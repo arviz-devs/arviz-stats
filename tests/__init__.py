@@ -1,0 +1,1 @@
+"""ArviZ stats general tests."""
