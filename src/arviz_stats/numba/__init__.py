@@ -5,3 +5,4 @@ Functions implemented in this folder can depend on NumPy, SciPy, Numba and shoul
 support Dask via xarray."""
 
 from .diagnostics import *
+from .intervals import *

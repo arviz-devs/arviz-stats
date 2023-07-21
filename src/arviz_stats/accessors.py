@@ -9,6 +9,13 @@ from .utils import get_function
 __all__ = ["AzStatsDsAccessor", "AzStatsDaAccessor", "AzStatsDtAccessor"]
 
 
+class UnsetDefault:
+    pass
+
+
+unset = UnsetDefault()
+
+
 class _BaseAccessor:
     def __init__(self, xarray_obj):
         self._obj = xarray_obj
@@ -30,10 +37,10 @@ class AzStatsDsAccessor(_BaseAccessor):
             self._obj = self._obj[var_names]
         return self
 
-    def eti(self, prob=None, dims=None, method="linear", skipna=False):
+    def eti(self, prob=None, dims=None, **kwargs):
         """Compute the equal tail interval of all the variables in the dataset."""
         return self._obj.map(
-            get_function("eti"), prob=prob, dims=dims, method=method, skipna=skipna
+            get_function("eti"), prob=prob, dims=dims, **kwargs
         )
 
     def hdi(self, prob=None, dims=None, **kwargs):
