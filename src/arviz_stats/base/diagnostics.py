@@ -7,10 +7,10 @@ import numpy as np
 import packaging
 import pandas as pd
 import scipy
-from scipy import stats
-
 from arviz_base import convert_to_dataset
 from arviz_base.utils import _var_names
+from scipy import stats
+
 from .stats_utils import autocov as _autocov
 from .stats_utils import not_valid as _not_valid
 from .stats_utils import quantile as _quantile
@@ -866,7 +866,6 @@ def _mc_error(ary, batches=5, circular=False):
         Simulation standard error
     """
     if ary.ndim > 1:
-
         dims = np.shape(ary)
         trace = np.transpose([t.ravel() for t in ary])
 

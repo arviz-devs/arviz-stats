@@ -3,19 +3,19 @@ from copy import deepcopy
 
 import numpy as np
 import pytest
+from arviz_base import from_dict, load_arviz_data
+from arviz_base.testing import check_multiple_attrs
+from datatree import DataTree
 from numpy.testing import (
     assert_allclose,
-    assert_array_almost_equal,
     assert_almost_equal,
+    assert_array_almost_equal,
     assert_array_equal,
 )
 from scipy.special import logsumexp
 from scipy.stats import linregress
 from xarray import DataArray, Dataset
-from datatree import DataTree
 
-from arviz_base import from_dict, load_arviz_data
-from arviz_base.testing import check_multiple_attrs
 from arviz_stats.base import (
     compare,
     ess,
@@ -28,8 +28,9 @@ from arviz_stats.base import (
     waic,
     weight_predictions,
 )
-from arviz_stats.base.stats import _gpinv, _calculate_ics
+from arviz_stats.base.stats import _calculate_ics, _gpinv
 from arviz_stats.utils import get_log_likelihood
+
 from ..helpers import multidim_models  # pylint: disable=unused-import
 
 
@@ -563,9 +564,7 @@ def test_multidimensional_log_likelihood(func):
     fr1 = func(ds1)
     all_keys = [key for key in dir(frm) if not key.startswith("_")]
 
-    assert all(
-        fr1[key] == frm[key] for key in all_keys if key not in {"elpd_i", "pareto_k"}
-    )
+    assert all(fr1[key] == frm[key] for key in all_keys if key not in {"elpd_i", "pareto_k"})
 
 
 @pytest.mark.parametrize(

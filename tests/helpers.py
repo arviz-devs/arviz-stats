@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-
 from arviz_base import from_dict
+
 
 def create_model(seed=10, transpose=False):
     """Create model with fake data."""

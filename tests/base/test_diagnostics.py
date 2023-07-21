@@ -7,9 +7,9 @@ import packaging
 import pandas as pd
 import pytest
 import scipy
+from arviz_base import load_arviz_data, xarray_var_iter
 from numpy.testing import assert_almost_equal
 
-from arviz_base import load_arviz_data, xarray_var_iter
 from arviz_stats.base import bfmi, ess, mcse, rhat
 from arviz_stats.base.diagnostics import (
     _ess,
@@ -39,9 +39,11 @@ def test_bfmi():
     energy = np.array([1, 2, 3, 4])
     assert_almost_equal(bfmi(energy), 0.6)
 
+
 def test_bfmi_dataset():
     data = load_arviz_data("centered_eight")
     assert bfmi(data).all()
+
 
 def test_bfmi_dataset_bad():
     data = load_arviz_data("centered_eight")
@@ -49,12 +51,14 @@ def test_bfmi_dataset_bad():
     with pytest.raises(TypeError):
         bfmi(data)
 
+
 def test_bfmi_correctly_transposed():
     data = load_arviz_data("centered_eight")
     vals1 = bfmi(data)
     data.sample_stats["energy"] = data.sample_stats["energy"].T
     vals2 = bfmi(data)
     assert_almost_equal(vals1, vals2)
+
 
 @pytest.mark.skip(reason="from_cmdstan not yet ported to arviz_base.")
 def test_deterministic():
@@ -124,7 +128,7 @@ def test_deterministic():
     here = os.path.dirname(os.path.abspath(__file__))
     data_directory = os.path.join(here, "..", "saved_models")
     # path = os.path.join(data_directory, "stan_diagnostics", "blocker.[0-9].csv")
-    posterior = None # from_cmdstan(path)
+    posterior = None  # from_cmdstan(path)
     reference_path = os.path.join(data_directory, "stan_diagnostics", "reference_posterior.csv")
     reference = (
         pd.read_csv(reference_path, index_col=0, float_precision="high")
@@ -171,6 +175,7 @@ def test_deterministic():
     # test absolute accuracy
     assert (abs(reference - arviz_data).values < 1e-8).all(None)
 
+
 @pytest.mark.parametrize("method", ("rank", "split", "folded", "z_scale", "identity"))
 @pytest.mark.parametrize("var_names", (None, "mu", ["mu", "tau"]))
 def test_rhat(data, var_names, method):
@@ -184,6 +189,7 @@ def test_rhat(data, var_names, method):
     if var_names is None:
         assert list(rhat_data.data_vars) == list(data.data_vars)
 
+
 @pytest.mark.parametrize("method", ("rank", "split", "folded", "z_scale", "identity"))
 def test_rhat_nan(method):
     """Confirm R-hat statistic returns nan."""
@@ -193,6 +199,7 @@ def test_rhat_nan(method):
     assert np.isnan(rhat_data)
     if method == "rank":
         assert np.isnan(_rhat(rhat_data))
+
 
 @pytest.mark.parametrize("method", ("rank", "split", "folded", "z_scale", "identity"))
 @pytest.mark.parametrize("chain", (None, 1, 2))
@@ -207,19 +214,23 @@ def test_rhat_shape(method, chain, draw):
         rhat_data = rhat(data, method=method)
         assert not np.isnan(rhat_data)
 
+
 def test_rhat_bad():
     """Confirm rank normalized Split R-hat statistic is
     far from 1 for a small number of samples."""
     r_hat = rhat(np.vstack([20 + np.random.randn(1, 100), np.random.randn(1, 100)]))
     assert 1 / GOOD_RHAT > r_hat or GOOD_RHAT < r_hat
 
+
 def test_rhat_bad_method():
     with pytest.raises(TypeError):
         rhat(np.random.randn(2, 300), method="wrong_method")
 
+
 def test_rhat_ndarray():
     with pytest.raises(TypeError):
         rhat(np.random.randn(2, 300, 10))
+
 
 @pytest.mark.parametrize(
     "method",
@@ -253,13 +264,12 @@ def test_effective_sample_size_array(data, method, relative):
                 np.random.randn(4, 100), method=method, prob=(0.2, 0.8), relative=relative
             )
     elif method == "local":
-        ess_hat = ess(
-            np.random.randn(4, 100), method=method, prob=(0.2, 0.3), relative=relative
-        )
+        ess_hat = ess(np.random.randn(4, 100), method=method, prob=(0.2, 0.3), relative=relative)
     else:
         ess_hat = ess(np.random.randn(4, 100), method=method, relative=relative)
     assert ess_hat > n_low
     assert ess_hat < n_high
+
 
 @pytest.mark.parametrize(
     "method",
@@ -302,6 +312,7 @@ def test_effective_sample_size_nan(method, relative, chain, draw, use_nan):
         else:
             assert not np.isnan(_ess(data))
 
+
 @pytest.mark.parametrize("relative", (True, False))
 def test_effective_sample_size_missing_prob(relative):
     with pytest.raises(TypeError):
@@ -311,21 +322,26 @@ def test_effective_sample_size_missing_prob(relative):
     with pytest.raises(TypeError):
         ess(np.random.randn(4, 100), method="local", relative=relative)
 
+
 @pytest.mark.parametrize("relative", (True, False))
 def test_effective_sample_size_too_many_probs(relative):
     with pytest.raises(ValueError):
         ess(np.random.randn(4, 100), method="local", prob=[0.1, 0.2, 0.9], relative=relative)
 
+
 def test_effective_sample_size_constant():
     assert ess(np.ones((4, 100))) == 400
+
 
 def test_effective_sample_size_bad_method():
     with pytest.raises(TypeError):
         ess(np.random.randn(4, 100), method="wrong_method")
 
+
 def test_effective_sample_size_ndarray():
     with pytest.raises(TypeError):
         ess(np.random.randn(2, 300, 10))
+
 
 @pytest.mark.parametrize(
     "method",
@@ -350,12 +366,11 @@ def test_effective_sample_size_dataset(data, method, var_names, relative):
     if method in ("quantile", "tail"):
         ess_hat = ess(data, var_names=var_names, method=method, prob=0.34, relative=relative)
     elif method == "local":
-        ess_hat = ess(
-            data, var_names=var_names, method=method, prob=(0.2, 0.3), relative=relative
-        )
+        ess_hat = ess(data, var_names=var_names, method=method, prob=(0.2, 0.3), relative=relative)
     else:
         ess_hat = ess(data, var_names=var_names, method=method, relative=relative)
     assert np.all(ess_hat.mu.values > n_low)  # This might break if the data is regenerated
+
 
 @pytest.mark.parametrize("mcse_method", ("mean", "sd", "median", "quantile"))
 def test_mcse_array(mcse_method):
@@ -365,9 +380,11 @@ def test_mcse_array(mcse_method):
         mcse_hat = mcse(np.random.randn(4, 100), method=mcse_method)
     assert mcse_hat
 
+
 def test_mcse_ndarray():
     with pytest.raises(TypeError):
         mcse(np.random.randn(2, 300, 10))
+
 
 @pytest.mark.parametrize("mcse_method", ("mean", "sd", "median", "quantile"))
 @pytest.mark.parametrize("var_names", (None, "mu", ["mu", "tau"]))
@@ -377,6 +394,7 @@ def test_mcse_dataset(data, mcse_method, var_names):
     else:
         mcse_hat = mcse(data, var_names=var_names, method=mcse_method)
     assert mcse_hat  # This might break if the data is regenerated
+
 
 @pytest.mark.parametrize("mcse_method", ("mean", "sd", "median", "quantile"))
 @pytest.mark.parametrize("chain", (None, 1, 2))
@@ -395,10 +413,12 @@ def test_mcse_nan(mcse_method, chain, draw, use_nan):
     else:
         assert not np.isnan(mcse_hat)
 
+
 @pytest.mark.parametrize("method", ("wrong_method", "quantile"))
 def test_mcse_bad_method(data, method):
     with pytest.raises(TypeError):
         mcse(data, method=method, prob=None)
+
 
 @pytest.mark.parametrize("draws", (3, 4, 100))
 @pytest.mark.parametrize("chains", (None, 1, 2))
@@ -451,6 +471,7 @@ def test_multichain_summary_array(draws, chains):
         else:
             assert round(rhat_hat, 3) == round(rhat_hat_, 3)
 
+
 def test_ks_summary():
     """Instead of psislw data, this test uses fake data."""
     pareto_tail_indices = np.array([0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2])
@@ -462,6 +483,7 @@ def test_ks_summary():
         summary2 = ks_summary(pareto_tail_indices2)
     assert summary2 is not None
 
+
 @pytest.mark.parametrize("size", [100, 101])
 @pytest.mark.parametrize("batches", [1, 2, 3, 5, 7])
 @pytest.mark.parametrize("ndim", [1, 2, 3])
@@ -469,6 +491,7 @@ def test_ks_summary():
 def test_mc_error(size, batches, ndim, circular):
     x = np.random.randn(size, ndim).squeeze()  # pylint: disable=no-member
     assert _mc_error(x, batches=batches, circular=circular) is not None
+
 
 @pytest.mark.parametrize("size", [100, 101])
 @pytest.mark.parametrize("ndim", [1, 2, 3])
@@ -479,6 +502,7 @@ def test_mc_error_nan(size, ndim):
         assert np.isnan(_mc_error(x)).all()
     else:
         assert np.isnan(_mc_error(x))
+
 
 @pytest.mark.parametrize("func", ("_mcse_quantile", "_z_scale"))
 def test_nan_behaviour(func):
@@ -491,6 +515,7 @@ def test_nan_behaviour(func):
         assert not np.isnan(_z_scale(data)).any(None)
     else:
         assert np.isnan(_z_scale(data)).sum() == 1
+
 
 @pytest.mark.parametrize("chains", (None, 1, 2, 3))
 @pytest.mark.parametrize("draws", (2, 3, 100, 101))

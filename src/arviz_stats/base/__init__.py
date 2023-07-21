@@ -2,8 +2,9 @@
 """ArviZ computational functions in NumPy.
 
 Functions implemented in this folder should only depend on NumPy and SciPy."""
-from .density_utils import *
+from .density import *
 from .diagnostics import *
+from .intervals import *
 from .stats import *
 from .stats_refitting import *
 from .stats_utils import *
@@ -11,6 +12,7 @@ from .stats_utils import *
 __all__ = [
     "bfmi",
     "compare",
+    "eti",
     "hdi",
     "kde",
     "loo",

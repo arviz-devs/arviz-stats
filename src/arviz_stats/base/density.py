@@ -3,13 +3,17 @@
 import warnings
 
 import numpy as np
+import xarray as xr
+from arviz_base import rcParams
 from scipy.fftpack import fft
 from scipy.optimize import brentq
 from scipy.signal import convolve, convolve2d, gaussian  # pylint: disable=no-name-in-module
 from scipy.sparse import coo_matrix
 from scipy.special import ive  # pylint: disable=no-name-in-module
 
-__all__ = ["kde", "kde_linear", "kde_circular"]
+from .stats_utils import wrap_xarray_ufunc
+
+__all__ = ["kde"]
 
 
 def _bw_scott(x, x_std=None, **kwargs):  # pylint: disable=unused-argument
@@ -372,7 +376,24 @@ def _get_grid(
     return grid_min, grid_max, grid_len
 
 
-def kde(x, circular=False, **kwargs):
+def kde(da, dims=None, grid_len=512, **kwargs):
+    """Compute the kde on a DataArray."""
+    if dims is None:
+        dims = rcParams["data.sample_dims"]
+    grid, pdf, bw = wrap_xarray_ufunc(
+        _kde,
+        da,
+        ufunc_kwargs={"n_output": 3, "n_input": 1, "n_dims": len(dims)},
+        func_kwargs={**kwargs, "out_shape": [(grid_len,), (grid_len,), []], "grid_len": grid_len},
+        output_core_dims=[["kde_dim"], ["kde_dim"], []],
+        input_core_dims=[dims],
+    )
+    plot_axis = xr.DataArray(["x", "y"], dims="plot_axis")
+    out = xr.concat((grid, pdf), dim=plot_axis)
+    return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
+
+
+def _kde(x, circular=False, **kwargs):
     """One dimensional density estimation.
 
     It is a wrapper around ``kde_linear()`` and ``kde_circular()``.
@@ -479,6 +500,7 @@ def kde(x, circular=False, **kwargs):
     --------
     plot_kde : Compute and plot a kernel density estimate.
     """
+    x = x.flatten()
     x = x[np.isfinite(x)]
     if x.size == 0 or np.all(x == x[0]):
         warnings.warn("Your data appears to have a single value or no finite values")
@@ -503,7 +525,6 @@ def kde_linear(
     bound_correction=True,
     extend_fct=0,
     bw_fct=1,
-    bw_return=False,
     custom_lims=None,
     cumulative=False,
     grid_len=512,
@@ -540,9 +561,6 @@ def kde_linear(
         A value that multiplies `bw` which enables tuning smoothness by hand.
         Must be positive. Values below 1 decrease smoothness while values above 1 decrease it.
         Defaults to 1 (no modification).
-    bw_return: bool, optional
-        Whether to return the estimated bandwidth in addition to the other objects.
-        Defaults to False.
     custom_lims: list or tuple, optional
         A list or tuple of length 2 indicating custom bounds for the range of `x`.
         Defaults to None which disables custom bounds.
@@ -575,7 +593,9 @@ def kde_linear(
     grid_min, grid_max, grid_len = _get_grid(
         x_min, x_max, x_std, extend_fct, grid_len, custom_lims, extend, bound_correction
     )
-    grid_counts, grid_edges = np.histogram(x, bins=grid_len, range=(grid_min, grid_max), density=False)
+    grid_counts, grid_edges = np.histogram(
+        x, bins=grid_len, range=(grid_min, grid_max), density=False
+    )
 
     # Bandwidth estimation
     bw = bw_fct * _get_bw(x, bw, grid_counts, x_std, x_range)
@@ -589,16 +609,13 @@ def kde_linear(
     if cumulative:
         pdf = pdf.cumsum() / pdf.sum()
 
-    if bw_return:
-        return grid, pdf, bw
-    return grid, pdf
+    return grid, pdf, bw
 
 
 def kde_circular(
     x,
     bw="taylor",
     bw_fct=1,
-    bw_return=False,
     custom_lims=None,
     cumulative=False,
     grid_len=512,
@@ -621,9 +638,6 @@ def kde_circular(
         A value that multiplies `bw` which enables tuning smoothness by hand. Must be positive.
         Values above 1 decrease smoothness while values below 1 decrease it.
         Defaults to 1 (no modification).
-    bw_return: bool, optional
-        Whether to return the estimated bandwidth in addition to the other objects.
-        Defaults to False.
     custom_lims: list or tuple, optional
         A list or tuple of length 2 indicating custom bounds for the range of `x`.
         Defaults to None which means the estimation limits are [-pi, pi].
@@ -677,9 +691,7 @@ def kde_circular(
     if cumulative:
         pdf = pdf.cumsum() / pdf.sum()
 
-    if bw_return:
-        return grid, pdf, bw
-    return grid, pdf
+    return grid, pdf, bw
 
 
 # pylint: disable=unused-argument

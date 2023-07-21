@@ -1,12 +1,12 @@
 """Diagnostics as gufuncs powered by xarray, numba and einops."""
-import numpy as np
 import numba
+import numpy as np
 import scipy
 import xarray as xr
-from scipy.fftpack import next_fast_len
-from xarray_einstats.einops import raw_rearrange
-from xarray_einstats import stats
 from datatree import DataTree
+from scipy.fftpack import next_fast_len
+from xarray_einstats import stats
+from xarray_einstats.einops import raw_rearrange
 
 __all__ = ["rhat", "ess"]
 
@@ -64,7 +64,7 @@ def _split_chains(da, **kwargs):
         # here we force dask="allowed" because einops doesn't play well with parallelized mode
         kwargs["dask"] = "allowed"
     if kwargs.get("dask", None) == "allowed":
-        from xarray_einstats.einops import DaskBackend  #  pylint: disable=unused-import
+        from xarray_einstats.einops import DaskBackend  # pylint: disable=unused-import
 
     return raw_rearrange(da, "(d1 d2)=draw -> (chain d1)=c2 d2", d2=half, **kwargs).rename(
         d2="draw", c2="chain"

@@ -1,12 +1,38 @@
-from dataclasses import dataclass
+"""ArviZ stats general utility functions."""
 import warnings
 from copy import copy as _copy
 from copy import deepcopy as _deepcopy
+from dataclasses import dataclass
+from importlib import import_module
 
 import numpy as np
+from arviz_base import rcParams
 from xarray import DataArray
 
-__all__ = ["ELPDData"]
+__all__ = ["ELPDData", "get_function", "get_log_likelihood"]
+
+
+def get_function(func_name):
+    """Get a function from arviz_stats.
+
+    Attempts to import the provided function from the module indicated in the rcParam
+    ``stats.module``, and if it fails, it imports it from ``arviz_stats.base``.
+
+    Parameters
+    ----------
+    func_name : str
+        Name of the function to be imported and returned
+
+    Returns
+    -------
+    callable
+    """
+    preferred_module = import_module(rcParams["stats.module"])
+    if hasattr(preferred_module, func_name):
+        return getattr(preferred_module, func_name)
+    base_module = import_module("arviz_stats.base")
+    return getattr(base_module, func_name)
+
 
 def get_log_likelihood(idata, var_name=None):
     """Retrieve the log likelihood dataarray of a given variable."""
@@ -57,20 +83,20 @@ SCALE_DICT = {"deviance": "deviance", "log": "elpd", "negative_log": "-elpd"}
 @dataclass
 class ELPDData:  # pylint: disable=too-many-ancestors
     """Class to contain the data from elpd information criterion like waic or loo."""
-    kind : str
-    elpd : float
-    se : float
-    p : float
-    n_samples : int
-    n_data_points : int
-    scale : float
-    warning : bool
-    elpd_i : DataArray = None
-    pareto_k : DataArray = None
 
+    kind: str
+    elpd: float
+    se: float
+    p: float
+    n_samples: int
+    n_data_points: int
+    scale: float
+    warning: bool
+    elpd_i: DataArray = None
+    pareto_k: DataArray = None
 
     def __str__(self):
-        "Print elpd data in a user friendly way."""
+        "Print elpd data in a user friendly way." ""
         kind = self.kind
         scale_str = SCALE_DICT[self["scale"]]
         padding = len(scale_str) + len(kind) + 1

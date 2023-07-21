@@ -13,6 +13,7 @@ __all__ = ["autocorr", "autocov", "make_ufunc", "wrap_xarray_ufunc"]
 
 _log = logging.getLogger(__name__)
 
+
 def autocov(ary, axis=-1):
     """Compute autocovariance estimates for every lag for the input array.
 
@@ -220,9 +221,7 @@ def wrap_xarray_ufunc(
 
     callable_ufunc = make_ufunc(ufunc, **ufunc_kwargs)
 
-    return apply_ufunc(
-        callable_ufunc, *datasets, *func_args, kwargs=func_kwargs, **kwargs
-    )
+    return apply_ufunc(callable_ufunc, *datasets, *func_args, kwargs=func_kwargs, **kwargs)
 
 
 def update_docstring(ufunc, func, n_output=1):
@@ -394,8 +393,6 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
             _log.warning(error_msg)
 
     return nan_error | chain_error | draw_error
-
-
 
 
 def smooth_data(obs_vals, pp_vals):
