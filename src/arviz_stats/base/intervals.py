@@ -6,8 +6,8 @@ import scipy.stats as st
 import xarray as xr
 from arviz_base import rcParams
 
+from .density import _kde
 from .density import get_bins as _get_bins
-from .density import kde as _kde
 from .stats_utils import wrap_xarray_ufunc as _wrap_xarray_ufunc
 
 __all__ = ["eti", "hdi"]
@@ -61,13 +61,16 @@ def hdi(
         raise ValueError("The value of hdi_prob should be in the interval (0, 1]")
     if dims is None:
         dims = rcParams["data.sample_dims"]
+    if isinstance(dims, str):
+        dims = [dims]
 
     func_kwargs = {
         "prob": prob,
         "skipna": skipna,
         "out_shape": (max_modes, 2) if multimodal else (2,),
     }
-    dask_kwargs.setdefault("output_core_dims", [["mode", "hdi"] if multimodal else ["hdi"]])
+    mode_dim = "mode" if da.name is None else f"{da.name}_mode"
+    dask_kwargs.setdefault("output_core_dims", [[mode_dim, "hdi"] if multimodal else ["hdi"]])
     if not multimodal:
         func_kwargs["circular"] = circular
     else:
@@ -78,10 +81,10 @@ def hdi(
     func = _hdi_multimodal if multimodal else hdi_method_map[method]
 
     hdi_coord = xr.DataArray(["lower", "higher"], dims=["hdi"], attrs={"prob": prob})
-    hdi_data = _wrap_xarray_ufunc(func, da, func_kwargs=func_kwargs, **dask_kwargs).assign_coords(
-        {"hdi": hdi_coord}
-    )
-    hdi_data = hdi_data.dropna("mode", how="all") if multimodal else hdi_data
+    hdi_data = _wrap_xarray_ufunc(
+        func, da, input_core_dims=[dims], func_kwargs=func_kwargs, **dask_kwargs
+    ).assign_coords({"hdi": hdi_coord})
+    hdi_data = hdi_data.dropna(mode_dim, how="all") if multimodal else hdi_data
     return hdi_data
 
 
@@ -94,7 +97,7 @@ def _hdi_agg_nearest(ary, prob, skipna):
             ary = ary[~nans]
 
     if ary.dtype.kind == "f":
-        bins, density = _kde(ary)
+        bins, density, _ = _kde(ary)
     else:
         bins = _get_bins(ary)
         density, _ = np.histogram(ary, bins=bins, density=True)
@@ -162,7 +165,7 @@ def _hdi_multimodal(ary, prob, skipna, max_modes):
         ary = ary[~np.isnan(ary)]
 
     if ary.dtype.kind == "f":
-        bins, density = _kde(ary)
+        bins, density, _ = _kde(ary)
         lower, upper = bins[0], bins[-1]
         range_x = upper - lower
         dx = range_x / len(density)

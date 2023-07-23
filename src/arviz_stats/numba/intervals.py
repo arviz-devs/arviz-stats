@@ -1,41 +1,39 @@
 """Credible interval estimators."""
-from numba import guvectorize
-import numpy as np
-import xarray as xr
 import warnings
 
-from xarray_einstats import _remove_indexes_to_reduce
+import numpy as np
+import xarray as xr
 from arviz_base import rcParams
+from numba import guvectorize
+from xarray_einstats import _remove_indexes_to_reduce
 
 __all__ = ["eti", "quantile"]
 
+
 @guvectorize(
-    [
-        "void(float64[:], float64[:], float64[:])",
-        "void(int64[:], float64[:], float64[:])"
-    ],
+    ["void(float64[:], float64[:], float64[:])", "void(int64[:], float64[:], float64[:])"],
     "(n),(q)->(q)",
     cache=True,
     target="parallel",
 )
-def _quantile(ary, q, result):
+def _quantile(ary, q, result):  # pylint: disable=unused-argument
     result = np.quantile(ary, q)
 
+
 def quantile(da, q, dim):
+    """Numbified and xarray aware quantile function."""
     if not isinstance(dim, str):
         aux_dim = f"__aux_dim__:{','.join(dim)}"
         da = _remove_indexes_to_reduce(da, dim).stack({aux_dim: dim}, create_index=False)
     else:
         aux_dim = dim
     xr.apply_ufunc(
-        _quantile,
-        da,
-        q,
-        input_core_dims=[[aux_dim], ["quantile"]],
-        output_core_dims=[["quantile"]]
+        _quantile, da, q, input_core_dims=[[aux_dim], ["quantile"]], output_core_dims=[["quantile"]]
     )
 
+
 def eti(da, prob=None, dims=None, method=None, skipna=None):
+    """Compute the equal tail credible interval."""
     if prob is None:
         prob = rcParams["stats.ci_prob"]
     elif not 1 >= prob > 0:

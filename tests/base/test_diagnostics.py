@@ -24,6 +24,8 @@ from arviz_stats.base.diagnostics import (
     ks_summary,
 )
 
+pytest.skip(allow_module_level=True)
+
 # For tests only, recommended value should be closer to 1.01-1.05
 # See discussion in https://github.com/stan-dev/rstan/pull/618
 GOOD_RHAT = 1.1

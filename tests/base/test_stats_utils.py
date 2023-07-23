@@ -13,7 +13,7 @@ from arviz_stats.base.stats_utils import make_ufunc, not_valid, wrap_xarray_ufun
 @pytest.mark.parametrize("axis", [None, 0, 1, (-2, -1)])
 @pytest.mark.parametrize("b", [None, 0, 1 / 100, 1 / 101])
 @pytest.mark.parametrize("keepdims", [True, False])
-def test_logsumexp_b(ary_dtype, axis, b, keepdims):
+def test_logsumexp_b(ary_dtype, axis, b, keepdims):  # pylint: disable=invalid-name
     """Test ArviZ implementation of logsumexp.
 
     Test also compares against Scipy implementation.

@@ -1,7 +1,8 @@
 # pylint: disable=wildcard-import
 """ArviZ computational functions in NumPy.
 
-Functions implemented in this folder should only depend on NumPy and SciPy."""
+Functions implemented in this folder should only depend on NumPy and SciPy.
+"""
 from .density import *
 from .diagnostics import *
 from .intervals import *

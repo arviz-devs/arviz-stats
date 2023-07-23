@@ -113,6 +113,5 @@ def reloo(wrapper, loo_orig=None, k_thresh=0.7, scale=None, verbose=True):
         loo_refitted.se = (n_data_points * np.var(loo_i.values)) ** 0.5
         loo_refitted.p_loo = lppd_orig - loo_refitted.elpd_loo / scale_value
         return loo_refitted
-    else:
-        _log.info("No problematic observations")
-        return loo_orig
+    _log.info("No problematic observations")
+    return loo_orig

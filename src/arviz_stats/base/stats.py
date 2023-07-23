@@ -174,8 +174,8 @@ def compare(
     """
     try:
         (ics_dict, scale, ic) = _calculate_ics(compare_dict, scale=scale, ic=ic, var_name=var_name)
-    except Exception as e:
-        raise e.__class__("Encountered error in ELPD computation of compare.") from e
+    except Exception as err:
+        raise err.__class__("Encountered error in ELPD computation of compare.") from err
     names = list(ics_dict.keys())
     if ic == "loo":
         df_comp = pd.DataFrame(
@@ -455,10 +455,10 @@ def _calculate_ics(
                     scale=scale,
                     var_name=var_name,
                 )
-            except Exception as e:
-                raise e.__class__(
+            except Exception as err:
+                raise err.__class__(
                     f"Encountered error trying to compute {ic} from model {name}."
-                ) from e
+                ) from err
     return (compare_dict, scale, ic)
 
 
@@ -542,7 +542,7 @@ def loo(data, pointwise=None, var_name=None, reff=None, scale=None):
     log_likelihood = log_likelihood.stack(__sample__=("chain", "draw"))
     shape = log_likelihood.shape
     n_samples = shape[-1]
-    n_data_points = np.product(shape[:-1])
+    n_data_points = np.prod(shape[:-1])
     scale = rcParams["stats.ic_scale"] if scale is None else scale.lower()
 
     if scale == "deviance":
@@ -828,8 +828,8 @@ def _gpinv(probs, kappa, sigma):
     x = np.full_like(probs, np.nan)
     if sigma <= 0:
         return x
-    ok = (probs > 0) & (probs < 1)
-    if np.all(ok):
+    is_prob = (probs > 0) & (probs < 1)
+    if np.all(is_prob):
         if np.abs(kappa) < np.finfo(float).eps:
             x = -np.log1p(-probs)
         else:
@@ -837,9 +837,9 @@ def _gpinv(probs, kappa, sigma):
         x *= sigma
     else:
         if np.abs(kappa) < np.finfo(float).eps:
-            x[ok] = -np.log1p(-probs[ok])
+            x[is_prob] = -np.log1p(-probs[is_prob])
         else:
-            x[ok] = np.expm1(-kappa * np.log1p(-probs[ok])) / kappa
+            x[is_prob] = np.expm1(-kappa * np.log1p(-probs[is_prob])) / kappa
         x *= sigma
         x[probs == 0] = 0
         x[probs == 1] = np.inf if kappa >= 0 else -sigma / kappa
@@ -938,7 +938,7 @@ def summary(
     stat_focus="mean",
     stat_funcs=None,
     extend=True,
-    hdi_prob=None,
+    ci_prob=None,
     skipna=False,
     labeller=None,
     coords=None,
@@ -987,7 +987,7 @@ def summary(
     extend: boolean
         If True, use the statistics returned by ``stat_funcs`` in addition to, rather than in place
         of, the default statistics. This is only meaningful when ``stat_funcs`` is not None.
-    hdi_prob: float, optional
+    ci_prob: float, optional
         Highest density interval to compute. Defaults to 0.94. This is only meaningful when
         ``stat_funcs`` is None.
     skipna: bool
@@ -996,13 +996,6 @@ def summary(
     labeller : labeller instance, optional
         Class providing the method `make_label_flat` to generate the labels in the plot titles.
         For more details on ``labeller`` usage see :ref:`label_guide`
-    credible_interval: float, optional
-        deprecated: Please see hdi_prob
-    order
-        deprecated: order is now ignored.
-    index_origin
-        deprecated: index_origin is now ignored, modify the coordinate values to change the
-        value used in summary.
 
     Returns
     -------
@@ -1091,10 +1084,10 @@ def summary(
 
     if labeller is None:
         labeller = BaseLabeller()
-    if hdi_prob is None:
-        hdi_prob = rcParams["stats.hdi_prob"]
-    elif not 1 >= hdi_prob > 0:
-        raise ValueError("The value of hdi_prob should be in the interval (0, 1]")
+    if ci_prob is None:
+        ci_prob = rcParams["stats.ci_prob"]
+    elif not 1 >= ci_prob > 0:
+        raise ValueError("The value of ci_prob should be in the interval (0, 1]")
 
     if isinstance(data, DataTree):
         if group is None:
@@ -1133,7 +1126,7 @@ def summary(
     if stat_focus != "mean" and circ_var_names is not None:
         raise TypeError(f"Invalid format: Circular stats not supported for '{stat_focus}'")
 
-    alpha = 1 - hdi_prob
+    alpha = 1 - ci_prob
 
     extra_metrics = []
     extra_metric_names = []
@@ -1164,7 +1157,7 @@ def summary(
 
             sd = dataset.std(dim=("chain", "draw"), ddof=1, skipna=skipna)
 
-            hdi_post = hdi(dataset, hdi_prob=hdi_prob, multimodal=False, skipna=skipna)
+            hdi_post = dataset.azstats.hdi(prob=ci_prob, multimodal=False, skipna=skipna)
             hdi_lower = hdi_post.sel(hdi="lower", drop=True)
             hdi_higher = hdi_post.sel(hdi="higher", drop=True)
             metrics.extend((mean, sd, hdi_lower, hdi_higher))
@@ -1200,7 +1193,7 @@ def summary(
             input_core_dims=(("chain", "draw"),),
         )
 
-        circ_hdi = hdi(dataset, hdi_prob=hdi_prob, circular=True, skipna=skipna)
+        circ_hdi = hdi(dataset, prob=ci_prob, circular=True, skipna=skipna)
         circ_hdi_lower = circ_hdi.sel(hdi="lower", drop=True)
         circ_hdi_higher = circ_hdi.sel(hdi="higher", drop=True)
 
@@ -1370,7 +1363,7 @@ def waic(data, pointwise=None, var_name=None, scale=None, **kwargs):
     log_likelihood = log_likelihood.stack(__sample__=("chain", "draw"))
     shape = log_likelihood.shape
     n_samples = shape[-1]
-    n_data_points = np.product(shape[:-1])
+    n_data_points = np.prod(shape[:-1])
 
     ufunc_kwargs = {"n_dims": 1, "ravel": False}
     kwargs.setdefault("input_core_dims", [["__sample__"]])
@@ -1580,12 +1573,10 @@ def _loo_pit(y, y_hat, log_weights):
 
 
 def weight_predictions(idatas, weights=None):
-    """
-    Generate weighted posterior predictive samples from a list of InferenceData
-    and a set of weights.
+    """Generate weighted posterior predictive samples from multiple InferenceData and their weights.
 
     Parameters
-    ---------
+    ----------
     idatas : list[InferenceData]
         List of :class:`arviz.InferenceData` objects containing the groups `posterior_predictive`
         and `observed_data`. Observations should be the same for all InferenceData objects.

@@ -57,3 +57,21 @@ def test_get_log_likelihood_no_group():
     )
     with pytest.raises(TypeError, match="log likelihood not found"):
         get_log_likelihood(idata)
+
+
+def test_elpddata_base():
+    elpddata = ELPDData(
+        kind="loo",
+        elpd=-20,
+        se=2,
+        p=5.6,
+        n_samples=1000,
+        n_data_points=370,
+        scale="log",
+        warning=False,
+    )
+
+    printed = str(elpddata)
+    assert "warning" not in printed
+    assert "1000 posterior samples" in printed
+    assert "370 observations" in printed

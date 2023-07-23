@@ -90,13 +90,13 @@ class ELPDData:  # pylint: disable=too-many-ancestors
     p: float
     n_samples: int
     n_data_points: int
-    scale: float
+    scale: str
     warning: bool
     elpd_i: DataArray = None
     pareto_k: DataArray = None
 
     def __str__(self):
-        "Print elpd data in a user friendly way." ""
+        """Print elpd data in a user friendly way."""
         kind = self.kind
         scale_str = SCALE_DICT[self["scale"]]
         padding = len(scale_str) + len(kind) + 1
@@ -130,7 +130,9 @@ class ELPDData:  # pylint: disable=too-many-ancestors
         return self.__str__()
 
     def __getitem__(self, key):
+        """Define getitem magic method."""
         return getattr(self, key)
 
     def __setitem__(self, key, item):
+        """Define setitem magic method."""
         setattr(self, key, item)

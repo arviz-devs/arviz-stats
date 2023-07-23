@@ -3,8 +3,7 @@ from copy import deepcopy
 
 import numpy as np
 import pytest
-from arviz_base import from_dict, load_arviz_data
-from arviz_base.testing import check_multiple_attrs
+from arviz_base import from_dict, load_arviz_data, ndarray_to_dataarray, rc_context
 from datatree import DataTree
 from numpy.testing import (
     assert_allclose,
@@ -19,7 +18,6 @@ from xarray import DataArray, Dataset
 from arviz_stats.base import (
     compare,
     ess,
-    hdi,
     loo,
     loo_pit,
     psislw,
@@ -58,63 +56,48 @@ def multivariable_log_likelihood(centered_eight):
     return centered_eight
 
 
-def test_hdi():
-    normal_sample = np.random.randn(5000000)
-    interval = hdi(normal_sample, hdi_prob=0.94)
-    assert_array_almost_equal(interval, [-1.88, 1.88], 2)
-
-
-def test_hdi_2darray():
-    normal_sample = np.random.randn(12000, 5)
-    result = hdi(normal_sample)
-    assert result.shape == (2,)
-
-
-def test_hdi_multidimension():
-    normal_sample = np.random.randn(12000, 10, 3)
-    result = hdi(normal_sample)
-    assert result.shape == (3, 2)
-
-
 def test_hdi_idata(centered_eight):
-    data = centered_eight.posterior
-    result = hdi(data)
+    accessor = centered_eight.posterior.ds.azstats
+    result = accessor.hdi()
     assert isinstance(result, Dataset)
     assert dict(result.dims) == {"school": 8, "hdi": 2}
 
-    result = hdi(data, input_core_dims=[["chain"]])
+    result = accessor.hdi(dims="chain")
     assert isinstance(result, Dataset)
     assert result.dims == {"draw": 500, "hdi": 2, "school": 8}
 
 
 def test_hdi_idata_varnames(centered_eight):
-    data = centered_eight.posterior
-    result = hdi(data, var_names=["mu", "theta"])
+    accessor = centered_eight.posterior.ds.azstats
+    result = accessor.filter_vars(var_names=["mu", "theta"]).hdi()
     assert isinstance(result, Dataset)
     assert result.dims == {"hdi": 2, "school": 8}
     assert list(result.data_vars.keys()) == ["mu", "theta"]
 
 
 def test_hdi_idata_group(centered_eight):
-    result_posterior = hdi(centered_eight, group="posterior", var_names="mu")
-    result_prior = hdi(centered_eight, group="prior", var_names="mu")
-    assert result_prior.dims == {"hdi": 2}
+    result_posterior = centered_eight.azstats.hdi(group="posterior")
+    result_prior = centered_eight.azstats.hdi(group="prior")
+    assert "hdi" in result_prior.mu.dims
     range_posterior = result_posterior.mu.values[1] - result_posterior.mu.values[0]
     range_prior = result_prior.mu.values[1] - result_prior.mu.values[0]
     assert range_posterior < range_prior
 
 
 def test_hdi_coords(centered_eight):
-    data = centered_eight.posterior
-    result = hdi(data, coords={"chain": [0, 1, 3]}, input_core_dims=[["draw"]])
+    data = centered_eight.posterior.sel({"chain": [0, 1, 3]}).ds
+    result = data.azstats.hdi(dims="draw")
     assert_array_equal(result.coords["chain"], [0, 1, 3])
 
 
 def test_hdi_multimodal():
-    normal_sample = np.concatenate(
-        (np.random.normal(-4, 1, 2500000), np.random.normal(2, 0.5, 2500000))
+    rng = np.random.default_rng(43)
+    normal_sample = ndarray_to_dataarray(
+        np.concatenate((rng.normal(-4, 1, 2500000), rng.normal(2, 0.5, 2500000))),
+        "x",
+        sample_dims=["sample"],
     )
-    intervals = hdi(normal_sample, multimodal=True, hdi_prob=0.83)
+    intervals = normal_sample.azstats.hdi(dims="sample", multimodal=True, prob=0.83)
     assert_array_almost_equal(intervals, [[-5.1, -2.8], [1.1, 2.8]], 1)
 
 
@@ -129,28 +112,36 @@ def test_hdi_multimodal_multivars():
         },
         coords={"chain": [0], "draw": np.arange(size * 2)},
     )
-    intervals = hdi(sample, multimodal=True, hdi_prob=0.83)
+    intervals = sample.azstats.hdi(multimodal=True, prob=0.83)
     assert_array_almost_equal(intervals.var1, [[-5.2, -2.8], [1.2, 2.8]], 1)
-    assert_array_almost_equal(intervals.var2, [[6.6, 9.4], [np.nan, np.nan]], 1)
+    assert_array_almost_equal(intervals.var2, [[6.6, 9.4]], 1)
+    assert "var1_mode" in intervals.var1.dims
+    assert "var2_mode" in intervals.var2.dims
 
 
 def test_hdi_circular():
-    normal_sample = np.random.vonmises(np.pi, 1, 5000000)
-    interval = hdi(normal_sample, circular=True, hdi_prob=0.83)
+    rng = np.random.default_rng(43)
+    normal_sample = ndarray_to_dataarray(
+        rng.vonmises(np.pi, 1, 5000000), "x", sample_dims=["sample"]
+    )
+    interval = normal_sample.azstats.hdi(circular=True, prob=0.83, dims="sample")
     assert_array_almost_equal(interval, [1.3, -1.4], 1)
 
 
 def test_hdi_bad_ci():
-    normal_sample = np.random.randn(10)
+    rng = np.random.default_rng(43)
+    normal_sample = ndarray_to_dataarray(rng.normal(size=50), "x", sample_dims=["sample"])
     with pytest.raises(ValueError):
-        hdi(normal_sample, hdi_prob=2)
+        normal_sample.azstats.hdi(prob=2, dims="sample")
 
 
 def test_hdi_skipna():
-    normal_sample = np.random.randn(500)
-    interval = hdi(normal_sample[10:])
-    normal_sample[:10] = np.nan
-    interval_ = hdi(normal_sample, skipna=True)
+    rng = np.random.default_rng(43)
+    with rc_context(rc={"data.sample_dims": ["sample"]}):
+        normal_sample = ndarray_to_dataarray(rng.normal(size=500), "x")
+        interval = normal_sample.sel(sample=slice(10, None)).azstats.hdi()
+        normal_sample.loc[{"sample": slice(None, 10)}] = np.nan
+        interval_ = normal_sample.azstats.hdi(skipna=True)
     assert_array_almost_equal(interval, interval_)
 
 

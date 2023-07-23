@@ -112,6 +112,7 @@ def _rhat_rank(da, **kwargs):
 
 
 def rhat(ds, group="posterior", method="rank", **kwargs):
+    """Calculate rhat diagnostic."""
     func_map = {"identity": _rhat, "rank": _rhat_rank}
     if method not in func_map:
         raise ValueError("method not recognized")
@@ -276,6 +277,7 @@ def _ess_bulk(da, relative=False, **kwargs):
 
 
 def ess(ds, group="posterior", method="bulk", **kwargs):
+    """Calculate ess statistic/diagnostic."""
     func_map = {"mean": _ess_mean, "bulk": _ess_bulk}
     if method not in func_map:
         raise ValueError("method not recognized")
