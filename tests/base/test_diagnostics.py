@@ -171,8 +171,8 @@ def test_deterministic():
     assert set(arviz_data.index) == set(reference.index)
 
     # show print with pytests '-s' tag
-    np.set_printoptions(16)
-    print(abs(reference - arviz_data).max())
+    # np.set_printoptions(16)
+    # print(abs(reference - arviz_data).max())
 
     # test absolute accuracy
     assert (abs(reference - arviz_data).values < 1e-8).all(None)
