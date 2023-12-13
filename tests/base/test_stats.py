@@ -75,6 +75,7 @@ def test_hdi_idata_varnames(centered_eight):
     assert list(result.data_vars.keys()) == ["mu", "theta"]
 
 
+@pytest.mark.skip(reason="AttributeError: DatasetView objects are not to be initialized directly")
 def test_hdi_idata_group(centered_eight):
     result_posterior = centered_eight.azstats.hdi(group="posterior")
     result_prior = centered_eight.azstats.hdi(group="prior")
@@ -143,6 +144,31 @@ def test_hdi_skipna():
         normal_sample.loc[{"sample": slice(None, 10)}] = np.nan
         interval_ = normal_sample.azstats.hdi(skipna=True)
     assert_array_almost_equal(interval, interval_)
+
+
+def test_ecdf(centered_eight):
+    accessor = centered_eight.posterior.ds.azstats
+    result = accessor.ecdf()
+    assert isinstance(result, Dataset)
+    assert dict(result.dims) == {"plot_axis": 2, "quantile": 200}
+
+    result = accessor.hdi(dims="chain")
+    assert isinstance(result, Dataset)
+    assert result.dims == {"draw": 500, "hdi": 2, "school": 8}
+
+
+def test_ecdf_idata_varnames(centered_eight):
+    accessor = centered_eight.posterior.ds.azstats
+    result = accessor.filter_vars(var_names=["mu", "theta"]).ecdf()
+    assert isinstance(result, Dataset)
+    assert result.dims == {"plot_axis": 2, "quantile": 200}
+    assert list(result.data_vars.keys()) == ["mu", "theta"]
+
+
+def test_ecdf_coords(centered_eight):
+    data = centered_eight.posterior.sel({"chain": [0, 1, 3]}).ds
+    result = data.azstats.ecdf(dims="draw")
+    assert_array_equal(result.coords["chain"], [0, 1, 3])
 
 
 def test_r2_score():

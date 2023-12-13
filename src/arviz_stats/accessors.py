@@ -4,6 +4,7 @@ import warnings
 import xarray as xr
 from arviz_base.utils import _var_names
 from datatree import register_datatree_accessor
+from xarray_einstats.numba import ecdf
 
 from .utils import get_function
 
@@ -76,6 +77,10 @@ class AzStatsDsAccessor(_BaseAccessor):
     def kde(self, dims=None, **kwargs):
         """Compute the KDE for all variables in the dataset."""
         return self._obj.map(get_function("kde"), dims=dims, **kwargs)
+
+    def ecdf(self, dims=None, **kwargs):
+        """Compute the ecdf for all variables in the dataset."""
+        return self._obj.map(ecdf, dims=dims, **kwargs).rename({"ecdf_axis": "plot_axis"})
 
 
 @register_datatree_accessor("azstats")
