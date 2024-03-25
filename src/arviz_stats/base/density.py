@@ -393,7 +393,7 @@ def kde(da, dims=None, grid_len=512, **kwargs):
     return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
 
 
-def _kde(x, circular=False, **kwargs):
+def _kde(x, circular=False, grid_len=512, **kwargs):
     """One dimensional density estimation.
 
     It is a wrapper around ``kde_linear()`` and ``kde_circular()``.
@@ -505,7 +505,7 @@ def _kde(x, circular=False, **kwargs):
     if x.size == 0 or np.all(x == x[0]):
         warnings.warn("Your data appears to have a single value or no finite values")
 
-        return np.zeros(2), np.array([np.nan] * 2), np.nan
+        return np.zeros(grid_len), np.array([np.nan] * grid_len), np.nan
 
     if circular:
         if circular == "degrees":
