@@ -506,7 +506,7 @@ def _kde(x, circular=False, grid_len=512, **kwargs):
     if x.size == 0 or np.all(x == x[0]):
         warnings.warn("Your data appears to have a single value or no finite values")
 
-        return np.zeros(grid_len), np.array([np.nan] * grid_len), np.nan
+        return np.zeros(grid_len), np.full(grid_len, np.nan), np.nan
 
     if circular:
         if circular == "degrees":
@@ -515,7 +515,7 @@ def _kde(x, circular=False, grid_len=512, **kwargs):
     else:
         kde_fun = kde_linear
 
-    return kde_fun(x, **kwargs)
+    return kde_fun(x, grid_len=grid_len, **kwargs)
 
 
 def kde_linear(
