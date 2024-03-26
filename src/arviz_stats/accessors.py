@@ -15,6 +15,15 @@ class UnsetDefault:
     pass
 
 
+def update_dims(dims, da):
+    """Update dims to contain only those present in da."""
+    if dims is None:
+        return None
+    if isinstance(dims, str):
+        dims = [dims]
+    return [dim for dim in dims if dim in da.dims]
+
+
 unset = UnsetDefault()
 
 
@@ -79,48 +88,33 @@ class AzStatsDsAccessor(_BaseAccessor):
             self._obj = self._obj[var_names]
         return self
 
-    def eti(self, prob=None, dims=None, **kwargs):
-        """Compute the equal tail interval of all the variables in the dataset."""
+    def _apply(self, fun, dims, **kwargs):
+        """Apply a function to all variables subsetting dims to existing dimensions."""
         return xr.Dataset(
             {
-                var_name: get_function("eti")(
-                    da, prob=prob, dims=[dim for dim in dims if dim in da.dims], **kwargs
-                )
+                var_name: fun(da, dims=update_dims(dims, da), **kwargs)
                 for var_name, da in self._obj.items()
             }
         )
+
+    def eti(self, prob=None, dims=None, **kwargs):
+        """Compute the equal tail interval of all the variables in the dataset."""
+        kwargs["prob"] = prob
+        return self._apply(get_function("eti"), dims=dims, **kwargs)
 
     def hdi(self, prob=None, dims=None, **kwargs):
         """Compute hdi on all variables in the dataset."""
-        return xr.Dataset(
-            {
-                var_name: get_function("hdi")(
-                    da, prob=prob, dims=[dim for dim in dims if dim in da.dims], **kwargs
-                )
-                for var_name, da in self._obj.items()
-            }
-        )
+        kwargs["prob"] = prob
+        return self._apply(get_function("hdi"), dims=dims, **kwargs)
 
     def kde(self, dims=None, **kwargs):
         """Compute the KDE for all variables in the dataset."""
-        return xr.Dataset(
-            {
-                var_name: get_function("kde")(
-                    da, dims=[dim for dim in dims if dim in da.dims], **kwargs
-                )
-                for var_name, da in self._obj.items()
-            }
-        )
+        return self._apply(get_function("kde"), dims=dims, **kwargs)
 
     def ecdf(self, dims=None, **kwargs):
         """Compute the ecdf for all variables in the dataset."""
         # TODO: implement ecdf here so it doesn't depend on numba
-        return xr.Dataset(
-            {
-                var_name: ecdf(da, dims=[dim for dim in dims if dim in da.dims], **kwargs)
-                for var_name, da in self._obj.items()
-            }
-        )
+        return self._apply(ecdf, dims=dims, **kwargs).rename(ecdf_axis="plot_axis")
 
 
 @register_datatree_accessor("azstats")
