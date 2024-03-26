@@ -15,6 +15,15 @@ class UnsetDefault:
     pass
 
 
+def update_dims(dims, da):
+    """Update dims to contain only those present in da."""
+    if dims is None:
+        return None
+    if isinstance(dims, str):
+        dims = [dims]
+    return [dim for dim in dims if dim in da.dims]
+
+
 unset = UnsetDefault()
 
 
@@ -37,10 +46,23 @@ class AzStatsDaAccessor(_BaseAccessor):
         """Compute the highest density interval on the DataArray."""
         return get_function("hdi")(self._obj, prob=prob, dims=dims, **kwargs)
 
+    def kde(self, dims=None, **kwargs):
+        """Compute the KDE on the DataArray."""
+        return get_function("kde")(self._obj, dims=dims, **kwargs)
+
 
 @xr.register_dataset_accessor("azstats")
 class AzStatsDsAccessor(_BaseAccessor):
-    """ArviZ stats accessor class for Datasets."""
+    """ArviZ stats accessor class for Datasets.
+
+    Notes
+    -----
+    Whenever "dims" indicates a set of dimensions that are to be reduced, the behaviour
+    should be to reduce all present dimensions and ignore the ones not present.
+    Thus, they can't use :meth:`.Dataset.map` and instead we must manually loop over variables
+    in the dataset, remove elements from dims if necessary and afterwards rebuild the output
+    Dataset.
+    """
 
     @property
     def ds(self):
@@ -66,21 +88,33 @@ class AzStatsDsAccessor(_BaseAccessor):
             self._obj = self._obj[var_names]
         return self
 
+    def _apply(self, fun, dims, **kwargs):
+        """Apply a function to all variables subsetting dims to existing dimensions."""
+        return xr.Dataset(
+            {
+                var_name: fun(da, dims=update_dims(dims, da), **kwargs)
+                for var_name, da in self._obj.items()
+            }
+        )
+
     def eti(self, prob=None, dims=None, **kwargs):
         """Compute the equal tail interval of all the variables in the dataset."""
-        return self._obj.map(get_function("eti"), prob=prob, dims=dims, **kwargs)
+        kwargs["prob"] = prob
+        return self._apply(get_function("eti"), dims=dims, **kwargs)
 
     def hdi(self, prob=None, dims=None, **kwargs):
         """Compute hdi on all variables in the dataset."""
-        return self._obj.map(get_function("hdi"), prob=prob, dims=dims, **kwargs)
+        kwargs["prob"] = prob
+        return self._apply(get_function("hdi"), dims=dims, **kwargs)
 
     def kde(self, dims=None, **kwargs):
         """Compute the KDE for all variables in the dataset."""
-        return self._obj.map(get_function("kde"), dims=dims, **kwargs)
+        return self._apply(get_function("kde"), dims=dims, **kwargs)
 
     def ecdf(self, dims=None, **kwargs):
         """Compute the ecdf for all variables in the dataset."""
-        return self._obj.map(ecdf, dims=dims, **kwargs).rename({"ecdf_axis": "plot_axis"})
+        # TODO: implement ecdf here so it doesn't depend on numba
+        return self._apply(ecdf, dims=dims, **kwargs).rename(ecdf_axis="plot_axis")
 
 
 @register_datatree_accessor("azstats")

@@ -7,7 +7,8 @@ import xarray as xr
 from arviz_base import rcParams
 from scipy.fftpack import fft
 from scipy.optimize import brentq
-from scipy.signal import convolve, convolve2d, gaussian  # pylint: disable=no-name-in-module
+from scipy.signal import convolve, convolve2d
+from scipy.signal.windows import gaussian
 from scipy.sparse import coo_matrix
 from scipy.special import ive  # pylint: disable=no-name-in-module
 
@@ -393,7 +394,7 @@ def kde(da, dims=None, grid_len=512, **kwargs):
     return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
 
 
-def _kde(x, circular=False, **kwargs):
+def _kde(x, circular=False, grid_len=512, **kwargs):
     """One dimensional density estimation.
 
     It is a wrapper around ``kde_linear()`` and ``kde_circular()``.
@@ -505,7 +506,7 @@ def _kde(x, circular=False, **kwargs):
     if x.size == 0 or np.all(x == x[0]):
         warnings.warn("Your data appears to have a single value or no finite values")
 
-        return np.zeros(2), np.array([np.nan] * 2), np.nan
+        return np.zeros(grid_len), np.full(grid_len, np.nan), np.nan
 
     if circular:
         if circular == "degrees":
@@ -514,7 +515,7 @@ def _kde(x, circular=False, **kwargs):
     else:
         kde_fun = kde_linear
 
-    return kde_fun(x, **kwargs)
+    return kde_fun(x, grid_len=grid_len, **kwargs)
 
 
 def kde_linear(
