@@ -7,7 +7,8 @@ import xarray as xr
 from arviz_base import rcParams
 from scipy.fftpack import fft
 from scipy.optimize import brentq
-from scipy.signal import convolve, convolve2d, gaussian  # pylint: disable=no-name-in-module
+from scipy.signal import convolve, convolve2d
+from scipy.signal.windows import gaussian
 from scipy.sparse import coo_matrix
 from scipy.special import ive  # pylint: disable=no-name-in-module
 
