@@ -1,75 +1,14 @@
 """Stats-utility functions for ArviZ."""
 import logging
-import warnings
 from collections.abc import Sequence
 
 import numpy as np
-from scipy.fftpack import next_fast_len
 from scipy.interpolate import CubicSpline
-from scipy.stats.mstats import mquantiles
 from xarray import apply_ufunc
 
-__all__ = ["autocorr", "autocov", "make_ufunc", "wrap_xarray_ufunc"]
+__all__ = ["make_ufunc", "wrap_xarray_ufunc"]
 
 _log = logging.getLogger(__name__)
-
-
-def autocov(ary, axis=-1):
-    """Compute autocovariance estimates for every lag for the input array.
-
-    Parameters
-    ----------
-    ary : Numpy array
-        An array containing MCMC samples
-
-    Returns
-    -------
-    acov: Numpy array same size as the input array
-    """
-    axis = axis if axis > 0 else len(ary.shape) + axis
-    n = ary.shape[axis]
-    m = next_fast_len(2 * n)
-
-    ary = ary - ary.mean(axis, keepdims=True)
-
-    # added to silence tuple warning for a submodule
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-
-        ifft_ary = np.fft.rfft(ary, n=m, axis=axis)
-        ifft_ary *= np.conjugate(ifft_ary)
-
-        shape = tuple(
-            slice(None) if dim_len != axis else slice(0, n) for dim_len, _ in enumerate(ary.shape)
-        )
-        cov = np.fft.irfft(ifft_ary, n=m, axis=axis)[shape]
-        cov /= n
-
-    return cov
-
-
-def autocorr(ary, axis=-1):
-    """Compute autocorrelation using FFT for every lag for the input array.
-
-    See https://en.wikipedia.org/wiki/autocorrelation#Efficient_computation
-
-    Parameters
-    ----------
-    ary : Numpy array
-        An array containing MCMC samples
-
-    Returns
-    -------
-    acorr: Numpy array same size as the input array
-    """
-    corr = autocov(ary, axis=axis)
-    axis = axis = axis if axis > 0 else len(corr.shape) + axis
-    norm = tuple(
-        slice(None, None) if dim != axis else slice(None, 1) for dim, _ in enumerate(corr.shape)
-    )
-    with np.errstate(invalid="ignore"):
-        corr /= corr[norm]
-    return corr
 
 
 def make_ufunc(
@@ -316,13 +255,6 @@ def logsumexp(ary, *, b=None, b_inv=None, axis=None, keepdims=False, out=None, c
     out += ary_max if keepdims else ary_max.squeeze()
     # transform to scalar if possible
     return out if out.shape else dtype(out)
-
-
-def quantile(ary, q, axis=None, limit=None):
-    """Use same quantile function as R (Type 7)."""
-    if limit is None:
-        limit = tuple()
-    return mquantiles(ary, q, alphap=1, betap=1, axis=axis, limit=limit)
 
 
 def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwargs=None):

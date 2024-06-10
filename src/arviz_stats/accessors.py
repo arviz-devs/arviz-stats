@@ -6,7 +6,7 @@ from arviz_base.utils import _var_names
 from datatree import register_datatree_accessor
 from xarray_einstats.numba import ecdf
 
-from .utils import get_function
+from arviz_stats.utils import get_function
 
 __all__ = ["AzStatsDsAccessor", "AzStatsDaAccessor", "AzStatsDtAccessor"]
 
@@ -102,6 +102,20 @@ class AzStatsDsAccessor(_BaseAccessor):
         kwargs["prob"] = prob
         return self._apply(get_function("eti"), dims=dims, **kwargs)
 
+    def ess(self, dims=None, method="bulk", relative=False, prob=None):
+        """Compute the ess of all the variables in the dataset."""
+        return self._apply(
+            get_function("ess"), dims=dims, method=method, relative=relative, prob=prob
+        )
+
+    def rhat(self, dims=None, method="rank"):
+        """Compute the rhat of all the variables in the dataset."""
+        return self._apply(get_function("rhat"), dims=dims, method=method)
+
+    def mcse(self, dims=None, method="mean", prob=None):
+        """Compute the mcse of all the variables in the dataset."""
+        return self._apply(get_function("mcse"), dims=dims, method=method, prob=prob)
+
     def hdi(self, prob=None, dims=None, **kwargs):
         """Compute hdi on all variables in the dataset."""
         kwargs["prob"] = prob
@@ -131,6 +145,11 @@ class AzStatsDtAccessor(_BaseAccessor):
             f"the group argument {group}"
         )
         return self._obj
+
+    def filter_vars(self, group="posterior", var_names=None, filter_vars=None):
+        """Access and filter variables of the provided group."""
+        ds = self._process_input(group, "filter_vars").ds
+        return ds.azstats.filter_vars(var_names, filter_vars)
 
     def eti(self, prob=None, dims=None, group="posterior", **kwargs):
         """Compute the equal tail interval of all the variables in a group of the DataTree."""
