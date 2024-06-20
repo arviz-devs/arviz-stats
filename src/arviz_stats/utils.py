@@ -15,8 +15,8 @@ __all__ = ["ELPDData", "get_function", "get_log_likelihood"]
 def get_function(func_name):
     """Get a function from arviz_stats.
 
-    Attempts to import the provided function from the module indicated in the rcParam
-    ``stats.module``, and if it fails, it imports it from ``arviz_stats.base``.
+    Attempts to import the provided function from dataarray class in the module indicated
+    in the rcParam ``stats.module``, and if it fails, it imports it from ``arviz_stats.base``.
 
     Parameters
     ----------
@@ -27,11 +27,16 @@ def get_function(func_name):
     -------
     callable
     """
-    preferred_module = import_module(rcParams["stats.module"])
-    if hasattr(preferred_module, func_name):
-        return getattr(preferred_module, func_name)
-    base_module = import_module("arviz_stats.base")
-    return getattr(base_module, func_name)
+    module_name = rcParams["stats.module"]
+    if isinstance(module_name, str):
+        preferred_module = import_module(f"arviz_stats.{module_name}")
+    else:
+        preferred_module = module_name
+    if hasattr(preferred_module, "dataarray_stats"):
+        preferred_module = preferred_module.dataarray_stats
+    if not hasattr(preferred_module, func_name):
+        raise KeyError(f"Requested function '{func_name}' is not available in '{preferred_module}'")
+    return getattr(preferred_module, func_name)
 
 
 def get_log_likelihood(idata, var_name=None):

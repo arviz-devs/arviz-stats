@@ -26,12 +26,7 @@ classifiers = [
 dynamic = ["version", "description"]
 dependencies = [
   "numpy>=1.23",
-  "xarray>=2022.6.0",
-  "xarray-datatree",
-  "arviz-base @ git+https://github.com/arviz-devs/arviz-base",
-  "xarray-einstats",
-  "scipy",
-  "numba",
+  "scipy>=1.10",
 ]
 
 [tool.flit.module]
@@ -44,14 +39,20 @@ documentation = "https://arviz-stats.readthedocs.io"
 funding = "https://opencollective.com/arviz"
 
 [project.optional-dependencies]
+xarray = [
+  "xarray>=2022.6.0",
+  "xarray-datatree",
+  "arviz-base==0.2",
+  "xarray-einstats",
+  "numba",
+]
 test = [
-    "hypothesis",
     "pytest",
     "pytest-cov",
     "h5netcdf",
 ]
 doc = [
-    "furo",
+    "sphinx-book-theme",
     "myst-parser[linkify]",
     "myst-nb",
     "sphinx-copybutton",
@@ -59,9 +60,10 @@ doc = [
     "sphinx>=5",
     "sphinx-design",
     "jupyter-sphinx",
-    "netcdf4"
+    "netcdf4",
+    "sphinx_autosummary_accessors",
 ]
-accel = [
+numba = [
   "numba",
   "xarray_einstats[einops]",
 ]

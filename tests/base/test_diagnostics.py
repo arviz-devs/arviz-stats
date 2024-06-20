@@ -3,28 +3,12 @@
 import os
 
 import numpy as np
-import packaging
 import pandas as pd
 import pytest
-import scipy
 from arviz_base import load_arviz_data, xarray_var_iter
-from numpy.testing import assert_almost_equal
 
-from arviz_stats.base import bfmi, ess, mcse, rhat
-from arviz_stats.base.diagnostics import (
-    _ess,
-    _ess_quantile,
-    _mc_error,
-    _mcse_quantile,
-    _multichain_statistics,
-    _rhat,
-    _rhat_rank,
-    _split_chains,
-    _z_scale,
-    ks_summary,
-)
-
-pytest.skip(allow_module_level=True)
+import arviz_stats  # pylint: disable=unused-import
+from arviz_stats.base import array_stats
 
 # For tests only, recommended value should be closer to 1.01-1.05
 # See discussion in https://github.com/stan-dev/rstan/pull/618
@@ -32,36 +16,17 @@ GOOD_RHAT = 1.1
 
 
 @pytest.fixture(scope="session")
-def data():
+def idata():
     centered_eight = load_arviz_data("centered_eight")
     return centered_eight.posterior
 
 
-def test_bfmi():
-    energy = np.array([1, 2, 3, 4])
-    assert_almost_equal(bfmi(energy), 0.6)
+@pytest.fixture(scope="function")
+def data(idata):
+    return idata.ds
 
 
-def test_bfmi_dataset():
-    data = load_arviz_data("centered_eight")
-    assert bfmi(data).all()
-
-
-def test_bfmi_dataset_bad():
-    data = load_arviz_data("centered_eight")
-    data["sample_stats"] = data["sample_stats"].drop_vars("energy")
-    with pytest.raises(TypeError):
-        bfmi(data)
-
-
-def test_bfmi_correctly_transposed():
-    data = load_arviz_data("centered_eight")
-    vals1 = bfmi(data)
-    data.sample_stats["energy"] = data.sample_stats["energy"].T
-    vals2 = bfmi(data)
-    assert_almost_equal(vals1, vals2)
-
-
+# pylint: disable=undefined-variable
 @pytest.mark.skip(reason="from_cmdstan not yet ported to arviz_base.")
 def test_deterministic():
     """
@@ -183,7 +148,7 @@ def test_deterministic():
 def test_rhat(data, var_names, method):
     """Confirm R-hat statistic is close to 1 for a large
     number of samples. Also checks the correct shape"""
-    rhat_data = rhat(data, var_names=var_names, method=method)
+    rhat_data = data.azstats.filter_vars(var_names).rhat(method=method)
     for r_hat in rhat_data.data_vars.values():
         assert ((1 / GOOD_RHAT < r_hat.values) | (r_hat.values < GOOD_RHAT)).all()
 
@@ -195,12 +160,11 @@ def test_rhat(data, var_names, method):
 @pytest.mark.parametrize("method", ("rank", "split", "folded", "z_scale", "identity"))
 def test_rhat_nan(method):
     """Confirm R-hat statistic returns nan."""
-    data = np.random.randn(4, 100)
+    rng = np.random.default_rng()
+    data = rng.normal(size=(4, 100))
     data[0, 0] = np.nan  #  pylint: disable=unsupported-assignment-operation
-    rhat_data = rhat(data, method=method)
+    rhat_data = array_stats.rhat(data, method=method)
     assert np.isnan(rhat_data)
-    if method == "rank":
-        assert np.isnan(_rhat(rhat_data))
 
 
 @pytest.mark.parametrize("method", ("rank", "split", "folded", "z_scale", "identity"))
@@ -208,30 +172,30 @@ def test_rhat_nan(method):
 @pytest.mark.parametrize("draw", (1, 2, 3, 4))
 def test_rhat_shape(method, chain, draw):
     """Confirm R-hat statistic returns nan."""
-    data = np.random.randn(draw) if chain is None else np.random.randn(chain, draw)
+    rng = np.random.default_rng()
+    size = draw if chain is None else (chain, draw)
+    ary = rng.normal(size=size)
+    kwargs = {"chain_axis": None} if chain is None else {}
     if (chain in (None, 1)) or (draw < 4):
-        rhat_data = rhat(data, method=method)
+        rhat_data = array_stats.rhat(ary, method=method, **kwargs)
         assert np.isnan(rhat_data)
     else:
-        rhat_data = rhat(data, method=method)
+        rhat_data = array_stats.rhat(ary, method=method, **kwargs)
         assert not np.isnan(rhat_data)
 
 
 def test_rhat_bad():
     """Confirm rank normalized Split R-hat statistic is
     far from 1 for a small number of samples."""
-    r_hat = rhat(np.vstack([20 + np.random.randn(1, 100), np.random.randn(1, 100)]))
+    r_hat = array_stats.rhat(np.vstack([20 + np.random.randn(1, 100), np.random.randn(1, 100)]))
     assert 1 / GOOD_RHAT > r_hat or GOOD_RHAT < r_hat
 
 
 def test_rhat_bad_method():
-    with pytest.raises(TypeError):
-        rhat(np.random.randn(2, 300), method="wrong_method")
-
-
-def test_rhat_ndarray():
-    with pytest.raises(TypeError):
-        rhat(np.random.randn(2, 300, 10))
+    rng = np.random.default_rng()
+    ary = rng.normal(size=(4, 100))
+    with pytest.raises(ValueError):
+        array_stats.rhat(ary, method="wrong_method")
 
 
 @pytest.mark.parametrize(
@@ -251,24 +215,24 @@ def test_rhat_ndarray():
     ),
 )
 @pytest.mark.parametrize("relative", (True, False))
-def test_effective_sample_size_array(data, method, relative):
-    n_low = 100 / 400 if relative else 100
-    n_high = 800 / 400 if relative else 800
+def test_ess_array(method, relative):
+    rng = np.random.default_rng()
+    ary = rng.normal(size=(4, 100))
+    n_low = 0.3 if relative else 150
+    n_high = 2 if relative else 700
     if method in ("quantile", "tail"):
-        ess_hat = ess(data, method=method, prob=0.34, relative=relative)
+        ess_hat = array_stats.ess(ary, method=method, prob=0.34, relative=relative)
         if method == "tail":
             assert ess_hat > n_low
             assert ess_hat < n_high
-            ess_hat = ess(np.random.randn(4, 100), method=method, relative=relative)
+            ess_hat = array_stats.ess(ary, method=method, relative=relative)
             assert ess_hat > n_low
             assert ess_hat < n_high
-            ess_hat = ess(
-                np.random.randn(4, 100), method=method, prob=(0.2, 0.8), relative=relative
-            )
+            ess_hat = array_stats.ess(ary, method=method, prob=(0.2, 0.8), relative=relative)
     elif method == "local":
-        ess_hat = ess(np.random.randn(4, 100), method=method, prob=(0.2, 0.3), relative=relative)
+        ess_hat = array_stats.ess(ary, method=method, prob=(0.2, 0.3), relative=relative)
     else:
-        ess_hat = ess(np.random.randn(4, 100), method=method, relative=relative)
+        ess_hat = array_stats.ess(ary, method=method, relative=relative)
     assert ess_hat > n_low
     assert ess_hat < n_high
 
@@ -293,56 +257,61 @@ def test_effective_sample_size_array(data, method, relative):
 @pytest.mark.parametrize("chain", (None, 1, 2))
 @pytest.mark.parametrize("draw", (1, 2, 3, 4))
 @pytest.mark.parametrize("use_nan", (True, False))
-def test_effective_sample_size_nan(method, relative, chain, draw, use_nan):
-    data = np.random.randn(draw) if chain is None else np.random.randn(chain, draw)
+def test_ess_nan(method, relative, chain, draw, use_nan):
+    rng = np.random.default_rng()
+    size = draw if chain is None else (chain, draw)
+    data = rng.normal(size=size)
+    kwargs = {"chain_axis": None} if chain is None else {}
     if use_nan:
         data[0] = np.nan
     if method in ("quantile", "tail"):
-        ess_value = ess(data, method=method, prob=0.34, relative=relative)
+        ess_value = array_stats.ess(data, method=method, prob=0.34, relative=relative, **kwargs)
     elif method == "local":
-        ess_value = ess(data, method=method, prob=(0.2, 0.3), relative=relative)
+        ess_value = array_stats.ess(
+            data, method=method, prob=(0.2, 0.3), relative=relative, **kwargs
+        )
     else:
-        ess_value = ess(data, method=method, relative=relative)
+        ess_value = array_stats.ess(data, method=method, relative=relative, **kwargs)
     if (draw < 4) or use_nan:
         assert np.isnan(ess_value)
     else:
         assert not np.isnan(ess_value)
-    # test following only once tests are run
-    if (method == "bulk") and (not relative) and (chain is None) and (draw == 4):
-        if use_nan:
-            assert np.isnan(_ess(data))
-        else:
-            assert not np.isnan(_ess(data))
 
 
-@pytest.mark.parametrize("relative", (True, False))
-def test_effective_sample_size_missing_prob(relative):
+def test_ess_missing_prob():
+    rng = np.random.default_rng()
+    ary = rng.normal(size=(4, 100))
     with pytest.raises(TypeError):
-        ess(np.random.randn(4, 100), method="quantile", relative=relative)
+        array_stats.ess(ary, method="quantile")
     with pytest.raises(TypeError):
-        _ess_quantile(np.random.randn(4, 100), prob=None, relative=relative)
-    with pytest.raises(TypeError):
-        ess(np.random.randn(4, 100), method="local", relative=relative)
+        array_stats.ess(ary, method="local")
 
 
-@pytest.mark.parametrize("relative", (True, False))
-def test_effective_sample_size_too_many_probs(relative):
+def test_ess_too_many_probs():
+    rng = np.random.default_rng()
+    ary = rng.normal(size=(4, 100))
     with pytest.raises(ValueError):
-        ess(np.random.randn(4, 100), method="local", prob=[0.1, 0.2, 0.9], relative=relative)
+        array_stats.ess(ary, method="local", prob=[0.1, 0.2, 0.9])
 
 
-def test_effective_sample_size_constant():
-    assert ess(np.ones((4, 100))) == 400
+def test_ess_constant():
+    assert array_stats.ess(np.ones((4, 100))) == 400
 
 
-def test_effective_sample_size_bad_method():
-    with pytest.raises(TypeError):
-        ess(np.random.randn(4, 100), method="wrong_method")
+def test_ess_bad_method():
+    rng = np.random.default_rng()
+    ary = rng.normal(size=(4, 100))
+    with pytest.raises(ValueError):
+        array_stats.ess(ary, method="wrong_method")
 
 
-def test_effective_sample_size_ndarray():
-    with pytest.raises(TypeError):
-        ess(np.random.randn(2, 300, 10))
+def test_ess_ndarray_axis():
+    rng = np.random.default_rng()
+    ary = rng.normal(size=(3, 100, 5))
+    ess_data = array_stats.ess(ary, chain_axis=0, draw_axis=1)
+    assert ess_data.shape == (5,)
+    ess_data = array_stats.ess(ary, chain_axis=-1, draw_axis=1)
+    assert ess_data.shape == (3,)
 
 
 @pytest.mark.parametrize(
@@ -362,40 +331,44 @@ def test_effective_sample_size_ndarray():
     ),
 )
 @pytest.mark.parametrize("relative", (True, False))
-@pytest.mark.parametrize("var_names", (None, "mu", ["mu", "tau"]))
-def test_effective_sample_size_dataset(data, method, var_names, relative):
-    n_low = 100 / (data.chain.size * data.draw.size) if relative else 100
+def test_ess_dataset(data, method, relative):
+    n_low = 100 / (data.sizes["chain"] * data.sizes["draw"]) if relative else 100
     if method in ("quantile", "tail"):
-        ess_hat = ess(data, var_names=var_names, method=method, prob=0.34, relative=relative)
+        ess_hat = data.azstats.ess(method=method, prob=0.34, relative=relative)
     elif method == "local":
-        ess_hat = ess(data, var_names=var_names, method=method, prob=(0.2, 0.3), relative=relative)
+        ess_hat = data.azstats.ess(method=method, prob=(0.2, 0.3), relative=relative)
     else:
-        ess_hat = ess(data, var_names=var_names, method=method, relative=relative)
-    assert np.all(ess_hat.mu.values > n_low)  # This might break if the data is regenerated
+        ess_hat = data.azstats.ess(method=method, relative=relative)
+    assert np.all(ess_hat.mu.values > n_low)
 
 
 @pytest.mark.parametrize("mcse_method", ("mean", "sd", "median", "quantile"))
 def test_mcse_array(mcse_method):
+    rng = np.random.default_rng()
+    ary = rng.normal(size=(4, 100))
     if mcse_method == "quantile":
-        mcse_hat = mcse(np.random.randn(4, 100), method=mcse_method, prob=0.34)
+        mcse_hat = array_stats.mcse(ary, method=mcse_method, prob=0.34)
     else:
-        mcse_hat = mcse(np.random.randn(4, 100), method=mcse_method)
+        mcse_hat = array_stats.mcse(ary, method=mcse_method)
     assert mcse_hat
 
 
-def test_mcse_ndarray():
-    with pytest.raises(TypeError):
-        mcse(np.random.randn(2, 300, 10))
+def test_mcse_ndarray_axis():
+    rng = np.random.default_rng()
+    ary = rng.normal(size=(3, 100, 5))
+    mcse_data = array_stats.mcse(ary, chain_axis=0, draw_axis=1)
+    assert mcse_data.shape == (5,)
+    mcse_data = array_stats.mcse(ary, chain_axis=-1, draw_axis=1)
+    assert mcse_data.shape == (3,)
 
 
 @pytest.mark.parametrize("mcse_method", ("mean", "sd", "median", "quantile"))
-@pytest.mark.parametrize("var_names", (None, "mu", ["mu", "tau"]))
-def test_mcse_dataset(data, mcse_method, var_names):
+def test_mcse_dataset(data, mcse_method):
     if mcse_method == "quantile":
-        mcse_hat = mcse(data, var_names=var_names, method=mcse_method, prob=0.34)
+        mcse_hat = data.azstats.mcse(method=mcse_method, prob=0.34)
     else:
-        mcse_hat = mcse(data, var_names=var_names, method=mcse_method)
-    assert mcse_hat  # This might break if the data is regenerated
+        mcse_hat = data.azstats.mcse(method=mcse_method)
+    assert mcse_hat
 
 
 @pytest.mark.parametrize("mcse_method", ("mean", "sd", "median", "quantile"))
@@ -403,120 +376,27 @@ def test_mcse_dataset(data, mcse_method, var_names):
 @pytest.mark.parametrize("draw", (1, 2, 3, 4))
 @pytest.mark.parametrize("use_nan", (True, False))
 def test_mcse_nan(mcse_method, chain, draw, use_nan):
-    data = np.random.randn(draw) if chain is None else np.random.randn(chain, draw)
+    rng = np.random.default_rng()
+    size = draw if chain is None else (chain, draw)
+    data = rng.normal(size=size)
+    kwargs = {"chain_axis": None} if chain is None else {}
     if use_nan:
         data[0] = np.nan
     if mcse_method == "quantile":
-        mcse_hat = mcse(data, method=mcse_method, prob=0.34)
+        mcse_hat = array_stats.mcse(data, method=mcse_method, prob=0.34, **kwargs)
     else:
-        mcse_hat = mcse(data, method=mcse_method)
+        mcse_hat = array_stats.mcse(data, method=mcse_method, **kwargs)
     if draw < 4 or use_nan:
         assert np.isnan(mcse_hat)
     else:
         assert not np.isnan(mcse_hat)
 
 
-@pytest.mark.parametrize("method", ("wrong_method", "quantile"))
-def test_mcse_bad_method(data, method):
-    with pytest.raises(TypeError):
-        mcse(data, method=method, prob=None)
-
-
-@pytest.mark.parametrize("draws", (3, 4, 100))
-@pytest.mark.parametrize("chains", (None, 1, 2))
-def test_multichain_summary_array(draws, chains):
-    """Test multichain statistics against individual functions."""
-    if chains is None:
-        ary = np.random.randn(draws)
-    else:
-        ary = np.random.randn(chains, draws)
-
-    mcse_mean_hat = mcse(ary, method="mean")
-    mcse_sd_hat = mcse(ary, method="sd")
-    ess_bulk_hat = ess(ary, method="bulk")
-    ess_tail_hat = ess(ary, method="tail")
-    rhat_hat = _rhat_rank(ary)
-    (
-        mcse_mean_hat_,
-        mcse_sd_hat_,
-        ess_bulk_hat_,
-        ess_tail_hat_,
-        rhat_hat_,
-    ) = _multichain_statistics(ary)
-    if draws == 3:
-        assert np.isnan(
-            (
-                mcse_mean_hat,
-                mcse_sd_hat,
-                ess_bulk_hat,
-                ess_tail_hat,
-                rhat_hat,
-            )
-        ).all()
-        assert np.isnan(
-            (
-                mcse_mean_hat_,
-                mcse_sd_hat_,
-                ess_bulk_hat_,
-                ess_tail_hat_,
-                rhat_hat_,
-            )
-        ).all()
-    else:
-        assert_almost_equal(mcse_mean_hat, mcse_mean_hat_)
-        assert_almost_equal(mcse_sd_hat, mcse_sd_hat_)
-        assert_almost_equal(ess_bulk_hat, ess_bulk_hat_)
-        assert_almost_equal(ess_tail_hat, ess_tail_hat_)
-        if chains in (None, 1):
-            assert np.isnan(rhat_hat)
-            assert np.isnan(rhat_hat_)
-        else:
-            assert round(rhat_hat, 3) == round(rhat_hat_, 3)
-
-
-def test_ks_summary():
-    """Instead of psislw data, this test uses fake data."""
-    pareto_tail_indices = np.array([0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2])
-    with pytest.warns(UserWarning):
-        summary = ks_summary(pareto_tail_indices)
-    assert summary is not None
-    pareto_tail_indices2 = np.array([0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.6])
-    with pytest.warns(UserWarning):
-        summary2 = ks_summary(pareto_tail_indices2)
-    assert summary2 is not None
-
-
-@pytest.mark.parametrize("size", [100, 101])
-@pytest.mark.parametrize("batches", [1, 2, 3, 5, 7])
-@pytest.mark.parametrize("ndim", [1, 2, 3])
-@pytest.mark.parametrize("circular", [False, True])
-def test_mc_error(size, batches, ndim, circular):
-    x = np.random.randn(size, ndim).squeeze()  # pylint: disable=no-member
-    assert _mc_error(x, batches=batches, circular=circular) is not None
-
-
-@pytest.mark.parametrize("size", [100, 101])
-@pytest.mark.parametrize("ndim", [1, 2, 3])
-def test_mc_error_nan(size, ndim):
-    x = np.random.randn(size, ndim).squeeze()  # pylint: disable=no-member
-    x[0] = np.nan
-    if ndim != 1:
-        assert np.isnan(_mc_error(x)).all()
-    else:
-        assert np.isnan(_mc_error(x))
-
-
-@pytest.mark.parametrize("func", ("_mcse_quantile", "_z_scale"))
-def test_nan_behaviour(func):
-    data = np.random.randn(100, 4)
-    data[0, 0] = np.nan  #  pylint: disable=unsupported-assignment-operation
-    if func == "_mcse_quantile":
-        assert np.isnan(_mcse_quantile(data, 0.5)).all(None)
-    elif packaging.version.parse(scipy.__version__) < packaging.version.parse("1.10.0.dev0"):
-        assert not np.isnan(_z_scale(data)).all(None)
-        assert not np.isnan(_z_scale(data)).any(None)
-    else:
-        assert np.isnan(_z_scale(data)).sum() == 1
+def test_mcse_bad_method():
+    rng = np.random.default_rng()
+    ary = rng.normal(size=(4, 100))
+    with pytest.raises(ValueError):
+        array_stats.mcse(ary, method="wrong_method")
 
 
 @pytest.mark.parametrize("chains", (None, 1, 2, 3))
@@ -526,7 +406,7 @@ def test_split_chain_dims(chains, draws):
         data = np.random.randn(draws)
     else:
         data = np.random.randn(chains, draws)
-    split_data = _split_chains(data)
+    split_data = array_stats._split_chains(data)  # pylint: disable=protected-access
     if chains is None:
         chains = 1
     assert split_data.shape == (chains * 2, draws // 2)

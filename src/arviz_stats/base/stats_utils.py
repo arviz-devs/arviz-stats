@@ -1,75 +1,14 @@
 """Stats-utility functions for ArviZ."""
 import logging
-import warnings
 from collections.abc import Sequence
 
 import numpy as np
-from scipy.fftpack import next_fast_len
 from scipy.interpolate import CubicSpline
-from scipy.stats.mstats import mquantiles
 from xarray import apply_ufunc
 
-__all__ = ["autocorr", "autocov", "make_ufunc", "wrap_xarray_ufunc"]
+__all__ = ["make_ufunc", "wrap_xarray_ufunc"]
 
 _log = logging.getLogger(__name__)
-
-
-def autocov(ary, axis=-1):
-    """Compute autocovariance estimates for every lag for the input array.
-
-    Parameters
-    ----------
-    ary : Numpy array
-        An array containing MCMC samples
-
-    Returns
-    -------
-    acov: Numpy array same size as the input array
-    """
-    axis = axis if axis > 0 else len(ary.shape) + axis
-    n = ary.shape[axis]
-    m = next_fast_len(2 * n)
-
-    ary = ary - ary.mean(axis, keepdims=True)
-
-    # added to silence tuple warning for a submodule
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-
-        ifft_ary = np.fft.rfft(ary, n=m, axis=axis)
-        ifft_ary *= np.conjugate(ifft_ary)
-
-        shape = tuple(
-            slice(None) if dim_len != axis else slice(0, n) for dim_len, _ in enumerate(ary.shape)
-        )
-        cov = np.fft.irfft(ifft_ary, n=m, axis=axis)[shape]
-        cov /= n
-
-    return cov
-
-
-def autocorr(ary, axis=-1):
-    """Compute autocorrelation using FFT for every lag for the input array.
-
-    See https://en.wikipedia.org/wiki/autocorrelation#Efficient_computation
-
-    Parameters
-    ----------
-    ary : Numpy array
-        An array containing MCMC samples
-
-    Returns
-    -------
-    acorr: Numpy array same size as the input array
-    """
-    corr = autocov(ary, axis=axis)
-    axis = axis = axis if axis > 0 else len(corr.shape) + axis
-    norm = tuple(
-        slice(None, None) if dim != axis else slice(None, 1) for dim, _ in enumerate(corr.shape)
-    )
-    with np.errstate(invalid="ignore"):
-        corr /= corr[norm]
-    return corr
 
 
 def make_ufunc(
@@ -104,7 +43,7 @@ def make_ufunc(
     callable
         ufunc wrapper for `func`.
     """
-    if n_dims < 1:
+    if n_dims is not None and n_dims < 1:
         raise TypeError("n_dims must be one or higher.")
 
     if n_input == 1 and check_shape is None:
@@ -112,30 +51,40 @@ def make_ufunc(
     elif check_shape is None:
         check_shape = False
 
-    def _ufunc(*args, out=None, out_shape=None, **kwargs):
+    def _ufunc(*args, out=None, out_shape=None, shape_from_1st=False, **kwargs):
         """General ufunc for single-output function."""
         arys = args[:n_input]
-        n_dims_out = None
-        if out is None:
+        if n_dims is None:
+            element_shape = arys[0].shape
+        else:
+            element_shape = arys[0].shape[:-n_dims]
+        if shape_from_1st and out_shape is not None:
+            raise ValueError("out_shape and shape_from_1st are incompatible")
+        if out is None and not shape_from_1st:
             if out_shape is None:
-                out = np.empty(arys[-1].shape[:-n_dims])
+                out = np.empty(element_shape)
             else:
-                out = np.empty((*arys[-1].shape[:-n_dims], *out_shape))
-                n_dims_out = -len(out_shape)
-        elif check_shape:
-            if out.shape != arys[-1].shape[:-n_dims]:
+                out = np.empty((*element_shape, *out_shape))
+        elif check_shape and not shape_from_1st:
+            if out.shape != arys[0].shape[:-n_dims]:
                 msg = f"Shape incorrect for `out`: {out.shape}."
                 msg += f" Correct shape is {arys[-1].shape[:-n_dims]}"
                 raise TypeError(msg)
-        for idx in np.ndindex(out.shape[:n_dims_out]):
+        for idx in np.ndindex(element_shape):
             arys_idx = [ary[idx].ravel() if ravel else ary[idx] for ary in arys]
-            out[idx] = np.asarray(func(*arys_idx, *args[n_input:], **kwargs))[index]
+            aux = np.asarray(func(*arys_idx, *args[n_input:], **kwargs))[index]
+            if idx == ():
+                aux = np.squeeze(aux)
+            if shape_from_1st:
+                out = np.empty((*element_shape, *aux.shape))
+                shape_from_1st = False
+            out[idx] = aux
         return out
 
-    def _multi_ufunc(*args, out=None, out_shape=None, **kwargs):
+    def _multi_ufunc(*args, out=None, out_shape=None, shape_from_1st=False, **kwargs):
         """General ufunc for multi-output function."""
         arys = args[:n_input]
-        element_shape = arys[-1].shape[:-n_dims]
+        element_shape = arys[0].shape[:-n_dims]
         if out is None:
             if out_shape is None:
                 out = tuple(np.empty(element_shape) for _ in range(n_output))
@@ -159,7 +108,12 @@ def make_ufunc(
         for idx in np.ndindex(element_shape):
             arys_idx = [ary[idx].ravel() if ravel else ary[idx] for ary in arys]
             results = func(*arys_idx, *args[n_input:], **kwargs)
+            if shape_from_1st:
+                out = tuple(np.empty((*element_shape, *res.shape)) for res in results)
+                shape_from_1st = False
             for i, res in enumerate(results):
+                if idx == ():
+                    res = np.squeeze(res)
                 out[i][idx] = np.asarray(res)[index]
         return out
 
@@ -316,13 +270,6 @@ def logsumexp(ary, *, b=None, b_inv=None, axis=None, keepdims=False, out=None, c
     out += ary_max if keepdims else ary_max.squeeze()
     # transform to scalar if possible
     return out if out.shape else dtype(out)
-
-
-def quantile(ary, q, axis=None, limit=None):
-    """Use same quantile function as R (Type 7)."""
-    if limit is None:
-        limit = tuple()
-    return mquantiles(ary, q, alphap=1, betap=1, axis=axis, limit=limit)
 
 
 def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwargs=None):

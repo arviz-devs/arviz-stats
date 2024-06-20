@@ -1,9 +1,26 @@
 """Test for general computational backend agnostic utilities."""
+import inspect
+
 import numpy as np
 import pytest
-from arviz_base import from_dict
+from arviz_base import from_dict, rcParams
 
-from arviz_stats.utils import ELPDData, get_log_likelihood
+from arviz_stats.base.dataarray import dataarray_stats
+from arviz_stats.utils import ELPDData, get_function, get_log_likelihood
+
+
+def test_get_function_str_module():
+    rcParams["stats.module"] = "base"
+    func = get_function("eti")
+    assert inspect.ismethod(func)
+    assert func.__self__ is dataarray_stats
+
+
+def test_get_function_obj_module():
+    rcParams["stats.module"] = dataarray_stats
+    func = get_function("eti")
+    assert inspect.ismethod(func)
+    assert func.__self__ is dataarray_stats
 
 
 def test_get_log_likelihood():
