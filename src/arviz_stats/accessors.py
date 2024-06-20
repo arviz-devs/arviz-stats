@@ -3,7 +3,7 @@ import warnings
 
 import xarray as xr
 from arviz_base.utils import _var_names
-from datatree import register_datatree_accessor
+from datatree import DataTree, register_datatree_accessor
 from xarray_einstats.numba import ecdf
 
 from arviz_stats.utils import get_function
@@ -102,6 +102,11 @@ class AzStatsDsAccessor(_BaseAccessor):
         kwargs["prob"] = prob
         return self._apply(get_function("eti"), dims=dims, **kwargs)
 
+    def hdi(self, prob=None, dims=None, **kwargs):
+        """Compute hdi on all variables in the dataset."""
+        kwargs["prob"] = prob
+        return self._apply(get_function("hdi"), dims=dims, **kwargs)
+
     def ess(self, dims=None, method="bulk", relative=False, prob=None):
         """Compute the ess of all the variables in the dataset."""
         return self._apply(
@@ -115,11 +120,6 @@ class AzStatsDsAccessor(_BaseAccessor):
     def mcse(self, dims=None, method="mean", prob=None):
         """Compute the mcse of all the variables in the dataset."""
         return self._apply(get_function("mcse"), dims=dims, method=method, prob=prob)
-
-    def hdi(self, prob=None, dims=None, **kwargs):
-        """Compute hdi on all variables in the dataset."""
-        kwargs["prob"] = prob
-        return self._apply(get_function("hdi"), dims=dims, **kwargs)
 
     def kde(self, dims=None, **kwargs):
         """Compute the KDE for all variables in the dataset."""
@@ -150,17 +150,45 @@ class AzStatsDtAccessor(_BaseAccessor):
         )
         return self._obj
 
+    def _apply(self, fun_name, dims, group, **kwargs):
+        return DataTree.from_dict(
+            {
+                var_name: get_function(fun_name)(da, dims=update_dims(dims, da), **kwargs)
+                for var_name, da in self._process_input(group, fun_name).items()
+            },
+            name=group,
+        )
+
     def filter_vars(self, group="posterior", var_names=None, filter_vars=None):
         """Access and filter variables of the provided group."""
         ds = self._process_input(group, "filter_vars").ds
+
         return ds.azstats.filter_vars(var_names, filter_vars)
 
     def eti(self, prob=None, dims=None, group="posterior", **kwargs):
         """Compute the equal tail interval of all the variables in a group of the DataTree."""
-        dt = self._process_input(group, "eti")
-        return dt.map(get_function("eti"), prob=prob, dims=dims, **kwargs)
+        return self._apply("eti", prob=prob, dims=dims, group=group, **kwargs)
 
     def hdi(self, prob=None, dims=None, group="posterior", **kwargs):
         """Compute the highest density interval of all the variables in a group of the DataTree."""
-        dt = self._process_input(group, "hdi")
-        return dt.map(get_function("hdi"), prob=prob, dims=dims, **kwargs)
+        return self._apply("hdi", prob=prob, dims=dims, group=group, **kwargs)
+
+    def ess(self, dims=None, group="posterior", **kwargs):
+        """Compute ess of all variables in a group of the DataTree."""
+        return self._apply("ess", dims=dims, group=group, **kwargs)
+
+    def rhat(self, dims=None, group="posterior", method="rank"):
+        """Compute the rhat of all the variables in a group of the DataTree."""
+        return self._apply("rhat", dims=dims, group=group, method=method)
+
+    def mcse(self, dims=None, group="posterior", method="mean", prob=None):
+        """Compute the mcse of all the variables in a group of the DataTree."""
+        return self._apply("mcse", dims=dims, group=group, method=method, prob=prob)
+
+    def kde(self, dims=None, group="posterior", **kwargs):
+        """Compute the KDE for all variables in a group of the DataTree."""
+        return self._apply("kde", dims=dims, group=group, **kwargs)
+
+    def histogram(self, dims=None, group="posterior", **kwargs):
+        """Compute the KDE for all variables in a group of the DataTree."""
+        return self._apply("histogram", dims=dims, group=group, **kwargs)
