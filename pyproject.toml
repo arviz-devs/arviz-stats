@@ -52,7 +52,7 @@ test = [
     "h5netcdf",
 ]
 doc = [
-    "furo",
+    "sphinx-book-theme",
     "myst-parser[linkify]",
     "myst-nb",
     "sphinx-copybutton",
@@ -60,7 +60,8 @@ doc = [
     "sphinx>=5",
     "sphinx-design",
     "jupyter-sphinx",
-    "netcdf4"
+    "netcdf4",
+    "sphinx_autosummary_accessors",
 ]
 numba = [
   "numba",

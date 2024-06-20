@@ -2,9 +2,11 @@
 import os
 from importlib.metadata import metadata
 
+import sphinx_autosummary_accessors
+
 # -- Project information
 
-_metadata = metadata("arviz-base")
+_metadata = metadata("arviz-stats")
 
 project = _metadata["Name"]
 author = _metadata["Author-email"].split("<", 1)[0].strip()
@@ -35,9 +37,10 @@ extensions = [
     "sphinx_copybutton",
     "sphinx_design",
     "jupyter_sphinx",
+    "sphinx_autosummary_accessors",
 ]
 
-templates_path = ["_templates"]
+templates_path = ["_templates", sphinx_autosummary_accessors.templates_path]
 
 exclude_patterns = [
     "Thumbs.db",
@@ -54,9 +57,12 @@ add_function_parentheses = False
 # -- Options for extensions
 
 extlinks = {
-    "issue": ("https://github.com/arviz-devs/arviz-base/issues/%s", "GH#%s"),
-    "pull": ("https://github.com/arviz-devs/arviz-base/pull/%s", "PR#%s"),
+    "issue": ("https://github.com/arviz-devs/arviz-stats/issues/%s", "GH#%s"),
+    "pull": ("https://github.com/arviz-devs/arviz-stats/pull/%s", "PR#%s"),
 }
+
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
 
 nb_execution_mode = "auto"
 nb_execution_excludepatterns = ["*.ipynb"]
@@ -91,5 +97,22 @@ intersphinx_mapping = {
 
 # -- Options for HTML output
 
-html_theme = "furo"
-# html_static_path = ["_static"]
+html_theme = "sphinx_book_theme"
+html_theme_options = {
+    "logo": {
+        "image_light": "_static/ArviZ.png",
+        "image_dark": "_static/ArviZ_white.png",
+    }
+}
+html_favicon = "_static/favicon.ico"
+html_static_path = ["_static"]
+html_css_files = ["custom.css"]
+html_sidebars = {
+    "**": [
+        "navbar-logo.html",
+        "name.html",
+        "icon-links.html",
+        "search-button-field.html",
+        "sbt-sidebar-nav.html",
+    ]
+}

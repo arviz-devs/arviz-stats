@@ -1,35 +1,90 @@
 # API reference
 
+## Accessors
+Currently, using accessors is the recommended way to call functions from `arviz_stats`.
+
+### Dataset accessors
+
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
+   :template: autosummary/accessor_attribute.rst
 
-   arviz_base.convert_to_dataset
-   arviz_base.convert_to_datatree
-   arviz_base.dict_to_dataset
-   arviz_base.extract
-   arviz_base.generate_dims_coords
-   arviz_base.make_attrs
+   xarray.Dataset.azstats.ds
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_method.rst
+
+   xarray.Dataset.azstats.filter_vars
+   xarray.Dataset.azstats.eti
+   xarray.Dataset.azstats.hdi
+   xarray.Dataset.azstats.ess
+   xarray.Dataset.azstats.rhat
+   xarray.Dataset.azstats.mcse
+   xarray.Dataset.azstats.kde
+   xarray.Dataset.azstats.histogram
+   xarray.Dataset.azstats.ecdf
+
 ```
 
 
-## Example datasets
+
+## DataArray facing functions
+
+### Base submodule
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
-   arviz_base.load_arviz_data
-   arviz_base.list_datasets
-   arviz_base.get_data_home
-   arviz_base.clear_data_home
+   arviz_stats.base.dataarray_stats.eti
+   arviz_stats.base.dataarray_stats.hdi
+   arviz_stats.base.dataarray_stats.ess
+   arviz_stats.base.dataarray_stats.rhat
+   arviz_stats.base.dataarray_stats.mcse
+   arviz_stats.base.dataarray_stats.histogram
+   arviz_stats.base.dataarray_stats.kde
 ```
 
-## Configuration
+### Numba submodule
+The numba accelerated computations are available as the same methods
+but of the `arviz_stats.numba.dataarray_stats` class.
+Both their API and implementation is the same as for the base module,
+the only difference being that one calls `arviz_stats.base.array_stats`
+for array facing functions whereas the other one calls `arviz_stats.numba.array_stats`.
+
+Implementation differences are thus documented below, at the array facing classes.
+
+
+## Array facing functions
+
+### Base submodule
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
-   arviz_base.rc_context
+   arviz_stats.base.array_stats.eti
+   arviz_stats.base.array_stats.hdi
+   arviz_stats.base.array_stats.ess
+   arviz_stats.base.array_stats.rhat
+   arviz_stats.base.array_stats.mcse
+   arviz_stats.base.array_stats.get_bins
+   arviz_stats.base.array_stats.histogram
+   arviz_stats.base.array_stats.kde
+```
+
+### Numba submodule
+Some functions are accelerated internally without changes to the public API,
+others are purely inherited from the base backend, and a last group is partially
+or completely reimplemented. This last group is documented here:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   arviz_stats.numba.array_stats.quantile
+   arviz_stats.numba.array_stats.histogram
+   arviz_stats.numba.array_stats.kde
 ```

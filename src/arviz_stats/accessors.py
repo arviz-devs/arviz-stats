@@ -125,6 +125,10 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Compute the KDE for all variables in the dataset."""
         return self._apply(get_function("kde"), dims=dims, **kwargs)
 
+    def histogram(self, dims=None, **kwargs):
+        """Compute the KDE for all variables in the dataset."""
+        return self._apply(get_function("histogram"), dims=dims, **kwargs)
+
     def ecdf(self, dims=None, **kwargs):
         """Compute the ecdf for all variables in the dataset."""
         # TODO: implement ecdf here so it doesn't depend on numba

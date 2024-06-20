@@ -51,7 +51,14 @@ class NumbaArray(BaseArray):
         self._hist_ufunc = None
 
     def quantile(self, ary, quantile, method="linear", **kwargs):
-        """Compute the quantile."""
+        """Compute the quantile.
+
+        Notes
+        -----
+        When `method` is not "linear", this falls back to the pure numpy quantile funcion.
+        Otherwise, numba is used to jit compile the quantile function and ensure it is
+        a ufunc.
+        """
         if method != "linear":
             return super().quantile(ary, quantile, method=method, **kwargs)
 
@@ -119,7 +126,15 @@ class NumbaArray(BaseArray):
         return self._kde_ufunc
 
     def kde(self, ary, axes=-1, circular=False, grid_len=512, **kwargs):
-        """Compute the guvectorized kde."""
+        """Compute the guvectorized kde.
+
+        Notes
+        -----
+        There currenly is no jit compiling of the kde computation steps other than the
+        ``histogram`` computation. Numba is only used for ufunc generation.
+        The ufunc is cached the first time to avoid unnecessary compilation while
+        ensuring the proper method of the initialized class is the one being guvectorized.
+        """
         if axes is not None:
             ary, axes = process_ary_axes(ary, axes)
             kwargs["axes"] = [(-1,), (0,), (), (), ()]
@@ -131,5 +146,18 @@ class NumbaArray(BaseArray):
 
         return self.kde_ufunc(ary, np.empty(grid_len), circular, bw, adaptive)
 
+
+NumbaArray.histogram.__doc__ = (
+    NumbaArray.histogram.__doc__
+    + """
+
+Notes
+-----
+The `weights` argument is not supported, but the `density` argument is supported.
+It uses the jit compiled histogram function to accelerate computations.
+``histogram`` is called in multiple places along the codebase (like the ``kde`` function for instance),
+so this function alone accelerates slightly a significant part of the codebase.
+"""
+)
 
 array_stats = NumbaArray()

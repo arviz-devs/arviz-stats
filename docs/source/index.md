@@ -23,6 +23,13 @@ api/index
 ```
 
 ```{toctree}
+:caption: Background
+:hidden:
+
+background
+```
+
+```{toctree}
 :caption: About
 :hidden:
 
