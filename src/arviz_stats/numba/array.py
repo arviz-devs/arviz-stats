@@ -48,6 +48,7 @@ class NumbaArray(BaseArray):
     def __init__(self):
         super().__init__()
         self._kde_ufunc = None
+        self._hist_ufunc = None
 
     def quantile(self, ary, quantile, method="linear", **kwargs):
         """Compute the quantile."""
@@ -66,12 +67,12 @@ class NumbaArray(BaseArray):
             return result
         return np.moveaxis(result, 0, -1)
 
-    def histogram(
+    def _histogram(
         self, ary, bins=None, range=None, weights=None, density=None
     ):  # pylint: disable=redefined-builtin
         """Compute the histogram of the data."""
         if bins is None:
-            bins = self.get_bins(ary)
+            bins = self._get_bins(ary)
         if weights is not None:
             raise NotImplementedError("numba doesn't support the weights argument")
         hist, bin_edges = _histogram_jit(ary, bins, range)

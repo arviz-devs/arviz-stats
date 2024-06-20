@@ -104,10 +104,79 @@ class BaseDataArray:
             kwargs={"method": method, "prob": prob},
         )
 
+    # pylint: disable=redefined-builtin
+    def histogram(self, da, dims=None, bins=None, range=None, weights=None, density=None):
+        """Compute histogram on DataArray input."""
+        if dims is None:
+            dims = rcParams["data.sample_dims"]
+        if isinstance(dims, str):
+            dims = [dims]
+        edges_dim = "edges_dim"
+        hist_dim = "hist_dim"
+        input_core_dims = [dims]
+        if isinstance(bins, DataArray):
+            bins_dims = [dim for dim in bins.dims if dim not in dims + ["plot_axis"]]
+            assert len(bins_dims) == 1
+            if "plot_axis" in bins.dims:
+                hist_dim = bins_dims[0]
+                bins = (
+                    concat(
+                        (
+                            bins.sel(plot_axis="left_edges", drop=True),
+                            bins.sel(plot_axis="right_edges", drop=True).isel({hist_dim: [-1]}),
+                        ),
+                        dim=hist_dim,
+                    )
+                    .rename({hist_dim: edges_dim})
+                    .drop_vars(edges_dim)
+                )
+            else:
+                edges_dim = bins_dims[0]
+            input_core_dims.append([edges_dim])
+        else:
+            input_core_dims.append([])
+        if isinstance(range, DataArray):
+            range_dims = [dim for dim in range.dims if dim not in dims]
+            assert len(range_dims) == 1
+            input_core_dims.append(range_dims)
+        else:
+            input_core_dims.append([])
+        if isinstance(weights, DataArray):
+            assert weights.dims == da.dims
+            input_core_dims.append(dims)
+        else:
+            input_core_dims.append([])
+
+        hist, edges = apply_ufunc(
+            self.array_class.histogram,
+            da,
+            bins,
+            range,
+            weights,
+            kwargs={
+                "density": density,
+                "axes": np.arange(-len(dims), 0, 1),
+            },
+            input_core_dims=input_core_dims,
+            output_core_dims=[[hist_dim], [edges_dim]],
+        )
+        plot_axis = DataArray(["histogram", "left_edges", "right_edges"], dims="plot_axis")
+        out = concat(
+            (
+                hist,
+                edges.isel({edges_dim: slice(None, -1)}).rename({edges_dim: hist_dim}),
+                edges.isel({edges_dim: slice(1, None)}).rename({edges_dim: hist_dim}),
+            ),
+            dim=plot_axis,
+        )
+        return out
+
     def kde(self, da, dims=None, circular=False, grid_len=512, **kwargs):
         """Compute kde on DataArray input."""
         if dims is None:
             dims = rcParams["data.sample_dims"]
+        if isinstance(dims, str):
+            dims = [dims]
         grid, pdf, bw = apply_ufunc(
             self.array_class.kde,
             da,

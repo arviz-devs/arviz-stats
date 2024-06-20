@@ -134,7 +134,7 @@ class _DensityBase(_CoreBase):
             grid_len = 256
             grid_min = x_min - 0.5 * x_std
             grid_max = x_max + 0.5 * x_std
-            grid_counts, _ = self.histogram(
+            grid_counts, _ = self._histogram(
                 x, bins=grid_len, range=(grid_min, grid_max), density=False
             )
         else:
@@ -456,7 +456,7 @@ class _DensityBase(_CoreBase):
         grid_min, grid_max, grid_len = self.get_grid(
             x_min, x_max, x_std, extend_fct, grid_len, custom_lims, extend, bound_correction
         )
-        grid_counts, grid_edges = self.histogram(
+        grid_counts, grid_edges = self._histogram(
             x, bins=grid_len, range=(grid_min, grid_max), density=False
         )
 
@@ -792,8 +792,8 @@ class _DensityBase(_CoreBase):
         if ary.dtype.kind == "f":
             bins, density, _ = self._kde(ary)
         else:
-            bins = self.get_bins(ary)
-            density, _ = self.histogram(ary, bins=bins, density=True)
+            bins = self._get_bins(ary)
+            density, _ = self._histogram(ary, bins=bins, density=True)
 
         sorted_idx = np.argsort(density)[::-1]
         mass_cum = 0

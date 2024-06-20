@@ -43,7 +43,7 @@ def make_ufunc(
     callable
         ufunc wrapper for `func`.
     """
-    if n_dims < 1:
+    if n_dims is not None and n_dims < 1:
         raise TypeError("n_dims must be one or higher.")
 
     if n_input == 1 and check_shape is None:
@@ -51,33 +51,40 @@ def make_ufunc(
     elif check_shape is None:
         check_shape = False
 
-    def _ufunc(*args, out=None, out_shape=None, **kwargs):
+    def _ufunc(*args, out=None, out_shape=None, shape_from_1st=False, **kwargs):
         """General ufunc for single-output function."""
         arys = args[:n_input]
-        n_dims_out = None
-        if out is None:
+        if n_dims is None:
+            element_shape = arys[0].shape
+        else:
+            element_shape = arys[0].shape[:-n_dims]
+        if shape_from_1st and out_shape is not None:
+            raise ValueError("out_shape and shape_from_1st are incompatible")
+        if out is None and not shape_from_1st:
             if out_shape is None:
-                out = np.empty(arys[-1].shape[:-n_dims])
+                out = np.empty(element_shape)
             else:
-                out = np.empty((*arys[-1].shape[:-n_dims], *out_shape))
-                n_dims_out = -len(out_shape)
-        elif check_shape:
-            if out.shape != arys[-1].shape[:-n_dims]:
+                out = np.empty((*element_shape, *out_shape))
+        elif check_shape and not shape_from_1st:
+            if out.shape != arys[0].shape[:-n_dims]:
                 msg = f"Shape incorrect for `out`: {out.shape}."
                 msg += f" Correct shape is {arys[-1].shape[:-n_dims]}"
                 raise TypeError(msg)
-        for idx in np.ndindex(out.shape[:n_dims_out]):
+        for idx in np.ndindex(element_shape):
             arys_idx = [ary[idx].ravel() if ravel else ary[idx] for ary in arys]
             aux = np.asarray(func(*arys_idx, *args[n_input:], **kwargs))[index]
             if idx == ():
                 aux = np.squeeze(aux)
+            if shape_from_1st:
+                out = np.empty((*element_shape, *aux.shape))
+                shape_from_1st = False
             out[idx] = aux
         return out
 
-    def _multi_ufunc(*args, out=None, out_shape=None, **kwargs):
+    def _multi_ufunc(*args, out=None, out_shape=None, shape_from_1st=False, **kwargs):
         """General ufunc for multi-output function."""
         arys = args[:n_input]
-        element_shape = arys[-1].shape[:-n_dims]
+        element_shape = arys[0].shape[:-n_dims]
         if out is None:
             if out_shape is None:
                 out = tuple(np.empty(element_shape) for _ in range(n_output))
@@ -101,7 +108,12 @@ def make_ufunc(
         for idx in np.ndindex(element_shape):
             arys_idx = [ary[idx].ravel() if ravel else ary[idx] for ary in arys]
             results = func(*arys_idx, *args[n_input:], **kwargs)
+            if shape_from_1st:
+                out = tuple(np.empty((*element_shape, *res.shape)) for res in results)
+                shape_from_1st = False
             for i, res in enumerate(results):
+                if idx == ():
+                    res = np.squeeze(res)
                 out[i][idx] = np.asarray(res)[index]
         return out
 

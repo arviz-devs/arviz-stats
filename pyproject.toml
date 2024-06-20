@@ -47,7 +47,6 @@ xarray = [
   "numba",
 ]
 test = [
-    "hypothesis",
     "pytest",
     "pytest-cov",
     "h5netcdf",

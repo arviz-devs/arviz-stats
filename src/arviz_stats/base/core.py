@@ -107,14 +107,39 @@ class _CoreBase:
         edge_prob = (1 - prob) / 2
         return self.quantile(ary, [edge_prob, 1 - edge_prob], **kwargs)
 
-    def get_bins(self, values):
+    def _get_bininfo(self, values):
+        dtype = values.dtype.kind
+
+        if dtype == "i":
+            x_min = values.min().astype(int)
+            x_max = values.max().astype(int)
+        else:
+            x_min = values.min().astype(float)
+            x_max = values.max().astype(float)
+
+        # Sturges histogram bin estimator
+        width_sturges = (x_max - x_min) / (np.log2(values.size) + 1)
+
+        # The Freedman-Diaconis histogram bin estimator.
+        iqr = np.subtract(
+            *self.quantile(values, [0.75, 0.25])
+        )  # pylint: disable=assignment-from-no-return
+        width_fd = 2 * iqr * values.size ** (-1 / 3)
+
+        if dtype == "i":
+            width = np.round(np.max([1, width_sturges, width_fd])).astype(int)
+        else:
+            width = np.max([width_sturges, width_fd])
+
+        return x_min, x_max, width
+
+    def _get_bins(self, values):
         """
-        Automatically compute the number of bins for discrete variables.
+        Automatically compute the number of bins for histograms.
 
         Parameters
         ----------
-        values = numpy array
-            values
+        values = array_like
 
         Returns
         -------
@@ -137,27 +162,11 @@ class _CoreBase:
         """
         dtype = values.dtype.kind
 
-        if dtype == "i":
-            x_min = values.min().astype(int)
-            x_max = values.max().astype(int)
-        else:
-            x_min = values.min().astype(float)
-            x_max = values.max().astype(float)
-
-        # Sturges histogram bin estimator
-        bins_sturges = (x_max - x_min) / (np.log2(values.size) + 1)
-
-        # The Freedman-Diaconis histogram bin estimator.
-        iqr = np.subtract(
-            *self.quantile(values, [0.75, 0.25])
-        )  # pylint: disable=assignment-from-no-return
-        bins_fd = 2 * iqr * values.size ** (-1 / 3)
+        x_min, x_max, width = self._get_bininfo(values)
 
         if dtype == "i":
-            width = np.round(np.max([1, bins_sturges, bins_fd])).astype(int)
             bins = np.arange(x_min, x_max + width + 1, width)
         else:
-            width = np.max([bins_sturges, bins_fd])
             if np.isclose(x_min, x_max):
                 width = 1e-3
             bins = np.arange(x_min, x_max + width, width)
@@ -165,9 +174,9 @@ class _CoreBase:
         return bins
 
     # pylint: disable=redefined-builtin
-    def histogram(self, ary, bins=None, range=None, weights=None, density=None):
+    def _histogram(self, ary, bins=None, range=None, weights=None, density=None):
         if bins is None:
-            bins = self.get_bins(ary)
+            bins = self._get_bins(ary)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
 
     def _hdi_linear_nearest_common(self, ary, prob, skipna, circular):
@@ -227,8 +236,8 @@ class _CoreBase:
             range_x = upper - lower
             dx = range_x / len(density)
         else:
-            bins = self.get_bins(ary)
-            density, _ = self.histogram(ary, bins=bins, density=True)
+            bins = self._get_bins(ary)
+            density, _ = self._histogram(ary, bins=bins, density=True)
             dx = np.diff(bins)[0]
 
         density *= dx

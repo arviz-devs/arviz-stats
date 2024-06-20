@@ -3,6 +3,7 @@
 "array" functions work on any dimension array,
 batching as necessary.
 """
+
 import numpy as np
 
 from arviz_stats.base.density import _DensityBase
@@ -129,16 +130,132 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         mcse_array = make_ufunc(mcse_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return mcse_array(ary, **func_kwargs)
 
+    def get_bins(self, ary, axes=-1):
+        """Compute default bins."""
+        ary, axes = process_ary_axes(ary, axes)
+        get_bininfo_ufunc = make_ufunc(
+            self._get_bininfo,
+            n_output=3,
+            n_input=1,
+            n_dims=len(axes),
+        )
+        x_min, x_max, width = get_bininfo_ufunc(ary)
+        n_bins = np.ceil((x_max - x_min) / width)
+        n_bins = np.ceil(np.mean(n_bins)).astype(int)
+        return np.moveaxis(np.linspace(x_min, x_max, n_bins), 0, -1)
+
+    # pylint: disable=redefined-builtin, too-many-return-statements
+    def histogram(self, ary, bins=None, range=None, weights=None, axes=-1, density=None):
+        """Compute histogram over provided axes."""
+        if isinstance(axes, int):
+            axes = [axes]
+        axes = [ax if ax >= 0 else ary.ndim + ax for ax in axes]
+        reordered_axes = [i for i in np.arange(ary.ndim) if i not in axes] + list(axes)
+        if weights is not None:
+            assert ary.shape == weights.shape
+            weights = np.transpose(weights, axes=reordered_axes)
+        ary = np.transpose(ary, axes=reordered_axes)
+        broadcased_shape = ary.shape[: -len(axes)]
+        if bins is None:
+            bins = self.get_bins(ary, axes=np.arange(-len(axes), 0, dtype=int))
+        if isinstance(bins, (int, str)):
+            # avoid broadcasting over bins -> can't be positional argument
+            if (range is None) or (np.size(range) == 2):
+                # avoid broadcasting over range
+                if weights is not None:
+                    # ensure broadcasting over weights
+                    histogram_ufunc = make_ufunc(
+                        lambda ary, weights: self._histogram(
+                            ary, bins=bins, range=range, weights=weights, density=density
+                        ),
+                        n_output=2,
+                        n_input=2,
+                        n_dims=len(axes),
+                    )
+                    return histogram_ufunc(ary, weights, shape_from_1st=True)
+                # avoid broadcasting over weights -> no broadcasting anywhere
+                histogram_ufunc = make_ufunc(
+                    self._histogram, n_output=2, n_input=1, n_dims=len(axes)
+                )
+                return histogram_ufunc(
+                    ary, bins=bins, range=range, density=density, shape_from_1st=True
+                )
+            # ensure broadcasting over range
+            assert range.shape[:-1] == broadcased_shape
+            if weights is not None:
+                # ensure broadcasting over weights
+                histogram_ufunc = make_ufunc(
+                    lambda ary, range, weights: self._histogram(
+                        ary, bins=bins, range=range, weights=weights, density=density
+                    ),
+                    n_output=2,
+                    n_input=3,
+                    n_dims=len(axes),
+                )
+                return histogram_ufunc(ary, range, weights, shape_from_1st=True)
+            # avoid broadcasting over weights while broadcasting over range
+            histogram_ufunc = make_ufunc(
+                lambda ary, range: self._histogram(ary, bins=bins, range=range, density=density),
+                n_output=2,
+                n_input=2,
+                n_dims=len(axes),
+            )
+            return histogram_ufunc(ary, range, shape_from_1st=True)
+        # ensure broadcasting over bins
+        assert bins.shape[:-1] == broadcased_shape
+        if (range is None) or (np.size(range) == 2):
+            # avoid broadcasting over range
+            if weights is not None:
+                # ensure broadcasting over weights
+                histogram_ufunc = make_ufunc(
+                    lambda ary, bins, weights: self._histogram(
+                        ary, bins=bins, range=range, weights=weights, density=density
+                    ),
+                    n_output=2,
+                    n_input=3,
+                    n_dims=len(axes),
+                )
+                return histogram_ufunc(ary, bins, weights, shape_from_1st=True)
+            # avoid broadcasting over weights
+            histogram_ufunc = make_ufunc(
+                lambda ary, bins: self._histogram(ary, bins=bins, range=range, density=density),
+                n_output=2,
+                n_input=2,
+                n_dims=len(axes),
+            )
+            return histogram_ufunc(ary, bins, shape_from_1st=True)
+        # ensure broadcasting over range
+        assert range.shape[:-1] == broadcased_shape
+        if weights is not None:
+            # ensure broadcasting over weights
+            histogram_ufunc = make_ufunc(
+                lambda ary, bins, range, weights: self._histogram(
+                    ary, bins=bins, range=range, weights=weights, density=density
+                ),
+                n_output=2,
+                n_input=4,
+                n_dims=len(axes),
+            )
+            return histogram_ufunc(ary, bins, range, weights, shape_from_1st=True)
+        # avoid broadcasting over weights
+        histogram_ufunc = make_ufunc(
+            lambda ary, bins, range: self._histogram(ary, bins=bins, range=range, density=density),
+            n_output=2,
+            n_input=3,
+            n_dims=len(axes),
+        )
+        return histogram_ufunc(ary, bins, range, shape_from_1st=True)
+
     def kde(self, ary, axes=-1, circular=False, grid_len=512, **kwargs):
         """Compute of kde on array-like inputs."""
         ary, axes = process_ary_axes(ary, axes)
-        kde_array = make_ufunc(
+        kde_ufunc = make_ufunc(
             self._kde,
             n_output=3,
             n_input=1,
             n_dims=len(axes),
         )
-        return kde_array(
+        return kde_ufunc(
             ary,
             out_shape=((grid_len,), (grid_len,), ()),
             grid_len=grid_len,
