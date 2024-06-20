@@ -5,7 +5,7 @@ version: 2
 build:
   os: ubuntu-22.04
   tools:
-    python: "3.10"
+    python: "3.11"
 
 sphinx:
   fail_on_warning: true
@@ -16,3 +16,4 @@ python:
      path: .
      extra_requirements:
        - doc
+       - xarray

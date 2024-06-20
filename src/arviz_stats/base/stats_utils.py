@@ -68,7 +68,10 @@ def make_ufunc(
                 raise TypeError(msg)
         for idx in np.ndindex(out.shape[:n_dims_out]):
             arys_idx = [ary[idx].ravel() if ravel else ary[idx] for ary in arys]
-            out[idx] = np.asarray(func(*arys_idx, *args[n_input:], **kwargs))[index]
+            aux = np.asarray(func(*arys_idx, *args[n_input:], **kwargs))[index]
+            if idx == ():
+                aux = np.squeeze(aux)
+            out[idx] = aux
         return out
 
     def _multi_ufunc(*args, out=None, out_shape=None, **kwargs):

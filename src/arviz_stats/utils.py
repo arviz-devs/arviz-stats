@@ -29,18 +29,14 @@ def get_function(func_name):
     """
     module_name = rcParams["stats.module"]
     if isinstance(module_name, str):
-        if "." not in module_name:
-            module_name = f"arviz_stats.{module_name}.dataarray_stats"
-        preferred_module = import_module(module_name)
+        preferred_module = import_module(f"arviz_stats.{module_name}")
     else:
         preferred_module = module_name
     if hasattr(preferred_module, "dataarray_stats"):
         preferred_module = preferred_module.dataarray_stats
-    if hasattr(preferred_module, func_name):
-        return getattr(preferred_module, func_name)
-    # TODO: with the class inheritance pattern we should be able to get rid of this
-    base_module = import_module("arviz_stats.base.dataarray_stats")
-    return getattr(base_module, func_name)
+    if not hasattr(preferred_module, func_name):
+        raise KeyError(f"Requested function '{func_name}' is not available in '{preferred_module}'")
+    return getattr(preferred_module, func_name)
 
 
 def get_log_likelihood(idata, var_name=None):

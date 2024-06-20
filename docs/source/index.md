@@ -1,37 +1,20 @@
-# arviz-base
-ArviZ base features and converters.
+# arviz-stats
+ArviZ statistics and diagnostics functions.
 
 ## Installation
 
 It currenly can only be installed with pip and from GitHub:
 
 ```bash
-pip install arviz-base @ git+https://github.com/arviz-devs/arviz-base
+pip install "arviz-stats[xarray] @ git+https://github.com/arviz-devs/arviz-stats"
 ```
 
-Note that `arviz-base` is a minimal package, which only depends on
-xarray (and xarray-datatree), numpy and typing-extensions.
-Everything else (netcdf, zarr, dask...) are optional dependencies.
-This allows installing only those that are needed, e.g. if you
-only plan to use zarr, there is no need to install netcdf.
-
-For convenience, some bundles are available to be installed with:
-
-```bash
-pip install "arviz-base[<option>] @ git+https://github.com/arviz-devs/arviz-base"
-```
-
-where `<option>` can be one of:
-
-* `netcdf`
-* `h5netcdf`
-* `zarr`
-* `test` (for developers)
-* `doc` (for developers)
-
-
-You can install multiple bundles of optional dependencies separating them with commas.
-Thus, to install all user facing optional dependencies you should use `xarray-einstats[einops,numba]`
+Note that it is also possible to install `arviz-stats` without the `[xarray]`.
+Doing that will install a minimal package, which only depends on numpy and scipy.
+Consequently, the functions that take arrays as inputs will be available,
+but many features won't be available. This is only recommended for libraries
+to depend on so they can use diagnostics and statistical summaries but don't want
+to depend on xarray.
 
 ```{toctree}
 :hidden:
@@ -45,5 +28,5 @@ api/index
 
 Twitter <https://twitter.com/arviz_devs>
 Mastodon <https://bayes.club/@ArviZ>
-GitHub repository <https://github.com/arviz-devs/xarray-einstats>
+GitHub repository <https://github.com/arviz-devs/arviz-stats>
 ```
