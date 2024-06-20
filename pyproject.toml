@@ -42,7 +42,7 @@ funding = "https://opencollective.com/arviz"
 xarray = [
   "xarray>=2022.6.0",
   "xarray-datatree",
-  "arviz-base @ git+https://github.com/arviz-devs/arviz-base@prepare_release",
+  "arviz-base==0.2",
   "xarray-einstats",
   "numba",
 ]
