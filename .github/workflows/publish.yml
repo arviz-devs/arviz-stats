@@ -1,7 +1,5 @@
 name: Publish library
 
-environment: publish
-
 on:
   push:
     branches:
@@ -13,6 +11,7 @@ on:
 
 jobs:
   publish:
+    environment: publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
