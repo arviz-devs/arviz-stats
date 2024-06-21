@@ -1,5 +1,6 @@
 # pylint: disable=invalid-name,too-many-lines
 """Density estimation functions for ArviZ."""
+
 import warnings
 
 import numpy as np
@@ -56,7 +57,7 @@ class _DensityBase(_CoreBase):
         k_sq = np.asarray(k_sq, dtype=np.float64)
         a_sq = np.asarray(a_sq, dtype=np.float64)
 
-        l = 7
+        l = 7  # noqa: E741
         f = np.sum(np.power(k_sq, l) * a_sq * np.exp(-k_sq * np.pi**2 * t))
         f *= 0.5 * np.pi ** (2.0 * l)
 
@@ -179,13 +180,11 @@ class _DensityBase(_CoreBase):
         """
         if isinstance(bw, bool):
             raise ValueError(
-                (
-                    "`bw` must not be of type `bool`.\n"
-                    "Expected a positive numeric or one of the following strings:\n"
-                    f"{self.bw_methods_linear}."
-                )
+                "`bw` must not be of type `bool`.\n"
+                "Expected a positive numeric or one of the following strings:\n"
+                f"{self.bw_methods_linear}."
             )
-        if isinstance(bw, (int, float)):
+        if isinstance(bw, int | float):
             if bw < 0:
                 raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
         elif isinstance(bw, str):
@@ -281,7 +280,7 @@ class _DensityBase(_CoreBase):
         -------
         None: Object of type None
         """
-        if not isinstance(custom_lims, (list, tuple)):
+        if not isinstance(custom_lims, list | tuple):
             raise TypeError(
                 "`custom_lims` must be a numeric list or tuple of length 2.\n"
                 f"Not an object of {type(custom_lims)}."
@@ -301,7 +300,7 @@ class _DensityBase(_CoreBase):
         if custom_lims[1] is None:
             custom_lims[1] = x_max
 
-        all_numeric = all(isinstance(i, (int, float, np.integer, np.number)) for i in custom_lims)
+        all_numeric = all(isinstance(i, int | float | np.integer | np.number) for i in custom_lims)
         if not all_numeric:
             raise TypeError(
                 "Elements of `custom_lims` must be numeric or None.\nAt least one of them is not."
@@ -440,7 +439,7 @@ class _DensityBase(_CoreBase):
         bw: optional, the estimated bandwidth.
         """
         # Check `bw_fct` is numeric and positive
-        if not isinstance(bw_fct, (int, float, np.integer, np.floating)):
+        if not isinstance(bw_fct, int | float | np.integer | np.floating):
             raise TypeError(f"`bw_fct` must be a positive number, not an object of {type(bw_fct)}.")
 
         if bw_fct <= 0:
@@ -619,7 +618,7 @@ class _DensityBase(_CoreBase):
         x = self._normalize_angle(x)
 
         # Check `bw_fct` is numeric and positive
-        if not isinstance(bw_fct, (int, float, np.integer, np.floating)):
+        if not isinstance(bw_fct, int | float | np.integer | np.floating):
             raise TypeError(f"`bw_fct` must be a positive number, not an object of {type(bw_fct)}.")
 
         if bw_fct <= 0:
@@ -630,7 +629,7 @@ class _DensityBase(_CoreBase):
             raise ValueError(
                 "`bw` can't be of type `bool`.\nExpected a positive numeric or 'taylor'"
             )
-        if isinstance(bw, (int, float)) and bw < 0:
+        if isinstance(bw, int | float) and bw < 0:
             raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
         if isinstance(bw, str):
             if bw == "taylor":

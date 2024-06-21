@@ -1,4 +1,5 @@
 """ArviZ stats accessors."""
+
 import warnings
 
 import xarray as xr

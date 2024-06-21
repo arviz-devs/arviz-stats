@@ -1,4 +1,5 @@
 """Credible interval estimators."""
+
 import warnings
 
 import numpy as np

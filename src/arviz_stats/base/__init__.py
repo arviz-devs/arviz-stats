@@ -3,6 +3,7 @@
 
 Functions implemented in this folder should only depend on NumPy and SciPy.
 """
+
 from arviz_stats.base.array import array_stats
 
 try:

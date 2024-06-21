@@ -145,6 +145,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return np.moveaxis(np.linspace(x_min, x_max, n_bins), 0, -1)
 
     # pylint: disable=redefined-builtin, too-many-return-statements
+    # noqa: PLR0911
     def histogram(self, ary, bins=None, range=None, weights=None, axes=-1, density=None):
         """Compute histogram over provided axes."""
         if isinstance(axes, int):
@@ -158,7 +159,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         broadcased_shape = ary.shape[: -len(axes)]
         if bins is None:
             bins = self.get_bins(ary, axes=np.arange(-len(axes), 0, dtype=int))
-        if isinstance(bins, (int, str)):
+        if isinstance(bins, int | str):
             # avoid broadcasting over bins -> can't be positional argument
             if (range is None) or (np.size(range) == 2):
                 # avoid broadcasting over range

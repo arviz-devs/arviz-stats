@@ -1,4 +1,6 @@
 # pylint: disable=redefined-builtin,invalid-name
+"""arviz-stats sphinx configuration."""
+
 import os
 from importlib.metadata import metadata
 

@@ -5,8 +5,6 @@ from arviz_base import load_arviz_data, ndarray_to_dataarray, rc_context
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 from xarray import DataArray, Dataset
 
-from ..helpers import multidim_models  # pylint: disable=unused-import
-
 
 @pytest.fixture(scope="module")
 def centered_eight():

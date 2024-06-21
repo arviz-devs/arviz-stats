@@ -74,9 +74,7 @@ class NumbaArray(BaseArray):
             return result
         return np.moveaxis(result, 0, -1)
 
-    def _histogram(
-        self, ary, bins=None, range=None, weights=None, density=None
-    ):  # pylint: disable=redefined-builtin
+    def _histogram(self, ary, bins=None, range=None, weights=None, density=None):  # pylint: disable=redefined-builtin
         """Compute the histogram of the data."""
         if bins is None:
             bins = self._get_bins(ary)
@@ -155,7 +153,8 @@ Notes
 -----
 The `weights` argument is not supported, but the `density` argument is supported.
 It uses the jit compiled histogram function to accelerate computations.
-``histogram`` is called in multiple places along the codebase (like the ``kde`` function for instance),
+``histogram`` is called in multiple places along the codebase
+(like the ``kde`` function for instance),
 so this function alone accelerates slightly a significant part of the codebase.
 """
 )
