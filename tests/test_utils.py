@@ -1,10 +1,10 @@
 """Test for general computational backend agnostic utilities."""
+
 import inspect
 
 import numpy as np
 import pytest
 from arviz_base import from_dict, rcParams
-
 from arviz_stats.base.dataarray import dataarray_stats
 from arviz_stats.utils import ELPDData, get_function, get_log_likelihood
 

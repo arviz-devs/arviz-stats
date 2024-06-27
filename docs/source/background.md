@@ -13,7 +13,7 @@ Computation submodules are structured into two main classes: an array facing cla
 The array facing class takes array_like inputs, and aims to have an API similar to NumPy/SciPy.
 It can be used independently of the dataarray class (to the point of not needing to have
 `arviz_base` nor `xarray` installed) but it is (consequently) lower level interface.
-There are more required arguments, no `rcParams` integration... 
+There are more required arguments, no `rcParams` integration...
 
 To make integration with the dataarray facing class easier, all functions should take
 `axes` (or equivalent arguments) which should allow either integers or sequences of axes

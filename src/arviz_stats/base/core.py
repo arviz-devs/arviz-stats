@@ -3,6 +3,7 @@
 Functions that are needed by multiple "organization classes"
 should go here. e.g. fft is used for kde bandwidth estimation and for ess.
 """
+
 import warnings
 
 import numpy as np
@@ -121,9 +122,7 @@ class _CoreBase:
         width_sturges = (x_max - x_min) / (np.log2(values.size) + 1)
 
         # The Freedman-Diaconis histogram bin estimator.
-        iqr = np.subtract(
-            *self.quantile(values, [0.75, 0.25])
-        )  # pylint: disable=assignment-from-no-return
+        iqr = np.subtract(*self.quantile(values, [0.75, 0.25]))  # pylint: disable=assignment-from-no-return
         width_fd = 2 * iqr * values.size ** (-1 / 3)
 
         if dtype == "i":

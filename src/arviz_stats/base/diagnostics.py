@@ -1,5 +1,6 @@
 # pylint: disable=too-many-lines, too-many-function-args, redefined-outer-name
 """Diagnostic functions for ArviZ."""
+
 from collections.abc import Sequence
 
 import numpy as np

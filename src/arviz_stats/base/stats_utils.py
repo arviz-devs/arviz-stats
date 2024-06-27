@@ -1,4 +1,5 @@
 """Stats-utility functions for ArviZ."""
+
 import logging
 from collections.abc import Sequence
 
@@ -11,9 +12,7 @@ __all__ = ["make_ufunc", "wrap_xarray_ufunc"]
 _log = logging.getLogger(__name__)
 
 
-def make_ufunc(
-    func, n_dims=2, n_output=1, n_input=1, index=Ellipsis, ravel=True, check_shape=None
-):  # noqa: D202
+def make_ufunc(func, n_dims=2, n_output=1, n_input=1, index=Ellipsis, ravel=True, check_shape=None):
     """Make ufunc from a function taking 1D array input.
 
     Parameters

@@ -1,7 +1,6 @@
 """ArviZ stats general utility functions."""
+
 import warnings
-from copy import copy as _copy
-from copy import deepcopy as _deepcopy
 from dataclasses import dataclass
 from importlib import import_module
 
@@ -121,7 +120,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors
             base += "\n\nThere has been a warning during the calculation. Please check the results."
 
         if kind == "loo" and self.pareto_k is not None:
-            bins = np.asarray([-np.Inf, 0.5, 0.7, 1, np.Inf])
+            bins = np.asarray([-np.inf, 0.5, 0.7, 1, np.inf])
             counts, *_ = np.histogram(self.pareto_k, bins=bins, density=False)
             extended = POINTWISE_LOO_FMT.format(max(4, len(str(np.max(counts)))))
             extended = extended.format(

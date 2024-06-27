@@ -1,4 +1,5 @@
 """Test Diagnostic methods"""
+
 # pylint: disable=redefined-outer-name
 import os
 
@@ -6,8 +7,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from arviz_base import load_arviz_data, xarray_var_iter
-
-import arviz_stats  # pylint: disable=unused-import
 from arviz_stats.base import array_stats
 
 # For tests only, recommended value should be closer to 1.01-1.05
@@ -26,7 +25,6 @@ def data(idata):
     return idata.ds
 
 
-# pylint: disable=undefined-variable
 @pytest.mark.skip(reason="from_cmdstan not yet ported to arviz_base.")
 def test_deterministic():
     """
@@ -104,23 +102,23 @@ def test_deterministic():
     )
     # test arviz functions
     funcs = {
-        "rhat_rank": lambda x: rhat(x, method="rank"),
-        "rhat_raw": lambda x: rhat(x, method="identity"),
-        "ess_bulk": lambda x: ess(x, method="bulk"),
-        "ess_tail": lambda x: ess(x, method="tail"),
-        "ess_mean": lambda x: ess(x, method="mean"),
-        "ess_sd": lambda x: ess(x, method="sd"),
-        "ess_median": lambda x: ess(x, method="median"),
-        "ess_raw": lambda x: ess(x, method="identity"),
-        "ess_quantile01": lambda x: ess(x, method="quantile", prob=0.01),
-        "ess_quantile10": lambda x: ess(x, method="quantile", prob=0.1),
-        "ess_quantile30": lambda x: ess(x, method="quantile", prob=0.3),
-        "mcse_mean": lambda x: mcse(x, method="mean"),
-        "mcse_sd": lambda x: mcse(x, method="sd"),
-        "mcse_median": lambda x: mcse(x, method="median"),
-        "mcse_quantile01": lambda x: mcse(x, method="quantile", prob=0.01),
-        "mcse_quantile10": lambda x: mcse(x, method="quantile", prob=0.1),
-        "mcse_quantile30": lambda x: mcse(x, method="quantile", prob=0.3),
+        "rhat_rank": lambda x: array_stats.rhat(x, method="rank"),
+        "rhat_raw": lambda x: array_stats.rhat(x, method="identity"),
+        "ess_bulk": lambda x: array_stats.ess(x, method="bulk"),
+        "ess_tail": lambda x: array_stats.ess(x, method="tail"),
+        "ess_mean": lambda x: array_stats.ess(x, method="mean"),
+        "ess_sd": lambda x: array_stats.ess(x, method="sd"),
+        "ess_median": lambda x: array_stats.ess(x, method="median"),
+        "ess_raw": lambda x: array_stats.ess(x, method="identity"),
+        "ess_quantile01": lambda x: array_stats.ess(x, method="quantile", prob=0.01),
+        "ess_quantile10": lambda x: array_stats.ess(x, method="quantile", prob=0.1),
+        "ess_quantile30": lambda x: array_stats.ess(x, method="quantile", prob=0.3),
+        "mcse_mean": lambda x: array_stats.mcse(x, method="mean"),
+        "mcse_sd": lambda x: array_stats.mcse(x, method="sd"),
+        "mcse_median": lambda x: array_stats.mcse(x, method="median"),
+        "mcse_quantile01": lambda x: array_stats.mcse(x, method="quantile", prob=0.01),
+        "mcse_quantile10": lambda x: array_stats.mcse(x, method="quantile", prob=0.1),
+        "mcse_quantile30": lambda x: array_stats.mcse(x, method="quantile", prob=0.3),
     }
     results = {}
     for key, coord_dict, _, vals in xarray_var_iter(posterior.posterior, combined=True):
