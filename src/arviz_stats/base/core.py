@@ -9,6 +9,7 @@ import warnings
 import numpy as np
 from scipy.fftpack import next_fast_len
 from scipy.stats import circmean
+from scipy.interpolate import CubicSpline
 
 
 class _CoreBase:
@@ -107,6 +108,32 @@ class _CoreBase:
     def eti(self, ary, prob, **kwargs):
         edge_prob = (1 - prob) / 2
         return self.quantile(ary, [edge_prob, 1 - edge_prob], **kwargs)
+
+    def _float_rankdata(self, ary):  # pylint: disable=no-self-use
+        """Compute ranks on coninuous data, assuming there are no ties.
+
+        Notes
+        -----
+        :func:`scipy.stats.rankdata` is focused on discrete data and on differen ways
+        to resolve ties. However, our most common use is converting all data to continuous
+        to get rid of the ties, the call rankdata which is not very efficient nor
+        numba compatible.
+        """
+        ranks = np.empty(len(ary), dtype=int)
+        ranks[np.argsort(ary, axis=None)] = np.arange(1, ary.size+1)
+        return ranks
+
+
+    def _compute_ranks(self, ary):
+        """Compute ranks for continuous and discrete variables."""
+        ary_shape = ary.shape
+        ary = ary.flatten()
+        if ary.dtype.kind == "i":
+            min_ary, max_ary = min(ary), max(ary)
+            x = np.linspace(min_ary, max_ary, len(ary))
+            csi = CubicSpline(x, ary)
+            ary = csi(np.linspace(min_ary + 0.001, max_ary - 0.001, len(ary))).reshape(ary_shape)
+        return self._float_rankdata(ary).reshape(ary_shape)
 
     def _get_bininfo(self, values):
         dtype = values.dtype.kind
