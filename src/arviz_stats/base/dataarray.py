@@ -193,5 +193,30 @@ class BaseDataArray:
         out = concat((grid, pdf), dim=plot_axis)
         return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
 
+    def thin(self, da, factor="auto", dims=None):
+        """Compute eti on DataArray input."""
+        if dims is None:
+            dims = rcParams["data.sample_dims"]
+
+        n_samples = da.sizes["chain"] * da.sizes["draw"]
+
+        if factor == "auto":
+            ess_ave = np.minimum(self.ess(da, method="bulk"), self.ess(da, method="tail")).mean()
+            factor = int(np.ceil(n_samples / ess_ave))
+
+        elif isinstance(factor, (float | int)):
+            factor = int(factor)
+            if factor == 1:
+                return da
+            if factor < 1:
+                raise ValueError("factor must be greater than 1")
+
+        return da.sel(draw=slice(None, None, factor))
+        # return apply_ufunc(
+        #     self.array_class.thin,
+        #     da,
+        #     factor,
+        # )
+
 
 dataarray_stats = BaseDataArray(array_class=array_stats)

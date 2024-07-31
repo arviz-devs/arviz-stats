@@ -51,6 +51,10 @@ class AzStatsDaAccessor(_BaseAccessor):
         """Compute the KDE on the DataArray."""
         return get_function("kde")(self._obj, dims=dims, **kwargs)
 
+    def thin(self, factor, dims=None, **kwargs):
+        """Perform thinning on the DataArray."""
+        return get_function("thin")(self._obj, factor=factor, dims=dims, **kwargs)
+
 
 @xr.register_dataset_accessor("azstats")
 class AzStatsDsAccessor(_BaseAccessor):
@@ -135,6 +139,10 @@ class AzStatsDsAccessor(_BaseAccessor):
         # TODO: implement ecdf here so it doesn't depend on numba
         return self._apply(ecdf, dims=dims, **kwargs).rename(ecdf_axis="plot_axis")
 
+    def thin(self, dims=None, factor="auto"):
+        """Perform thinning for all the variables in the dataset."""
+        return self._apply(get_function("thin"), dims=dims, factor=factor)
+
 
 @register_datatree_accessor("azstats")
 class AzStatsDtAccessor(_BaseAccessor):
@@ -193,3 +201,7 @@ class AzStatsDtAccessor(_BaseAccessor):
     def histogram(self, dims=None, group="posterior", **kwargs):
         """Compute the KDE for all variables in a group of the DataTree."""
         return self._apply("histogram", dims=dims, group=group, **kwargs)
+
+    def thin(self, dims=None, group="posterior", **kwargs):
+        """Perform thinning for all variables in a group of the DataTree."""
+        return self._apply("thin", dims=dims, group=group, **kwargs)

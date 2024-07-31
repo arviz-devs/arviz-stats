@@ -264,5 +264,23 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
+    # def thin(self, ary, factor, **kwargs):
+    #     """Perform thinning on array-like inputs."""
+    #     n_samples = ary.size
+
+    #     if factor == "auto":
+    #         ESS_ave = np.minimum(self.ess(ary, method="bulk", **kwargs),
+    # self.ess(ary, method="tail", **kwargs)).mean()
+    #         factor = int(np.ceil(n_samples / ESS_ave))
+
+    #     elif isinstance(factor, (float, int)):
+    #         factor = int(factor)
+    #         if factor == 1:
+    #             return da
+    #         elif factor < 1:
+    #             raise ValueError("factor must be greater than 1"))
+
+    #     return ary[1,::factor]
+
 
 array_stats = BaseArray()
