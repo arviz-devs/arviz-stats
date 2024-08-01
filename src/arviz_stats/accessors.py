@@ -51,7 +51,7 @@ class AzStatsDaAccessor(_BaseAccessor):
         """Compute the KDE on the DataArray."""
         return get_function("kde")(self._obj, dims=dims, **kwargs)
 
-    def thin(self, factor, dims=None, **kwargs):
+    def thin(self, factor="auto", dims=None, **kwargs):
         """Perform thinning on the DataArray."""
         return get_function("thin")(self._obj, factor=factor, dims=dims, **kwargs)
 

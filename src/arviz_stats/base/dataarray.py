@@ -3,6 +3,8 @@
 "dataarray" functions take :class:`xarray.DataArray` as inputs.
 """
 
+import warnings
+
 import numpy as np
 from arviz_base import rcParams
 from xarray import DataArray, apply_ufunc, concat
@@ -194,26 +196,27 @@ class BaseDataArray:
         return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
 
     def thin(self, da, factor="auto", dims=None):
-        """Compute eti on DataArray input."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
-
-        n_samples = da.sizes["chain"] * da.sizes["draw"]
+        """Perform thinning on DataArray input."""
+        if factor == "auto" and dims is not None:
+            warnings.warn("dims are ignored if factor is auto")
 
         if factor == "auto":
-            ess_ave = np.minimum(
-                self.ess(da, method="bulk", dims=dims), self.ess(da, method="tail", dims=dims)
-            ).mean()
+            n_samples = da.sizes["chain"] * da.sizes["draw"]
+            ess_ave = np.minimum(self.ess(da, method="bulk"), self.ess(da, method="tail")).mean()
             factor = int(np.ceil(n_samples / ess_ave))
+            dims = "draw"
 
         elif isinstance(factor, (float | int)):
+            if dims is None:
+                dims = rcParams["data.sample_dims"]
+
             factor = int(factor)
             if factor == 1:
                 return da
             if factor < 1:
                 raise ValueError("factor must be greater than 1")
 
-        return da.sel({dims[-1]: slice(None, None, factor)})
+        return da.sel({dims: slice(None, None, factor)})
 
 
 dataarray_stats = BaseDataArray(array_class=array_stats)
