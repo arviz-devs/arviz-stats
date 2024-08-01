@@ -201,7 +201,9 @@ class BaseDataArray:
         n_samples = da.sizes["chain"] * da.sizes["draw"]
 
         if factor == "auto":
-            ess_ave = np.minimum(self.ess(da, method="bulk"), self.ess(da, method="tail")).mean()
+            ess_ave = np.minimum(
+                self.ess(da, method="bulk", dims=dims), self.ess(da, method="tail", dims=dims)
+            ).mean()
             factor = int(np.ceil(n_samples / ess_ave))
 
         elif isinstance(factor, (float | int)):
@@ -211,7 +213,7 @@ class BaseDataArray:
             if factor < 1:
                 raise ValueError("factor must be greater than 1")
 
-        return da.sel(draw=slice(None, None, factor))
+        return da.sel({dims[-1]: slice(None, None, factor)})
 
 
 dataarray_stats = BaseDataArray(array_class=array_stats)
