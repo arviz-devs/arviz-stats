@@ -212,11 +212,6 @@ class BaseDataArray:
                 raise ValueError("factor must be greater than 1")
 
         return da.sel(draw=slice(None, None, factor))
-        # return apply_ufunc(
-        #     self.array_class.thin,
-        #     da,
-        #     factor,
-        # )
 
 
 dataarray_stats = BaseDataArray(array_class=array_stats)
