@@ -124,7 +124,7 @@ class _CoreBase:
         return ranks
 
 
-    def _compute_ranks(self, ary):
+    def _compute_ranks(self, ary, relative=False):
         """Compute ranks for continuous and discrete variables."""
         ary_shape = ary.shape
         ary = ary.flatten()
@@ -133,7 +133,10 @@ class _CoreBase:
             x = np.linspace(min_ary, max_ary, len(ary))
             csi = CubicSpline(x, ary)
             ary = csi(np.linspace(min_ary + 0.001, max_ary - 0.001, len(ary))).reshape(ary_shape)
-        return self._float_rankdata(ary).reshape(ary_shape)
+        out = self._float_rankdata(ary).reshape(ary_shape)
+        if relative:
+            return out / out.size
+        return out
 
     def _get_bininfo(self, values):
         dtype = values.dtype.kind

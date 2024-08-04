@@ -132,7 +132,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         mcse_array = make_ufunc(mcse_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return mcse_array(ary, **func_kwargs)
 
-    def compute_ranks(self, ary, axes=-1):
+    def compute_ranks(self, ary, axes=-1, relative=False):
         """Compute ranks of MCMC samples."""
         ary, axes = process_ary_axes(ary, axes)
         compute_ranks_ufunc = make_ufunc(
@@ -142,7 +142,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=len(axes),
             ravel=False,
         )
-        return compute_ranks_ufunc(ary, out_shape=(ary.shape[i] for i in axes))
+        return compute_ranks_ufunc(ary, out_shape=(ary.shape[i] for i in axes), relative=relative)
 
     def get_bins(self, ary, axes=-1):
         """Compute default bins."""
