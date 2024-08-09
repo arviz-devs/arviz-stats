@@ -6,7 +6,7 @@ import numpy as np
 from arviz import ess
 
 
-def pareto_khat(dt, r_eff=None, tail="both", log_weights=False):
+def pareto_khat(ary, r_eff=1, tail="both", log_weights=False):
     """
     Compute Pareto k-hat diagnostic.
 
@@ -14,10 +14,9 @@ def pareto_khat(dt, r_eff=None, tail="both", log_weights=False):
 
     Parameters
     ----------
-    x : DataArray
+    ary : Array
     r_eff : float, optional
         Relative efficiency. Effective sample size divided the number of samples.
-        If not provided, it will be estimated from the data.
     tail : srt, optional
         Which tail to fit. Can be 'right', 'left', or 'both'.
     log_weights : bool, optional
@@ -28,15 +27,10 @@ def pareto_khat(dt, r_eff=None, tail="both", log_weights=False):
     khat : float
         Pareto k-hat value.
     """
-    ary = dt.values.flatten()
-
     if log_weights:
         tail = "right"
 
     n_draws = len(ary)
-
-    if r_eff is None:
-        r_eff = ess(dt.values, method="tail") / n_draws
 
     if n_draws > 255:
         n_draws_tail = np.ceil(3 * (n_draws / r_eff) ** 0.5).astype(int)
@@ -66,7 +60,7 @@ def pareto_khat(dt, r_eff=None, tail="both", log_weights=False):
     return khat
 
 
-def pareto_min_ss(k):
+def pareto_min_ss(ary):
     """
     Compute minimum effective sample size.
 
@@ -77,8 +71,14 @@ def pareto_min_ss(k):
     k : float
         Pareto k-hat value.
     """
-    if k < 1:
-        return 10 ** (1 / (1 - max(0, k)))
+    ary_flatten = ary.flatten()
+    n_draws = len(ary_flatten)
+    r_eff = ess(ary, method="tail") / n_draws
+
+    kappa = pareto_khat(ary_flatten, r_eff=r_eff, tail="both", log_weights=False)
+
+    if kappa < 1:
+        return 10 ** (1 / (1 - max(0, kappa)))
 
     return np.inf
 
