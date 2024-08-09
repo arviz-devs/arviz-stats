@@ -202,13 +202,21 @@ class BaseDataArray:
 
         if factor == "auto":
             n_samples = da.sizes["chain"] * da.sizes["draw"]
-            ess_ave = np.minimum(self.ess(da, method="bulk"), self.ess(da, method="tail")).mean()
+            ess_ave = np.minimum(
+                self.ess(da, method="bulk", dims=["chain", "draw"]),
+                self.ess(da, method="tail", dims=["chain", "draw"]),
+            ).mean()
             factor = int(np.ceil(n_samples / ess_ave))
             dims = "draw"
 
         elif isinstance(factor, (float | int)):
             if dims is None:
                 dims = rcParams["data.sample_dims"]
+            if not isinstance(dims, str):
+                if len(dims) >= 2:
+                    raise ValueError("dims must be of length 1")
+                if len(dims) == 1:
+                    dims = dims[0]
 
             factor = int(factor)
             if factor == 1:
