@@ -1,84 +1,134 @@
+"""Pareto k-hat diagnostics."""
+
 import warnings
 
 import numpy as np
 from arviz import ess
 
 
-def pareto_khat(x, r_eff=None, tail="both", log_weights=False):
+def pareto_khat(dt, r_eff=None, tail="both", log_weights=False):
     """
+    Compute Pareto k-hat diagnostic.
+
+    See details in Vehtari et al., 2024 (https://doi.org/10.48550/arXiv.1507.02646)
 
     Parameters
     ----------
     x : DataArray
+    r_eff : float, optional
+        Relative efficiency. Effective sample size divided the number of samples.
+        If not provided, it will be estimated from the data.
+    tail : srt, optional
+        Which tail to fit. Can be 'right', 'left', or 'both'.
+    log_weights : bool, optional
+        Whether dt represents log-weights.
+
+    Returns
+    -------
+    khat : float
+        Pareto k-hat value.
     """
-    ary = x.values.flatten()
+    ary = dt.values.flatten()
 
     if log_weights:
         tail = "right"
 
-    ndraws = len(ary)
+    n_draws = len(ary)
 
     if r_eff is None:
-        r_eff = ess(x.values, method="tail") / ndraws
+        r_eff = ess(dt.values, method="tail") / n_draws
 
-    if ndraws > 255:
-        ndraws_tail = np.ceil(3 * (ndraws / r_eff) ** 0.5).astype(int)
+    if n_draws > 255:
+        n_draws_tail = np.ceil(3 * (n_draws / r_eff) ** 0.5).astype(int)
     else:
-        ndraws_tail = int(ndraws / 5)
+        n_draws_tail = int(n_draws / 5)
 
     if tail == "both":
-        if ndraws_tail > ndraws / 2:
+        if n_draws_tail > n_draws / 2:
             warnings.warn(
                 "Number of tail draws cannot be more than half "
                 "the total number of draws if both tails are fit, "
-                f"changing to {ndraws / 2}"
+                f"changing to {n_draws / 2}"
             )
-            ndraws_tail = ndraws / 2
+            n_draws_tail = n_draws / 2
 
-        if ndraws_tail < 5:
-            warnings.warn("Number of tail draws cannot be less than 5. " "Changing to 5")
-            ndraws_tail = 5
+        if n_draws_tail < 5:
+            warnings.warn("Number of tail draws cannot be less than 5. Changing to 5")
+            n_draws_tail = 5
 
-        k = max(
-            [
-                pareto_smooth_tail(ary, ndraws, ndraws_tail, smooth_draws=False, tail=t)[1]
-                for t in ("left", "right")
-            ]
+        khat = max(
+            ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=t)[1]
+            for t in ("left", "right")
         )
     else:
-        _, k = pareto_smooth_tail(ary, ndraws, ndraws_tail, smooth_draws=False, tail=tail)
+        _, khat = ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail)
 
-    return k
+    return khat
 
 
-def ps_min_ss(k):
+def pareto_min_ss(k):
+    """
+    Compute minimum effective sample size.
+
+    See details in Vehtari et al., 2024 (https://doi.org/10.48550/arXiv.1507.02646)
+
+    Parameters
+    ----------
+    k : float
+        Pareto k-hat value.
+    """
     if k < 1:
         return 10 ** (1 / (1 - max(0, k)))
-    else:
-        return np.inf
+
+    return np.inf
 
 
-def pareto_smooth_tail(x, ndraws, ndraws_tail, smooth_draws=False, tail="both", log_weights=False):
+def ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail="both", log_weights=False):
+    """
+    Estimate the tail of a distribution using the Generalized Pareto Distribution.
+
+    Parameters
+    ----------
+    x : array
+        1D array.
+    n_draws : int
+        Number of draws.
+    n_draws_tail : int
+        Number of draws in the tail.
+    smooth_draws : bool, optional
+        Whether to smooth the tail.
+    tail : str, optional
+        Which tail to fit. Can be 'right', 'left', or 'both'.
+    log_weights : bool, optional
+        Whether x represents log-weights.
+
+    Returns
+    -------
+    ary : array
+        Array with smoothed tail values.
+    k : float
+        Estimated shape parameter.
+    """
     if log_weights:
-        x = x - np.max(x)
+        ary = ary - np.max(ary)
 
     if tail not in ["right", "left", "both"]:
         raise ValueError('tail must be one of "right", "left", or "both"')
 
-    tail_ids = np.arange(ndraws - ndraws_tail, ndraws)
+    tail_ids = np.arange(n_draws - n_draws_tail, n_draws)
 
     if tail == "left":
-        x = -x
+        ary = -ary
 
-    ordered = np.argsort(x)
-    draws_tail = x[ordered[tail_ids]]
+    ordered = np.argsort(ary)
+    draws_tail = ary[ordered[tail_ids]]
 
-    cutoff = x[ordered[tail_ids[0] - 1]]  # largest value smaller than tail values
+    cutoff = ary[ordered[tail_ids[0] - 1]]  # largest value smaller than tail values
 
     max_tail = np.max(draws_tail)
     min_tail = np.min(draws_tail)
 
-    if ndraws_tail >= 5:
+    if n_draws_tail >= 5:
         if abs(max_tail - min_tail) < np.finfo(float).tiny:
             raise ValueError("All tail values are the same")
 
@@ -86,34 +136,39 @@ def pareto_smooth_tail(x, ndraws, ndraws_tail, smooth_draws=False, tail="both", 
             draws_tail = np.exp(draws_tail)
             cutoff = np.exp(cutoff)
 
-        k, sigma = _gpdfit(draws_tail - cutoff)
+        khat, sigma = _gpdfit(draws_tail - cutoff)
 
-        if np.isfinite(k) and smooth_draws:
-            p = (np.arange(0.5, ndraws_tail)) / ndraws_tail
-            smoothed = _gpinv(p, k, sigma, cutoff)
+        if np.isfinite(khat) and smooth_draws:
+            p = (np.arange(0.5, n_draws_tail)) / n_draws_tail
+            smoothed = _gpinv(p, khat, sigma, cutoff)
 
             if log_weights:
                 smoothed = np.log(smoothed)
         else:
             smoothed = None
     else:
-        raise ValueError("ndraws_tail must be at least 5")
+        raise ValueError("n_draws_tail must be at least 5")
 
     if smoothed is not None:
         smoothed[smoothed > max_tail] = max_tail
-        x[ordered[tail_ids]] = smoothed
+        ary[ordered[tail_ids]] = smoothed
 
     if tail == "left":
-        x = -x
+        ary = -ary
 
-    return x, k
+    return ary, khat
 
 
 def _gpdfit(ary):
     """Estimate the parameters for the Generalized Pareto Distribution (GPD).
 
-    Empirical Bayes estimate for the parameters of the generalized Pareto
+    Empirical Bayes estimate for the parameters (kappa, sigma) of the generalized Pareto
     distribution given the data.
+
+    The fit uses a prior for kappa to stabilize estimates for very small (effective)
+    sample sizes. The weakly informative prior is a Gaussian  centered at 0.5.
+    See details in Vehtari et al., 2024 (https://doi.org/10.48550/arXiv.1507.02646)
+
 
     Parameters
     ----------
@@ -122,7 +177,7 @@ def _gpdfit(ary):
 
     Returns
     -------
-    k: float
+    kappa: float
         estimated shape parameter
     sigma: float
         estimated scale parameter
@@ -151,16 +206,16 @@ def _gpdfit(ary):
     # posterior mean for b
     b_post = np.sum(b_ary * weights)
     # estimate for k
-    k_post = np.log1p(-b_post * ary).mean()  # pylint: disable=invalid-unary-operand-type,no-member
-    # add prior for k_post
-    sigma = -k_post / b_post
-    k_post = (n * k_post + prior_k * 0.5) / (n + prior_k)
+    kappa = np.log1p(-b_post * ary).mean()  # pylint: disable=invalid-unary-operand-type,no-member
+    # add prior for kappa
+    sigma = -kappa / b_post
+    kappa = (n * kappa + prior_k * 0.5) / (n + prior_k)
 
-    return k_post, sigma
+    return kappa, sigma
 
 
 def _gpinv(probs, kappa, sigma, mu):
-    """ """
+    """Quantile function for generalized pareto distribution."""
     if sigma <= 0:
         return np.full_like(probs, np.nan)
 
