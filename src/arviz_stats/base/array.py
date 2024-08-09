@@ -130,6 +130,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         mcse_array = make_ufunc(mcse_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return mcse_array(ary, **func_kwargs)
 
+    def pareto_min_ss(self, ary):
+        """Compute minimum effective sample size."""
+
     def get_bins(self, ary, axes=-1):
         """Compute default bins."""
         ary, axes = process_ary_axes(ary, axes)
