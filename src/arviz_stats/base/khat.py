@@ -1,11 +1,13 @@
 import warnings
+
 import numpy as np
 from arviz import ess
 
+
 def pareto_khat(x, r_eff=None, tail="both", log_weights=False):
     """
-    
-    parameters
+
+    Parameters
     ----------
     x : DataArray
     """
@@ -20,46 +22,52 @@ def pareto_khat(x, r_eff=None, tail="both", log_weights=False):
         r_eff = ess(x.values, method="tail") / ndraws
 
     if ndraws > 255:
-        ndraws_tail = np.ceil(3 * (ndraws / r_eff)**0.5).astype(int)
+        ndraws_tail = np.ceil(3 * (ndraws / r_eff) ** 0.5).astype(int)
     else:
         ndraws_tail = int(ndraws / 5)
 
     if tail == "both":
         if ndraws_tail > ndraws / 2:
-            warnings.warn("Number of tail draws cannot be more than half "
-                   "the total number of draws if both tails are fit, "
-                   f"changing to {ndraws / 2}")
+            warnings.warn(
+                "Number of tail draws cannot be more than half "
+                "the total number of draws if both tails are fit, "
+                f"changing to {ndraws / 2}"
+            )
             ndraws_tail = ndraws / 2
-        
 
         if ndraws_tail < 5:
-            warnings.warn("Number of tail draws cannot be less than 5. "
-                          "Changing to 5")
+            warnings.warn("Number of tail draws cannot be less than 5. " "Changing to 5")
             ndraws_tail = 5
 
-        k = max([pareto_smooth_tail(ary, ndraws, ndraws_tail, smooth_draws=False, tail=t)[1] for t in ("left", "right")])
+        k = max(
+            [
+                pareto_smooth_tail(ary, ndraws, ndraws_tail, smooth_draws=False, tail=t)[1]
+                for t in ("left", "right")
+            ]
+        )
     else:
         _, k = pareto_smooth_tail(ary, ndraws, ndraws_tail, smooth_draws=False, tail=tail)
 
-
     return k
+
 
 def ps_min_ss(k):
     if k < 1:
-        return 10**(1 / (1 - max(0, k)))
+        return 10 ** (1 / (1 - max(0, k)))
     else:
         return np.inf
 
-def pareto_smooth_tail(x, ndraws, ndraws_tail, smooth_draws=False, tail='both', log_weights=False):
+
+def pareto_smooth_tail(x, ndraws, ndraws_tail, smooth_draws=False, tail="both", log_weights=False):
     if log_weights:
         x = x - np.max(x)
 
-    if tail not in ['right', 'left', 'both']:
+    if tail not in ["right", "left", "both"]:
         raise ValueError('tail must be one of "right", "left", or "both"')
 
     tail_ids = np.arange(ndraws - ndraws_tail, ndraws)
 
-    if tail == 'left':
+    if tail == "left":
         x = -x
 
     ordered = np.argsort(x)
@@ -72,7 +80,7 @@ def pareto_smooth_tail(x, ndraws, ndraws_tail, smooth_draws=False, tail='both', 
 
     if ndraws_tail >= 5:
         if abs(max_tail - min_tail) < np.finfo(float).tiny:
-            raise ValueError('All tail values are the same')
+            raise ValueError("All tail values are the same")
 
         if log_weights:
             draws_tail = np.exp(draws_tail)
@@ -83,21 +91,21 @@ def pareto_smooth_tail(x, ndraws, ndraws_tail, smooth_draws=False, tail='both', 
         if np.isfinite(k) and smooth_draws:
             p = (np.arange(0.5, ndraws_tail)) / ndraws_tail
             smoothed = _gpinv(p, k, sigma, cutoff)
-        
+
             if log_weights:
                 smoothed = np.log(smoothed)
         else:
             smoothed = None
     else:
-        raise ValueError('ndraws_tail must be at least 5')
-    
+        raise ValueError("ndraws_tail must be at least 5")
+
     if smoothed is not None:
         smoothed[smoothed > max_tail] = max_tail
-        x[ordered[tail_ids]] = smoothed 
+        x[ordered[tail_ids]] = smoothed
 
-    if tail == 'left':
+    if tail == "left":
         x = -x
-    
+
     return x, k
 
 
@@ -150,9 +158,9 @@ def _gpdfit(ary):
 
     return k_post, sigma
 
+
 def _gpinv(probs, kappa, sigma, mu):
-    """
-    """
+    """ """
     if sigma <= 0:
         return np.full_like(probs, np.nan)
 
@@ -163,5 +171,3 @@ def _gpinv(probs, kappa, sigma, mu):
         q = mu + sigma * np.expm1(-kappa * np.log1p(-probs)) / kappa
 
     return q
-
-
