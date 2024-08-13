@@ -8,8 +8,8 @@ import warnings
 
 import numpy as np
 from scipy.fftpack import next_fast_len
-from scipy.stats import circmean
 from scipy.interpolate import CubicSpline
+from scipy.stats import circmean
 
 
 class _CoreBase:
@@ -120,9 +120,8 @@ class _CoreBase:
         numba compatible.
         """
         ranks = np.empty(len(ary), dtype=int)
-        ranks[np.argsort(ary, axis=None)] = np.arange(1, ary.size+1)
+        ranks[np.argsort(ary, axis=None)] = np.arange(1, ary.size + 1)
         return ranks
-
 
     def _compute_ranks(self, ary, relative=False):
         """Compute ranks for continuous and discrete variables."""

@@ -6,7 +6,7 @@ from collections.abc import Sequence
 import numpy as np
 from scipy.interpolate import CubicSpline
 
-__all__ = ["make_ufunc", "wrap_xarray_ufunc"]
+__all__ = ["make_ufunc"]
 
 _log = logging.getLogger(__name__)
 
