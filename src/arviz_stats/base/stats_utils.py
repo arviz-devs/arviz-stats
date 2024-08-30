@@ -252,11 +252,16 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
     draw_error = False
     chain_error = False
 
+    # for arviz-plots alignment, if all elements are nan return nan without indicating
+    # any error
+    isnan = np.isnan(ary)
+    if isnan.all():
+        return True
+
     if check_nan:
         if nan_kwargs is None:
             nan_kwargs = {}
 
-        isnan = np.isnan(ary)
         axis = nan_kwargs.get("axis", None)
         if nan_kwargs.get("how", "any").lower() == "all":
             nan_error = isnan.all(axis)
