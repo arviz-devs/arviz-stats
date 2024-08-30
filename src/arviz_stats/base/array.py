@@ -20,7 +20,7 @@ def process_ary_axes(ary, axes):
     axes : int or sequence of int
     """
     if axes is None:
-        axes = [i for i in range(ary.ndim)]
+        axes = list(range(ary.ndim))
     if isinstance(axes, int):
         axes = [axes]
     axes = [ax if ax >= 0 else ary.ndim + ax for ax in axes]
