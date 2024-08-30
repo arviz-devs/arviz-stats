@@ -110,11 +110,11 @@ class _CoreBase:
         return self.quantile(ary, [edge_prob, 1 - edge_prob], **kwargs)
 
     def _float_rankdata(self, ary):  # pylint: disable=no-self-use
-        """Compute ranks on coninuous data, assuming there are no ties.
+        """Compute ranks on continuous data, assuming there are no ties.
 
         Notes
         -----
-        :func:`scipy.stats.rankdata` is focused on discrete data and on differen ways
+        :func:`scipy.stats.rankdata` is focused on discrete data and different ways
         to resolve ties. However, our most common use is converting all data to continuous
         to get rid of the ties, the call rankdata which is not very efficient nor
         numba compatible.
