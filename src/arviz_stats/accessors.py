@@ -154,8 +154,12 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Compute the KDE for all variables in the dataset."""
         return self._apply("kde", dims=dims, **kwargs)
 
+    def get_bins(self, dims=None, **kwargs):
+        """Compute the histogram bin edges for all variables in the dataset."""
+        return self._apply(get_function("get_bins"), dims=dims, **kwargs)
+
     def histogram(self, dims=None, **kwargs):
-        """Compute the KDE for all variables in the dataset."""
+        """Compute the histogram for all variables in the dataset."""
         return self._apply("histogram", dims=dims, **kwargs)
 
     def compute_ranks(self, dims=None, relative=False):
