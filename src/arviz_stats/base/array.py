@@ -179,7 +179,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return compute_ranks_ufunc(ary, out_shape=(ary.shape[i] for i in axes), relative=relative)
 
-    def get_bins(self, ary, axes=-1):
+    def get_bins(self, ary, axes=-1, bins="arviz"):
         """Compute default bins."""
         ary, axes = process_ary_axes(ary, axes)
         get_bininfo_ufunc = make_ufunc(
@@ -188,7 +188,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_input=1,
             n_dims=len(axes),
         )
-        x_min, x_max, width = get_bininfo_ufunc(ary)
+        # TODO: improve handling of array_like bins
+        x_min, x_max, width = get_bininfo_ufunc(ary, bins=bins)
         n_bins = np.ceil((x_max - x_min) / width)
         n_bins = np.ceil(np.mean(n_bins)).astype(int)
         return np.moveaxis(np.linspace(x_min, x_max, n_bins), 0, -1)

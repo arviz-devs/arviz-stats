@@ -115,6 +115,21 @@ class BaseDataArray:
             },
         )
 
+    def get_bins(self, da, dims=None, bins="arviz"):
+        """Compute bins or align provided ones with DataArray input."""
+        if dims is None:
+            dims = rcParams["data.sample_dims"]
+        if isinstance(dims, str):
+            dims = [dims]
+        return apply_ufunc(
+            self.array_class.get_bins,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[["edges_dim"]],
+            kwargs={"bins": bins}
+        )
+
+
     # pylint: disable=redefined-builtin
     def histogram(self, da, dims=None, bins=None, range=None, weights=None, density=None):
         """Compute histogram on DataArray input."""
