@@ -5,7 +5,7 @@
 import numpy as np
 import pytest
 from arviz_stats.base.stats_utils import logsumexp as _logsumexp
-from arviz_stats.base.stats_utils import make_ufunc, not_valid, wrap_xarray_ufunc
+from arviz_stats.base.stats_utils import make_ufunc, not_valid
 from numpy.testing import assert_array_almost_equal
 from scipy.special import logsumexp
 
@@ -68,19 +68,15 @@ def test_logsumexp_b_inv(ary_dtype, axis, b_inv, keepdims):
 
 @pytest.mark.parametrize("quantile", ((0.5,), (0.5, 0.1)))
 @pytest.mark.parametrize("arg", (True, False))
-def test_wrap_ufunc_output(quantile, arg):
+def test_make_ufunc_output(quantile, arg):
     ary = np.random.randn(4, 100)
     n_output = len(quantile)
     if arg:
-        res = wrap_xarray_ufunc(
-            np.quantile, ary, ufunc_kwargs={"n_output": n_output}, func_args=(quantile,)
-        )
+        res = make_ufunc(np.quantile, n_output=n_output)(ary, quantile)
     elif n_output == 1:
-        res = wrap_xarray_ufunc(np.quantile, ary, func_kwargs={"q": quantile})
+        res = make_ufunc(np.quantile)(ary, q=quantile)
     else:
-        res = wrap_xarray_ufunc(
-            np.quantile, ary, ufunc_kwargs={"n_output": n_output}, func_kwargs={"q": quantile}
-        )
+        res = make_ufunc(np.quantile, n_output=n_output)(ary, q=quantile)
     if n_output == 1:
         assert not isinstance(res, tuple)
     else:
@@ -90,48 +86,34 @@ def test_wrap_ufunc_output(quantile, arg):
 
 @pytest.mark.parametrize("out_shape", ((1, 2), (1, 2, 3), (2, 3, 4, 5)))
 @pytest.mark.parametrize("input_dim", ((4, 100), (4, 100, 3), (4, 100, 4, 5)))
-def test_wrap_ufunc_out_shape(out_shape, input_dim):
+def test_make_ufunc_out_shape(out_shape, input_dim):
     func = lambda x: np.random.rand(*out_shape)
     ary = np.ones(input_dim)
-    res = wrap_xarray_ufunc(
-        func, ary, func_kwargs={"out_shape": out_shape}, ufunc_kwargs={"n_dims": 1}
-    )
+    res = make_ufunc(func, n_dims=1)(ary, out_shape=out_shape)
     assert res.shape == (*ary.shape[:-1], *out_shape)
 
 
-def test_wrap_ufunc_out_shape_multi_input():
+def test_make_ufunc_out_shape_multi_input():
     out_shape = (2, 4)
     func = lambda x, y: np.random.rand(*out_shape)
     ary1 = np.ones((4, 100))
     ary2 = np.ones((4, 5))
-    res = wrap_xarray_ufunc(
-        func, ary1, ary2, func_kwargs={"out_shape": out_shape}, ufunc_kwargs={"n_dims": 1}
-    )
+    res = make_ufunc(func, n_dims=1)(ary1, ary2, out_shape=out_shape)
     assert res.shape == (*ary1.shape[:-1], *out_shape)
 
 
-def test_wrap_ufunc_out_shape_multi_output_same():
+def test_make_ufunc_out_shape_multi_output_same():
     func = lambda x: (np.random.rand(1, 2), np.random.rand(1, 2))
     ary = np.ones((4, 100))
-    res1, res2 = wrap_xarray_ufunc(
-        func,
-        ary,
-        func_kwargs={"out_shape": ((1, 2), (1, 2))},
-        ufunc_kwargs={"n_dims": 1, "n_output": 2},
-    )
+    res1, res2 = make_ufunc(func, n_dims=1, n_output=2)(ary, out_shape=((1, 2), (1, 2)))
     assert res1.shape == (*ary.shape[:-1], 1, 2)
     assert res2.shape == (*ary.shape[:-1], 1, 2)
 
 
-def test_wrap_ufunc_out_shape_multi_output_diff():
+def test_make_ufunc_out_shape_multi_output_diff():
     func = lambda x: (np.random.rand(5, 3), np.random.rand(10, 4))
     ary = np.ones((4, 100))
-    res1, res2 = wrap_xarray_ufunc(
-        func,
-        ary,
-        func_kwargs={"out_shape": ((5, 3), (10, 4))},
-        ufunc_kwargs={"n_dims": 1, "n_output": 2},
-    )
+    res1, res2 = make_ufunc(func, n_dims=1, n_output=2)(ary, out_shape=((5, 3), (10, 4)))
     assert res1.shape == (*ary.shape[:-1], 5, 3)
     assert res2.shape == (*ary.shape[:-1], 10, 4)
 

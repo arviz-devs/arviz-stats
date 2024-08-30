@@ -78,6 +78,20 @@ class BaseDataArray:
             kwargs={"method": method, "relative": relative, "prob": prob},
         )
 
+    def compute_ranks(self, da, dims=None, relative=False):
+        """Compute ranks on DataArray input."""
+        if dims is None:
+            dims = rcParams["data.sample_dims"]
+        if isinstance(dims, str):
+            dims = [dims]
+        return apply_ufunc(
+            self.array_class.compute_ranks,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[dims],
+            kwargs={"relative": relative},
+        )
+
     def rhat(self, da, dims=None, method="bulk"):
         """Compute rhat on DataArray input."""
         if dims is None:

@@ -19,9 +19,11 @@ Currently, using accessors is the recommended way to call functions from `arviz_
    xarray.Dataset.azstats.filter_vars
    xarray.Dataset.azstats.eti
    xarray.Dataset.azstats.hdi
+   xarray.Dataset.azstats.compute_ranks
    xarray.Dataset.azstats.ess
    xarray.Dataset.azstats.rhat
    xarray.Dataset.azstats.mcse
+   xarray.Dataset.azstats.thin
    xarray.Dataset.azstats.kde
    xarray.Dataset.azstats.histogram
    xarray.Dataset.azstats.ecdf
