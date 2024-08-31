@@ -34,6 +34,22 @@ def update_kwargs_with_dims(da, kwargs):
     return kwargs
 
 
+def check_var_name_subset(obj, var_name):
+    if isinstance(obj, xr.Dataset):
+        return obj[var_name]
+    if isinstance(obj, DataTree):
+        return obj.ds[var_name]
+    return obj
+
+def apply_function_to_dataset(func, ds, kwargs):
+    return xr.Dataset(
+        {
+            var_name: func(da, **{key: check_var_name_subset(value, var_name) for key, value in update_kwargs_with_dims(da, kwargs).items()})
+            for var_name, da in ds.items()
+        }
+    )
+
+
 unset = UnsetDefault()
 
 
@@ -120,12 +136,7 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Apply a function to all variables subsetting dims to existing dimensions."""
         if isinstance(fun, str):
             fun = get_function(fun)
-        return xr.Dataset(
-            {
-                var_name: fun(da, **update_kwargs_with_dims(da, kwargs))
-                for var_name, da in self._obj.items()
-            }
-        )
+        return apply_function_to_dataset(fun, self._obj.items(), kwargs=kwargs)
 
     def eti(self, prob=None, dims=None, **kwargs):
         """Compute the equal tail interval of all the variables in the dataset."""
@@ -228,14 +239,7 @@ class AzStatsDtAccessor(_BaseAccessor):
             allow_non_matching = True
         return DataTree.from_dict(
             {
-                group_i: xr.Dataset(
-                    {
-                        var_name: get_function(fun_name)(da, **update_kwargs_with_dims(da, kwargs))
-                        for var_name, da in self._process_input(
-                            group_i, fun_name, allow_non_matching=allow_non_matching
-                        ).items()
-                    }
-                )
+                group_i: apply_function_to_dataset(get_function(func_name), self._process_input(group_i, fun_name, allow_non_matching=allow_non_matching), kwargs=kwargs)
                 for group_i in group
             }
         )
