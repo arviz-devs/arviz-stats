@@ -126,9 +126,8 @@ class BaseDataArray:
             kwargs={
                 "bins": bins,
                 "axes": np.arange(-len(dims), 0, 1),
-            }
+            },
         )
-
 
     # pylint: disable=redefined-builtin
     def histogram(self, da, dims=None, bins=None, range=None, weights=None, density=None):
@@ -154,7 +153,10 @@ class BaseDataArray:
                     .drop_vars(edges_dim)
                 )
             elif edges_dim not in bins.dims:
-                raise ValueError(f"Invalid 'bins' DataArray, it should contain either 'plot_axis' or '{edges_dim}' dimension")
+                raise ValueError(
+                    "Invalid 'bins' DataArray, it should contain either 'plot_axis' or "
+                    f"'{edges_dim}' dimension"
+                )
             input_core_dims.append([edges_dim])
         else:
             input_core_dims.append([])
