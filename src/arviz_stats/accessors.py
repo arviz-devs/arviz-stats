@@ -99,7 +99,14 @@ class AzStatsDsAccessor(_BaseAccessor):
             fun = get_function(fun)
         return xr.Dataset(
             {
-                var_name: fun(da, dims=update_dims(dims, da), **{key: value[var_name] if isinstance(value, xr.Dataset) else value for key, value in kwargs.items()})
+                var_name: fun(
+                    da,
+                    dims=update_dims(dims, da),
+                    **{
+                        key: value[var_name] if isinstance(value, xr.Dataset) else value
+                        for key, value in kwargs.items()
+                    },
+                )
                 for var_name, da in self._obj.items()
             }
         )
