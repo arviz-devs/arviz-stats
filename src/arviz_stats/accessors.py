@@ -42,10 +42,17 @@ def check_var_name_subset(obj, var_name):
         return obj.ds[var_name]
     return obj
 
+
 def apply_function_to_dataset(func, ds, kwargs):
     return xr.Dataset(
         {
-            var_name: func(da, **{key: check_var_name_subset(value, var_name) for key, value in update_kwargs_with_dims(da, kwargs).items()})
+            var_name: func(
+                da,
+                **{
+                    key: check_var_name_subset(value, var_name)
+                    for key, value in update_kwargs_with_dims(da, kwargs).items()
+                },
+            )
             for var_name, da in ds.items()
         }
     )
@@ -234,7 +241,7 @@ class AzStatsDtAccessor(_BaseAccessor):
             f"and the DataTree itself is named {self._obs.name}"
         )
 
-    def _apply(self, fun_name, group, **kwargs):
+    def _apply(self, func_name, group, **kwargs):
         hashable_group = False
         if isinstance(group, Hashable):
             group = [group]
@@ -244,8 +251,8 @@ class AzStatsDtAccessor(_BaseAccessor):
                 group_i: apply_function_to_dataset(
                     get_function(func_name),
                     # if group is a single str/hashable that doesn't match the group name,
-                    # still allow it and apply the function to the top level of the provided datatree
-                    self._process_input(group_i, fun_name, allow_non_matching=hashable_group),
+                    # still allow it and apply the function to the top level of the provided input
+                    self._process_input(group_i, func_name, allow_non_matching=hashable_group),
                     kwargs=kwargs
                 )
                 for group_i in group
