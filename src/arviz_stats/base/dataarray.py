@@ -8,6 +8,7 @@ import warnings
 import numpy as np
 from arviz_base import rcParams
 from xarray import DataArray, apply_ufunc, concat
+from xarray_einstats.stats import _apply_nonreduce_func
 
 from arviz_stats.base.array import array_stats
 
@@ -68,14 +69,25 @@ class BaseDataArray:
         """Compute ess on DataArray input."""
         if dims is None:
             dims = rcParams["data.sample_dims"]
-        if len(dims) != 2:
-            raise ValueError("dims must be of length 2")
+        draw_axis = -1
+        if len(dims) == 1:
+            chain_axis = None
+        elif len(dims) == 2:
+            chain_axis = -2
+        else:
+            raise ValueError("dims can only have 1 or 2 elements")
         return apply_ufunc(
             self.array_class.ess,
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"method": method, "relative": relative, "prob": prob},
+            kwargs={
+                "method": method,
+                "relative": relative,
+                "prob": prob,
+                "chain_axis": chain_axis,
+                "draw_axis": draw_axis,
+            },
         )
 
     def compute_ranks(self, da, dims=None, relative=False):
@@ -84,12 +96,12 @@ class BaseDataArray:
             dims = rcParams["data.sample_dims"]
         if isinstance(dims, str):
             dims = [dims]
-        return apply_ufunc(
+        return _apply_nonreduce_func(
             self.array_class.compute_ranks,
             da,
-            input_core_dims=[dims],
-            output_core_dims=[dims],
-            kwargs={"relative": relative},
+            dims,
+            {},
+            func_kwargs={"relative": relative},
         )
 
     def rhat(self, da, dims=None, method="bulk"):
