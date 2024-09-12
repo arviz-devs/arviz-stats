@@ -3,7 +3,6 @@
 import warnings
 
 import numpy as np
-from arviz import ess
 
 
 def pareto_khat(ary, r_eff=1, tail="both", log_weights=False):
@@ -58,29 +57,6 @@ def pareto_khat(ary, r_eff=1, tail="both", log_weights=False):
         _, khat = ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail)
 
     return khat
-
-
-def pareto_min_ss(ary):
-    """
-    Compute minimum effective sample size.
-
-    See details in Vehtari et al., 2024 (https://doi.org/10.48550/arXiv.1507.02646)
-
-    Parameters
-    ----------
-    k : float
-        Pareto k-hat value.
-    """
-    ary_flatten = ary.flatten()
-    n_draws = len(ary_flatten)
-    r_eff = ess(ary, method="tail") / n_draws
-
-    kappa = pareto_khat(ary_flatten, r_eff=r_eff, tail="both", log_weights=False)
-
-    if kappa < 1:
-        return 10 ** (1 / (1 - max(0, kappa)))
-
-    return np.inf
 
 
 def ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail="both", log_weights=False):

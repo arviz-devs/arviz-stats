@@ -55,6 +55,10 @@ class AzStatsDaAccessor(_BaseAccessor):
         """Perform thinning on the DataArray."""
         return get_function("thin")(self._obj, factor=factor, dims=dims, **kwargs)
 
+    def pareto_min_ss(self):
+        """Compute the minimum effective sample size on the DataArray."""
+        return get_function("pareto_min_ss")(self._obj)
+
 
 @xr.register_dataset_accessor("azstats")
 class AzStatsDsAccessor(_BaseAccessor):
@@ -147,6 +151,10 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Perform thinning for all the variables in the dataset."""
         return self._apply(get_function("thin"), dims=dims, factor=factor)
 
+    def pareto_min_ss(self, dims=None):
+        """Compute the min sample size for all variables in the dataset."""
+        return self._apply("pareto_min_ss", dims=dims)
+
 
 @register_datatree_accessor("azstats")
 class AzStatsDtAccessor(_BaseAccessor):
@@ -215,3 +223,7 @@ class AzStatsDtAccessor(_BaseAccessor):
     def thin(self, dims=None, group="posterior", **kwargs):
         """Perform thinning for all variables in a group of the DataTree."""
         return self._apply("thin", dims=dims, group=group, **kwargs)
+
+    def pareto_min_ss(self, dims=None, group="posterior"):
+        """Compute the min sample size for all variables in a group of the DataTree."""
+        return self._apply("pareto_min_ss", dims=dims, group=group)

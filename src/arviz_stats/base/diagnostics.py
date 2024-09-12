@@ -7,6 +7,7 @@ import numpy as np
 from scipy import stats
 
 from arviz_stats.base.core import _CoreBase
+from arviz_stats.base.pareto import pareto_khat
 from arviz_stats.base.stats_utils import not_valid as _not_valid
 
 
@@ -327,3 +328,17 @@ class _DiagnosticsBase(_CoreBase):
         th1 = sorted_ary[int(np.floor(np.nanmax((ppf_size[0], 0))))]
         th2 = sorted_ary[int(np.ceil(np.nanmin((ppf_size[1], size - 1))))]
         return (th2 - th1) / 2
+
+    def _pareto_min_ss(self, ary):
+        """Compute the minimum effective sample size."""
+        ary = np.asarray(ary)
+        ary_flatten = ary.flatten()
+        n_draws = len(ary_flatten)
+        r_eff = self._ess_tail(ary) / n_draws
+
+        kappa = pareto_khat(ary_flatten, r_eff=r_eff, tail="both", log_weights=False)
+
+        if kappa < 1:
+            return 10 ** (1 / (1 - max(0, kappa)))
+
+        return np.inf
