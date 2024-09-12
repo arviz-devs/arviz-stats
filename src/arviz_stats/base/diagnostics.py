@@ -332,6 +332,8 @@ class _DiagnosticsBase(_CoreBase):
     def _pareto_min_ss(self, ary):
         """Compute the minimum effective sample size."""
         ary = np.asarray(ary)
+        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
+            return np.nan
         ary_flatten = ary.flatten()
         n_draws = len(ary_flatten)
         r_eff = self._ess_tail(ary) / n_draws
