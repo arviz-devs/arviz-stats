@@ -51,6 +51,10 @@ class AzStatsDaAccessor(_BaseAccessor):
         """Compute the KDE on the DataArray."""
         return get_function("kde")(self._obj, dims=dims, **kwargs)
 
+    def thin(self, factor="auto", dims=None, **kwargs):
+        """Perform thinning on the DataArray."""
+        return get_function("thin")(self._obj, factor=factor, dims=dims, **kwargs)
+
 
 @xr.register_dataset_accessor("azstats")
 class AzStatsDsAccessor(_BaseAccessor):
@@ -91,6 +95,8 @@ class AzStatsDsAccessor(_BaseAccessor):
 
     def _apply(self, fun, dims, **kwargs):
         """Apply a function to all variables subsetting dims to existing dimensions."""
+        if isinstance(fun, str):
+            fun = get_function(fun)
         return xr.Dataset(
             {
                 var_name: fun(da, dims=update_dims(dims, da), **kwargs)
@@ -101,39 +107,45 @@ class AzStatsDsAccessor(_BaseAccessor):
     def eti(self, prob=None, dims=None, **kwargs):
         """Compute the equal tail interval of all the variables in the dataset."""
         kwargs["prob"] = prob
-        return self._apply(get_function("eti"), dims=dims, **kwargs)
+        return self._apply("eti", dims=dims, **kwargs)
 
     def hdi(self, prob=None, dims=None, **kwargs):
         """Compute hdi on all variables in the dataset."""
         kwargs["prob"] = prob
-        return self._apply(get_function("hdi"), dims=dims, **kwargs)
+        return self._apply("hdi", dims=dims, **kwargs)
 
     def ess(self, dims=None, method="bulk", relative=False, prob=None):
         """Compute the ess of all the variables in the dataset."""
-        return self._apply(
-            get_function("ess"), dims=dims, method=method, relative=relative, prob=prob
-        )
+        return self._apply("ess", dims=dims, method=method, relative=relative, prob=prob)
 
     def rhat(self, dims=None, method="rank"):
         """Compute the rhat of all the variables in the dataset."""
-        return self._apply(get_function("rhat"), dims=dims, method=method)
+        return self._apply("rhat", dims=dims, method=method)
 
     def mcse(self, dims=None, method="mean", prob=None):
         """Compute the mcse of all the variables in the dataset."""
-        return self._apply(get_function("mcse"), dims=dims, method=method, prob=prob)
+        return self._apply("mcse", dims=dims, method=method, prob=prob)
 
     def kde(self, dims=None, **kwargs):
         """Compute the KDE for all variables in the dataset."""
-        return self._apply(get_function("kde"), dims=dims, **kwargs)
+        return self._apply("kde", dims=dims, **kwargs)
 
     def histogram(self, dims=None, **kwargs):
         """Compute the KDE for all variables in the dataset."""
-        return self._apply(get_function("histogram"), dims=dims, **kwargs)
+        return self._apply("histogram", dims=dims, **kwargs)
+
+    def compute_ranks(self, dims=None, relative=False):
+        """Compute ranks for all variables in the dataset."""
+        return self._apply("compute_ranks", dims=dims, relative=relative)
 
     def ecdf(self, dims=None, **kwargs):
         """Compute the ecdf for all variables in the dataset."""
         # TODO: implement ecdf here so it doesn't depend on numba
         return self._apply(ecdf, dims=dims, **kwargs).rename(ecdf_axis="plot_axis")
+
+    def thin(self, dims=None, factor="auto"):
+        """Perform thinning for all the variables in the dataset."""
+        return self._apply(get_function("thin"), dims=dims, factor=factor)
 
 
 @register_datatree_accessor("azstats")
@@ -152,12 +164,18 @@ class AzStatsDtAccessor(_BaseAccessor):
         return self._obj
 
     def _apply(self, fun_name, dims, group, **kwargs):
+        if isinstance(group, str):
+            group = [group]
         return DataTree.from_dict(
             {
-                var_name: get_function(fun_name)(da, dims=update_dims(dims, da), **kwargs)
-                for var_name, da in self._process_input(group, fun_name).items()
-            },
-            name=group,
+                group_i: xr.Dataset(
+                    {
+                        var_name: get_function(fun_name)(da, dims=update_dims(dims, da), **kwargs)
+                        for var_name, da in self._process_input(group_i, fun_name).items()
+                    }
+                )
+                for group_i in group
+            }
         )
 
     def filter_vars(self, group="posterior", var_names=None, filter_vars=None):
@@ -193,3 +211,7 @@ class AzStatsDtAccessor(_BaseAccessor):
     def histogram(self, dims=None, group="posterior", **kwargs):
         """Compute the KDE for all variables in a group of the DataTree."""
         return self._apply("histogram", dims=dims, group=group, **kwargs)
+
+    def thin(self, dims=None, group="posterior", **kwargs):
+        """Perform thinning for all variables in a group of the DataTree."""
+        return self._apply("thin", dims=dims, group=group, **kwargs)

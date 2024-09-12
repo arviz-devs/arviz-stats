@@ -5,9 +5,8 @@ from collections.abc import Sequence
 
 import numpy as np
 from scipy.interpolate import CubicSpline
-from xarray import apply_ufunc
 
-__all__ = ["make_ufunc", "wrap_xarray_ufunc"]
+__all__ = ["make_ufunc"]
 
 _log = logging.getLogger(__name__)
 
@@ -123,58 +122,6 @@ def make_ufunc(func, n_dims=2, n_output=1, n_input=1, index=Ellipsis, ravel=True
 
     update_docstring(ufunc, func, n_output)
     return ufunc
-
-
-def wrap_xarray_ufunc(
-    ufunc,
-    *datasets,
-    ufunc_kwargs=None,
-    func_args=None,
-    func_kwargs=None,
-    **kwargs,
-):
-    """Wrap make_ufunc with xarray.apply_ufunc.
-
-    Parameters
-    ----------
-    ufunc : callable
-    *datasets : xarray.Dataset
-    ufunc_kwargs : dict
-        Keyword arguments passed to `make_ufunc`.
-            - 'n_dims', int, by default 2
-            - 'n_output', int, by default 1
-            - 'n_input', int, by default len(datasets)
-            - 'index', slice, by default Ellipsis
-            - 'ravel', bool, by default True
-    func_args : tuple
-        Arguments passed to 'ufunc'.
-    func_kwargs : dict
-        Keyword arguments passed to 'ufunc'.
-            - 'out_shape', int, by default None
-    **kwargs
-        Passed to :func:`xarray.apply_ufunc`.
-
-    Returns
-    -------
-    xarray.Dataset
-    """
-    if ufunc_kwargs is None:
-        ufunc_kwargs = {}
-    ufunc_kwargs.setdefault("n_input", len(datasets))
-    if func_args is None:
-        func_args = tuple()
-    if func_kwargs is None:
-        func_kwargs = {}
-
-    kwargs.setdefault(
-        "input_core_dims", tuple(("chain", "draw") for _ in range(len(func_args) + len(datasets)))
-    )
-    ufunc_kwargs.setdefault("n_dims", len(kwargs["input_core_dims"][-1]))
-    kwargs.setdefault("output_core_dims", tuple([] for _ in range(ufunc_kwargs.get("n_output", 1))))
-
-    callable_ufunc = make_ufunc(ufunc, **ufunc_kwargs)
-
-    return apply_ufunc(callable_ufunc, *datasets, *func_args, kwargs=func_kwargs, **kwargs)
 
 
 def update_docstring(ufunc, func, n_output=1):
@@ -305,11 +252,16 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
     draw_error = False
     chain_error = False
 
+    # for arviz-plots alignment, if all elements are nan return nan without indicating
+    # any error
+    isnan = np.isnan(ary)
+    if isnan.all():
+        return True
+
     if check_nan:
         if nan_kwargs is None:
             nan_kwargs = {}
 
-        isnan = np.isnan(ary)
         axis = nan_kwargs.get("axis", None)
         if nan_kwargs.get("how", "any").lower() == "all":
             nan_error = isnan.all(axis)

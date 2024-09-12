@@ -19,6 +19,8 @@ def process_ary_axes(ary, axes):
     ary : array_like
     axes : int or sequence of int
     """
+    if axes is None:
+        axes = list(range(ary.ndim))
     if isinstance(axes, int):
         axes = [axes]
     axes = [ax if ax >= 0 else ary.ndim + ax for ax in axes]
@@ -132,6 +134,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
     def pareto_min_ss(self, ary):
         """Compute minimum effective sample size."""
+
+    def compute_ranks(self, ary, axes=-1, relative=False):
+        """Compute ranks of MCMC samples."""
+        ary, axes = process_ary_axes(ary, axes)
+        compute_ranks_ufunc = make_ufunc(
+            self._compute_ranks,
+            n_output=1,
+            n_input=1,
+            n_dims=len(axes),
+            ravel=False,
+        )
+        return compute_ranks_ufunc(ary, out_shape=(ary.shape[i] for i in axes), relative=relative)
 
     def get_bins(self, ary, axes=-1):
         """Compute default bins."""

@@ -3,6 +3,8 @@
 "dataarray" functions take :class:`xarray.DataArray` as inputs.
 """
 
+import warnings
+
 import numpy as np
 from arviz_base import rcParams
 from xarray import DataArray, apply_ufunc, concat
@@ -74,6 +76,20 @@ class BaseDataArray:
             input_core_dims=[dims],
             output_core_dims=[[]],
             kwargs={"method": method, "relative": relative, "prob": prob},
+        )
+
+    def compute_ranks(self, da, dims=None, relative=False):
+        """Compute ranks on DataArray input."""
+        if dims is None:
+            dims = rcParams["data.sample_dims"]
+        if isinstance(dims, str):
+            dims = [dims]
+        return apply_ufunc(
+            self.array_class.compute_ranks,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[dims],
+            kwargs={"relative": relative},
         )
 
     def rhat(self, da, dims=None, method="bulk"):
@@ -192,6 +208,37 @@ class BaseDataArray:
         plot_axis = DataArray(["x", "y"], dims="plot_axis")
         out = concat((grid, pdf), dim=plot_axis)
         return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
+
+    def thin(self, da, factor="auto", dims=None):
+        """Perform thinning on DataArray input."""
+        if factor == "auto" and dims is not None:
+            warnings.warn("dims are ignored if factor is auto")
+
+        if factor == "auto":
+            n_samples = da.sizes["chain"] * da.sizes["draw"]
+            ess_ave = np.minimum(
+                self.ess(da, method="bulk", dims=["chain", "draw"]),
+                self.ess(da, method="tail", dims=["chain", "draw"]),
+            ).mean()
+            factor = int(np.ceil(n_samples / ess_ave))
+            dims = "draw"
+
+        elif isinstance(factor, (float | int)):
+            if dims is None:
+                dims = rcParams["data.sample_dims"]
+            if not isinstance(dims, str):
+                if len(dims) >= 2:
+                    raise ValueError("dims must be of length 1")
+                if len(dims) == 1:
+                    dims = dims[0]
+
+            factor = int(factor)
+            if factor == 1:
+                return da
+            if factor < 1:
+                raise ValueError("factor must be greater than 1")
+
+        return da.sel({dims: slice(None, None, factor)})
 
 
 dataarray_stats = BaseDataArray(array_class=array_stats)
