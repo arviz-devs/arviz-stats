@@ -138,8 +138,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             ary = np.expand_dims(ary, axis=0)
             chain_axis = 0
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
-        pms_func = getattr(self, "_pareto_min_ss")
-        pms_array = make_ufunc(pms_func, n_output=1, n_input=1, n_dims=2, ravel=False)
+        pms_array = make_ufunc(self._pareto_min_ss, n_output=1, n_input=1, n_dims=2, ravel=False)
         return pms_array(ary)
 
     def compute_ranks(self, ary, axes=-1, relative=False):

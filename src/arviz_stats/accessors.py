@@ -55,9 +55,9 @@ class AzStatsDaAccessor(_BaseAccessor):
         """Perform thinning on the DataArray."""
         return get_function("thin")(self._obj, factor=factor, dims=dims, **kwargs)
 
-    def pareto_min_ss(self):
+    def pareto_min_ss(self, dims=None):
         """Compute the minimum effective sample size on the DataArray."""
-        return get_function("pareto_min_ss")(self._obj)
+        return get_function("pareto_min_ss")(self._obj, dims=dims)
 
 
 @xr.register_dataset_accessor("azstats")
