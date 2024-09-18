@@ -240,5 +240,16 @@ class BaseDataArray:
 
         return da.sel({dims: slice(None, None, factor)})
 
+    def pareto_min_ss(self, da, dims=None):
+        """Compute the minimum effective sample size for all variables in the dataset."""
+        if dims is None:
+            dims = rcParams["data.sample_dims"]
+        return apply_ufunc(
+            self.array_class.pareto_min_ss,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[]],
+        )
+
 
 dataarray_stats = BaseDataArray(array_class=array_stats)

@@ -132,6 +132,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         mcse_array = make_ufunc(mcse_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return mcse_array(ary, **func_kwargs)
 
+    def pareto_min_ss(self, ary, chain_axis=-2, draw_axis=-1):
+        """Compute minimum effective sample size."""
+        if chain_axis is None:
+            ary = np.expand_dims(ary, axis=0)
+            chain_axis = 0
+        ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
+        pms_array = make_ufunc(self._pareto_min_ss, n_output=1, n_input=1, n_dims=2, ravel=False)
+        return pms_array(ary)
+
     def compute_ranks(self, ary, axes=-1, relative=False):
         """Compute ranks of MCMC samples."""
         ary, axes = process_ary_axes(ary, axes)
