@@ -390,6 +390,7 @@ class _DensityBase(_CoreBase):
         bw_fct=1,
         custom_lims=None,
         cumulative=False,
+        weights=None,
         grid_len=512,
         **kwargs,  # pylint: disable=unused-argument
     ):
@@ -457,7 +458,7 @@ class _DensityBase(_CoreBase):
             x_min, x_max, x_std, extend_fct, grid_len, custom_lims, extend, bound_correction
         )
         grid_counts, grid_edges = self._histogram(
-            x, bins=grid_len, range=(grid_min, grid_max), density=False
+            x, bins=grid_len, weights=weights, range=(grid_min, grid_max), density=False
         )
 
         # Bandwidth estimation

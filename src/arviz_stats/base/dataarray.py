@@ -179,7 +179,7 @@ class BaseDataArray:
         )
         return out
 
-    def kde(self, da, dims=None, circular=False, grid_len=512, **kwargs):
+    def kde(self, da, dims=None, circular=False, grid_len=512, weights=None, **kwargs):
         """Compute kde on DataArray input."""
         dims = validate_dims(dims)
         grid, pdf, bw = apply_ufunc(
@@ -188,6 +188,7 @@ class BaseDataArray:
             kwargs={
                 "circular": circular,
                 "grid_len": grid_len,
+                "weights": weights,
                 "axes": np.arange(-len(dims), 0, 1),
                 **kwargs,
             },
@@ -272,6 +273,32 @@ class BaseDataArray:
             input_core_dims=[dims],
             output_core_dims=[[]],
             kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
+        )
+
+    def power_scale_lw(self, da, alpha=0, dims=None):
+        """Compute log weights for power-scaling component by alpha."""
+        if dims is None:
+            dims = rcParams["data.sample_dims"]
+        return apply_ufunc(
+            self.array_class.power_scale_lw,
+            da,
+            alpha,
+            input_core_dims=[dims, []],
+            output_core_dims=[dims],
+        )
+
+    def power_scale_sens(self, da, lower_w, upper_w, delta, dims=None):
+        """Compute power-scaling sensitivity."""
+        if dims is None:
+            dims = rcParams["data.sample_dims"]
+        return apply_ufunc(
+            self.array_class.power_scale_sens,
+            da,
+            lower_w,
+            upper_w,
+            delta,
+            input_core_dims=[dims, [], [], []],
+            output_core_dims=[[]],
         )
 
 

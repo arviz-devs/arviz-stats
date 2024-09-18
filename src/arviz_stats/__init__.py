@@ -4,5 +4,8 @@
 try:
     from arviz_stats.utils import *
     from arviz_stats.accessors import *
+
 except ModuleNotFoundError:
     pass
+
+from arviz_stats.psens import *
