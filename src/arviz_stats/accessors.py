@@ -103,7 +103,14 @@ class AzStatsDsAccessor(_BaseAccessor):
             fun = get_function(fun)
         return xr.Dataset(
             {
-                var_name: fun(da, dims=update_dims(dims, da), **kwargs)
+                var_name: fun(
+                    da,
+                    dims=update_dims(dims, da),
+                    **{
+                        key: value[var_name] if isinstance(value, xr.Dataset) else value
+                        for key, value in kwargs.items()
+                    },
+                )
                 for var_name, da in self._obj.items()
             }
         )
@@ -134,8 +141,12 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Compute the KDE for all variables in the dataset."""
         return self._apply("kde", dims=dims, **kwargs)
 
+    def get_bins(self, dims=None, **kwargs):
+        """Compute the histogram bin edges for all variables in the dataset."""
+        return self._apply(get_function("get_bins"), dims=dims, **kwargs)
+
     def histogram(self, dims=None, **kwargs):
-        """Compute the KDE for all variables in the dataset."""
+        """Compute the histogram for all variables in the dataset."""
         return self._apply("histogram", dims=dims, **kwargs)
 
     def compute_ranks(self, dims=None, relative=False):
