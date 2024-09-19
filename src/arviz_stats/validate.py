@@ -18,7 +18,7 @@ def validate_dims(dims):
     """
     if dims is None:
         dims = rcParams["data.sample_dims"]
-    if isinstance(str, dims):
+    if isinstance(dims, str):
         dims = [dims]
     return list(dims)
 
