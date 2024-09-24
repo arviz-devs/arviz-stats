@@ -8,8 +8,10 @@ import warnings
 import numpy as np
 from arviz_base import rcParams
 from xarray import DataArray, apply_ufunc, concat
+from xarray_einstats.stats import _apply_nonreduce_func
 
 from arviz_stats.base.array import array_stats
+from arviz_stats.validate import validate_ci_prob, validate_dims, validate_dims_chain_draw_axis
 
 
 class BaseDataArray:
@@ -20,12 +22,8 @@ class BaseDataArray:
 
     def eti(self, da, prob=None, dims=None, method="linear"):
         """Compute eti on DataArray input."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
-        if prob is None:
-            prob = rcParams["stats.ci_prob"]
-        elif not 1 >= prob > 0:
-            raise ValueError("The value of hdi_prob should be in the interval (0, 1]")
+        dims = validate_dims(dims)
+        prob = validate_ci_prob(prob)
 
         return apply_ufunc(
             self.array_class.eti,
@@ -40,12 +38,8 @@ class BaseDataArray:
         self, da, prob=None, dims=None, method="nearest", circular=False, max_modes=10, skipna=False
     ):
         """Compute hdi on DataArray input."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
-        if isinstance(dims, str):
-            dims = [dims]
-        if prob is None:
-            prob = rcParams["stats.ci_prob"]
+        dims = validate_dims(dims)
+        prob = validate_ci_prob(prob)
 
         mode_dim = "mode" if da.name is None else f"{da.name}_mode"
         hdi_coord = DataArray(["lower", "higher"], dims=["hdi"], attrs={"hdi_prob": prob})
@@ -66,67 +60,65 @@ class BaseDataArray:
 
     def ess(self, da, dims=None, method="bulk", relative=False, prob=None):
         """Compute ess on DataArray input."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
-        if len(dims) != 2:
-            raise ValueError("dims must be of length 2")
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
         return apply_ufunc(
             self.array_class.ess,
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"method": method, "relative": relative, "prob": prob},
+            kwargs={
+                "method": method,
+                "relative": relative,
+                "prob": prob,
+                "chain_axis": chain_axis,
+                "draw_axis": draw_axis,
+            },
         )
 
     def compute_ranks(self, da, dims=None, relative=False):
         """Compute ranks on DataArray input."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
-        if isinstance(dims, str):
-            dims = [dims]
-        return apply_ufunc(
+        dims = validate_dims(dims)
+        return _apply_nonreduce_func(
             self.array_class.compute_ranks,
             da,
-            input_core_dims=[dims],
-            output_core_dims=[dims],
-            kwargs={"relative": relative},
+            dims,
+            {},
+            func_kwargs={"relative": relative},
         )
 
     def rhat(self, da, dims=None, method="bulk"):
         """Compute rhat on DataArray input."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
+        dims = validate_dims(dims)
         if len(dims) != 2:
-            raise ValueError("dims must be of length 2")
+            raise ValueError("dims must be of length 2 for rhat computation")
         return apply_ufunc(
             self.array_class.rhat,
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"method": method},
+            kwargs={"method": method, "chain_axis": -2, "draw_axis": -1},
         )
 
     def mcse(self, da, dims=None, method="mean", prob=None):
         """Compute mcse on DataArray input."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
-        if len(dims) != 2:
-            raise ValueError("dims must be of length 2")
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
         return apply_ufunc(
             self.array_class.mcse,
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"method": method, "prob": prob},
+            kwargs={
+                "method": method,
+                "prob": prob,
+                "chain_axis": chain_axis,
+                "draw_axis": draw_axis,
+            },
         )
 
     # pylint: disable=redefined-builtin
     def histogram(self, da, dims=None, bins=None, range=None, weights=None, density=None):
         """Compute histogram on DataArray input."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
-        if isinstance(dims, str):
-            dims = [dims]
+        dims = validate_dims(dims)
         edges_dim = "edges_dim"
         hist_dim = "hist_dim"
         input_core_dims = [dims]
@@ -189,10 +181,7 @@ class BaseDataArray:
 
     def kde(self, da, dims=None, circular=False, grid_len=512, **kwargs):
         """Compute kde on DataArray input."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
-        if isinstance(dims, str):
-            dims = [dims]
+        dims = validate_dims(dims)
         grid, pdf, bw = apply_ufunc(
             self.array_class.kde,
             da,
@@ -242,13 +231,13 @@ class BaseDataArray:
 
     def pareto_min_ss(self, da, dims=None):
         """Compute the minimum effective sample size for all variables in the dataset."""
-        if dims is None:
-            dims = rcParams["data.sample_dims"]
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
         return apply_ufunc(
             self.array_class.pareto_min_ss,
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
+            kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
         )
 
 
