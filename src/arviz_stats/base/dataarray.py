@@ -198,18 +198,40 @@ class BaseDataArray:
         out = concat((grid, pdf), dim=plot_axis)
         return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
 
+    def thin_factor(self, da, target_ess=None):
+        """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
+
+        Parameters
+        ----------
+        da : DataArray
+        target_ess : int, optional
+            By default, the ESS target will be preserving the ESS of all available samples.
+            If an integer value is passed, it must be lower than the average ESS of the input
+            samples.
+        """
+        n_samples = da.sizes["chain"] * da.sizes["draw"]
+        ess_ave = np.minimum(
+            self.ess(da, method="bulk", dims=["chain", "draw"]),
+            self.ess(da, method="tail", dims=["chain", "draw"]),
+        ).mean()
+        if target_ess is None:
+            target_ess = ess_ave
+        if target_ess > ess_ave:
+            warnings.warn(
+                f"ESS not high enough to reach requested {target_ess} ESS. "
+                "Returning 1 so no thinning is applied and "
+                f"current ESS average at {ess_ave} is preserved."
+            )
+            return 1
+        return int(np.ceil(n_samples / target_ess))
+
     def thin(self, da, factor="auto", dims=None):
         """Perform thinning on DataArray input."""
         if factor == "auto" and dims is not None:
             warnings.warn("dims are ignored if factor is auto")
 
         if factor == "auto":
-            n_samples = da.sizes["chain"] * da.sizes["draw"]
-            ess_ave = np.minimum(
-                self.ess(da, method="bulk", dims=["chain", "draw"]),
-                self.ess(da, method="tail", dims=["chain", "draw"]),
-            ).mean()
-            factor = int(np.ceil(n_samples / ess_ave))
+            factor = self.thin_factor(da)
             dims = "draw"
 
         elif isinstance(factor, (float | int)):
