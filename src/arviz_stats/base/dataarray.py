@@ -198,7 +198,7 @@ class BaseDataArray:
         out = concat((grid, pdf), dim=plot_axis)
         return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
 
-    def thin_factor(self, da, target_ess=None):
+    def thin_factor(self, da, target_ess=None, mode="mean"):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
 
         Parameters
@@ -208,22 +208,32 @@ class BaseDataArray:
             By default, the ESS target will be preserving the ESS of all available samples.
             If an integer value is passed, it must be lower than the average ESS of the input
             samples.
+        mode : {"mean", "min"}, default "mean"
         """
         n_samples = da.sizes["chain"] * da.sizes["draw"]
-        ess_ave = np.minimum(
+        ess = np.minimum(
             self.ess(da, method="bulk", dims=["chain", "draw"]),
             self.ess(da, method="tail", dims=["chain", "draw"]),
-        ).mean()
+        )
+        if mode == "mean":
+            ess_ave = ess.mean()
+        elif mode == "min":
+            ess_ave = ess.min()
+        else:
+            raise ValueError(f"`mode` {mode} not recognized. Valid values are 'mean' or 'min'")
         if target_ess is None:
             target_ess = ess_ave
         if target_ess > ess_ave:
+            var_indicator = f"for {ess_ave.name} " if ess_ave.name is not None else ""
             warnings.warn(
                 f"ESS not high enough to reach requested {target_ess} ESS. "
                 "Returning 1 so no thinning is applied and "
-                f"current ESS average at {ess_ave} is preserved."
+                f"current ESS average {var_indicator}at {ess_ave.item()} is preserved."
             )
             return 1
-        return int(np.ceil(n_samples / target_ess))
+        if mode == "mean":
+            return int(np.ceil(n_samples / target_ess))
+        return int(np.floor(n_samples / target_ess))
 
     def thin(self, da, factor="auto", dims=None):
         """Perform thinning on DataArray input."""
