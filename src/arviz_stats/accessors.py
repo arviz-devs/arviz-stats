@@ -1,6 +1,7 @@
 """ArviZ stats accessors."""
 
 import warnings
+from collections.abc import Hashable
 
 import xarray as xr
 from arviz_base.utils import _var_names
@@ -159,6 +160,14 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Compute the min sample size for all variables in the dataset."""
         return self._apply("pareto_min_ss", dims=dims)
 
+    def power_scale_lw(self, dims=None, **kwargs):
+        """Compute log weights for power-scaling of the DataTree."""
+        return self._apply("power_scale_lw", dims=dims, **kwargs)
+
+    def power_scale_sens(self, dims=None, **kwargs):
+        """Compute power-scaling sensitivity."""
+        return self._apply("power_scale_sens", dims=dims, **kwargs)
+
 
 @register_datatree_accessor("azstats")
 class AzStatsDtAccessor(_BaseAccessor):
@@ -176,9 +185,11 @@ class AzStatsDtAccessor(_BaseAccessor):
         return self._obj
 
     def _apply(self, fun_name, dims, group, **kwargs):
-        if isinstance(group, str):
+        hashable_group = False
+        if isinstance(group, Hashable):
             group = [group]
-        return DataTree.from_dict(
+            hashable_group = True
+        out_dt = DataTree.from_dict(
             {
                 group_i: xr.Dataset(
                     {
@@ -189,6 +200,13 @@ class AzStatsDtAccessor(_BaseAccessor):
                 for group_i in group
             }
         )
+        if hashable_group:
+            # if group was a string/hashable, return a datatree with a single node
+            # (from the provided group) as the root of the DataTree
+            return out_dt[group[0]]
+        # if group was a sequence, return a DataTree with multiple groups in the 1st level,
+        # as many groups as requested
+        return out_dt
 
     def filter_vars(self, group="posterior", var_names=None, filter_vars=None):
         """Access and filter variables of the provided group."""

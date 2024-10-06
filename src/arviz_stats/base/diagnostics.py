@@ -550,7 +550,7 @@ class _DiagnosticsBase(_CoreBase):
 
         return q
 
-    def _power_scale_sens(self, ary, lower_w=None, upper_w=None, delta=0.01):
+    def _power_scale_sens(self, ary, lower_w, upper_w, delta=0.01):
         """Compute power-scaling sensitivity by finite difference second derivative of CJS."""
         ary = np.ravel(ary)
         lower_w = np.ravel(lower_w)
@@ -562,6 +562,7 @@ class _DiagnosticsBase(_CoreBase):
 
     def _power_scale_lw(self, ary, alpha):
         """Compute log weights for power-scaling component by alpha."""
+        shape = ary.shape
         ary = np.ravel(ary)
         log_weights = (alpha - 1) * ary
         n_draws = len(log_weights)
@@ -575,7 +576,7 @@ class _DiagnosticsBase(_CoreBase):
             log_weights=True,
         )
 
-        return log_weights
+        return log_weights.reshape(shape)
 
     @staticmethod
     def _cjs_dist(ary, weights):

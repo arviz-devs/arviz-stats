@@ -1,6 +1,7 @@
 """Power-scaling sensitivity diagnostics."""
 
 import warnings
+from collections.abc import Hashable
 from typing import cast
 
 import numpy as np
@@ -10,12 +11,17 @@ from arviz_base import extract
 from arviz_base.labels import BaseLabeller
 from arviz_base.sel_utils import xarray_var_iter
 
+from arviz_stats.validate import validate_dims
+
 labeller = BaseLabeller()
+
+__all__ = ["psens", "psens_summary"]
 
 
 def psens(
     dt,
     group="log_prior",
+    sample_dims=None,
     component_var_names=None,
     component_coords=None,
     var_names=None,
@@ -75,44 +81,45 @@ def psens(
     .. [1] Kallioinen et al, *Detecting and diagnosing prior and likelihood sensitivity with
        power-scaling*, 2022, https://arxiv.org/abs/2107.14054
     """
-    dataset = extract(dt, var_names=var_names, filter_vars=filter_vars, group="posterior")
-    if coords is None:
+    dataset = extract(
+        dt, var_names=var_names, filter_vars=filter_vars, group="posterior", combined=False
+    )
+    sample_dims = validate_dims(sample_dims)
+    if coords is not None:
         dataset = dataset.sel(coords)
 
     if group == "log_likelihood":
-        component_draws = get_log_likelihood(dt, var_name=component_var_names, single_var=False)
+        component_draws = get_log_likelihood_dataset(dt, var_names=component_var_names)
     elif group == "log_prior":
         component_draws = get_log_prior(dt, var_names=component_var_names)
     else:
         raise ValueError("Value for `group` argument not recognized")
 
-    component_draws = component_draws.stack(__sample__=("chain", "draw"))
-    if component_coords is None:
+    if component_coords is not None:
         component_draws = component_draws.sel(component_coords)
-    if isinstance(component_draws, xr.DataArray):
-        component_draws = component_draws.to_dataset()
-    if len(component_draws.dims):
-        component_draws = component_draws.to_stacked_array(
-            "latent-obs_var", sample_dims=("__sample__",)
-        ).sum("latent-obs_var")
-
-    component_draws = component_draws.unstack()
+    # we stack the different variables (if any) and dimensions in each variable (if any)
+    # into a flat dimension "latent-obs_var", over which we sum afterwards.
+    # Consequently, after this component_draws draws is a dataarray with only sample_dims as dims
+    component_draws = component_draws.to_stacked_array(
+        "latent-obs_var", sample_dims=sample_dims
+    ).sum("latent-obs_var")
 
     # calculate lower and upper alpha values
     lower_alpha = 1 / (1 + delta)
     upper_alpha = 1 + delta
 
     # calculate importance sampling weights for lower and upper alpha power-scaling
-    lower_w = np.exp(component_draws.azstats.power_scale_lw(alpha=lower_alpha)).values.flatten()
-    lower_w = lower_w / np.sum(lower_w)
+    lower_w = np.exp(component_draws.azstats.power_scale_lw(alpha=lower_alpha, dims=sample_dims))
+    lower_w = lower_w / lower_w.sum(sample_dims)
 
-    upper_w = np.exp(component_draws.azstats.power_scale_lw(alpha=upper_alpha)).values.flatten()
-    upper_w = upper_w / np.sum(upper_w)
+    upper_w = np.exp(component_draws.azstats.power_scale_lw(alpha=upper_alpha, dims=sample_dims))
+    upper_w = upper_w / upper_w.sum(sample_dims)
 
-    return dt.azstats.power_scale_sens(
+    return dataset.azstats.power_scale_sens(
         lower_w=lower_w,
         upper_w=upper_w,
         delta=delta,
+        dims=sample_dims,
     )
 
 
@@ -138,8 +145,8 @@ def psens_summary(data, threshold=0.05, round_to=3):
         and the likelihood sensitivity is below the threshold
         - "-" otherwise
     """
-    pssdp = psens(data, group="log_prior")["posterior"].to_dataset()
-    pssdl = psens(data, group="log_likelihood")["posterior"].to_dataset()
+    pssdp = psens(data, group="log_prior")
+    pssdl = psens(data, group="log_likelihood")
 
     joined = xr.concat([pssdp, pssdl], dim="component").assign_coords(
         component=["prior", "likelihood"]
@@ -173,7 +180,7 @@ def psens_summary(data, threshold=0.05, round_to=3):
 
 
 # get_log_likelihood and get_log_prior functions should be somewhere else
-def get_log_likelihood(idata, var_name=None, single_var=True):
+def get_log_likelihood_dataset(idata, var_names=None):
     """Retrieve the log likelihood dataarray of a given variable."""
     if (
         not hasattr(idata, "log_likelihood")
@@ -184,21 +191,29 @@ def get_log_likelihood(idata, var_name=None, single_var=True):
             "Storing the log_likelihood in sample_stats groups has been deprecated",
             DeprecationWarning,
         )
-        return idata.sample_stats.log_likelihood
+        log_lik_ds = idata.sample_stats.ds[["log_likelihood"]]
     if not hasattr(idata, "log_likelihood"):
         raise TypeError("log likelihood not found in inference data object")
+    log_lik_ds = idata.log_likelihood.ds
+    if var_names is None:
+        return log_lik_ds
+    if isinstance(var_names, Hashable):
+        return log_lik_ds[[var_names]]
+    return log_lik_ds[var_names]
+
+
+def get_log_likelihood_dataarray(data, var_name=None):
+    log_lik_ds = get_log_likelihood_dataset(data)
     if var_name is None:
-        var_names = list(idata.log_likelihood.data_vars)
+        var_names = list(log_lik_ds.data_vars)
         if len(var_names) > 1:
-            if single_var:
-                raise TypeError(
-                    f"Found several log likelihood arrays {var_names}, var_name cannot be None"
-                )
-            return idata.log_likelihood[var_names]
-        return idata.log_likelihood[var_names[0]]
+            raise TypeError(
+                f"Found several log likelihood arrays {var_names}, var_name cannot be None"
+            )
+        return log_lik_ds[var_names[0]]
 
     try:
-        log_likelihood = idata.log_likelihood[var_name]
+        log_likelihood = log_lik_ds[var_name]
     except KeyError as err:
         raise TypeError(f"No log likelihood data named {var_name} found") from err
     return log_likelihood
@@ -209,5 +224,7 @@ def get_log_prior(idata, var_names=None):
     if not hasattr(idata, "log_prior"):
         raise TypeError("log prior not found in inference data object")
     if var_names is None:
-        var_names = list(idata.log_prior.data_vars)
-    return idata.log_prior.to_dataset()[var_names]
+        return idata.log_prior.ds
+    if isinstance(var_names, Hashable):
+        return idata.log_prior.ds[[var_names]]
+    return idata.log_prior.ds[var_names]
