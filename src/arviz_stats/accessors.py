@@ -1,6 +1,7 @@
 """ArviZ stats accessors."""
 
 import warnings
+from collections.abc import Hashable
 
 import numpy as np
 import xarray as xr
@@ -182,6 +183,14 @@ class AzStatsDsAccessor(_BaseAccessor):
     def pareto_min_ss(self, dims=None):
         """Compute the min sample size for all variables in the dataset."""
         return self._apply("pareto_min_ss", dims=dims)
+
+    def power_scale_lw(self, dims=None, **kwargs):
+        """Compute log weights for power-scaling of the DataTree."""
+        return self._apply("power_scale_lw", dims=dims, **kwargs)
+
+    def power_scale_sens(self, dims=None, **kwargs):
+        """Compute power-scaling sensitivity."""
+        return self._apply("power_scale_sens", dims=dims, **kwargs)
 
 
 @register_datatree_accessor("azstats")
