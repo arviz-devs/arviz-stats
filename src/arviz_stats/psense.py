@@ -83,36 +83,29 @@ def psense(
     dataset = extract(
         dt, var_names=var_names, filter_vars=filter_vars, group="posterior", combined=False
     )
-    sample_dims = validate_dims(sample_dims)
     if coords is not None:
         dataset = dataset.sel(coords)
 
-    if group == "log_likelihood":
-        component_draws = get_log_likelihood_dataset(dt, var_names=component_var_names)
-    elif group == "log_prior":
-        component_draws = get_log_prior(dt, var_names=component_var_names)
-    else:
-        raise ValueError("Value for `group` argument not recognized")
-
-    if component_coords is not None:
-        component_draws = component_draws.sel(component_coords)
-    # we stack the different variables (if any) and dimensions in each variable (if any)
-    # into a flat dimension "latent-obs_var", over which we sum afterwards.
-    # Consequently, after this component_draws draws is a dataarray with only sample_dims as dims
-    component_draws = component_draws.to_stacked_array(
-        "latent-obs_var", sample_dims=sample_dims
-    ).sum("latent-obs_var")
-
-    # calculate lower and upper alpha values
     lower_alpha = 1 / (1 + delta)
     upper_alpha = 1 + delta
 
-    # calculate importance sampling weights for lower and upper alpha power-scaling
-    lower_w = np.exp(component_draws.azstats.power_scale_lw(alpha=lower_alpha, dims=sample_dims))
-    lower_w = lower_w / lower_w.sum(sample_dims)
+    lower_w = _get_power_scale_weights(
+        dt,
+        alpha=lower_alpha,
+        group=group,
+        sample_dims=sample_dims,
+        component_var_names=component_var_names,
+        component_coords=component_coords,
+    )
 
-    upper_w = np.exp(component_draws.azstats.power_scale_lw(alpha=upper_alpha, dims=sample_dims))
-    upper_w = upper_w / upper_w.sum(sample_dims)
+    upper_w = _get_power_scale_weights(
+        dt,
+        alpha=upper_alpha,
+        group=group,
+        sample_dims=sample_dims,
+        component_var_names=component_var_names,
+        component_coords=component_coords,
+    )
 
     return dataset.azstats.power_scale_sense(
         lower_w=lower_w,
@@ -176,3 +169,31 @@ def psense_summary(data, threshold=0.05, round_to=3):
     psense_df["diagnosis"] = psense_df.apply(_diagnose, axis=1)
 
     return psense_df.round(round_to)
+
+
+def _get_power_scale_weights(
+    dt, alpha=None, group=None, sample_dims=None, component_var_names=None, component_coords=None
+):
+    """Compute power scale weights."""
+    sample_dims = validate_dims(sample_dims)
+    if group == "log_likelihood":
+        component_draws = get_log_likelihood_dataset(dt, var_names=component_var_names)
+    elif group == "log_prior":
+        component_draws = get_log_prior(dt, var_names=component_var_names)
+    else:
+        raise ValueError("Value for `group` argument not recognized")
+
+    if component_coords is not None:
+        component_draws = component_draws.sel(component_coords)
+    # we stack the different variables (if any) and dimensions in each variable (if any)
+    # into a flat dimension "latent-obs_var", over which we sum afterwards.
+    # Consequently, after this component_draws draws is a dataarray with only sample_dims as dims
+    component_draws = component_draws.to_stacked_array(
+        "latent-obs_var", sample_dims=sample_dims
+    ).sum("latent-obs_var")
+
+    # calculate importance sampling weights for lower and upper alpha power-scaling
+    weights = np.exp(component_draws.azstats.power_scale_lw(alpha=alpha, dims=sample_dims))
+    weights = weights / weights.sum(sample_dims)
+
+    return weights
