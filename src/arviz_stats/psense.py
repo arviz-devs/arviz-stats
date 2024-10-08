@@ -1,7 +1,5 @@
 """Power-scaling sensitivity diagnostics."""
 
-import warnings
-from collections.abc import Hashable
 from typing import cast
 
 import numpy as np
@@ -11,14 +9,15 @@ from arviz_base import extract
 from arviz_base.labels import BaseLabeller
 from arviz_base.sel_utils import xarray_var_iter
 
+from arviz_stats.utils import get_log_likelihood_dataset, get_log_prior
 from arviz_stats.validate import validate_dims
 
 labeller = BaseLabeller()
 
-__all__ = ["psens", "psens_summary"]
+__all__ = ["psense", "psense_summary"]
 
 
-def psens(
+def psense(
     dt,
     group="log_prior",
     sample_dims=None,
@@ -115,7 +114,7 @@ def psens(
     upper_w = np.exp(component_draws.azstats.power_scale_lw(alpha=upper_alpha, dims=sample_dims))
     upper_w = upper_w / upper_w.sum(sample_dims)
 
-    return dataset.azstats.power_scale_sens(
+    return dataset.azstats.power_scale_sense(
         lower_w=lower_w,
         upper_w=upper_w,
         delta=delta,
@@ -123,7 +122,7 @@ def psens(
     )
 
 
-def psens_summary(data, threshold=0.05, round_to=3):
+def psense_summary(data, threshold=0.05, round_to=3):
     """
     Compute the prior/likelihood sensitivity based on power-scaling perturbations.
 
@@ -137,7 +136,7 @@ def psens_summary(data, threshold=0.05, round_to=3):
 
     Returns
     -------
-    psens_df : DataFrame
+    psense_df : DataFrame
         DataFrame containing the prior and likelihood sensitivity values for each variable
         in the data. And a diagnosis column with the following values:
         - "prior-data conflict" if both prior and likelihood sensitivity are above threshold
@@ -145,8 +144,8 @@ def psens_summary(data, threshold=0.05, round_to=3):
         and the likelihood sensitivity is below the threshold
         - "-" otherwise
     """
-    pssdp = psens(data, group="log_prior")
-    pssdl = psens(data, group="log_likelihood")
+    pssdp = psense(data, group="log_prior")
+    pssdl = psense(data, group="log_likelihood")
 
     joined = xr.concat([pssdp, pssdl], dim="component").assign_coords(
         component=["prior", "likelihood"]
@@ -154,7 +153,7 @@ def psens_summary(data, threshold=0.05, round_to=3):
 
     n_vars = np.sum([joined[var].size // 2 for var in joined.data_vars])
 
-    psens_df = pd.DataFrame(
+    psense_df = pd.DataFrame(
         (np.full((cast(int, n_vars), 2), np.nan)), columns=["prior", "likelihood"]
     )
 
@@ -162,9 +161,9 @@ def psens_summary(data, threshold=0.05, round_to=3):
     for i, (var_name, sel, isel, values) in enumerate(
         xarray_var_iter(joined, skip_dims={"component"})
     ):
-        psens_df.iloc[i] = values
+        psense_df.iloc[i] = values
         indices.append(labeller.make_label_flat(var_name, sel, isel))
-    psens_df.index = indices
+    psense_df.index = indices
 
     def _diagnose(row):
         if row["prior"] >= threshold and row["likelihood"] >= threshold:
@@ -174,57 +173,6 @@ def psens_summary(data, threshold=0.05, round_to=3):
 
         return "-"
 
-    psens_df["diagnosis"] = psens_df.apply(_diagnose, axis=1)
+    psense_df["diagnosis"] = psense_df.apply(_diagnose, axis=1)
 
-    return psens_df.round(round_to)
-
-
-# get_log_likelihood and get_log_prior functions should be somewhere else
-def get_log_likelihood_dataset(idata, var_names=None):
-    """Retrieve the log likelihood dataarray of a given variable."""
-    if (
-        not hasattr(idata, "log_likelihood")
-        and hasattr(idata, "sample_stats")
-        and hasattr(idata.sample_stats, "log_likelihood")
-    ):
-        warnings.warn(
-            "Storing the log_likelihood in sample_stats groups has been deprecated",
-            DeprecationWarning,
-        )
-        log_lik_ds = idata.sample_stats.ds[["log_likelihood"]]
-    if not hasattr(idata, "log_likelihood"):
-        raise TypeError("log likelihood not found in inference data object")
-    log_lik_ds = idata.log_likelihood.ds
-    if var_names is None:
-        return log_lik_ds
-    if isinstance(var_names, Hashable):
-        return log_lik_ds[[var_names]]
-    return log_lik_ds[var_names]
-
-
-def get_log_likelihood_dataarray(data, var_name=None):
-    log_lik_ds = get_log_likelihood_dataset(data)
-    if var_name is None:
-        var_names = list(log_lik_ds.data_vars)
-        if len(var_names) > 1:
-            raise TypeError(
-                f"Found several log likelihood arrays {var_names}, var_name cannot be None"
-            )
-        return log_lik_ds[var_names[0]]
-
-    try:
-        log_likelihood = log_lik_ds[var_name]
-    except KeyError as err:
-        raise TypeError(f"No log likelihood data named {var_name} found") from err
-    return log_likelihood
-
-
-def get_log_prior(idata, var_names=None):
-    """Retrieve the log prior dataarray of a given variable."""
-    if not hasattr(idata, "log_prior"):
-        raise TypeError("log prior not found in inference data object")
-    if var_names is None:
-        return idata.log_prior.ds
-    if isinstance(var_names, Hashable):
-        return idata.log_prior.ds[[var_names]]
-    return idata.log_prior.ds[var_names]
+    return psense_df.round(round_to)

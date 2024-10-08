@@ -551,7 +551,7 @@ class _DiagnosticsBase(_CoreBase):
 
         return q
 
-    def _power_scale_sens(self, ary, lower_w, upper_w, delta=0.01):
+    def _power_scale_sense(self, ary, lower_w, upper_w, delta=0.01):
         """Compute power-scaling sensitivity by finite difference second derivative of CJS."""
         ary = np.ravel(ary)
         lower_w = np.ravel(lower_w)

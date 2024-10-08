@@ -73,6 +73,12 @@ class AzStatsDaAccessor(_BaseAccessor):
         """Compute log weights for power-scaling of the DataTree."""
         return get_function("power_scale_lw")(self._obj, alpha=alpha, dims=dims)
 
+    def power_scale_sense(self, lower_w=None, upper_w=None, delta=None, dims=None):
+        """Compute power-scaling sensitivity."""
+        return get_function("power_scale_sense")(
+            self._obj, lower_w=lower_w, upper_w=upper_w, delta=delta, dims=dims
+        )
+
 
 @xr.register_dataset_accessor("azstats")
 class AzStatsDsAccessor(_BaseAccessor):
@@ -188,9 +194,9 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Compute log weights for power-scaling of the DataTree."""
         return self._apply("power_scale_lw", dims=dims, **kwargs)
 
-    def power_scale_sens(self, dims=None, **kwargs):
+    def power_scale_sense(self, dims=None, **kwargs):
         """Compute power-scaling sensitivity."""
-        return self._apply("power_scale_sens", dims=dims, **kwargs)
+        return self._apply("power_scale_sense", dims=dims, **kwargs)
 
 
 @register_datatree_accessor("azstats")
@@ -294,6 +300,6 @@ class AzStatsDtAccessor(_BaseAccessor):
         """Compute log weights for power-scaling of the DataTree."""
         return self._apply("power_scale_lw", dims=dims, group=group, **kwargs)
 
-    def power_scale_sens(self, dims=None, group="posterior", **kwargs):
+    def power_scale_sense(self, dims=None, group="posterior", **kwargs):
         """Compute power-scaling sensitivity."""
-        return self._apply("power_scale_sens", dims=dims, group=group, **kwargs)
+        return self._apply("power_scale_sense", dims=dims, group=group, **kwargs)

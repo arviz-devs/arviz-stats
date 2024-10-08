@@ -152,7 +152,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return psl_ufunc(ary, out_shape=(ary.shape[i] for i in axes), alpha=alpha)
 
-    def power_scale_sens(self, ary, lower_w, upper_w, delta, chain_axis=-2, draw_axis=-1):
+    def power_scale_sense(self, ary, lower_w, upper_w, delta, chain_axis=-2, draw_axis=-1):
         """Compute power-scaling sensitivity."""
         if chain_axis is None:
             ary = np.expand_dims(ary, axis=0)
@@ -162,7 +162,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         lower_w, _ = process_ary_axes(lower_w, [chain_axis, draw_axis])
         upper_w, _ = process_ary_axes(upper_w, [chain_axis, draw_axis])
-        pss_array = make_ufunc(self._power_scale_sens, n_output=1, n_input=3, n_dims=2, ravel=False)
+        pss_array = make_ufunc(
+            self._power_scale_sense, n_output=1, n_input=3, n_dims=2, ravel=False
+        )
         return pss_array(ary, lower_w, upper_w, delta=delta)
 
     def compute_ranks(self, ary, axes=-1, relative=False):
@@ -294,7 +296,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return histogram_ufunc(ary, bins, range, shape_from_1st=True)
 
-    def kde(self, ary, axes=-1, circular=False, grid_len=512, weights=None, **kwargs):
+    def kde(self, ary, axes=-1, circular=False, grid_len=512, **kwargs):
         """Compute of kde on array-like inputs."""
         ary, axes = process_ary_axes(ary, axes)
         kde_ufunc = make_ufunc(
@@ -308,7 +310,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             out_shape=((grid_len,), (grid_len,), ()),
             grid_len=grid_len,
             circular=circular,
-            weights=weights,
             **kwargs,
         )
 
