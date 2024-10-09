@@ -89,18 +89,9 @@ def psense(
     lower_alpha = 1 / (1 + delta)
     upper_alpha = 1 + delta
 
-    lower_w = _get_power_scale_weights(
+    lower_w, upper_w = _get_power_scale_weights(
         dt,
-        alpha=lower_alpha,
-        group=group,
-        sample_dims=sample_dims,
-        component_var_names=component_var_names,
-        component_coords=component_coords,
-    )
-
-    upper_w = _get_power_scale_weights(
-        dt,
-        alpha=upper_alpha,
+        alphas=(lower_alpha, upper_alpha),
         group=group,
         sample_dims=sample_dims,
         component_var_names=component_var_names,
@@ -164,7 +155,7 @@ def psense_summary(data, threshold=0.05, round_to=3):
         if row["prior"] > threshold > row["likelihood"]:
             return "strong prior / weak likelihood"
 
-        return "-"
+        return "✓"
 
     psense_df["diagnosis"] = psense_df.apply(_diagnose, axis=1)
 
@@ -172,7 +163,7 @@ def psense_summary(data, threshold=0.05, round_to=3):
 
 
 def _get_power_scale_weights(
-    dt, alpha=None, group=None, sample_dims=None, component_var_names=None, component_coords=None
+    dt, alphas=None, group=None, sample_dims=None, component_var_names=None, component_coords=None
 ):
     """Compute power scale weights."""
     sample_dims = validate_dims(sample_dims)
@@ -193,7 +184,10 @@ def _get_power_scale_weights(
     ).sum("latent-obs_var")
 
     # calculate importance sampling weights for lower and upper alpha power-scaling
-    weights = np.exp(component_draws.azstats.power_scale_lw(alpha=alpha, dims=sample_dims))
-    weights = weights / weights.sum(sample_dims)
+    lower_w = np.exp(component_draws.azstats.power_scale_lw(alpha=alphas[0], dims=sample_dims))
+    lower_w = lower_w / lower_w.sum(sample_dims)
 
-    return weights
+    upper_w = np.exp(component_draws.azstats.power_scale_lw(alpha=alphas[1], dims=sample_dims))
+    upper_w = upper_w / upper_w.sum(sample_dims)
+
+    return lower_w, upper_w
