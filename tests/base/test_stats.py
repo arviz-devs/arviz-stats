@@ -119,6 +119,17 @@ def test_hdi_multimodal_multivars():
     assert "var2_mode" in intervals.var2.dims
 
 
+def test_hdi_multimodal_max_modes():
+    rng = np.random.default_rng(42)
+    x = np.concatenate([rng.normal(0, 1, 250_000), rng.normal(30, 1, 2_500_000)])
+    sample = ndarray_to_dataarray(x, "x", sample_dims=["sample"])
+    intervals = sample.azstats.hdi(dims="sample", method="multimodal", prob=0.9)
+    assert intervals.sizes["mode"] == 2
+    intervals2 = sample.azstats.hdi(dims="sample", method="multimodal", prob=0.9, max_modes=1)
+    assert intervals2.sizes["mode"] == 1
+    assert intervals2.equals(intervals.isel(mode=[1]))
+
+
 def test_hdi_circular():
     rng = np.random.default_rng(43)
     normal_sample = ndarray_to_dataarray(

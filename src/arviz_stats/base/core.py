@@ -263,9 +263,9 @@ class _CoreBase:
         range_x = upper - lower
         dx = range_x / len(density)
 
-        hdi_intervals = self._hdi_from_bin_probabilities(bins, density, prob, dx)
+        hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(bins, density, prob, dx)
 
-        return self._pad_hdi_to_maxmodes(hdi_intervals, max_modes)
+        return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
     def _hdi_multimodal_discrete(self, ary, prob, bins, max_modes):
         """Compute HDI if the distribution is multimodal."""
@@ -279,36 +279,44 @@ class _CoreBase:
             density, _ = self._histogram(ary, bins=bins)
             dx = np.diff(bins)[0]
 
-        hdi_intervals = self._hdi_from_bin_probabilities(bins, density, prob, dx)
+        hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(bins, density, prob, dx)
 
-        return self._pad_hdi_to_maxmodes(hdi_intervals, max_modes)
+        return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
     def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, dx):  # pylint: disable=no-self-use
         # find idx of bins in the interval
         sorted_idx = np.argsort(bin_probs)[::-1]
-        cum_scaled_prob = bin_probs[sorted_idx].cumsum()
-        scaled_prob = prob * cum_scaled_prob[-1]
-        interval_size = np.searchsorted(cum_scaled_prob, scaled_prob, side="left") + 1
+        bin_probs = bin_probs / bin_probs.sum()
+        cum_probs = bin_probs[sorted_idx].cumsum()
+        interval_size = np.searchsorted(cum_probs, prob, side="left") + 1
         idx_in_interval = sorted_idx[:interval_size]
         idx_in_interval.sort()
 
         # get points in intervals
         intervals = bins[idx_in_interval]
+        probs_in_interval = bin_probs[idx_in_interval]
+        cum_probs_intervals = probs_in_interval.cumsum()
 
         # get interval bounds
         is_bound = np.diff(intervals) > dx * 1.01
         is_lower_bound = np.insert(is_bound, 0, True)
         is_upper_bound = np.append(is_bound, True)
         interval_bounds = np.column_stack([intervals[is_lower_bound], intervals[is_upper_bound]])
+        interval_probs = (
+            cum_probs_intervals[is_upper_bound]
+            - cum_probs_intervals[is_lower_bound]
+            + probs_in_interval[is_lower_bound]
+        )
 
-        return interval_bounds
+        return interval_bounds, interval_probs
 
-    def _pad_hdi_to_maxmodes(self, hdi_intervals, max_modes):  # pylint: disable=no-self-use
+    def _pad_hdi_to_maxmodes(self, hdi_intervals, interval_probs, max_modes):  # pylint: disable=no-self-use
         if hdi_intervals.shape[0] > max_modes:
             warnings.warn(
-                f"found more modes than {max_modes}, returning only the first {max_modes} modes"
+                f"found more modes than {max_modes}, returning only the {max_modes} highest "
+                "probability modes"
             )
-            hdi_intervals = hdi_intervals[:max_modes, :]
+            hdi_intervals = hdi_intervals[np.argsort(interval_probs)[::-1][:max_modes], :]
         elif hdi_intervals.shape[0] < max_modes:
             hdi_intervals = np.vstack(
                 [hdi_intervals, np.full((max_modes - hdi_intervals.shape[0], 2), np.nan)]
