@@ -287,7 +287,7 @@ class _CoreBase:
         sorted_idx = np.argsort(bin_probs)[::-1]
         cum_scaled_prob = bin_probs[sorted_idx].cumsum()
         scaled_prob = prob * cum_scaled_prob[-1]
-        interval_size = np.searchsorted(cum_scaled_prob, scaled_prob, side="right")
+        interval_size = np.searchsorted(cum_scaled_prob, scaled_prob, side="left") + 1
         idx_in_interval = sorted_idx[:interval_size]
         idx_in_interval.sort()
 
