@@ -137,6 +137,10 @@ def test_hdi_circular():
     )
     interval = normal_sample.azstats.hdi(circular=True, prob=0.83, dims="sample")
     assert_array_almost_equal(interval, [1.3, -1.4], 1)
+    interval_multi = normal_sample.azstats.hdi(
+        circular=True, prob=0.83, dims="sample", method="multimodal"
+    )
+    assert_array_almost_equal(interval_multi, [[1.3, -1.4]], 1)
 
 
 def test_hdi_bad_ci():

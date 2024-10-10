@@ -52,16 +52,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         """Compute HDI function on array-like input."""
         if not 1 >= prob > 0:
             raise ValueError("The value of `prob` must be in the (0, 1] interval.")
-        if method == "multimodal" and circular:
-            raise ValueError("Multimodal hdi not supported for circular data.")
         ary, axes = process_ary_axes(ary, axes)
         is_discrete = np.issubdtype(ary.dtype, np.integer) or np.issubdtype(ary.dtype, np.bool_)
+        if method == "multimodal" and circular and is_discrete:
+            raise ValueError("Multimodal hdi not supported for discrete circular data.")
         hdi_func = {
             "nearest": self._hdi_nearest,
             "agg_nearest": self._hdi_agg_nearest,
-            "multimodal": self._hdi_multimodal_discrete
-            if is_discrete
-            else self._hdi_multimodal_continuous,
+            "multimodal": (
+                self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
+            ),
         }[method]
         hdi_array = make_ufunc(
             hdi_func,
@@ -73,16 +73,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             "prob": prob,
             "skipna": skipna,
             "out_shape": (max_modes, 2) if method == "multimodal" else (2,),
+            "circular": circular,
         }
-        if method != "multimodal":
-            func_kwargs["circular"] = circular
-        else:
+        if method == "multimodal":
             func_kwargs["max_modes"] = max_modes
             if is_discrete:
+                func_kwargs.pop("circular")
                 func_kwargs.pop("skipna")
                 func_kwargs["bins"] = None
             else:
-                func_kwargs["bw"] = "isj"
+                func_kwargs["bw"] = "isj" if not circular else "taylor"
                 func_kwargs.update(kwargs)
 
         result = hdi_array(ary, **func_kwargs)

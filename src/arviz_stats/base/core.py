@@ -252,18 +252,20 @@ class _CoreBase:
 
         return hdi_interval
 
-    def _hdi_multimodal_continuous(self, ary, prob, skipna, max_modes, **kwargs):
+    def _hdi_multimodal_continuous(self, ary, prob, skipna, max_modes, circular, **kwargs):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
         if skipna:
             ary = ary[~np.isnan(ary)]
 
-        bins, density, _ = self.kde(ary, **kwargs)
+        bins, density, _ = self.kde(ary, circular=circular, **kwargs)
         lower, upper = bins[0], bins[-1]
         range_x = upper - lower
         dx = range_x / len(density)
 
-        hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(bins, density, prob, dx)
+        hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(
+            bins, density, prob, circular, dx
+        )
 
         return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
@@ -279,11 +281,20 @@ class _CoreBase:
             density, _ = self._histogram(ary, bins=bins)
             dx = np.diff(bins)[0]
 
-        hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(bins, density, prob, dx)
+        hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(
+            bins, density, prob, False, dx
+        )
 
         return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
-    def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, dx):  # pylint: disable=no-self-use
+    def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, circular, dx):  # pylint: disable=no-self-use
+        if circular:
+            # standardize bins to [-pi, pi]
+            bins = np.fmod(bins + np.pi, 2 * np.pi) - np.pi
+            sorted_idx = np.argsort(bins)
+            bins = bins[sorted_idx]
+            bin_probs = bin_probs[sorted_idx]
+
         # find idx of bins in the interval
         sorted_idx = np.argsort(bin_probs)[::-1]
         bin_probs = bin_probs / bin_probs.sum()
@@ -307,6 +318,16 @@ class _CoreBase:
             - cum_probs_intervals[is_lower_bound]
             + probs_in_interval[is_lower_bound]
         )
+
+        if (
+            circular
+            and np.fmod(dx * 1.01 + interval_bounds[-1, -1] - interval_bounds[0, 0], 2 * np.pi)
+            <= dx * 1.01
+        ):
+            interval_bounds[-1, 1] = interval_bounds[0, 1]
+            interval_bounds = interval_bounds[1:, :]
+            interval_probs[-1] += interval_probs[0]
+            interval_probs = interval_probs[1:]
 
         return interval_bounds, interval_probs
 
