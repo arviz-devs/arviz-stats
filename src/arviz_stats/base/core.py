@@ -252,7 +252,7 @@ class _CoreBase:
 
         return hdi_interval
 
-    def _hdi_multimodal(self, ary, prob, skipna, max_modes):
+    def _hdi_multimodal(self, ary, prob, skipna, bins, max_modes):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
         if skipna:
@@ -263,10 +263,16 @@ class _CoreBase:
             lower, upper = bins[0], bins[-1]
             range_x = upper - lower
             dx = range_x / len(density)
+        elif ary.dtype.kind in {"i", "b"}:
+            if bins is not None:
+                bins = self._get_bins(ary)
+                density, _ = self._histogram(ary, bins=bins)
+                dx = np.diff(bins)[0]
+            else:
+                bins, density = np.unique(ary, return_counts=True)
+                dx = 1
         else:
-            bins = self._get_bins(ary)
-            density, _ = self._histogram(ary, bins=bins, density=True)
-            dx = np.diff(bins)[0]
+            raise ValueError(f"HDI not defined for dtype {ary.dtype}")
 
         hdi_intervals = self._hdi_from_bin_probabilities(bins, density, prob, dx)
 

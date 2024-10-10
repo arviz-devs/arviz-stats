@@ -74,6 +74,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             func_kwargs["circular"] = circular
         else:
             func_kwargs["max_modes"] = max_modes
+            func_kwargs["bins"] = None
 
         result = hdi_array(ary, **func_kwargs)
         if method == "multimodal":
