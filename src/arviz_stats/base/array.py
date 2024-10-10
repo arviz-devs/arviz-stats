@@ -47,6 +47,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         circular=False,
         max_modes=10,
         skipna=False,
+        **kwargs,
     ):
         """Compute HDI function on array-like input."""
         if not 1 >= prob > 0:
@@ -80,6 +81,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             if is_discrete:
                 func_kwargs.pop("skipna")
                 func_kwargs["bins"] = None
+            else:
+                func_kwargs["bw"] = "isj"
+                func_kwargs.update(kwargs)
 
         result = hdi_array(ary, **func_kwargs)
         if method == "multimodal":

@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from arviz_base import load_arviz_data, ndarray_to_dataarray, rc_context
 from numpy.testing import assert_array_almost_equal, assert_array_equal
-from scipy.stats import bernoulli, poisson
+from scipy.stats import bernoulli, norm, poisson
 from xarray import DataArray, Dataset
 
 
@@ -66,15 +66,27 @@ def test_hdi_coords(centered_eight):
     assert_array_equal(result.coords["chain"], [0, 1, 3])
 
 
-def test_hdi_multimodal_continuous():
+@pytest.mark.parametrize("prob", [0.56, 0.83])
+def test_hdi_multimodal_continuous(prob):
     rng = np.random.default_rng(43)
+    dist1 = norm(loc=-30, scale=0.5)
+    dist2 = norm(loc=30, scale=0.5)
     normal_sample = ndarray_to_dataarray(
-        np.concatenate((rng.normal(-4, 1, 2500000), rng.normal(2, 0.5, 2500000))),
+        np.concatenate(
+            (dist1.rvs(2500000, random_state=rng), dist2.rvs(2500000, random_state=rng))
+        ),
         "x",
         sample_dims=["sample"],
     )
-    intervals = normal_sample.azstats.hdi(dims="sample", method="multimodal", prob=0.83)
-    assert_array_almost_equal(intervals, [[-5.1, -2.8], [1.1, 2.8]], 1)
+    exact_hdis = np.concatenate(
+        [
+            np.array(dist1.interval(prob))[np.newaxis, :],
+            np.array(dist2.interval(prob))[np.newaxis, :],
+        ],
+        axis=0,
+    )
+    intervals = normal_sample.azstats.hdi(dims="sample", method="multimodal", prob=prob)
+    assert_array_almost_equal(intervals, exact_hdis, 1)
 
 
 @pytest.mark.parametrize("prob", [0.56, 0.83])
