@@ -252,41 +252,36 @@ class _CoreBase:
 
         return hdi_interval
 
-    def _hdi_multimodal(self, ary, prob, skipna, bins, max_modes):
+    def _hdi_multimodal_continuous(self, ary, prob, skipna, max_modes):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
         if skipna:
             ary = ary[~np.isnan(ary)]
 
-        if ary.dtype.kind == "f":
-            bins, density, _ = self.kde(ary)
-            lower, upper = bins[0], bins[-1]
-            range_x = upper - lower
-            dx = range_x / len(density)
-        elif ary.dtype.kind in {"i", "b"}:
-            if bins is not None:
-                bins = self._get_bins(ary)
-                density, _ = self._histogram(ary, bins=bins)
-                dx = np.diff(bins)[0]
-            else:
-                bins, density = np.unique(ary, return_counts=True)
-                dx = 1
-        else:
-            raise ValueError(f"HDI not defined for dtype {ary.dtype}")
+        bins, density, _ = self.kde(ary)
+        lower, upper = bins[0], bins[-1]
+        range_x = upper - lower
+        dx = range_x / len(density)
 
         hdi_intervals = self._hdi_from_bin_probabilities(bins, density, prob, dx)
 
-        if hdi_intervals.shape[0] > max_modes:
-            warnings.warn(
-                f"found more modes than {max_modes}, returning only the first {max_modes} modes"
-            )
-            hdi_intervals = hdi_intervals[:max_modes, :]
-        elif hdi_intervals.shape[0] < max_modes:
-            hdi_intervals = np.vstack(
-                [hdi_intervals, np.full((max_modes - hdi_intervals.shape[0], 2), np.nan)]
-            )
+        return self._pad_hdi_to_maxmodes(hdi_intervals, max_modes)
 
-        return hdi_intervals
+    def _hdi_multimodal_discrete(self, ary, prob, bins, max_modes):
+        """Compute HDI if the distribution is multimodal."""
+        ary = ary.flatten()
+
+        if bins is None:
+            bins, density = np.unique(ary, return_counts=True)
+            dx = 1
+        else:
+            bins = self._get_bins(ary)
+            density, _ = self._histogram(ary, bins=bins)
+            dx = np.diff(bins)[0]
+
+        hdi_intervals = self._hdi_from_bin_probabilities(bins, density, prob, dx)
+
+        return self._pad_hdi_to_maxmodes(hdi_intervals, max_modes)
 
     def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, dx):  # pylint: disable=no-self-use
         # find idx of bins in the interval
@@ -307,3 +302,15 @@ class _CoreBase:
         interval_bounds = np.column_stack([intervals[is_lower_bound], intervals[is_upper_bound]])
 
         return interval_bounds
+
+    def _pad_hdi_to_maxmodes(self, hdi_intervals, max_modes):  # pylint: disable=no-self-use
+        if hdi_intervals.shape[0] > max_modes:
+            warnings.warn(
+                f"found more modes than {max_modes}, returning only the first {max_modes} modes"
+            )
+            hdi_intervals = hdi_intervals[:max_modes, :]
+        elif hdi_intervals.shape[0] < max_modes:
+            hdi_intervals = np.vstack(
+                [hdi_intervals, np.full((max_modes - hdi_intervals.shape[0], 2), np.nan)]
+            )
+        return hdi_intervals

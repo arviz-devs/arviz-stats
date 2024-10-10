@@ -54,10 +54,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         if method == "multimodal" and circular:
             raise ValueError("Multimodal hdi not supported for circular data.")
         ary, axes = process_ary_axes(ary, axes)
+        is_discrete = np.issubdtype(ary.dtype, np.integer) or np.issubdtype(ary.dtype, np.bool_)
         hdi_func = {
             "nearest": self._hdi_nearest,
             "agg_nearest": self._hdi_agg_nearest,
-            "multimodal": self._hdi_multimodal,
+            "multimodal": self._hdi_multimodal_discrete
+            if is_discrete
+            else self._hdi_multimodal_continuous,
         }[method]
         hdi_array = make_ufunc(
             hdi_func,
@@ -74,7 +77,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             func_kwargs["circular"] = circular
         else:
             func_kwargs["max_modes"] = max_modes
-            func_kwargs["bins"] = None
+            if is_discrete:
+                func_kwargs.pop("skipna")
+                func_kwargs["bins"] = None
 
         result = hdi_array(ary, **func_kwargs)
         if method == "multimodal":
