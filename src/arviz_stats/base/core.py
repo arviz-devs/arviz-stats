@@ -268,24 +268,36 @@ class _CoreBase:
             density, _ = self._histogram(ary, bins=bins, density=True)
             dx = np.diff(bins)[0]
 
-        density *= dx
+        hdi_intervals = self._hdi_from_bin_probabilities(bins, density, prob, dx)
 
-        idx = np.argsort(-density)
-        intervals = bins[idx][density[idx].cumsum() <= prob]
-        intervals.sort()
+        if hdi_intervals.shape[0] > max_modes:
+            warnings.warn(
+                f"found more modes than {max_modes}, returning only the first {max_modes} modes"
+            )
+            hdi_intervals = hdi_intervals[:max_modes, :]
+        elif hdi_intervals.shape[0] < max_modes:
+            hdi_intervals = np.vstack(
+                [hdi_intervals, np.full((max_modes - hdi_intervals.shape[0], 2), np.nan)]
+            )
 
-        intervals_splitted = np.split(intervals, np.where(np.diff(intervals) >= dx * 1.1)[0] + 1)
+        return hdi_intervals
 
-        hdi_intervals = np.full((max_modes, 2), np.nan)
-        for i, interval in enumerate(intervals_splitted):
-            if i == max_modes:
-                warnings.warn(
-                    f"found more modes than {max_modes}, returning only the first {max_modes} modes"
-                )
-                break
-            if interval.size == 0:
-                hdi_intervals[i] = np.asarray([bins[0], bins[0]])
-            else:
-                hdi_intervals[i] = np.asarray([interval[0], interval[-1]])
+    def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, dx):  # pylint: disable=no-self-use
+        # find idx of bins in the interval
+        sorted_idx = np.argsort(bin_probs)[::-1]
+        cum_scaled_prob = bin_probs[sorted_idx].cumsum()
+        scaled_prob = prob * cum_scaled_prob[-1]
+        interval_size = np.searchsorted(cum_scaled_prob, scaled_prob, side="right")
+        idx_in_interval = sorted_idx[:interval_size]
+        idx_in_interval.sort()
 
-        return np.array(hdi_intervals)
+        # get points in intervals
+        intervals = bins[idx_in_interval]
+
+        # get interval bounds
+        is_bound = np.diff(intervals) > dx * 1.01
+        is_lower_bound = np.insert(is_bound, 0, True)
+        is_upper_bound = np.append(is_bound, True)
+        interval_bounds = np.column_stack([intervals[is_lower_bound], intervals[is_upper_bound]])
+
+        return interval_bounds
