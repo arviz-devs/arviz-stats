@@ -48,7 +48,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         max_modes=10,
         skipna=False,
     ):
-        """Compute of HDI function on array-like input."""
+        """Compute HDI function on array-like input."""
         if not 1 >= prob > 0:
             raise ValueError("The value of `prob` must be in the (0, 1] interval.")
         if method == "multimodal" and circular:
