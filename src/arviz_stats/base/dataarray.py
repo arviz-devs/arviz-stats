@@ -198,7 +198,7 @@ class BaseDataArray:
         out = concat((grid, pdf), dim=plot_axis)
         return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
 
-    def thin_factor(self, da, target_ess=None, mode="mean"):
+    def thin_factor(self, da, target_ess=None, reduce_func="mean"):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
 
         Parameters
@@ -215,12 +215,14 @@ class BaseDataArray:
             self.ess(da, method="bulk", dims=["chain", "draw"]),
             self.ess(da, method="tail", dims=["chain", "draw"]),
         )
-        if mode == "mean":
+        if reduce_func == "mean":
             ess_ave = ess.mean()
-        elif mode == "min":
+        elif reduce_func == "min":
             ess_ave = ess.min()
         else:
-            raise ValueError(f"`mode` {mode} not recognized. Valid values are 'mean' or 'min'")
+            raise ValueError(
+                f"`reduce_func` {reduce_func} not recognized. Valid values are 'mean' or 'min'"
+            )
         if target_ess is None:
             target_ess = ess_ave
         if target_ess > ess_ave:
@@ -231,9 +233,9 @@ class BaseDataArray:
                 f"current ESS average {var_indicator}at {ess_ave.item()} is preserved."
             )
             return 1
-        if mode == "mean":
-            return int(np.ceil(n_samples / target_ess))
-        return int(np.floor(n_samples / target_ess))
+        if reduce_func == "min":
+            return int(np.floor(n_samples / target_ess))
+        return int(np.ceil(n_samples / target_ess))
 
     def thin(self, da, factor="auto", dims=None):
         """Perform thinning on DataArray input."""

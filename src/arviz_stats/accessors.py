@@ -158,13 +158,15 @@ class AzStatsDsAccessor(_BaseAccessor):
 
     def thin_factor(self, **kwargs):
         """Get thinning factor for all the variables in the dataset."""
-        mode = kwargs.get("mode", "mean")
+        reduce_func = kwargs.get("reduce_func", "mean")
         thin_factors = self._apply("thin_factor", **kwargs).to_array()
-        if mode == "mean":
+        if reduce_func == "mean":
             return int(np.floor(thin_factors.mean().item()))
-        if mode == "min":
+        if reduce_func == "min":
             return int(np.floor(thin_factors.min().item()))
-        raise ValueError(f"`mode` {mode} not recognized. Valid values are 'mean' or 'min'")
+        raise ValueError(
+            f"`reduce_func` {reduce_func} not recognized. Valid values are 'mean' or 'min'"
+        )
 
     def thin(self, dims=None, factor="auto"):
         """Perform thinning for all the variables in the dataset."""
@@ -254,13 +256,15 @@ class AzStatsDtAccessor(_BaseAccessor):
         """Get thinning factor for all the variables in a group of the datatree."""
         if not isinstance(group, str):
             raise ValueError("Thin factor can only be applied over a single group.")
-        mode = kwargs.get("mode", "mean")
+        reduce_func = kwargs.get("reduce_func", "mean")
         thin_factors = self._apply("thin_factor", group=group, **kwargs)[group].ds.to_array()
-        if mode == "mean":
+        if reduce_func == "mean":
             return int(np.floor(thin_factors.mean().item()))
-        if mode == "min":
+        if reduce_func == "min":
             return int(np.floor(thin_factors.min().item()))
-        raise ValueError(f"`mode` {mode} not recognized. Valid values are 'mean' or 'min'")
+        raise ValueError(
+            f"`reduce_func` {reduce_func} not recognized. Valid values are 'mean' or 'min'"
+        )
 
     def thin(self, dims=None, group="posterior", **kwargs):
         """Perform thinning for all variables in a group of the DataTree."""
