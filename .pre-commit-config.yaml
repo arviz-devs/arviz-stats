@@ -3,7 +3,6 @@ repos:
   rev: v4.6.0
   hooks:
   - id: check-added-large-files
-    args: ['--maxkb=1500']
   - id: check-toml
   - id: check-merge-conflict
   - id: end-of-file-fixer

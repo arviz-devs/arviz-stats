@@ -33,7 +33,7 @@ def psense(
 
     Parameters
     ----------
-    data : obj
+    dt : obj
         Any object that can be converted to an :class:`arviz.InferenceData` object.
         Refer to documentation of :func:`arviz.convert_to_dataset` for details.
         For ndarray: shape = (chain, draw).
@@ -54,6 +54,7 @@ def psense(
         Coordinates defining a subset over the posterior. Only these variables will
         be used when computing the prior sensitivity.
     filter_vars: {None, "like", "regex"}, default None
+        Used for `var_names` only.
         If ``None`` (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
         If "regex", interpret var_names as regular expressions on the real variables names.
