@@ -230,7 +230,7 @@ class BaseDataArray:
             warnings.warn(
                 f"ESS not high enough to reach requested {target_ess} ESS. "
                 "Returning 1 so no thinning is applied and "
-                f"current ESS average {var_indicator}at {ess_ave.item()} is preserved."
+                f"current ESS average {var_indicator} at {ess_ave.item()} is preserved."
             )
             return 1
         if reduce_func == "min":
