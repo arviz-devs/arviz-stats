@@ -1,6 +1,7 @@
 # pylint: disable=invalid-name,too-many-lines
 """Density estimation functions for ArviZ."""
 
+import math
 import warnings
 
 import numpy as np
@@ -238,7 +239,7 @@ class _DensityBase(_CoreBase):
         return 1 / (x**3 - 4 * x**2 + 3 * x)
 
     def _kappa_mle(self, x):
-        mean = self._circular_mean(x)
+        mean = self.circular_mean(x)
         kappa = self._a1inv(np.mean(np.cos(x - mean)))
         return kappa
 
@@ -474,6 +475,10 @@ class _DensityBase(_CoreBase):
 
         if cumulative:
             pdf = pdf.cumsum() / pdf.sum()
+        else:
+            # explicitly normalize to 1
+            bin_width = grid_edges[1] - grid_edges[0]
+            pdf /= pdf.sum() * bin_width
 
         return grid, pdf, bw
 
@@ -495,9 +500,7 @@ class _DensityBase(_CoreBase):
 
         grid = (grid_edges[1:] + grid_edges[:-1]) / 2
 
-        kernel_n = int(bw * 2 * np.pi)
-        if kernel_n == 0:
-            kernel_n = 1
+        kernel_n = 2 * math.ceil(4 * bw) + 1
 
         kernel = gaussian(kernel_n, bw)
 
@@ -633,7 +636,7 @@ class _DensityBase(_CoreBase):
             raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
         if isinstance(bw, str):
             if bw == "taylor":
-                bw = self._bw_taylor(x)
+                bw = self.bw_taylor(x)
             else:
                 raise ValueError(f"`bw` must be a positive numeric or `taylor`, not {bw}")
         bw *= bw_fct
