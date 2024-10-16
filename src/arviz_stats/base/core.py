@@ -274,7 +274,8 @@ class _CoreBase:
         ary = ary.flatten()
 
         if bins is None:
-            bins, density = np.unique(ary, return_counts=True)
+            bins, counts = np.unique(ary, return_counts=True)
+            density = counts / len(ary)
             dx = 1
         else:
             bins = self._get_bins(ary)
@@ -297,7 +298,6 @@ class _CoreBase:
 
         # find idx of bins in the interval
         sorted_idx = np.argsort(bin_probs)[::-1]
-        bin_probs = bin_probs / bin_probs.sum()
         cum_probs = bin_probs[sorted_idx].cumsum()
         interval_size = np.searchsorted(cum_probs, prob, side="left") + 1
         idx_in_interval = sorted_idx[:interval_size]
