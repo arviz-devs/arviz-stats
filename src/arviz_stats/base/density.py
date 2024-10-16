@@ -779,27 +779,3 @@ class _DensityBase(_CoreBase):
                 contours[idx] = sorted_density[0]
 
         return contours
-
-    def _hdi_agg_nearest(self, ary, prob, skipna):
-        """Approximate the HDI from the kde or histogram."""
-        ary = ary.flatten()
-        if skipna:
-            nans = np.isnan(ary)
-            if not nans.all():
-                ary = ary[~nans]
-
-        if ary.dtype.kind == "f":
-            bins, density, _ = self._kde(ary)
-        else:
-            bins = self._get_bins(ary)
-            density, _ = self._histogram(ary, bins=bins, density=True)
-
-        sorted_idx = np.argsort(density)[::-1]
-        mass_cum = 0
-        indices = []
-        for idx in sorted_idx:
-            mass_cum += density[idx]
-            indices.append(idx)
-            if mass_cum >= prob:
-                break
-        return bins[np.sort(indices)[[0, -1]]]
