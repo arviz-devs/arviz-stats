@@ -56,7 +56,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, axes = process_ary_axes(ary, axes)
         hdi_func = {
             "nearest": self._hdi_nearest,
-            "agg_nearest": self._hdi_agg_nearest,
             "multimodal": self._hdi_multimodal,
         }[method]
         hdi_array = make_ufunc(
