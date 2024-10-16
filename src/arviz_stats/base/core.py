@@ -259,9 +259,7 @@ class _CoreBase:
             ary = ary[~np.isnan(ary)]
 
         bins, density, _ = self.kde(ary, circular=circular, **kwargs)
-        lower, upper = bins[0], bins[-1]
-        range_x = upper - lower
-        dx = range_x / len(density)
+        dx = (bins[-1] - bins[0]) / len(density)
 
         hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(
             bins, density, prob, circular, dx
