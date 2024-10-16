@@ -376,13 +376,14 @@ class _DiagnosticsBase(_CoreBase):
             n_draws_tail = int(n_draws / 5)
 
         if tail == "both":
-            if n_draws_tail > n_draws / 2:
+            half_n_draws = n_draws // 2
+            if n_draws_tail > half_n_draws:
                 warnings.warn(
                     "Number of tail draws cannot be more than half "
                     "the total number of draws if both tails are fit, "
-                    f"changing to {n_draws / 2}"
+                    f"changing to {half_n_draws}"
                 )
-                n_draws_tail = n_draws / 2
+                n_draws_tail = half_n_draws
 
             if n_draws_tail < 5:
                 warnings.warn("Number of tail draws cannot be less than 5. Changing to 5")
@@ -431,7 +432,7 @@ class _DiagnosticsBase(_CoreBase):
         if tail not in ["right", "left", "both"]:
             raise ValueError('tail must be one of "right", "left", or "both"')
 
-        tail_ids = np.arange(n_draws - n_draws_tail, n_draws)
+        tail_ids = np.arange(n_draws - n_draws_tail, n_draws, dtype=int)
 
         if tail == "left":
             ary = -ary

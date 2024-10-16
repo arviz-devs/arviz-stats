@@ -2,6 +2,7 @@
 
 import warnings
 
+import numpy as np
 import xarray as xr
 from arviz_base.utils import _var_names
 from datatree import DataTree, register_datatree_accessor
@@ -23,6 +24,14 @@ def update_dims(dims, da):
     if isinstance(dims, str):
         dims = [dims]
     return [dim for dim in dims if dim in da.dims]
+
+
+def update_kwargs_with_dims(da, kwargs):
+    """Update kwargs dict which may have a `dims` keyword."""
+    kwargs = kwargs.copy()
+    if "dims" in kwargs:
+        kwargs.update({"dims": update_dims(kwargs["dims"], da)})
+    return kwargs
 
 
 unset = UnsetDefault()
@@ -97,13 +106,13 @@ class AzStatsDsAccessor(_BaseAccessor):
             self._obj = self._obj[var_names]
         return self
 
-    def _apply(self, fun, dims, **kwargs):
+    def _apply(self, fun, **kwargs):
         """Apply a function to all variables subsetting dims to existing dimensions."""
         if isinstance(fun, str):
             fun = get_function(fun)
         return xr.Dataset(
             {
-                var_name: fun(da, dims=update_dims(dims, da), **kwargs)
+                var_name: fun(da, **update_kwargs_with_dims(da, kwargs))
                 for var_name, da in self._obj.items()
             }
         )
@@ -147,9 +156,24 @@ class AzStatsDsAccessor(_BaseAccessor):
         # TODO: implement ecdf here so it doesn't depend on numba
         return self._apply(ecdf, dims=dims, **kwargs).rename(ecdf_axis="plot_axis")
 
+    def thin_factor(self, **kwargs):
+        """Get thinning factor for all the variables in the dataset."""
+        reduce_func = kwargs.get("reduce_func", "mean")
+        thin_factors = self._apply("thin_factor", **kwargs).to_array()
+        if reduce_func == "mean":
+            return int(np.floor(thin_factors.mean().item()))
+        if reduce_func == "min":
+            return int(np.floor(thin_factors.min().item()))
+        raise ValueError(
+            f"`reduce_func` {reduce_func} not recognized. Valid values are 'mean' or 'min'"
+        )
+
     def thin(self, dims=None, factor="auto"):
         """Perform thinning for all the variables in the dataset."""
-        return self._apply(get_function("thin"), dims=dims, factor=factor)
+        if factor == "auto":
+            factor = self.thin_factor()
+            dims = "draw"
+        return self._apply("thin", dims=dims, factor=factor)
 
     def pareto_min_ss(self, dims=None):
         """Compute the min sample size for all variables in the dataset."""
@@ -160,26 +184,34 @@ class AzStatsDsAccessor(_BaseAccessor):
 class AzStatsDtAccessor(_BaseAccessor):
     """ArviZ stats accessor class for DataTrees."""
 
-    def _process_input(self, group, method):
+    def _process_input(self, group, method, allow_non_matching=True):
         if self._obj.name == group:
             return self._obj
         if self._obj.children and group in self._obj.children:
             return self._obj[group]
-        warnings.warn(
-            f"Computing {method} on DataTree named {self._obj.name} which doesn't match "
-            f"the group argument {group}"
+        if allow_non_matching:
+            warnings.warn(
+                f"Computing {method} on DataTree named {self._obj.name} which doesn't match "
+                f"the group argument {group}"
+            )
+            return self._obj
+        raise ValueError(
+            f"Group {group} not available in DataTree. Present groups are {self._obj.children}"
         )
-        return self._obj
 
-    def _apply(self, fun_name, dims, group, **kwargs):
+    def _apply(self, fun_name, group, **kwargs):
+        allow_non_matching = False
         if isinstance(group, str):
             group = [group]
+            allow_non_matching = True
         return DataTree.from_dict(
             {
                 group_i: xr.Dataset(
                     {
-                        var_name: get_function(fun_name)(da, dims=update_dims(dims, da), **kwargs)
-                        for var_name, da in self._process_input(group_i, fun_name).items()
+                        var_name: get_function(fun_name)(da, **update_kwargs_with_dims(da, kwargs))
+                        for var_name, da in self._process_input(
+                            group_i, fun_name, allow_non_matching=allow_non_matching
+                        ).items()
                     }
                 )
                 for group_i in group
@@ -220,8 +252,25 @@ class AzStatsDtAccessor(_BaseAccessor):
         """Compute the KDE for all variables in a group of the DataTree."""
         return self._apply("histogram", dims=dims, group=group, **kwargs)
 
+    def thin_factor(self, group="posterior", **kwargs):
+        """Get thinning factor for all the variables in a group of the datatree."""
+        if not isinstance(group, str):
+            raise ValueError("Thin factor can only be applied over a single group.")
+        reduce_func = kwargs.get("reduce_func", "mean")
+        thin_factors = self._apply("thin_factor", group=group, **kwargs)[group].ds.to_array()
+        if reduce_func == "mean":
+            return int(np.floor(thin_factors.mean().item()))
+        if reduce_func == "min":
+            return int(np.floor(thin_factors.min().item()))
+        raise ValueError(
+            f"`reduce_func` {reduce_func} not recognized. Valid values are 'mean' or 'min'"
+        )
+
     def thin(self, dims=None, group="posterior", **kwargs):
         """Perform thinning for all variables in a group of the DataTree."""
+        if kwargs.get("factor", "auto") == "auto":
+            kwargs["factor"] = self.thin_factor()
+            dims = "draw"
         return self._apply("thin", dims=dims, group=group, **kwargs)
 
     def pareto_min_ss(self, dims=None, group="posterior"):
