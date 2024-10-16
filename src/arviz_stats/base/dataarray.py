@@ -7,7 +7,7 @@ import warnings
 
 import numpy as np
 from arviz_base import rcParams
-from xarray import DataArray, apply_ufunc, concat
+from xarray import DataArray, apply_ufunc, broadcast, concat
 from xarray_einstats.stats import _apply_nonreduce_func
 
 from arviz_stats.base.array import array_stats
@@ -270,6 +270,30 @@ class BaseDataArray:
             self.array_class.pareto_min_ss,
             da,
             input_core_dims=[dims],
+            output_core_dims=[[]],
+            kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
+        )
+
+    def power_scale_lw(self, da, alpha=0, dims=None):
+        """Compute log weights for power-scaling component by alpha."""
+        dims = validate_dims(dims)
+        return apply_ufunc(
+            self.array_class.power_scale_lw,
+            da,
+            alpha,
+            input_core_dims=[dims, []],
+            output_core_dims=[dims],
+            kwargs={"axes": np.arange(-len(dims), 0, 1)},
+        )
+
+    def power_scale_sense(self, da, lower_w, upper_w, delta, dims=None):
+        """Compute power-scaling sensitivity."""
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
+        return apply_ufunc(
+            self.array_class.power_scale_sense,
+            *broadcast(da, lower_w, upper_w),
+            delta,
+            input_core_dims=[dims, dims, dims, []],
             output_core_dims=[[]],
             kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
         )

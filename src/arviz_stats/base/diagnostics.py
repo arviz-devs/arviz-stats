@@ -370,6 +370,20 @@ class _DiagnosticsBase(_CoreBase):
 
         n_draws = len(ary)
 
+        n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail=tail)
+
+        if tail == "both":
+            khat = max(
+                self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=t)[1]
+                for t in ("left", "right")
+            )
+        else:
+            _, khat = self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail)
+
+        return khat
+
+    @staticmethod
+    def _get_ps_tails(n_draws, r_eff, tail):
         if n_draws > 255:
             n_draws_tail = np.ceil(3 * (n_draws / r_eff) ** 0.5).astype(int)
         else:
@@ -389,14 +403,7 @@ class _DiagnosticsBase(_CoreBase):
                 warnings.warn("Number of tail draws cannot be less than 5. Changing to 5")
                 n_draws_tail = 5
 
-            khat = max(
-                self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=t)[1]
-                for t in ("left", "right")
-            )
-        else:
-            _, khat = self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail)
-
-        return khat
+        return n_draws_tail
 
     def _ps_tail(
         self, ary, n_draws, n_draws_tail, smooth_draws=False, tail="both", log_weights=False
@@ -543,3 +550,71 @@ class _DiagnosticsBase(_CoreBase):
             q = mu + sigma * np.expm1(-kappa * np.log1p(-probs)) / kappa
 
         return q
+
+    def _power_scale_sense(self, ary, lower_w, upper_w, delta=0.01):
+        """Compute power-scaling sensitivity by finite difference second derivative of CJS."""
+        ary = np.ravel(ary)
+        lower_w = np.ravel(lower_w)
+        upper_w = np.ravel(upper_w)
+        lower_cjs = max(self._cjs_dist(ary, lower_w), self._cjs_dist(-1 * ary, lower_w))
+        upper_cjs = max(self._cjs_dist(ary, upper_w), self._cjs_dist(-1 * ary, upper_w))
+        grad = (lower_cjs + upper_cjs) / (2 * np.log2(1 + delta))
+        return grad
+
+    def _power_scale_lw(self, ary, alpha):
+        """Compute log weights for power-scaling component by alpha."""
+        shape = ary.shape
+        ary = np.ravel(ary)
+        log_weights = (alpha - 1) * ary
+        n_draws = len(log_weights)
+        r_eff = self._ess_tail(ary, relative=True)
+        n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail="both")
+        log_weights, _ = self._ps_tail(
+            log_weights,
+            n_draws,
+            n_draws_tail,
+            smooth_draws=False,
+            log_weights=True,
+        )
+
+        return log_weights.reshape(shape)
+
+    @staticmethod
+    def _cjs_dist(ary, weights):
+        """Calculate the cumulative Jensen-Shannon distance between original and weighted draws."""
+        # sort draws and weights
+        order = np.argsort(ary)
+        ary = ary[order]
+        weights = weights[order]
+
+        binwidth = np.diff(ary)
+
+        # ecdfs
+        cdf_p = np.linspace(1 / len(ary), 1 - 1 / len(ary), len(ary) - 1)
+        cdf_q = np.cumsum(weights / np.sum(weights))[:-1]
+
+        # integrals of ecdfs
+        cdf_p_int = np.dot(cdf_p, binwidth)
+        cdf_q_int = np.dot(cdf_q, binwidth)
+
+        # cjs calculation
+        pq_numer = np.log2(cdf_p, out=np.zeros_like(cdf_p), where=cdf_p != 0)
+        qp_numer = np.log2(cdf_q, out=np.zeros_like(cdf_q), where=cdf_q != 0)
+
+        denom = 0.5 * (cdf_p + cdf_q)
+        denom = np.log2(denom, out=np.zeros_like(denom), where=denom != 0)
+
+        cjs_pq = np.sum(binwidth * (cdf_p * (pq_numer - denom))) + 0.5 / np.log(2) * (
+            cdf_q_int - cdf_p_int
+        )
+
+        cjs_qp = np.sum(binwidth * (cdf_q * (qp_numer - denom))) + 0.5 / np.log(2) * (
+            cdf_p_int - cdf_q_int
+        )
+
+        cjs_pq = max(0, cjs_pq)
+        cjs_qp = max(0, cjs_qp)
+
+        bound = cdf_p_int + cdf_q_int
+
+        return np.sqrt((cjs_pq + cjs_qp) / bound)

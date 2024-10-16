@@ -68,6 +68,16 @@ class AzStatsDaAccessor(_BaseAccessor):
         """Compute the minimum effective sample size on the DataArray."""
         return get_function("pareto_min_ss")(self._obj, dims=dims)
 
+    def power_scale_lw(self, alpha=1, dims=None):
+        """Compute log weights for power-scaling of the DataTree."""
+        return get_function("power_scale_lw")(self._obj, alpha=alpha, dims=dims)
+
+    def power_scale_sense(self, lower_w=None, upper_w=None, delta=None, dims=None):
+        """Compute power-scaling sensitivity."""
+        return get_function("power_scale_sense")(
+            self._obj, lower_w=lower_w, upper_w=upper_w, delta=delta, dims=dims
+        )
+
 
 @xr.register_dataset_accessor("azstats")
 class AzStatsDsAccessor(_BaseAccessor):
@@ -179,6 +189,14 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Compute the min sample size for all variables in the dataset."""
         return self._apply("pareto_min_ss", dims=dims)
 
+    def power_scale_lw(self, dims=None, **kwargs):
+        """Compute log weights for power-scaling of the DataTree."""
+        return self._apply("power_scale_lw", dims=dims, **kwargs)
+
+    def power_scale_sense(self, dims=None, **kwargs):
+        """Compute power-scaling sensitivity."""
+        return self._apply("power_scale_sense", dims=dims, **kwargs)
+
 
 @register_datatree_accessor("azstats")
 class AzStatsDtAccessor(_BaseAccessor):
@@ -276,3 +294,11 @@ class AzStatsDtAccessor(_BaseAccessor):
     def pareto_min_ss(self, dims=None, group="posterior"):
         """Compute the min sample size for all variables in a group of the DataTree."""
         return self._apply("pareto_min_ss", dims=dims, group=group)
+
+    def power_scale_lw(self, dims=None, group="log_likelihood", **kwargs):
+        """Compute log weights for power-scaling of the DataTree."""
+        return self._apply("power_scale_lw", dims=dims, group=group, **kwargs)
+
+    def power_scale_sense(self, dims=None, group="posterior", **kwargs):
+        """Compute power-scaling sensitivity."""
+        return self._apply("power_scale_sense", dims=dims, group=group, **kwargs)

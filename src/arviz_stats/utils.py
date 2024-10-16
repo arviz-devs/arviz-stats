@@ -1,6 +1,7 @@
 """ArviZ stats general utility functions."""
 
 import warnings
+from collections.abc import Hashable
 from dataclasses import dataclass
 from importlib import import_module
 
@@ -64,6 +65,57 @@ def get_log_likelihood(idata, var_name=None):
     except KeyError as err:
         raise TypeError(f"No log likelihood data named {var_name} found") from err
     return log_likelihood
+
+
+# get_log_likelihood and get_log_prior functions should be somewhere else
+def get_log_likelihood_dataset(idata, var_names=None):
+    """Retrieve the log likelihood dataarray of a given variable."""
+    if (
+        not hasattr(idata, "log_likelihood")
+        and hasattr(idata, "sample_stats")
+        and hasattr(idata.sample_stats, "log_likelihood")
+    ):
+        warnings.warn(
+            "Storing the log_likelihood in sample_stats groups has been deprecated",
+            DeprecationWarning,
+        )
+        log_lik_ds = idata.sample_stats.ds[["log_likelihood"]]
+    if not hasattr(idata, "log_likelihood"):
+        raise TypeError("log likelihood not found in inference data object")
+    log_lik_ds = idata.log_likelihood.ds
+    if var_names is None:
+        return log_lik_ds
+    if isinstance(var_names, Hashable):
+        return log_lik_ds[[var_names]]
+    return log_lik_ds[var_names]
+
+
+def get_log_likelihood_dataarray(data, var_name=None):
+    log_lik_ds = get_log_likelihood_dataset(data)
+    if var_name is None:
+        var_names = list(log_lik_ds.data_vars)
+        if len(var_names) > 1:
+            raise TypeError(
+                f"Found several log likelihood arrays {var_names}, var_name cannot be None"
+            )
+        return log_lik_ds[var_names[0]]
+
+    try:
+        log_likelihood = log_lik_ds[var_name]
+    except KeyError as err:
+        raise TypeError(f"No log likelihood data named {var_name} found") from err
+    return log_likelihood
+
+
+def get_log_prior(idata, var_names=None):
+    """Retrieve the log prior dataarray of a given variable."""
+    if not hasattr(idata, "log_prior"):
+        raise TypeError("log prior not found in inference data object")
+    if var_names is None:
+        return idata.log_prior.ds
+    if isinstance(var_names, Hashable):
+        return idata.log_prior.ds[[var_names]]
+    return idata.log_prior.ds[var_names]
 
 
 BASE_FMT = """Computed from {{n_samples}} posterior samples and \
