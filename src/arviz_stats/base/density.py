@@ -1,6 +1,7 @@
 # pylint: disable=invalid-name,too-many-lines
 """Density estimation functions for ArviZ."""
 
+import math
 import warnings
 
 import numpy as np
@@ -474,6 +475,10 @@ class _DensityBase(_CoreBase):
 
         if cumulative:
             pdf = pdf.cumsum() / pdf.sum()
+        else:
+            # explicitly normalize to 1
+            bin_width = grid_edges[1] - grid_edges[0]
+            pdf /= pdf.sum() * bin_width
 
         return grid, pdf, bw
 
@@ -495,9 +500,7 @@ class _DensityBase(_CoreBase):
 
         grid = (grid_edges[1:] + grid_edges[:-1]) / 2
 
-        kernel_n = int(bw * 2 * np.pi)
-        if kernel_n == 0:
-            kernel_n = 1
+        kernel_n = 2 * math.ceil(4 * bw) + 1
 
         kernel = gaussian(kernel_n, bw)
 
@@ -779,27 +782,3 @@ class _DensityBase(_CoreBase):
                 contours[idx] = sorted_density[0]
 
         return contours
-
-    def _hdi_agg_nearest(self, ary, prob, skipna):
-        """Approximate the HDI from the kde or histogram."""
-        ary = ary.flatten()
-        if skipna:
-            nans = np.isnan(ary)
-            if not nans.all():
-                ary = ary[~nans]
-
-        if ary.dtype.kind == "f":
-            bins, density, _ = self._kde(ary)
-        else:
-            bins = self._get_bins(ary)
-            density, _ = self._histogram(ary, bins=bins, density=True)
-
-        sorted_idx = np.argsort(density)[::-1]
-        mass_cum = 0
-        indices = []
-        for idx in sorted_idx:
-            mass_cum += density[idx]
-            indices.append(idx)
-            if mass_cum >= prob:
-                break
-        return bins[np.sort(indices)[[0, -1]]]

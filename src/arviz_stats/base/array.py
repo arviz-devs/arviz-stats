@@ -58,7 +58,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             raise ValueError("Multimodal hdi not supported for discrete circular data.")
         hdi_func = {
             "nearest": self._hdi_nearest,
-            "agg_nearest": self._hdi_agg_nearest,
             "multimodal": (
                 self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
             ),

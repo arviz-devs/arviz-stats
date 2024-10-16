@@ -31,6 +31,29 @@ def multivariable_log_likelihood(centered_eight):
     return centered_eight
 
 
+@pytest.mark.parametrize(
+    "kde_kwargs",
+    [
+        {},
+        {"adaptive": True},
+        {"circular": True},
+    ],
+    ids=["default", "adaptive", "circular"],
+)
+@pytest.mark.parametrize("bound_correction", [True, False])
+def test_kde_is_normalized(bound_correction, kde_kwargs):
+    rng = np.random.default_rng(43)
+    if kde_kwargs.get("circular", False):
+        data = rng.vonmises(np.pi, 1, (1_000, 100))
+    else:
+        data = rng.normal(size=(1_000, 100))
+    sample = ndarray_to_dataarray(data, "x", sample_dims=["sample"])
+    kde = sample.azstats.kde(dims="sample", bound_correction=bound_correction, **kde_kwargs)
+    dx = kde.sel(plot_axis="x").diff(dim="kde_dim")
+    density_norm = kde.sel(plot_axis="y").sum(dim="kde_dim") * dx
+    assert_array_almost_equal(density_norm, 1, 6)
+
+
 def test_hdi_idata(centered_eight):
     accessor = centered_eight.posterior.ds.azstats
     result = accessor.hdi()
