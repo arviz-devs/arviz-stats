@@ -238,7 +238,7 @@ class _DensityBase(_CoreBase):
         return 1 / (x**3 - 4 * x**2 + 3 * x)
 
     def _kappa_mle(self, x):
-        mean = self._circular_mean(x)
+        mean = self.circular_mean(x)
         kappa = self._a1inv(np.mean(np.cos(x - mean)))
         return kappa
 
@@ -633,7 +633,7 @@ class _DensityBase(_CoreBase):
             raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
         if isinstance(bw, str):
             if bw == "taylor":
-                bw = self._bw_taylor(x)
+                bw = self.bw_taylor(x)
             else:
                 raise ValueError(f"`bw` must be a positive numeric or `taylor`, not {bw}")
         bw *= bw_fct
