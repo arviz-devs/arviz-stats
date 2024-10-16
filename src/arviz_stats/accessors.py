@@ -1,7 +1,6 @@
 """ArviZ stats accessors."""
 
 import warnings
-from collections.abc import Hashable
 
 import numpy as np
 import xarray as xr
