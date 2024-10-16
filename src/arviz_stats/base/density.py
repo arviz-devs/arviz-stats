@@ -475,6 +475,10 @@ class _DensityBase(_CoreBase):
 
         if cumulative:
             pdf = pdf.cumsum() / pdf.sum()
+        else:
+            # explicitly normalize to 1
+            bin_width = grid_edges[1] - grid_edges[0]
+            pdf /= pdf.sum() * bin_width
 
         return grid, pdf, bw
 
