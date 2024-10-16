@@ -19,10 +19,10 @@ __all__ = ["psense", "psense_summary"]
 
 def psense(
     dt,
-    group="log_prior",
+    group="prior",
     sample_dims=None,
-    component_var_names=None,
-    component_coords=None,
+    group_var_names=None,
+    group_coords=None,
     var_names=None,
     coords=None,
     filter_vars=None,
@@ -38,15 +38,14 @@ def psense(
         Refer to documentation of :func:`arviz.convert_to_dataset` for details.
         For ndarray: shape = (chain, draw).
         For n-dimensional ndarray transform first to dataset with ``az.convert_to_dataset``.
-    group : {"log_prior", "log_likelihood"}, default "log_prior"
-        When `component` is "likelihood", the log likelihood values are retrieved
-        from the ``log_likelihood`` group as pointwise log likelihood and added
-        together. With "prior", the log prior values are retrieved from the
-        ``log_prior`` group.
-    component_var_names : str, optional
+    group : {"prior", "likelihood"}, default "prior"
+        If "likelihood", the pointsize log likelihood values are retrieved
+        from the ``log_likelihood`` group and added together.
+        If "prior", the log prior values are retrieved from the ``log_prior`` group.
+    group_var_names : str, optional
         Name of the prior or log likelihood variables to use
-    component_coords : dict, optional
-        Coordinates defining a subset over the component element for which to
+    group_coords : dict, optional
+        Coordinates defining a subset over the group element for which to
         compute the prior sensitivity diagnostic.
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
@@ -72,7 +71,7 @@ def psense(
 
     Notes
     -----
-    The diagnostic is computed by power-scaling the specified component (prior or likelihood)
+    The diagnostic is computed by power-scaling either the prior or likelihood
     and determining the degree to which the posterior changes as described in [1]_.
     It uses Pareto-smoothed importance sampling to avoid refitting the model.
 
@@ -95,8 +94,8 @@ def psense(
         alphas=(lower_alpha, upper_alpha),
         group=group,
         sample_dims=sample_dims,
-        component_var_names=component_var_names,
-        component_coords=component_coords,
+        group_var_names=group_var_names,
+        group_coords=group_coords,
     )
 
     return dataset.azstats.power_scale_sense(
@@ -129,8 +128,8 @@ def psense_summary(data, threshold=0.05, round_to=3):
         and the likelihood sensitivity is below the threshold
         - "-" otherwise
     """
-    pssdp = psense(data, group="log_prior")
-    pssdl = psense(data, group="log_likelihood")
+    pssdp = psense(data, group="prior")
+    pssdl = psense(data, group="likelihood")
 
     joined = xr.concat([pssdp, pssdl], dim="component").assign_coords(
         component=["prior", "likelihood"]
@@ -164,31 +163,32 @@ def psense_summary(data, threshold=0.05, round_to=3):
 
 
 def _get_power_scale_weights(
-    dt, alphas=None, group=None, sample_dims=None, component_var_names=None, component_coords=None
+    dt, alphas=None, group=None, sample_dims=None, group_var_names=None, group_coords=None
 ):
     """Compute power scale weights."""
     sample_dims = validate_dims(sample_dims)
-    if group == "log_likelihood":
-        component_draws = get_log_likelihood_dataset(dt, var_names=component_var_names)
-    elif group == "log_prior":
-        component_draws = get_log_prior(dt, var_names=component_var_names)
+
+    if group == "likelihood":
+        group_draws = get_log_likelihood_dataset(dt, var_names=group_var_names)
+    elif group == "prior":
+        group_draws = get_log_prior(dt, var_names=group_var_names)
     else:
         raise ValueError("Value for `group` argument not recognized")
 
-    if component_coords is not None:
-        component_draws = component_draws.sel(component_coords)
+    if group_coords is not None:
+        group_draws = group_draws.sel(group_coords)
     # we stack the different variables (if any) and dimensions in each variable (if any)
     # into a flat dimension "latent-obs_var", over which we sum afterwards.
-    # Consequently, after this component_draws draws is a dataarray with only sample_dims as dims
-    component_draws = component_draws.to_stacked_array(
-        "latent-obs_var", sample_dims=sample_dims
-    ).sum("latent-obs_var")
+    # Consequently, after this group_draws draws is a dataarray with only sample_dims as dims
+    group_draws = group_draws.to_stacked_array("latent-obs_var", sample_dims=sample_dims).sum(
+        "latent-obs_var"
+    )
 
     # calculate importance sampling weights for lower and upper alpha power-scaling
-    lower_w = np.exp(component_draws.azstats.power_scale_lw(alpha=alphas[0], dims=sample_dims))
+    lower_w = np.exp(group_draws.azstats.power_scale_lw(alpha=alphas[0], dims=sample_dims))
     lower_w = lower_w / lower_w.sum(sample_dims)
 
-    upper_w = np.exp(component_draws.azstats.power_scale_lw(alpha=alphas[1], dims=sample_dims))
+    upper_w = np.exp(group_draws.azstats.power_scale_lw(alpha=alphas[1], dims=sample_dims))
     upper_w = upper_w / upper_w.sum(sample_dims)
 
     return lower_w, upper_w
