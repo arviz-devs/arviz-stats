@@ -34,9 +34,7 @@ def multivariable_log_likelihood(centered_eight):
     "kde_kwargs",
     [
         {},
-        {
-            "adaptive": True,
-        },
+        {"adaptive": True},
         {"circular": True},
     ],
     ids=["default", "adaptive", "circular"],
