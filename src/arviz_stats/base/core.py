@@ -278,8 +278,8 @@ class _CoreBase:
             dx = 1
         else:
             bins = self._get_bins(ary)
-            density, _ = self._histogram(ary, bins=bins)
-            dx = np.diff(bins)[0]
+            density, bins = self._histogram(ary, bins=bins)
+            dx = bins[1] - bins[0]
 
         hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(
             bins, density, prob, False, dx
