@@ -1,6 +1,7 @@
 # pylint: disable=invalid-name,too-many-lines
 """Density estimation functions for ArviZ."""
 
+import math
 import warnings
 
 import numpy as np
@@ -495,9 +496,7 @@ class _DensityBase(_CoreBase):
 
         grid = (grid_edges[1:] + grid_edges[:-1]) / 2
 
-        kernel_n = int(bw * 2 * np.pi)
-        if kernel_n == 0:
-            kernel_n = 1
+        kernel_n = 2 * math.ceil(4 * bw) + 1
 
         kernel = gaussian(kernel_n, bw)
 
