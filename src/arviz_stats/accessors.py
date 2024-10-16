@@ -1,6 +1,7 @@
 """ArviZ stats accessors."""
 
 import warnings
+from collections.abc import Hashable
 
 import numpy as np
 import xarray as xr
@@ -214,27 +215,40 @@ class AzStatsDtAccessor(_BaseAccessor):
             )
             return self._obj
         raise ValueError(
-            f"Group {group} not available in DataTree. Present groups are {self._obj.children}"
+            f"Group {group} not available in DataTree. Present groups are {self._obj.children} "
+            f"and the DataTree itself is named {self._obs.name}"
         )
 
     def _apply(self, fun_name, group, **kwargs):
-        allow_non_matching = False
-        if isinstance(group, str):
+        hashable_group = False
+        if isinstance(group, Hashable):
             group = [group]
-            allow_non_matching = True
-        return DataTree.from_dict(
+            hashable_group = True
+        out_dt = DataTree.from_dict(
             {
                 group_i: xr.Dataset(
                     {
                         var_name: get_function(fun_name)(da, **update_kwargs_with_dims(da, kwargs))
                         for var_name, da in self._process_input(
-                            group_i, fun_name, allow_non_matching=allow_non_matching
+                            # if group is a single str/hashable that doesn't match the group
+                            # name, still allow it and apply the function to the top level of
+                            # the provided datatree
+                            group_i,
+                            fun_name,
+                            allow_non_matching=hashable_group,
                         ).items()
                     }
                 )
                 for group_i in group
             }
         )
+        if hashable_group:
+            # if group was a string/hashable, return a datatree with a single node
+            # (from the provided group) as the root of the DataTree
+            return out_dt[group[0]]
+        # if group was a sequence, return a DataTree with multiple groups in the 1st level,
+        # as many groups as requested
+        return out_dt
 
     def filter_vars(self, group="posterior", var_names=None, filter_vars=None):
         """Access and filter variables of the provided group."""
