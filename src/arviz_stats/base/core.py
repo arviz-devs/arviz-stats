@@ -282,10 +282,9 @@ class _CoreBase:
 
         return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
-    def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, circular, dx):  # pylint: disable=no-self-use
+    def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, circular, dx):
         if circular:
-            # standardize bins to [-pi, pi]
-            bins = np.fmod(bins + np.pi, 2 * np.pi) - np.pi
+            bins = self._circular_standardize(bins)
             sorted_idx = np.argsort(bins)
             bins = bins[sorted_idx]
             bin_probs = bin_probs[sorted_idx]
