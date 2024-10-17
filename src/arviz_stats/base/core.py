@@ -85,7 +85,7 @@ class _CoreBase:
         The result is between -pi and pi.
         """
         return circmean(ary, high=np.pi, low=-np.pi)
-    
+
     def _circular_standardize(self, ary):  # pylint: disable=no-self-use
         """Standardize circular data to the interval [-pi, pi]."""
         return np.mod(ary + np.pi, 2 * np.pi) - np.pi
@@ -211,7 +211,7 @@ class _CoreBase:
             bins = self._get_bins(ary)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
 
-    def _hdi_linear_nearest_common(self, ary, prob):
+    def _hdi_linear_nearest_common(self, ary, prob):  # pylint: disable=no-self-use
         n = len(ary)
 
         ary = np.sort(ary)
