@@ -85,6 +85,10 @@ class _CoreBase:
         The result is between -pi and pi.
         """
         return circmean(ary, high=np.pi, low=-np.pi)
+    
+    def _circular_standardize(self, ary):  # pylint: disable=no-self-use
+        """Standardize circular data to the interval [-pi, pi]."""
+        return np.fmod(ary + np.pi, 2 * np.pi) - np.pi
 
     def quantile(self, ary, quantile, **kwargs):  # pylint: disable=no-self-use
         """Compute the quantile of an array of samples.
@@ -207,19 +211,8 @@ class _CoreBase:
             bins = self._get_bins(ary)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
 
-    def _hdi_linear_nearest_common(self, ary, prob, skipna, circular):
-        ary = ary.flatten()
-        if skipna:
-            nans = np.isnan(ary)
-            if not nans.all():
-                ary = ary[~nans]
+    def _hdi_linear_nearest_common(self, ary, prob):
         n = len(ary)
-
-        mean = None
-        if circular:
-            mean = self.circular_mean(ary)
-            ary = ary - mean
-            ary = np.arctan2(np.sin(ary), np.cos(ary))
 
         ary = np.sort(ary)
         interval_idx_inc = int(np.floor(prob * n))
@@ -230,28 +223,29 @@ class _CoreBase:
             raise ValueError("Too few elements for interval calculation. ")
 
         min_idx = np.argmin(interval_width)
-
-        return ary, mean, min_idx, interval_idx_inc
-
-    def _hdi_nearest(self, ary, prob, circular, skipna):
-        """Compute HDI over the flattened array as closest samples that contain the given prob."""
-        ary, mean, min_idx, interval_idx_inc = self._hdi_linear_nearest_common(
-            ary, prob, skipna, circular
-        )
-
-        hdi_min = ary[min_idx]
-        hdi_max = ary[min_idx + interval_idx_inc]
-
-        if circular:
-            hdi_min = hdi_min + mean
-            hdi_max = hdi_max + mean
-            hdi_min = np.arctan2(np.sin(hdi_min), np.cos(hdi_min))
-            hdi_max = np.arctan2(np.sin(hdi_max), np.cos(hdi_max))
-
-        hdi_interval = np.array([hdi_min, hdi_max])
+        hdi_interval = ary[[min_idx, min_idx + interval_idx_inc]]
 
         return hdi_interval
 
+    def _hdi_nearest(self, ary, prob, circular, skipna):
+        """Compute HDI over the flattened array as closest samples that contain the given prob."""
+        ary = ary.flatten()
+        if skipna:
+            nans = np.isnan(ary)
+            if not nans.all():
+                ary = ary[~nans]
+
+        if circular:
+            mean = self.circular_mean(ary)
+            ary = self._circular_standardize(ary - mean)
+
+        hdi_interval = self._hdi_linear_nearest_common(ary, prob)
+
+        if circular:
+            hdi_interval = self._circular_standardize(hdi_interval + mean)
+
+        return hdi_interval
+    
     def _hdi_multimodal_continuous(self, ary, prob, skipna, max_modes, circular, **kwargs):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
