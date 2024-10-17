@@ -300,22 +300,23 @@ class _CoreBase:
         # get points in intervals
         intervals = bins[idx_in_interval]
         probs_in_interval = bin_probs[idx_in_interval]
-        cum_probs_intervals = probs_in_interval.cumsum()
 
-        # get interval bounds
-        is_bound = np.diff(intervals) > dx * 1.01
+        return self._interval_points_to_bounds(intervals, probs_in_interval, dx, circular)
+
+    def _interval_points_to_bounds(self, points, probs, dx, circular, period=2 * np.pi):  # pylint: disable=no-self-use
+        cum_probs = probs.cumsum()
+
+        is_bound = np.diff(points) > dx * 1.01
         is_lower_bound = np.insert(is_bound, 0, True)
         is_upper_bound = np.append(is_bound, True)
-        interval_bounds = np.column_stack([intervals[is_lower_bound], intervals[is_upper_bound]])
+        interval_bounds = np.column_stack([points[is_lower_bound], points[is_upper_bound]])
         interval_probs = (
-            cum_probs_intervals[is_upper_bound]
-            - cum_probs_intervals[is_lower_bound]
-            + probs_in_interval[is_lower_bound]
+            cum_probs[is_upper_bound] - cum_probs[is_lower_bound] + probs[is_lower_bound]
         )
 
         if (
             circular
-            and np.fmod(dx * 1.01 + interval_bounds[-1, -1] - interval_bounds[0, 0], 2 * np.pi)
+            and np.mod(dx * 1.01 + interval_bounds[-1, -1] - interval_bounds[0, 0], period)
             <= dx * 1.01
         ):
             interval_bounds[-1, 1] = interval_bounds[0, 1]
