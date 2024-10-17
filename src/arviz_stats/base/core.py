@@ -268,21 +268,21 @@ class _CoreBase:
 
         return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
-    def _hdi_multimodal_discrete(self, ary, prob, bins, max_modes):
+    def _hdi_multimodal_discrete(self, ary, prob, max_modes, bins=None):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
 
         if bins is None:
             bins, counts = np.unique(ary, return_counts=True)
-            density = counts / len(ary)
+            bin_probs = counts / len(ary)
             dx = 1
         else:
-            bins = self._get_bins(ary)
-            density, bins = self._histogram(ary, bins=bins)
+            counts, bins = self._histogram(ary, bins=bins)
+            bin_probs = counts / counts.sum()
             dx = bins[1] - bins[0]
 
         hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(
-            bins, density, prob, False, dx
+            bins, bin_probs, prob, False, dx
         )
 
         return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)

@@ -113,6 +113,27 @@ def test_hdi_multimodal_continuous(prob):
 
 
 @pytest.mark.parametrize("prob", [0.56, 0.83])
+def test_hdi_multimodal_discrete(prob):
+    rng = np.random.default_rng(43)
+    dist1 = poisson(10)
+    dist2 = poisson(100)
+    x = np.concatenate([dist1.rvs(2500000, random_state=rng), dist2.rvs(2500000, random_state=rng)])
+    sample = ndarray_to_dataarray(x, "x", sample_dims=["sample"])
+    intervals = sample.azstats.hdi(dims="sample", method="multimodal", prob=prob)
+    assert intervals.sizes["mode"] == 2
+    lower_mode = intervals.sel(mode=0)
+    higher_mode = intervals.sel(mode=1)
+    assert lower_mode[0] <= 10 <= lower_mode[1]
+    assert higher_mode[0] <= 100 <= higher_mode[1]
+
+    # restrict the bins to a range in which only a single mode will appear
+    bins = np.arange(0, 20) - 0.5
+    intervals = sample.azstats.hdi(dims="sample", method="multimodal", prob=prob, bins=bins)
+    assert intervals.sizes["mode"] == 1
+    assert intervals.sel(mode=0)[0] <= 10 <= intervals.sel(mode=0)[1]
+
+
+@pytest.mark.parametrize("prob", [0.56, 0.83])
 @pytest.mark.parametrize("dist", [poisson(10), bernoulli(0.7)])
 def test_hdi_multimodal_unimodal_discrete_consistent(dist, prob):
     rng = np.random.default_rng(43)

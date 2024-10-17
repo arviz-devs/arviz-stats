@@ -79,10 +79,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             if is_discrete:
                 func_kwargs.pop("circular")
                 func_kwargs.pop("skipna")
-                func_kwargs["bins"] = None
             else:
                 func_kwargs["bw"] = "isj" if not circular else "taylor"
-                func_kwargs.update(kwargs)
+            func_kwargs.update(kwargs)
 
         result = hdi_array(ary, **func_kwargs)
         if method == "multimodal":
