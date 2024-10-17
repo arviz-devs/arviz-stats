@@ -271,7 +271,8 @@ class _CoreBase:
             bin_probs = counts / len(ary)
             dx = 1
         else:
-            counts, bins = self._histogram(ary, bins=bins)
+            counts, edges = self._histogram(ary, bins=bins)
+            bins = 0.5 * (edges[1:] + edges[:-1])
             bin_probs = counts / counts.sum()
             dx = bins[1] - bins[0]
 
