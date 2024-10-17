@@ -88,7 +88,7 @@ class _CoreBase:
     
     def _circular_standardize(self, ary):  # pylint: disable=no-self-use
         """Standardize circular data to the interval [-pi, pi]."""
-        return np.fmod(ary + np.pi, 2 * np.pi) - np.pi
+        return np.mod(ary + np.pi, 2 * np.pi) - np.pi
 
     def quantile(self, ary, quantile, **kwargs):  # pylint: disable=no-self-use
         """Compute the quantile of an array of samples.
