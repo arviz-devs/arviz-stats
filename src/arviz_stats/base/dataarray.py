@@ -46,7 +46,7 @@ class BaseDataArray:
             da,
             prob,
             input_core_dims=[dims, []],
-            output_core_dims=[[mode_dim, "hdi"] if method == "multimodal" else ["hdi"]],
+            output_core_dims=[[mode_dim, "hdi"] if method.startswith("multimodal") else ["hdi"]],
             kwargs={
                 "axes": np.arange(-len(dims), 0, 1),
                 "method": method,

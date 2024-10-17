@@ -245,20 +245,28 @@ class _CoreBase:
             hdi_interval = self._circular_standardize(hdi_interval + mean)
 
         return hdi_interval
-    
-    def _hdi_multimodal_continuous(self, ary, prob, skipna, max_modes, circular, **kwargs):
+
+    def _hdi_multimodal_continuous(
+        self, ary, prob, skipna, max_modes, circular, nearest=False, **kwargs
+    ):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
         if skipna:
             ary = ary[~np.isnan(ary)]
 
         bins, density, _ = self.kde(ary, circular=circular, **kwargs)
-        dx = (bins[-1] - bins[0]) / len(density)
-        bin_probs = density * dx
+        if nearest:
+            ary_density = np.interp(ary, bins, density)
+            hdi_intervals, interval_probs = self._hdi_from_point_densities(
+                ary, ary_density, prob, circular
+            )
+        else:
+            dx = (bins[-1] - bins[0]) / (len(bins) - 1)
+            bin_probs = density * dx
 
-        hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(
-            bins, bin_probs, prob, circular, dx
-        )
+            hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(
+                bins, bin_probs, prob, circular, dx
+            )
 
         return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 

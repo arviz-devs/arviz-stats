@@ -90,7 +90,9 @@ def test_hdi_coords(centered_eight):
 
 
 @pytest.mark.parametrize("prob", [0.56, 0.83])
-def test_hdi_multimodal_continuous(prob):
+@pytest.mark.parametrize("nearest", [True, False])
+def test_hdi_multimodal_continuous(prob, nearest):
+    method = "multimodal_nearest" if nearest else "multimodal"
     rng = np.random.default_rng(43)
     dist1 = norm(loc=-30, scale=0.5)
     dist2 = norm(loc=30, scale=0.5)
@@ -108,8 +110,13 @@ def test_hdi_multimodal_continuous(prob):
         ],
         axis=0,
     )
-    intervals = normal_sample.azstats.hdi(dims="sample", method="multimodal", prob=prob)
+    intervals = normal_sample.azstats.hdi(dims="sample", method=method, prob=prob)
     assert_array_almost_equal(intervals, exact_hdis, 1)
+
+    if nearest:
+        assert np.all(np.isin(intervals, normal_sample))
+    else:
+        assert not np.any(np.isin(intervals, normal_sample))
 
 
 @pytest.mark.parametrize("prob", [0.56, 0.83])
@@ -172,6 +179,26 @@ def test_hdi_multimodal_max_modes():
     intervals2 = sample.azstats.hdi(dims="sample", method="multimodal", prob=0.9, max_modes=1)
     assert intervals2.sizes["mode"] == 1
     assert intervals2.equals(intervals.isel(mode=[1]))
+
+
+@pytest.mark.parametrize("nearest", [True, False])
+def test_hdi_multimodal_circular(nearest):
+    rng = np.random.default_rng(43)
+    normal_sample = ndarray_to_dataarray(
+        np.concatenate(
+            [
+                rng.vonmises(np.pi, 10, 2500000),
+                rng.vonmises(np.pi / 2, 10, 2500000),
+            ]
+        ),
+        "x",
+        sample_dims=["sample"],
+    )
+    method = "multimodal_nearest" if nearest else "multimodal"
+    interval = normal_sample.azstats.hdi(circular=True, method=method, prob=0.83, dims="sample")
+    assert interval.sizes["mode"] == 2
+    assert interval.sel(mode=0)[0] <= np.pi / 2 <= interval.sel(mode=0)[1]
+    assert interval.sel(mode=1)[0] <= np.pi and interval.sel(mode=1)[1] >= -np.pi
 
 
 def test_hdi_circular():
