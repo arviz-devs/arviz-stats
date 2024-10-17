@@ -282,6 +282,28 @@ class _CoreBase:
 
         return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
+    def _hdi_from_point_densities(self, points, densities, prob, circular):
+        if circular:
+            points = self._circular_standardize(points)
+
+        sorted_idx = np.argsort(points)
+        points = points[sorted_idx]
+        densities = densities[sorted_idx]
+
+        # find idx of points in the interval
+        interval_size = int(np.ceil(prob * len(points)))
+        sorted_idx = np.argsort(densities)[::-1]
+        idx_in_interval = sorted_idx[:interval_size]
+        idx_in_interval.sort()
+
+        # find idx of interval bounds
+        probs_in_interval = np.full(idx_in_interval.shape, 1 / len(points))
+        interval_bounds_idx, interval_probs = self._interval_points_to_bounds(
+            idx_in_interval, probs_in_interval, 1, circular, period=len(points)
+        )
+
+        return points[interval_bounds_idx], interval_probs
+
     def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, circular, dx):
         if circular:
             bins = self._circular_standardize(bins)
