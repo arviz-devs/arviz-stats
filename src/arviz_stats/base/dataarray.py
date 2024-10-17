@@ -34,9 +34,7 @@ class BaseDataArray:
             kwargs={"axis": np.arange(-len(dims), 0, 1), "method": method},
         )
 
-    def hdi(
-        self, da, prob=None, dims=None, method="nearest", circular=False, max_modes=10, skipna=False
-    ):
+    def hdi(self, da, prob=None, dims=None, method="nearest", **kwargs):
         """Compute hdi on DataArray input."""
         dims = validate_dims(dims)
         prob = validate_ci_prob(prob)
@@ -50,11 +48,9 @@ class BaseDataArray:
             input_core_dims=[dims, []],
             output_core_dims=[[mode_dim, "hdi"] if method == "multimodal" else ["hdi"]],
             kwargs={
-                "method": method,
-                "circular": circular,
-                "skipna": skipna,
-                "max_modes": max_modes,
                 "axes": np.arange(-len(dims), 0, 1),
+                "method": method,
+                **kwargs,
             },
         ).assign_coords({"hdi": hdi_coord})
 
