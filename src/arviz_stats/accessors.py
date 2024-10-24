@@ -144,7 +144,7 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Apply a function to all variables subsetting dims to existing dimensions."""
         if isinstance(fun, str):
             fun = get_function(fun)
-        return apply_function_to_dataset(fun, self._obj.items(), kwargs=kwargs)
+        return apply_function_to_dataset(fun, self._obj, kwargs=kwargs)
 
     def eti(self, prob=None, dims=None, **kwargs):
         """Compute the equal tail interval of all the variables in the dataset."""
