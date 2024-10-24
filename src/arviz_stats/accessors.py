@@ -34,6 +34,29 @@ def update_kwargs_with_dims(da, kwargs):
     return kwargs
 
 
+def check_var_name_subset(obj, var_name):
+    if isinstance(obj, xr.Dataset):
+        return obj[var_name]
+    if isinstance(obj, DataTree):
+        return obj.ds[var_name]
+    return obj
+
+
+def apply_function_to_dataset(func, ds, kwargs):
+    return xr.Dataset(
+        {
+            var_name: func(
+                da,
+                **{
+                    key: check_var_name_subset(value, var_name)
+                    for key, value in update_kwargs_with_dims(da, kwargs).items()
+                },
+            )
+            for var_name, da in ds.items()
+        }
+    )
+
+
 unset = UnsetDefault()
 
 
@@ -120,12 +143,7 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Apply a function to all variables subsetting dims to existing dimensions."""
         if isinstance(fun, str):
             fun = get_function(fun)
-        return xr.Dataset(
-            {
-                var_name: fun(da, **update_kwargs_with_dims(da, kwargs))
-                for var_name, da in self._obj.items()
-            }
-        )
+        return apply_function_to_dataset(fun, self._obj, kwargs=kwargs)
 
     def eti(self, prob=None, dims=None, **kwargs):
         """Compute the equal tail interval of all the variables in the dataset."""
@@ -153,8 +171,12 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Compute the KDE for all variables in the dataset."""
         return self._apply("kde", dims=dims, **kwargs)
 
+    def get_bins(self, dims=None, **kwargs):
+        """Compute the histogram bin edges for all variables in the dataset."""
+        return self._apply(get_function("get_bins"), dims=dims, **kwargs)
+
     def histogram(self, dims=None, **kwargs):
-        """Compute the KDE for all variables in the dataset."""
+        """Compute the histogram for all variables in the dataset."""
         return self._apply("histogram", dims=dims, **kwargs)
 
     def compute_ranks(self, dims=None, relative=False):
@@ -217,20 +239,17 @@ class AzStatsDtAccessor(_BaseAccessor):
             f"Group {group} not available in DataTree. Present groups are {self._obj.children}"
         )
 
-    def _apply(self, fun_name, group, **kwargs):
+    def _apply(self, func_name, group, **kwargs):
         allow_non_matching = False
         if isinstance(group, str):
             group = [group]
             allow_non_matching = True
         return DataTree.from_dict(
             {
-                group_i: xr.Dataset(
-                    {
-                        var_name: get_function(fun_name)(da, **update_kwargs_with_dims(da, kwargs))
-                        for var_name, da in self._process_input(
-                            group_i, fun_name, allow_non_matching=allow_non_matching
-                        ).items()
-                    }
+                group_i: apply_function_to_dataset(
+                    get_function(func_name),
+                    self._process_input(group_i, func_name, allow_non_matching=allow_non_matching),
+                    kwargs=kwargs,
                 )
                 for group_i in group
             }

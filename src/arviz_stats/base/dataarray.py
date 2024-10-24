@@ -115,17 +115,31 @@ class BaseDataArray:
             },
         )
 
+    def get_bins(self, da, dims=None, bins="arviz"):
+        """Compute bins or align provided ones with DataArray input."""
+        dims = validate_dims(dims)
+        return apply_ufunc(
+            self.array_class.get_bins,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[["edges_dim" if da.name is None else f"edges_dim_{da.name}"]],
+            kwargs={
+                "bins": bins,
+                "axes": np.arange(-len(dims), 0, 1),
+            },
+        )
+
     # pylint: disable=redefined-builtin
     def histogram(self, da, dims=None, bins=None, range=None, weights=None, density=None):
         """Compute histogram on DataArray input."""
         dims = validate_dims(dims)
-        edges_dim = "edges_dim"
-        hist_dim = "hist_dim"
+        edges_dim = "edges_dim" if da.name is None else f"edges_dim_{da.name}"
+        hist_dim = "hist_dim" if da.name is None else f"hist_dim_{da.name}"
         input_core_dims = [dims]
         if isinstance(bins, DataArray):
-            bins_dims = [dim for dim in bins.dims if dim not in dims + ["plot_axis"]]
-            assert len(bins_dims) == 1
             if "plot_axis" in bins.dims:
+                bins_dims = [dim for dim in bins.dims if dim not in dims + ["plot_axis"]]
+                assert len(bins_dims) == 1
                 hist_dim = bins_dims[0]
                 bins = (
                     concat(
@@ -138,8 +152,11 @@ class BaseDataArray:
                     .rename({hist_dim: edges_dim})
                     .drop_vars(edges_dim)
                 )
-            else:
-                edges_dim = bins_dims[0]
+            elif edges_dim not in bins.dims:
+                raise ValueError(
+                    "Invalid 'bins' DataArray, it should contain either 'plot_axis' or "
+                    f"'{edges_dim}' dimension"
+                )
             input_core_dims.append([edges_dim])
         else:
             input_core_dims.append([])
