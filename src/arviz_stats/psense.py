@@ -19,14 +19,14 @@ __all__ = ["psense", "psense_summary"]
 
 def psense(
     dt,
+    var_names=None,
+    filter_vars=None,
     group="prior",
-    delta=0.01,
+    coords=None,
     sample_dims=None,
+    delta=0.01,
     group_var_names=None,
     group_coords=None,
-    var_names=None,
-    coords=None,
-    filter_vars=None,
 ):
     """
     Compute power-scaling sensitivity values.
@@ -38,10 +38,20 @@ def psense(
         Refer to documentation of :func:`arviz.convert_to_dataset` for details.
         For ndarray: shape = (chain, draw).
         For n-dimensional ndarray transform first to dataset with ``az.convert_to_dataset``.
+    var_names : list of str, optional
+        Names of posterior variables to include in the power scaling sensitivity diagnostic
+    filter_vars: {None, "like", "regex"}, default None
+        Used for `var_names` only.
+        If ``None`` (default), interpret var_names as the real variables names.
+        If "like", interpret var_names as substrings of the real variables names.
+        If "regex", interpret var_names as regular expressions on the real variables names.
     group : {"prior", "likelihood"}, default "prior"
         If "likelihood", the pointsize log likelihood values are retrieved
         from the ``log_likelihood`` group and added together.
         If "prior", the log prior values are retrieved from the ``log_prior`` group.
+    coords : dict, optional
+        Coordinates defining a subset over the posterior. Only these variables will
+        be used when computing the prior sensitivity.
     delta : float
         Value for finite difference derivative calculation.
     group_var_names : str, optional
@@ -49,17 +59,6 @@ def psense(
     group_coords : dict, optional
         Coordinates defining a subset over the group element for which to
         compute the prior sensitivity diagnostic.
-    var_names : list of str, optional
-        Names of posterior variables to include in the power scaling sensitivity diagnostic
-    coords : dict, optional
-        Coordinates defining a subset over the posterior. Only these variables will
-        be used when computing the prior sensitivity.
-    filter_vars: {None, "like", "regex"}, default None
-        Used for `var_names` only.
-        If ``None`` (default), interpret var_names as the real variables names.
-        If "like", interpret var_names as substrings of the real variables names.
-        If "regex", interpret var_names as regular expressions on the real variables names.
-
 
     Returns
     -------
@@ -78,7 +77,7 @@ def psense(
     References
     ----------
     .. [1] Kallioinen et al, *Detecting and diagnosing prior and likelihood sensitivity with
-       power-scaling*, 2022, https://arxiv.org/abs/2107.14054
+    power-scaling*, Stat Comput 34, 57 (2024), https://doi.org/10.1007/s11222-023-10366-5
     """
     dataset = extract(
         dt,
@@ -113,13 +112,13 @@ def psense(
 
 def psense_summary(
     data,
+    var_names=None,
+    filter_vars=None,
+    coords=None,
     threshold=0.05,
     delta=0.01,
     group_var_names=None,
     group_coords=None,
-    var_names=None,
-    coords=None,
-    filter_vars=None,
     round_to=3,
 ):
     """
@@ -128,6 +127,16 @@ def psense_summary(
     Parameters
     ----------
     data : DataTree
+    var_names : list of str, optional
+        Names of posterior variables to include in the power scaling sensitivity diagnostic
+    filter_vars: {None, "like", "regex"}, default None
+        Used for `var_names` only.
+        If ``None`` (default), interpret var_names as the real variables names.
+        If "like", interpret var_names as substrings of the real variables names.
+        If "regex", interpret var_names as regular expressions on the real variables names.
+    coords : dict, optional
+        Coordinates defining a subset over the posterior. Only these variables will
+        be used when computing the prior sensitivity.
     threshold : float, optional
         Threshold value to determine the sensitivity diagnosis. Default is 0.05.
     delta : float
@@ -139,16 +148,6 @@ def psense_summary(
         compute the prior sensitivity diagnostic
     round_to : int, optional
         Number of decimal places to round the sensitivity values. Default is 3.
-    var_names : list of str, optional
-        Names of posterior variables to include in the power scaling sensitivity diagnostic
-    coords : dict, optional
-        Coordinates defining a subset over the posterior. Only these variables will
-        be used when computing the prior sensitivity.
-    filter_vars: {None, "like", "regex"}, default None
-        Used for `var_names` only.
-        If ``None`` (default), interpret var_names as the real variables names.
-        If "like", interpret var_names as substrings of the real variables names.
-        If "regex", interpret var_names as regular expressions on the real variables names.
 
     Returns
     -------
@@ -171,21 +170,23 @@ def psense_summary(
     """
     pssdp = psense(
         data,
-        group="prior",
-        delta=delta,
-        group_var_names=group_var_names,
         var_names=var_names,
         filter_vars=filter_vars,
+        group="prior",
         coords=coords,
+        group_var_names=group_var_names,
+        group_coords=group_coords,
+        delta=delta,
     )
     pssdl = psense(
         data,
-        group="likelihood",
-        delta=delta,
-        group_coords=group_coords,
         var_names=var_names,
         filter_vars=filter_vars,
+        group="likelihood",
         coords=coords,
+        group_var_names=group_var_names,
+        group_coords=group_coords,
+        delta=delta,
     )
 
     joined = xr.concat([pssdp, pssdl], dim="component").assign_coords(
