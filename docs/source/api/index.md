@@ -1,5 +1,15 @@
 # API reference
 
+## Functions
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   arviz_stats.psense.psense
+   arviz_stats.psense.psense_summary
+```
+
 ## Accessors
 Currently, using accessors is the recommended way to call functions from `arviz_stats`.
 
