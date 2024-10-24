@@ -40,6 +40,8 @@ extensions = [
     "sphinx_design",
     "jupyter_sphinx",
     "sphinx_autosummary_accessors",
+    "IPython.sphinxext.ipython_directive",
+    "IPython.sphinxext.ipython_console_highlighting",
 ]
 
 templates_path = ["_templates", sphinx_autosummary_accessors.templates_path]
