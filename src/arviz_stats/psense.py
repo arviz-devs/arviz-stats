@@ -20,13 +20,13 @@ __all__ = ["psense", "psense_summary"]
 def psense(
     dt,
     group="prior",
+    delta=0.01,
     sample_dims=None,
     group_var_names=None,
     group_coords=None,
     var_names=None,
     coords=None,
     filter_vars=None,
-    delta=0.01,
 ):
     """
     Compute power-scaling sensitivity values.
@@ -42,6 +42,8 @@ def psense(
         If "likelihood", the pointsize log likelihood values are retrieved
         from the ``log_likelihood`` group and added together.
         If "prior", the log prior values are retrieved from the ``log_prior`` group.
+    delta : float
+        Value for finite difference derivative calculation.
     group_var_names : str, optional
         Name of the prior or log likelihood variables to use
     group_coords : dict, optional
@@ -57,8 +59,6 @@ def psense(
         If ``None`` (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
         If "regex", interpret var_names as regular expressions on the real variables names.
-    delta : float
-        Value for finite difference derivative calculation.
 
 
     Returns
@@ -81,7 +81,12 @@ def psense(
        power-scaling*, 2022, https://arxiv.org/abs/2107.14054
     """
     dataset = extract(
-        dt, var_names=var_names, filter_vars=filter_vars, group="posterior", combined=False
+        dt,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        group="posterior",
+        combined=False,
+        keep_dataset=True,
     )
     if coords is not None:
         dataset = dataset.sel(coords)
@@ -106,7 +111,17 @@ def psense(
     )
 
 
-def psense_summary(data, threshold=0.05, round_to=3):
+def psense_summary(
+    data,
+    threshold=0.05,
+    delta=0.01,
+    group_var_names=None,
+    group_coords=None,
+    var_names=None,
+    coords=None,
+    filter_vars=None,
+    round_to=3,
+):
     """
     Compute the prior/likelihood sensitivity based on power-scaling perturbations.
 
@@ -115,8 +130,25 @@ def psense_summary(data, threshold=0.05, round_to=3):
     data : DataTree
     threshold : float, optional
         Threshold value to determine the sensitivity diagnosis. Default is 0.05.
+    delta : float
+        Value for finite difference derivative calculation.
+    group_var_names : str, optional
+        Name of the prior or log likelihood variables to use
+    group_coords : dict, optional
+        Coordinates defining a subset over the group element for which to
+        compute the prior sensitivity diagnostic
     round_to : int, optional
         Number of decimal places to round the sensitivity values. Default is 3.
+    var_names : list of str, optional
+        Names of posterior variables to include in the power scaling sensitivity diagnostic
+    coords : dict, optional
+        Coordinates defining a subset over the posterior. Only these variables will
+        be used when computing the prior sensitivity.
+    filter_vars: {None, "like", "regex"}, default None
+        Used for `var_names` only.
+        If ``None`` (default), interpret var_names as the real variables names.
+        If "like", interpret var_names as substrings of the real variables names.
+        If "regex", interpret var_names as regular expressions on the real variables names.
 
     Returns
     -------
@@ -127,9 +159,34 @@ def psense_summary(data, threshold=0.05, round_to=3):
         - "strong prior / weak likelihood" if the prior sensitivity is above threshold
         and the likelihood sensitivity is below the threshold
         - "-" otherwise
+
+    Examples
+    --------
+    .. ipython::
+
+        In [1]: from arviz_base import load_arviz_data
+           ...: from arviz_stats import psense_summary
+           ...: rugby = load_arviz_data("rugby")
+           ...: psense_summary(rugby, var_names="atts")
     """
-    pssdp = psense(data, group="prior")
-    pssdl = psense(data, group="likelihood")
+    pssdp = psense(
+        data,
+        group="prior",
+        delta=delta,
+        group_var_names=group_var_names,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+    )
+    pssdl = psense(
+        data,
+        group="likelihood",
+        delta=delta,
+        group_coords=group_coords,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+    )
 
     joined = xr.concat([pssdp, pssdl], dim="component").assign_coords(
         component=["prior", "likelihood"]
