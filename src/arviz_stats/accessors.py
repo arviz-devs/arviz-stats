@@ -253,7 +253,7 @@ class AzStatsDtAccessor(_BaseAccessor):
                     # if group is a single str/hashable that doesn't match the group name,
                     # still allow it and apply the function to the top level of the provided input
                     self._process_input(group_i, func_name, allow_non_matching=hashable_group),
-                    kwargs=kwargs
+                    kwargs=kwargs,
                 )
                 for group_i in group
             }
