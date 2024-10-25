@@ -80,7 +80,7 @@ def psense(
     References
     ----------
     .. [1] Kallioinen et al, *Detecting and diagnosing prior and likelihood sensitivity with
-    power-scaling*, Stat Comput 34, 57 (2024), https://doi.org/10.1007/s11222-023-10366-5
+       power-scaling*, Stat Comput 34, 57 (2024), https://doi.org/10.1007/s11222-023-10366-5
     """
     dataset = extract(
         dt,

@@ -6,8 +6,8 @@
 .. autosummary::
    :toctree: generated/
 
-   arviz_stats.psense.psense
-   arviz_stats.psense.psense_summary
+   arviz_stats.psense
+   arviz_stats.psense_summary
 ```
 
 ## Accessors
