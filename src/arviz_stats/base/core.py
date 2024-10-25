@@ -247,7 +247,7 @@ class _CoreBase:
         return hdi_interval
 
     def _hdi_multimodal_continuous(
-        self, ary, prob, skipna, max_modes, circular, nearest=False, **kwargs
+        self, ary, prob, skipna, max_modes, circular, from_sample=False, **kwargs
     ):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
@@ -255,7 +255,7 @@ class _CoreBase:
             ary = ary[~np.isnan(ary)]
 
         bins, density, _ = self.kde(ary, circular=circular, **kwargs)
-        if nearest:
+        if from_sample:
             ary_density = np.interp(ary, bins, density)
             hdi_intervals, interval_probs = self._hdi_from_point_densities(
                 ary, ary_density, prob, circular

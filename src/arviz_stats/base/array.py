@@ -62,7 +62,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             "multimodal": (
                 self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
             ),
-            "multimodal_nearest": (
+            "multimodal_sample": (
                 self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
             ),
         }[method]
@@ -87,8 +87,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                 func_kwargs["bw"] = "isj" if not circular else "taylor"
             func_kwargs.update(kwargs)
 
-        if method == "multimodal_nearest":
-            func_kwargs["nearest"] = True
+        if method == "multimodal_sample":
+            func_kwargs["from_sample"] = True
 
         result = hdi_array(ary, **func_kwargs)
         if is_multimodal:

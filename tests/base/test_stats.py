@@ -92,7 +92,7 @@ def test_hdi_coords(centered_eight):
 @pytest.mark.parametrize("prob", [0.56, 0.83])
 @pytest.mark.parametrize("nearest", [True, False])
 def test_hdi_multimodal_continuous(prob, nearest):
-    method = "multimodal_nearest" if nearest else "multimodal"
+    method = "multimodal_sample" if nearest else "multimodal"
     rng = np.random.default_rng(43)
     dist1 = norm(loc=-30, scale=0.5)
     dist2 = norm(loc=30, scale=0.5)
@@ -176,7 +176,8 @@ def test_hdi_multimodal_max_modes():
     sample = ndarray_to_dataarray(x, "x", sample_dims=["sample"])
     intervals = sample.azstats.hdi(dims="sample", method="multimodal", prob=0.9)
     assert intervals.sizes["mode"] == 2
-    intervals2 = sample.azstats.hdi(dims="sample", method="multimodal", prob=0.9, max_modes=1)
+    with pytest.warns(UserWarning, match="found more modes"):
+        intervals2 = sample.azstats.hdi(dims="sample", method="multimodal", prob=0.9, max_modes=1)
     assert intervals2.sizes["mode"] == 1
     assert intervals2.equals(intervals.isel(mode=[1]))
 
@@ -194,7 +195,7 @@ def test_hdi_multimodal_circular(nearest):
         "x",
         sample_dims=["sample"],
     )
-    method = "multimodal_nearest" if nearest else "multimodal"
+    method = "multimodal_sample" if nearest else "multimodal"
     interval = normal_sample.azstats.hdi(circular=True, method=method, prob=0.83, dims="sample")
     assert interval.sizes["mode"] == 2
     assert interval.sel(mode=0)[0] <= np.pi / 2 <= interval.sel(mode=0)[1]
