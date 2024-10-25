@@ -137,8 +137,14 @@ class _CoreBase:
             return out / out.size
         return out
 
-    def _get_bininfo(self, values):
+    def _get_bininfo(self, values, bins="arviz"):
         dtype = values.dtype.kind
+
+        if isinstance(bins, str) and bins != "arviz":
+            bins = np.histogram_bin_edges(values, bins=bins)
+
+        if isinstance(bins, np.ndarray):
+            return bins[0], bins[-1], bins[1] - bins[0]
 
         if dtype == "i":
             x_min = values.min().astype(int)
@@ -146,6 +152,12 @@ class _CoreBase:
         else:
             x_min = values.min().astype(float)
             x_max = values.max().astype(float)
+
+        if isinstance(bins, int):
+            width = (x_max - x_min) / bins
+            if dtype == "i":
+                width = max(1, width)
+            return x_min, x_max, width
 
         # Sturges histogram bin estimator
         width_sturges = (x_max - x_min) / (np.log2(values.size) + 1)
@@ -161,13 +173,20 @@ class _CoreBase:
 
         return x_min, x_max, width
 
-    def _get_bins(self, values):
+    def _get_bins(self, values, bins="arviz"):
         """
         Automatically compute the number of bins for histograms.
 
         Parameters
         ----------
-        values = array_like
+        values : array_like
+        bins : int, str or array_like, default "arviz"
+            If `bins` "arviz", use ArviZ default rule (explained in detail in notes),
+            if it is a different string it is passed to :func:`numpy.histogram_bin_edges`.
+            If `bins` is an integer it is interpreted as the number of bins, however,
+            if `values` holds discrete data, there is an extra check to prevent
+            the width of the bins to be smaller than ``1``.
+            If it is an array it is returned as it.
 
         Returns
         -------
@@ -190,7 +209,7 @@ class _CoreBase:
         """
         dtype = values.dtype.kind
 
-        x_min, x_max, width = self._get_bininfo(values)
+        x_min, x_max, width = self._get_bininfo(values, bins)
 
         if dtype == "i":
             bins = np.arange(x_min, x_max + width + 1, width)
