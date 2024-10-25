@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from arviz_base import load_arviz_data, xarray_var_iter
+
 from arviz_stats.base import array_stats
 
 # For tests only, recommended value should be closer to 1.01-1.05
