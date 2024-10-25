@@ -1,9 +1,10 @@
 import os
 
 from arviz_base import convert_to_datatree
-from arviz_stats import psense, psense_summary
 from numpy import isclose
 from numpy.testing import assert_almost_equal
+
+from arviz_stats import psense, psense_summary
 
 file_path = os.path.join(os.path.dirname(__file__), "univariate_normal.nc")
 uni_dt = convert_to_datatree(file_path)

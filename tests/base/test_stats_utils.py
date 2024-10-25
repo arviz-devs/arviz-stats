@@ -4,10 +4,11 @@
 #  pylint: disable=no-member,unnecessary-lambda-assignment
 import numpy as np
 import pytest
-from arviz_stats.base.stats_utils import logsumexp as _logsumexp
-from arviz_stats.base.stats_utils import make_ufunc, not_valid
 from numpy.testing import assert_array_almost_equal
 from scipy.special import logsumexp
+
+from arviz_stats.base.stats_utils import logsumexp as _logsumexp
+from arviz_stats.base.stats_utils import make_ufunc, not_valid
 
 
 @pytest.mark.parametrize("ary_dtype", [np.float64, np.float32, np.int32, np.int64])
