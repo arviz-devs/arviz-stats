@@ -6,7 +6,6 @@ from collections.abc import Hashable
 import numpy as np
 import xarray as xr
 from arviz_base.utils import _var_names
-from datatree import DataTree, register_datatree_accessor
 from xarray_einstats.numba import ecdf
 
 from arviz_stats.utils import get_function
@@ -228,7 +227,7 @@ class AzStatsDsAccessor(_BaseAccessor):
         return self._apply("power_scale_sense", dims=dims, **kwargs)
 
 
-@register_datatree_accessor("azstats")
+@xr.register_datatree_accessor("azstats")
 class AzStatsDtAccessor(_BaseAccessor):
     """ArviZ stats accessor class for DataTrees."""
 
@@ -253,7 +252,7 @@ class AzStatsDtAccessor(_BaseAccessor):
         if isinstance(group, Hashable):
             group = [group]
             hashable_group = True
-        out_dt = DataTree.from_dict(
+        out_dt = xr.DataTree.from_dict(
             {
                 group_i: apply_function_to_dataset(
                     get_function(func_name),
