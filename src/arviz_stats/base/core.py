@@ -86,6 +86,10 @@ class _CoreBase:
         """
         return circmean(ary, high=np.pi, low=-np.pi)
 
+    def _circular_standardize(self, ary):  # pylint: disable=no-self-use
+        """Standardize circular data to the interval [-pi, pi]."""
+        return np.mod(ary + np.pi, 2 * np.pi) - np.pi
+
     def quantile(self, ary, quantile, **kwargs):  # pylint: disable=no-self-use
         """Compute the quantile of an array of samples.
 
@@ -226,19 +230,8 @@ class _CoreBase:
             bins = self._get_bins(ary)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
 
-    def _hdi_linear_nearest_common(self, ary, prob, skipna, circular):
-        ary = ary.flatten()
-        if skipna:
-            nans = np.isnan(ary)
-            if not nans.all():
-                ary = ary[~nans]
+    def _hdi_linear_nearest_common(self, ary, prob):  # pylint: disable=no-self-use
         n = len(ary)
-
-        mean = None
-        if circular:
-            mean = self.circular_mean(ary)
-            ary = ary - mean
-            ary = np.arctan2(np.sin(ary), np.cos(ary))
 
         ary = np.sort(ary)
         interval_idx_inc = int(np.floor(prob * n))
@@ -249,62 +242,147 @@ class _CoreBase:
             raise ValueError("Too few elements for interval calculation. ")
 
         min_idx = np.argmin(interval_width)
-
-        return ary, mean, min_idx, interval_idx_inc
-
-    def _hdi_nearest(self, ary, prob, circular, skipna):
-        """Compute HDI over the flattened array as closest samples that contain the given prob."""
-        ary, mean, min_idx, interval_idx_inc = self._hdi_linear_nearest_common(
-            ary, prob, skipna, circular
-        )
-
-        hdi_min = ary[min_idx]
-        hdi_max = ary[min_idx + interval_idx_inc]
-
-        if circular:
-            hdi_min = hdi_min + mean
-            hdi_max = hdi_max + mean
-            hdi_min = np.arctan2(np.sin(hdi_min), np.cos(hdi_min))
-            hdi_max = np.arctan2(np.sin(hdi_max), np.cos(hdi_max))
-
-        hdi_interval = np.array([hdi_min, hdi_max])
+        hdi_interval = ary[[min_idx, min_idx + interval_idx_inc]]
 
         return hdi_interval
 
-    def _hdi_multimodal(self, ary, prob, skipna, max_modes):
+    def _hdi_nearest(self, ary, prob, circular, skipna):
+        """Compute HDI over the flattened array as closest samples that contain the given prob."""
+        ary = ary.flatten()
+        if skipna:
+            nans = np.isnan(ary)
+            if not nans.all():
+                ary = ary[~nans]
+
+        if circular:
+            mean = self.circular_mean(ary)
+            ary = self._circular_standardize(ary - mean)
+
+        hdi_interval = self._hdi_linear_nearest_common(ary, prob)
+
+        if circular:
+            hdi_interval = self._circular_standardize(hdi_interval + mean)
+
+        return hdi_interval
+
+    def _hdi_multimodal_continuous(
+        self, ary, prob, skipna, max_modes, circular, from_sample=False, **kwargs
+    ):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
         if skipna:
             ary = ary[~np.isnan(ary)]
 
-        if ary.dtype.kind == "f":
-            bins, density, _ = self.kde(ary)
-            lower, upper = bins[0], bins[-1]
-            range_x = upper - lower
-            dx = range_x / len(density)
+        bins, density, _ = self.kde(ary, circular=circular, **kwargs)
+        if from_sample:
+            ary_density = np.interp(ary, bins, density)
+            hdi_intervals, interval_probs = self._hdi_from_point_densities(
+                ary, ary_density, prob, circular
+            )
         else:
-            bins = self._get_bins(ary)
-            density, _ = self._histogram(ary, bins=bins, density=True)
-            dx = np.diff(bins)[0]
+            dx = (bins[-1] - bins[0]) / (len(bins) - 1)
+            bin_probs = density * dx
 
-        density *= dx
+            hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(
+                bins, bin_probs, prob, circular, dx
+            )
 
-        idx = np.argsort(-density)
-        intervals = bins[idx][density[idx].cumsum() <= prob]
-        intervals.sort()
+        return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
-        intervals_splitted = np.split(intervals, np.where(np.diff(intervals) >= dx * 1.1)[0] + 1)
+    def _hdi_multimodal_discrete(self, ary, prob, max_modes, bins=None):
+        """Compute HDI if the distribution is multimodal."""
+        ary = ary.flatten()
 
-        hdi_intervals = np.full((max_modes, 2), np.nan)
-        for i, interval in enumerate(intervals_splitted):
-            if i == max_modes:
-                warnings.warn(
-                    f"found more modes than {max_modes}, returning only the first {max_modes} modes"
-                )
-                break
-            if interval.size == 0:
-                hdi_intervals[i] = np.asarray([bins[0], bins[0]])
-            else:
-                hdi_intervals[i] = np.asarray([interval[0], interval[-1]])
+        if bins is None:
+            bins, counts = np.unique(ary, return_counts=True)
+            bin_probs = counts / len(ary)
+            dx = 1
+        else:
+            counts, edges = self._histogram(ary, bins=bins)
+            bins = 0.5 * (edges[1:] + edges[:-1])
+            bin_probs = counts / counts.sum()
+            dx = bins[1] - bins[0]
 
-        return np.array(hdi_intervals)
+        hdi_intervals, interval_probs = self._hdi_from_bin_probabilities(
+            bins, bin_probs, prob, False, dx
+        )
+
+        return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
+
+    def _hdi_from_point_densities(self, points, densities, prob, circular):
+        if circular:
+            points = self._circular_standardize(points)
+
+        sorted_idx = np.argsort(points)
+        points = points[sorted_idx]
+        densities = densities[sorted_idx]
+
+        # find idx of points in the interval
+        interval_size = int(np.ceil(prob * len(points)))
+        sorted_idx = np.argsort(densities)[::-1]
+        idx_in_interval = sorted_idx[:interval_size]
+        idx_in_interval.sort()
+
+        # find idx of interval bounds
+        probs_in_interval = np.full(idx_in_interval.shape, 1 / len(points))
+        interval_bounds_idx, interval_probs = self._interval_points_to_bounds(
+            idx_in_interval, probs_in_interval, 1, circular, period=len(points)
+        )
+
+        return points[interval_bounds_idx], interval_probs
+
+    def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, circular, dx):
+        if circular:
+            bins = self._circular_standardize(bins)
+            sorted_idx = np.argsort(bins)
+            bins = bins[sorted_idx]
+            bin_probs = bin_probs[sorted_idx]
+
+        # find idx of bins in the interval
+        sorted_idx = np.argsort(bin_probs)[::-1]
+        cum_probs = bin_probs[sorted_idx].cumsum()
+        interval_size = np.searchsorted(cum_probs, prob, side="left") + 1
+        idx_in_interval = sorted_idx[:interval_size]
+        idx_in_interval.sort()
+
+        # get points in intervals
+        intervals = bins[idx_in_interval]
+        probs_in_interval = bin_probs[idx_in_interval]
+
+        return self._interval_points_to_bounds(intervals, probs_in_interval, dx, circular)
+
+    def _interval_points_to_bounds(self, points, probs, dx, circular, period=2 * np.pi):  # pylint: disable=no-self-use
+        cum_probs = probs.cumsum()
+
+        is_bound = np.diff(points) > dx * 1.01
+        is_lower_bound = np.insert(is_bound, 0, True)
+        is_upper_bound = np.append(is_bound, True)
+        interval_bounds = np.column_stack([points[is_lower_bound], points[is_upper_bound]])
+        interval_probs = (
+            cum_probs[is_upper_bound] - cum_probs[is_lower_bound] + probs[is_lower_bound]
+        )
+
+        if (
+            circular
+            and np.mod(dx * 1.01 + interval_bounds[-1, -1] - interval_bounds[0, 0], period)
+            <= dx * 1.01
+        ):
+            interval_bounds[-1, 1] = interval_bounds[0, 1]
+            interval_bounds = interval_bounds[1:, :]
+            interval_probs[-1] += interval_probs[0]
+            interval_probs = interval_probs[1:]
+
+        return interval_bounds, interval_probs
+
+    def _pad_hdi_to_maxmodes(self, hdi_intervals, interval_probs, max_modes):  # pylint: disable=no-self-use
+        if hdi_intervals.shape[0] > max_modes:
+            warnings.warn(
+                f"found more modes than {max_modes}, returning only the {max_modes} highest "
+                "probability modes"
+            )
+            hdi_intervals = hdi_intervals[np.argsort(interval_probs)[::-1][:max_modes], :]
+        elif hdi_intervals.shape[0] < max_modes:
+            hdi_intervals = np.vstack(
+                [hdi_intervals, np.full((max_modes - hdi_intervals.shape[0], 2), np.nan)]
+            )
+        return hdi_intervals

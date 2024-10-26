@@ -47,16 +47,24 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         circular=False,
         max_modes=10,
         skipna=False,
+        **kwargs,
     ):
-        """Compute of HDI function on array-like input."""
+        """Compute HDI function on array-like input."""
         if not 1 >= prob > 0:
             raise ValueError("The value of `prob` must be in the (0, 1] interval.")
-        if method == "multimodal" and circular:
-            raise ValueError("Multimodal hdi not supported for circular data.")
         ary, axes = process_ary_axes(ary, axes)
+        is_discrete = np.issubdtype(ary.dtype, np.integer) or np.issubdtype(ary.dtype, np.bool_)
+        is_multimodal = method.startswith("multimodal")
+        if is_multimodal and circular and is_discrete:
+            raise ValueError("Multimodal hdi not supported for discrete circular data.")
         hdi_func = {
             "nearest": self._hdi_nearest,
-            "multimodal": self._hdi_multimodal,
+            "multimodal": (
+                self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
+            ),
+            "multimodal_sample": (
+                self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
+            ),
         }[method]
         hdi_array = make_ufunc(
             hdi_func,
@@ -67,15 +75,23 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         func_kwargs = {
             "prob": prob,
             "skipna": skipna,
-            "out_shape": (max_modes, 2) if method == "multimodal" else (2,),
+            "out_shape": (max_modes, 2) if is_multimodal else (2,),
+            "circular": circular,
         }
-        if method != "multimodal":
-            func_kwargs["circular"] = circular
-        else:
+        if is_multimodal:
             func_kwargs["max_modes"] = max_modes
+            if is_discrete:
+                func_kwargs.pop("circular")
+                func_kwargs.pop("skipna")
+            else:
+                func_kwargs["bw"] = "isj" if not circular else "taylor"
+            func_kwargs.update(kwargs)
+
+        if method == "multimodal_sample":
+            func_kwargs["from_sample"] = True
 
         result = hdi_array(ary, **func_kwargs)
-        if method == "multimodal":
+        if is_multimodal:
             mode_mask = [np.all(np.isnan(result[..., i, :])) for i in range(result.shape[-2])]
             result = result[..., ~np.array(mode_mask), :]
         return result
