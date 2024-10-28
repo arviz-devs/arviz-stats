@@ -24,7 +24,7 @@ def psense(
     group="prior",
     coords=None,
     sample_dims=None,
-    delta=0.01,
+    alphas=(0.99, 1.01),
     group_var_names=None,
     group_coords=None,
 ):
@@ -55,8 +55,8 @@ def psense(
     sample_dims : str or sequence of hashable, optional
         Dimensions to reduce unless mapped to an aesthetic.
         Defaults to ``rcParams["data.sample_dims"]``
-    delta : float
-        Value for finite difference derivative calculation.
+    alphas : tuple
+        Lower and upper alpha values for gradient calculation. Defaults to (0.99, 1.01).
     group_var_names : str, optional
         Name of the prior or log likelihood variables to use
     group_coords : dict, optional
@@ -93,12 +93,9 @@ def psense(
     if coords is not None:
         dataset = dataset.sel(coords)
 
-    lower_alpha = 1 / (1 + delta)
-    upper_alpha = 1 + delta
-
     lower_w, upper_w = _get_power_scale_weights(
         dt,
-        alphas=(lower_alpha, upper_alpha),
+        alphas=alphas,
         group=group,
         sample_dims=sample_dims,
         group_var_names=group_var_names,
@@ -108,7 +105,7 @@ def psense(
     return dataset.azstats.power_scale_sense(
         lower_w=lower_w,
         upper_w=upper_w,
-        delta=delta,
+        upper_alpha=alphas[1],
         dims=sample_dims,
     )
 
@@ -120,7 +117,7 @@ def psense_summary(
     coords=None,
     sample_dims=None,
     threshold=0.05,
-    delta=0.01,
+    alphas=(0.99, 1.01),
     group_var_names=None,
     group_coords=None,
     round_to=3,
@@ -146,8 +143,8 @@ def psense_summary(
         Defaults to ``rcParams["data.sample_dims"]``
     threshold : float, optional
         Threshold value to determine the sensitivity diagnosis. Default is 0.05.
-    delta : float
-        Value for finite difference derivative calculation.
+    alphas : tuple
+        Lower and upper alpha values for gradient calculation. Defaults to (0.99, 1.01).
     group_var_names : str, optional
         Name of the prior or log likelihood variables to use
     group_coords : dict, optional
@@ -182,7 +179,7 @@ def psense_summary(
         group="prior",
         sample_dims=sample_dims,
         coords=coords,
-        delta=delta,
+        alphas=alphas,
         group_var_names=group_var_names,
         group_coords=group_coords,
     )
@@ -193,7 +190,7 @@ def psense_summary(
         group="likelihood",
         coords=coords,
         sample_dims=sample_dims,
-        delta=delta,
+        alphas=alphas,
         group_var_names=group_var_names,
         group_coords=group_coords,
     )
