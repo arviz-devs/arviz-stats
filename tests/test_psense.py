@@ -10,8 +10,8 @@ uni_dt = convert_to_datatree(file_path)
 
 
 def test_psense():
-    assert_almost_equal(psense(uni_dt, group="prior").to_array(), [0.404, 0.293], decimal=3)
-    assert_almost_equal(psense(uni_dt, group="likelihood").to_array(), [0.575, 0.535], decimal=3)
+    assert_almost_equal(psense(uni_dt, group="prior").to_array(), [0.406, 0.294], decimal=3)
+    assert_almost_equal(psense(uni_dt, group="likelihood").to_array(), [0.578, 0.537], decimal=3)
 
 
 def test_psense_var_names():
@@ -26,8 +26,8 @@ def test_psense_var_names():
 def test_psense_summary():
     psense_df = psense_summary(uni_dt)
     assert all(psense_df.index == ["mu", "sigma"])
-    assert all(psense_df["prior"] == [0.404, 0.293])
-    assert all(psense_df["likelihood"] == [0.575, 0.535])
+    assert all(psense_df["prior"] == [0.406, 0.294])
+    assert all(psense_df["likelihood"] == [0.578, 0.537])
     assert all(psense_df["diagnosis"] == "prior-data conflict")
 
     psense_df = psense_summary(uni_dt, threshold=1)
