@@ -105,6 +105,7 @@ def psense(
     return dataset.azstats.power_scale_sense(
         lower_w=lower_w,
         upper_w=upper_w,
+        lower_alpha=alphas[0],
         upper_alpha=alphas[1],
         dims=sample_dims,
     )

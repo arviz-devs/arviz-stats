@@ -152,7 +152,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return psl_ufunc(ary, out_shape=(ary.shape[i] for i in axes), alpha=alpha)
 
-    def power_scale_sense(self, ary, lower_w, upper_w, upper_alpha, chain_axis=-2, draw_axis=-1):
+    def power_scale_sense(
+        self, ary, lower_w, upper_w, lower_alpha, upper_alpha, chain_axis=-2, draw_axis=-1
+    ):
         """Compute power-scaling sensitivity."""
         if chain_axis is None:
             ary = np.expand_dims(ary, axis=0)
@@ -165,7 +167,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         pss_array = make_ufunc(
             self._power_scale_sense, n_output=1, n_input=3, n_dims=2, ravel=False
         )
-        return pss_array(ary, lower_w, upper_w, upper_alpha=upper_alpha)
+        return pss_array(ary, lower_w, upper_w, lower_alpha=lower_alpha, upper_alpha=upper_alpha)
 
     def compute_ranks(self, ary, axes=-1, relative=False):
         """Compute ranks of MCMC samples."""

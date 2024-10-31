@@ -286,14 +286,15 @@ class BaseDataArray:
             kwargs={"axes": np.arange(-len(dims), 0, 1)},
         )
 
-    def power_scale_sense(self, da, lower_w, upper_w, upper_alpha, dims=None):
+    def power_scale_sense(self, da, lower_w, upper_w, lower_alpha, upper_alpha, dims=None):
         """Compute power-scaling sensitivity."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
         return apply_ufunc(
             self.array_class.power_scale_sense,
             *broadcast(da, lower_w, upper_w),
+            lower_alpha,
             upper_alpha,
-            input_core_dims=[dims, dims, dims, []],
+            input_core_dims=[dims, dims, dims, [], []],
             output_core_dims=[[]],
             kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
         )
