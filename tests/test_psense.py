@@ -19,9 +19,9 @@ def test_psense_var_names():
     result_0 = psense(uni_dt, group="prior", group_var_names=["mu"], var_names=["mu"])
     result_1 = psense(uni_dt, group="prior", var_names=["mu"])
     for result in (result_0, result_1):
-        assert "sigma" != result.name
-        assert "mu" == result.name
-    assert not isclose(result_0, result_1)
+        assert "sigma" not in result.data_vars
+        assert "mu" in result.data_vars
+    assert not isclose(result_0["mu"], result_1["mu"])
 
 
 def test_psense_summary():

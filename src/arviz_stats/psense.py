@@ -19,14 +19,14 @@ __all__ = ["psense", "psense_summary"]
 
 def psense(
     dt,
+    var_names=None,
+    filter_vars=None,
     group="prior",
+    coords=None,
     sample_dims=None,
+    alphas=(0.99, 1.01),
     group_var_names=None,
     group_coords=None,
-    var_names=None,
-    coords=None,
-    filter_vars=None,
-    delta=0.01,
 ):
     """
     Compute power-scaling sensitivity values.
@@ -38,28 +38,30 @@ def psense(
         Refer to documentation of :func:`arviz.convert_to_dataset` for details.
         For ndarray: shape = (chain, draw).
         For n-dimensional ndarray transform first to dataset with ``az.convert_to_dataset``.
-    group : {"prior", "likelihood"}, default "prior"
-        If "likelihood", the pointsize log likelihood values are retrieved
-        from the ``log_likelihood`` group and added together.
-        If "prior", the log prior values are retrieved from the ``log_prior`` group.
-    group_var_names : str, optional
-        Name of the prior or log likelihood variables to use
-    group_coords : dict, optional
-        Coordinates defining a subset over the group element for which to
-        compute the prior sensitivity diagnostic.
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
-    coords : dict, optional
-        Coordinates defining a subset over the posterior. Only these variables will
-        be used when computing the prior sensitivity.
     filter_vars: {None, "like", "regex"}, default None
         Used for `var_names` only.
         If ``None`` (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
         If "regex", interpret var_names as regular expressions on the real variables names.
-    delta : float
-        Value for finite difference derivative calculation.
-
+    group : {"prior", "likelihood"}, default "prior"
+        If "likelihood", the pointsize log likelihood values are retrieved
+        from the ``log_likelihood`` group and added together.
+        If "prior", the log prior values are retrieved from the ``log_prior`` group.
+    coords : dict, optional
+        Coordinates defining a subset over the posterior. Only these variables will
+        be used when computing the prior sensitivity.
+    sample_dims : str or sequence of hashable, optional
+        Dimensions to reduce unless mapped to an aesthetic.
+        Defaults to ``rcParams["data.sample_dims"]``
+    alphas : tuple
+        Lower and upper alpha values for gradient calculation. Defaults to (0.99, 1.01).
+    group_var_names : str, optional
+        Name of the prior or log likelihood variables to use
+    group_coords : dict, optional
+        Coordinates defining a subset over the group element for which to
+        compute the prior sensitivity diagnostic.
 
     Returns
     -------
@@ -78,20 +80,22 @@ def psense(
     References
     ----------
     .. [1] Kallioinen et al, *Detecting and diagnosing prior and likelihood sensitivity with
-       power-scaling*, 2022, https://arxiv.org/abs/2107.14054
+       power-scaling*, Stat Comput 34, 57 (2024), https://doi.org/10.1007/s11222-023-10366-5
     """
     dataset = extract(
-        dt, var_names=var_names, filter_vars=filter_vars, group="posterior", combined=False
+        dt,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        group="posterior",
+        combined=False,
+        keep_dataset=True,
     )
     if coords is not None:
         dataset = dataset.sel(coords)
 
-    lower_alpha = 1 / (1 + delta)
-    upper_alpha = 1 + delta
-
     lower_w, upper_w = _get_power_scale_weights(
         dt,
-        alphas=(lower_alpha, upper_alpha),
+        alphas=alphas,
         group=group,
         sample_dims=sample_dims,
         group_var_names=group_var_names,
@@ -101,20 +105,52 @@ def psense(
     return dataset.azstats.power_scale_sense(
         lower_w=lower_w,
         upper_w=upper_w,
-        delta=delta,
+        lower_alpha=alphas[0],
+        upper_alpha=alphas[1],
         dims=sample_dims,
     )
 
 
-def psense_summary(data, threshold=0.05, round_to=3):
+def psense_summary(
+    data,
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    sample_dims=None,
+    threshold=0.05,
+    alphas=(0.99, 1.01),
+    group_var_names=None,
+    group_coords=None,
+    round_to=3,
+):
     """
     Compute the prior/likelihood sensitivity based on power-scaling perturbations.
 
     Parameters
     ----------
     data : DataTree
+    var_names : list of str, optional
+        Names of posterior variables to include in the power scaling sensitivity diagnostic
+    filter_vars: {None, "like", "regex"}, default None
+        Used for `var_names` only.
+        If ``None`` (default), interpret var_names as the real variables names.
+        If "like", interpret var_names as substrings of the real variables names.
+        If "regex", interpret var_names as regular expressions on the real variables names.
+    coords : dict, optional
+        Coordinates defining a subset over the posterior. Only these variables will
+        be used when computing the prior sensitivity.
+    sample_dims : str or sequence of hashable, optional
+        Dimensions to reduce unless mapped to an aesthetic.
+        Defaults to ``rcParams["data.sample_dims"]``
     threshold : float, optional
         Threshold value to determine the sensitivity diagnosis. Default is 0.05.
+    alphas : tuple
+        Lower and upper alpha values for gradient calculation. Defaults to (0.99, 1.01).
+    group_var_names : str, optional
+        Name of the prior or log likelihood variables to use
+    group_coords : dict, optional
+        Coordinates defining a subset over the group element for which to
+        compute the prior sensitivity diagnostic
     round_to : int, optional
         Number of decimal places to round the sensitivity values. Default is 3.
 
@@ -127,9 +163,38 @@ def psense_summary(data, threshold=0.05, round_to=3):
         - "strong prior / weak likelihood" if the prior sensitivity is above threshold
         and the likelihood sensitivity is below the threshold
         - "-" otherwise
+
+    Examples
+    --------
+    .. ipython::
+
+        In [1]: from arviz_base import load_arviz_data
+           ...: from arviz_stats import psense_summary
+           ...: rugby = load_arviz_data("rugby")
+           ...: psense_summary(rugby, var_names="atts")
     """
-    pssdp = psense(data, group="prior")
-    pssdl = psense(data, group="likelihood")
+    pssdp = psense(
+        data,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        group="prior",
+        sample_dims=sample_dims,
+        coords=coords,
+        alphas=alphas,
+        group_var_names=group_var_names,
+        group_coords=group_coords,
+    )
+    pssdl = psense(
+        data,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        group="likelihood",
+        coords=coords,
+        sample_dims=sample_dims,
+        alphas=alphas,
+        group_var_names=group_var_names,
+        group_coords=group_coords,
+    )
 
     joined = xr.concat([pssdp, pssdl], dim="component").assign_coords(
         component=["prior", "likelihood"]

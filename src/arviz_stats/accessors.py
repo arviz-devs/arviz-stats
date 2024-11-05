@@ -96,10 +96,17 @@ class AzStatsDaAccessor(_BaseAccessor):
         """Compute log weights for power-scaling of the DataTree."""
         return get_function("power_scale_lw")(self._obj, alpha=alpha, dims=dims)
 
-    def power_scale_sense(self, lower_w=None, upper_w=None, delta=None, dims=None):
+    def power_scale_sense(
+        self, lower_w=None, upper_w=None, lower_alpha=None, upper_alpha=None, dims=None
+    ):
         """Compute power-scaling sensitivity."""
         return get_function("power_scale_sense")(
-            self._obj, lower_w=lower_w, upper_w=upper_w, delta=delta, dims=dims
+            self._obj,
+            lower_w=lower_w,
+            upper_w=upper_w,
+            lower_alpha=lower_alpha,
+            upper_alpha=upper_alpha,
+            dims=dims,
         )
 
 
