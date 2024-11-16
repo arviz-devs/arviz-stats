@@ -1,8 +1,11 @@
 """Functions for sampling diagnostics."""
 
 from arviz_base import convert_to_dataset
+from arviz_stats.base.array import BaseArray
 from numpy import atleast_2d, ndarray
 
+
+base_array = BaseArray()
 
 def ess(data, var_names=None, method="bulk", relative=False, prob=None):
     r"""Estimate the effective sample size (ess).
@@ -40,9 +43,9 @@ def ess(data, var_names=None, method="bulk", relative=False, prob=None):
     xarray.Dataset
         Return the effective sample size
     """
-    # maybe have something like this inside convert_to_dataset
     if isinstance(data, (list, tuple, ndarray)):
         data = atleast_2d(data)
+        return base_array.ess(data, method=method, relative=relative, prob=prob)
 
     data = convert_to_dataset(data)
 
