@@ -1,11 +1,12 @@
 """Functions for sampling diagnostics."""
 
 from arviz_base import convert_to_dataset
-from arviz_stats.base.array import BaseArray
 from numpy import atleast_2d, ndarray
 
+from arviz_stats.base.array import BaseArray
 
 base_array = BaseArray()
+
 
 def ess(data, var_names=None, method="bulk", relative=False, prob=None):
     r"""Estimate the effective sample size (ess).
@@ -13,13 +14,13 @@ def ess(data, var_names=None, method="bulk", relative=False, prob=None):
     Parameters
     ----------
     data : obj
-        Any object that can be converted to a :class:`xarray.DataSet` object.
+        Array-like or any object that can be converted to a :class:`xarray.DataSet` object.
         Refer to documentation of :func:`arviz.convert_to_dataset` for details.
         For ndarray: shape = (chain, draw).
     var_names : str or list of str
-        Names of variables to include in the return value Dataset.
-    method : str, optional, default "bulk"
-        Select ess method. Valid methods are:
+        Names of the variables for which the ess should be computed.
+    method : str, optional
+        Defaults to "bulk". Valid methods are:
 
         - "bulk"
         - "tail"     # prob, optional
@@ -40,8 +41,37 @@ def ess(data, var_names=None, method="bulk", relative=False, prob=None):
 
     Returns
     -------
-    xarray.Dataset
-        Return the effective sample size
+    xarray.Dataset or numpy array with the effective sample size values
+
+    See Also
+    --------
+    arviz.rhat : Compute estimate of rank normalized split R-hat for a set of traces.
+    arviz.mcse : Calculate Markov Chain Standard Error statistic.
+    plot_ess : Plot quantile, local or evolution of effective sample sizes (ESS).
+    arviz.summary : Create a data frame with summary statistics.
+
+    Examples
+    --------
+    Calculate the effective_sample_size using the default arguments:
+
+    .. ipython::
+
+        In [1]: from arviz_base import load_arviz_data
+           ...: import arviz_stats as azs
+           ...: data = load_arviz_data('non_centered_eight')
+           ...: azs.ess(data)
+
+    Calculate ess for a subset of the variables
+
+    .. ipython::
+
+        In [1]: azs.ess(data, relative=True, var_names=["mu", "theta_t"])
+
+    Calculate ess using the "tail" method, leaving the `prob` at its default value.
+
+    .. ipython::
+
+        In [1]: azs.ess(data, method="tail")
     """
     if isinstance(data, (list, tuple, ndarray)):
         data = atleast_2d(data)
@@ -50,6 +80,6 @@ def ess(data, var_names=None, method="bulk", relative=False, prob=None):
     data = convert_to_dataset(data)
 
     if var_names is not None:
-        data = data.filter_vars(var_names=var_names)
+        return data.azstats.filter_vars(var_names=var_names).ess(method=method, relative=relative, prob=prob)
 
     return data.azstats.ess(method=method, relative=relative, prob=prob)
