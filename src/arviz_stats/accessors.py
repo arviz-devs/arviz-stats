@@ -37,7 +37,7 @@ def update_kwargs_with_dims(da, kwargs):
 def check_var_name_subset(obj, var_name):
     if isinstance(obj, xr.Dataset):
         return obj[var_name]
-    if isinstance(obj, DataTree):
+    if isinstance(obj, xr.DataTree):
         return obj.ds[var_name]
     return obj
 
