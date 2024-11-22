@@ -9,7 +9,7 @@ is the main goal of this module even if it does so via specific "regular" method
 import numpy as np
 import pytest
 from arviz_base import from_dict
-from datatree import DataTree
+from xarray import DataTree
 
 
 @pytest.fixture(scope="module")
