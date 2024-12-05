@@ -4,7 +4,6 @@ import numba
 import numpy as np
 import scipy
 import xarray as xr
-from datatree import DataTree
 from scipy.fftpack import next_fast_len
 from xarray_einstats import stats
 from xarray_einstats.einops import raw_rearrange
@@ -118,7 +117,7 @@ def rhat(ds, group="posterior", method="rank", **kwargs):
     if method not in func_map:
         raise ValueError("method not recognized")
     rhat_func = func_map[method]
-    if isinstance(ds, DataTree):
+    if isinstance(ds, xr.DataTree):
         ds = ds[group]
         return ds.map(rhat_func, **kwargs)
     if isinstance(ds, xr.Dataset):
@@ -283,7 +282,7 @@ def ess(ds, group="posterior", method="bulk", **kwargs):
     if method not in func_map:
         raise ValueError("method not recognized")
     ess_func = func_map[method]
-    if isinstance(ds, DataTree):
+    if isinstance(ds, xr.DataTree):
         ds = ds[group]
         return ds.map(ess_func, **kwargs)
     if isinstance(ds, xr.Dataset):
