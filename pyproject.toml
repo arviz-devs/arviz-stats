@@ -40,7 +40,7 @@ funding = "https://opencollective.com/arviz"
 
 [project.optional-dependencies]
 xarray = [
-  "arviz-base @ git+https://github.com/arviz-devs/arviz-base@xarray_datatree",
+  "arviz-base @ git+https://github.com/arviz-devs/arviz-base",
   "xarray-einstats",
   "numba",
 ]
