@@ -39,6 +39,33 @@ def get_function(func_name):
     return getattr(preferred_module, func_name)
 
 
+def get_array_function(func_name):
+    """Get a function from arviz_stats' array layer.
+
+    Attempts to import the provided function from array class in the module indicated
+    in the rcParam ``stats.module``, and if it fails, it imports it from ``arviz_stats.base``.
+
+    Parameters
+    ----------
+    func_name : str
+        Name of the function to be imported and returned
+
+    Returns
+    -------
+    callable
+    """
+    module_name = rcParams["stats.module"]
+    if isinstance(module_name, str):
+        preferred_module = import_module(f"arviz_stats.{module_name}")
+    else:
+        preferred_module = module_name
+    if hasattr(preferred_module, "array_stats"):
+        preferred_module = preferred_module.array_stats
+    if not hasattr(preferred_module, func_name):
+        raise KeyError(f"Requested function '{func_name}' is not available in '{preferred_module}'")
+    return getattr(preferred_module, func_name)
+
+
 def get_log_likelihood(idata, var_name=None):
     """Retrieve the log likelihood dataarray of a given variable."""
     if (
