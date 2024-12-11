@@ -157,6 +157,11 @@ class AzStatsDsAccessor(_BaseAccessor):
         """Return the underlying Dataset."""
         return self._obj
 
+    @property
+    def dataset(self):
+        """Return the underlying Dataset."""
+        return self._obj
+
     def filter_vars(self, var_names=None, filter_vars=None):
         """Filter variables in the dataset.
 
@@ -206,6 +211,11 @@ class AzStatsDsAccessor(_BaseAccessor):
 class AzStatsDtAccessor(_BaseAccessor):
     """ArviZ stats accessor class for DataTrees."""
 
+    @property
+    def datatree(self):
+        """Return the underlying Dataset."""
+        return self._obj
+
     def _process_input(self, group, method, allow_non_matching=True):
         if self._obj.name == group:
             return self._obj
@@ -250,9 +260,27 @@ class AzStatsDtAccessor(_BaseAccessor):
 
     def filter_vars(self, group="posterior", var_names=None, filter_vars=None):
         """Access and filter variables of the provided group."""
-        ds = self._process_input(group, "filter_vars").ds
-
-        return ds.azstats.filter_vars(var_names, filter_vars)
+        if var_names is None:
+            return self
+        hashable_group = False
+        if isinstance(group, Hashable):
+            group = [group]
+            hashable_group = True
+        out_dt = xr.DataTree.from_dict(
+            {
+                group_i: self._process_input(
+                    group_i, "filter_vars", allow_non_matching=hashable_group
+                ).dataset.azstats.filter_vars(var_names=var_names, filter_vars=filter_vars)
+                for group_i in group
+            }
+        )
+        if hashable_group:
+            # if group was a string/hashable, return a datatree with a single node
+            # (from the provided group) as the root of the DataTree
+            return out_dt[group[0]].azstats
+        # if group was a sequence, return a DataTree with multiple groups in the 1st level,
+        # as many groups as requested
+        return out_dt.azstats
 
     def thin_factor(self, group="posterior", **kwargs):
         """Get thinning factor for all the variables in a group of the datatree."""

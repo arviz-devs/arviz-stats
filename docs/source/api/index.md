@@ -1,17 +1,30 @@
 # API reference
 
+.. note::
+
+   Similarly to xarray, ArviZ aims for idempotent functions. However,
+   there are two important caveats. First and foremost, several functions
+   require combining data from multiple groups or variables, in which case the
+   output won't keep the type of the input data.
+
+   Moreover, ArviZ works on
+   data following the InferenceData schema, there are functions that can accept
+   PPL outputs directly, but when this happens, the first step is converting
+   those outputs to InferenceData. Consequently, the output won't be of the same type.
+
 ## Functions
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
+   arviz_stats.ess
    arviz_stats.psense
    arviz_stats.psense_summary
 ```
 
 ## Accessors
-Currently, using accessors is the recommended way to call functions from `arviz_stats`.
+In addition, many functions are also available via accessors:
 
 ### Dataset accessors
 
@@ -39,7 +52,6 @@ Currently, using accessors is the recommended way to call functions from `arviz_
    xarray.Dataset.azstats.ecdf
 
 ```
-
 
 
 ## DataArray facing functions
