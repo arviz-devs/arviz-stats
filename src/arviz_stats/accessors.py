@@ -66,94 +66,14 @@ class _BaseAccessor:
     def __init__(self, xarray_obj):
         self._obj = xarray_obj
 
-
-@xr.register_dataarray_accessor("azstats")
-class AzStatsDaAccessor(_BaseAccessor):
-    """ArviZ stats accessor class for DataArrays."""
+    def _apply(self, func, **kwargs):
+        raise NotImplementedError("_apply private method needs to be implemented in subclasses")
 
     def eti(self, prob=None, dims=None, **kwargs):
-        """Compute the equal tail interval on the DataArray."""
-        return get_function("eti")(self._obj, prob=prob, dims=dims, **kwargs)
+        """Compute the equal tail interval.
 
-    def hdi(self, prob=None, dims=None, **kwargs):
-        """Compute the highest density interval on the DataArray."""
-        return get_function("hdi")(self._obj, prob=prob, dims=dims, **kwargs)
-
-    def kde(self, dims=None, **kwargs):
-        """Compute the KDE on the DataArray."""
-        return get_function("kde")(self._obj, dims=dims, **kwargs)
-
-    def thin(self, factor="auto", dims=None, **kwargs):
-        """Perform thinning on the DataArray."""
-        return get_function("thin")(self._obj, factor=factor, dims=dims, **kwargs)
-
-    def pareto_min_ss(self, dims=None):
-        """Compute the minimum effective sample size on the DataArray."""
-        return get_function("pareto_min_ss")(self._obj, dims=dims)
-
-    def power_scale_lw(self, alpha=1, dims=None):
-        """Compute log weights for power-scaling of the DataTree."""
-        return get_function("power_scale_lw")(self._obj, alpha=alpha, dims=dims)
-
-    def power_scale_sense(
-        self, lower_w=None, upper_w=None, lower_alpha=None, upper_alpha=None, dims=None
-    ):
-        """Compute power-scaling sensitivity."""
-        return get_function("power_scale_sense")(
-            self._obj,
-            lower_w=lower_w,
-            upper_w=upper_w,
-            lower_alpha=lower_alpha,
-            upper_alpha=upper_alpha,
-            dims=dims,
-        )
-
-
-@xr.register_dataset_accessor("azstats")
-class AzStatsDsAccessor(_BaseAccessor):
-    """ArviZ stats accessor class for Datasets.
-
-    Notes
-    -----
-    Whenever "dims" indicates a set of dimensions that are to be reduced, the behaviour
-    should be to reduce all present dimensions and ignore the ones not present.
-    Thus, they can't use :meth:`.Dataset.map` and instead we must manually loop over variables
-    in the dataset, remove elements from dims if necessary and afterwards rebuild the output
-    Dataset.
-    """
-
-    @property
-    def ds(self):
-        """Return the underlying Dataset."""
-        return self._obj
-
-    def filter_vars(self, var_names=None, filter_vars=None):
-        """Filter variables in the dataset.
-
-        Parameters
-        ----------
-        var_names : iterable, optional
-        filter_vars : {None, "like", "regex"}, default None
-
-        Returns
-        -------
-        accessor
-            This method returns the accessor after filtering its underlying xarray object.
-            To get the filtered dataset, use ``.ds``.
+        For full documentation and available arguments see :ref:`~arviz_stats.eti`
         """
-        var_names = _var_names(var_names=var_names, data=self._obj, filter_vars=filter_vars)
-        if var_names is not None:
-            self._obj = self._obj[var_names]
-        return self
-
-    def _apply(self, fun, **kwargs):
-        """Apply a function to all variables subsetting dims to existing dimensions."""
-        if isinstance(fun, str):
-            fun = get_function(fun)
-        return apply_function_to_dataset(fun, self._obj, kwargs=kwargs)
-
-    def eti(self, prob=None, dims=None, **kwargs):
-        """Compute the equal tail interval of all the variables in the dataset."""
         kwargs["prob"] = prob
         return self._apply("eti", dims=dims, **kwargs)
 
@@ -195,6 +115,73 @@ class AzStatsDsAccessor(_BaseAccessor):
         # TODO: implement ecdf here so it doesn't depend on numba
         return self._apply(ecdf, dims=dims, **kwargs).rename(ecdf_axis="plot_axis")
 
+    def pareto_min_ss(self, dims=None):
+        """Compute the min sample size for all variables in the dataset."""
+        return self._apply("pareto_min_ss", dims=dims)
+
+    def power_scale_lw(self, dims=None, **kwargs):
+        """Compute log weights for power-scaling of the DataTree."""
+        return self._apply("power_scale_lw", dims=dims, **kwargs)
+
+    def power_scale_sense(self, dims=None, **kwargs):
+        """Compute power-scaling sensitivity."""
+        return self._apply("power_scale_sense", dims=dims, **kwargs)
+
+
+@xr.register_dataarray_accessor("azstats")
+class AzStatsDaAccessor(_BaseAccessor):
+    """ArviZ stats accessor class for DataArrays."""
+
+    def _apply(self, func, **kwargs):
+        """Apply function to DataArray input."""
+        if isinstance(func, str):
+            func = get_function(func)
+        return func(self._obj, **kwargs)
+
+
+@xr.register_dataset_accessor("azstats")
+class AzStatsDsAccessor(_BaseAccessor):
+    """ArviZ stats accessor class for Datasets.
+
+    Notes
+    -----
+    Whenever "dims" indicates a set of dimensions that are to be reduced, the behaviour
+    should be to reduce all present dimensions and ignore the ones not present.
+    Thus, they can't use :meth:`.Dataset.map` and instead we must manually loop over variables
+    in the dataset, remove elements from dims if necessary and afterwards rebuild the output
+    Dataset.
+    """
+
+    @property
+    def ds(self):
+        """Return the underlying Dataset."""
+        return self._obj
+
+    def filter_vars(self, var_names=None, filter_vars=None):
+        """Filter variables in the dataset.
+
+        Parameters
+        ----------
+        var_names : iterable, optional
+        filter_vars : {None, "like", "regex"}, default None
+
+        Returns
+        -------
+        accessor
+            This method returns the accessor after filtering its underlying xarray object.
+            To get the filtered dataset, use ``.ds``.
+        """
+        var_names = _var_names(var_names=var_names, data=self._obj, filter_vars=filter_vars)
+        if var_names is not None:
+            self._obj = self._obj[var_names]
+        return self
+
+    def _apply(self, func, **kwargs):
+        """Apply a function to all variables subsetting dims to existing dimensions."""
+        if isinstance(func, str):
+            func = get_function(func)
+        return apply_function_to_dataset(func, self._obj, kwargs=kwargs)
+
     def thin_factor(self, **kwargs):
         """Get thinning factor for all the variables in the dataset."""
         reduce_func = kwargs.get("reduce_func", "mean")
@@ -213,18 +200,6 @@ class AzStatsDsAccessor(_BaseAccessor):
             factor = self.thin_factor()
             dims = "draw"
         return self._apply("thin", dims=dims, factor=factor)
-
-    def pareto_min_ss(self, dims=None):
-        """Compute the min sample size for all variables in the dataset."""
-        return self._apply("pareto_min_ss", dims=dims)
-
-    def power_scale_lw(self, dims=None, **kwargs):
-        """Compute log weights for power-scaling of the DataTree."""
-        return self._apply("power_scale_lw", dims=dims, **kwargs)
-
-    def power_scale_sense(self, dims=None, **kwargs):
-        """Compute power-scaling sensitivity."""
-        return self._apply("power_scale_sense", dims=dims, **kwargs)
 
 
 @xr.register_datatree_accessor("azstats")
@@ -247,7 +222,8 @@ class AzStatsDtAccessor(_BaseAccessor):
             f"and the DataTree itself is named {self._obs.name}"
         )
 
-    def _apply(self, func_name, group, **kwargs):
+    def _apply(self, func, **kwargs):
+        group = kwargs.pop("group", "posterior")
         hashable_group = False
         if isinstance(group, Hashable):
             group = [group]
@@ -255,10 +231,10 @@ class AzStatsDtAccessor(_BaseAccessor):
         out_dt = xr.DataTree.from_dict(
             {
                 group_i: apply_function_to_dataset(
-                    get_function(func_name),
+                    get_function(func),
                     # if group is a single str/hashable that doesn't match the group name,
                     # still allow it and apply the function to the top level of the provided input
-                    self._process_input(group_i, func_name, allow_non_matching=hashable_group),
+                    self._process_input(group_i, func, allow_non_matching=hashable_group),
                     kwargs=kwargs,
                 )
                 for group_i in group
@@ -277,34 +253,6 @@ class AzStatsDtAccessor(_BaseAccessor):
         ds = self._process_input(group, "filter_vars").ds
 
         return ds.azstats.filter_vars(var_names, filter_vars)
-
-    def eti(self, prob=None, dims=None, group="posterior", **kwargs):
-        """Compute the equal tail interval of all the variables in a group of the DataTree."""
-        return self._apply("eti", prob=prob, dims=dims, group=group, **kwargs)
-
-    def hdi(self, prob=None, dims=None, group="posterior", **kwargs):
-        """Compute the highest density interval of all the variables in a group of the DataTree."""
-        return self._apply("hdi", prob=prob, dims=dims, group=group, **kwargs)
-
-    def ess(self, dims=None, group="posterior", **kwargs):
-        """Compute ess of all variables in a group of the DataTree."""
-        return self._apply("ess", dims=dims, group=group, **kwargs)
-
-    def rhat(self, dims=None, group="posterior", method="rank"):
-        """Compute the rhat of all the variables in a group of the DataTree."""
-        return self._apply("rhat", dims=dims, group=group, method=method)
-
-    def mcse(self, dims=None, group="posterior", method="mean", prob=None):
-        """Compute the mcse of all the variables in a group of the DataTree."""
-        return self._apply("mcse", dims=dims, group=group, method=method, prob=prob)
-
-    def kde(self, dims=None, group="posterior", **kwargs):
-        """Compute the KDE for all variables in a group of the DataTree."""
-        return self._apply("kde", dims=dims, group=group, **kwargs)
-
-    def histogram(self, dims=None, group="posterior", **kwargs):
-        """Compute the KDE for all variables in a group of the DataTree."""
-        return self._apply("histogram", dims=dims, group=group, **kwargs)
 
     def thin_factor(self, group="posterior", **kwargs):
         """Get thinning factor for all the variables in a group of the datatree."""
@@ -326,15 +274,3 @@ class AzStatsDtAccessor(_BaseAccessor):
             kwargs["factor"] = self.thin_factor()
             dims = "draw"
         return self._apply("thin", dims=dims, group=group, **kwargs)
-
-    def pareto_min_ss(self, dims=None, group="posterior"):
-        """Compute the min sample size for all variables in a group of the DataTree."""
-        return self._apply("pareto_min_ss", dims=dims, group=group)
-
-    def power_scale_lw(self, dims=None, group="log_likelihood", **kwargs):
-        """Compute log weights for power-scaling of the DataTree."""
-        return self._apply("power_scale_lw", dims=dims, group=group, **kwargs)
-
-    def power_scale_sense(self, dims=None, group="posterior", **kwargs):
-        """Compute power-scaling sensitivity."""
-        return self._apply("power_scale_sense", dims=dims, group=group, **kwargs)
