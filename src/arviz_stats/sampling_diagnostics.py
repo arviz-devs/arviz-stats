@@ -5,6 +5,7 @@ import xarray as xr
 from arviz_base import convert_to_dataset
 
 from arviz_stats.utils import get_array_function
+from arviz_stats.validate import validate_dims
 
 
 def ess(
@@ -112,6 +113,8 @@ def ess(
         )
 
     if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
+        # Make sure the grouped dimension is added as one of the dimensions to be reduced
+        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
         return data.map(
             ess,
             sample_dims=sample_dims,

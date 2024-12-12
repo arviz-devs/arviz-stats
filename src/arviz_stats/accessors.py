@@ -82,17 +82,17 @@ class _BaseAccessor:
         kwargs["prob"] = prob
         return self._apply("hdi", dims=dims, **kwargs)
 
-    def ess(self, dims=None, method="bulk", relative=False, prob=None):
+    def ess(self, dims=None, method="bulk", relative=False, prob=None, **kwargs):
         """Compute the ess of all the variables in the dataset."""
-        return self._apply("ess", dims=dims, method=method, relative=relative, prob=prob)
+        return self._apply("ess", dims=dims, method=method, relative=relative, prob=prob, **kwargs)
 
-    def rhat(self, dims=None, method="rank"):
+    def rhat(self, dims=None, method="rank", **kwargs):
         """Compute the rhat of all the variables in the dataset."""
-        return self._apply("rhat", dims=dims, method=method)
+        return self._apply("rhat", dims=dims, method=method, **kwargs)
 
-    def mcse(self, dims=None, method="mean", prob=None):
+    def mcse(self, dims=None, method="mean", prob=None, **kwargs):
         """Compute the mcse of all the variables in the dataset."""
-        return self._apply("mcse", dims=dims, method=method, prob=prob)
+        return self._apply("mcse", dims=dims, method=method, prob=prob, **kwargs)
 
     def kde(self, dims=None, **kwargs):
         """Compute the KDE for all variables in the dataset."""
@@ -106,18 +106,18 @@ class _BaseAccessor:
         """Compute the histogram for all variables in the dataset."""
         return self._apply("histogram", dims=dims, **kwargs)
 
-    def compute_ranks(self, dims=None, relative=False):
+    def compute_ranks(self, dims=None, relative=False, **kwargs):
         """Compute ranks for all variables in the dataset."""
-        return self._apply("compute_ranks", dims=dims, relative=relative)
+        return self._apply("compute_ranks", dims=dims, relative=relative, **kwargs)
 
     def ecdf(self, dims=None, **kwargs):
         """Compute the ecdf for all variables in the dataset."""
         # TODO: implement ecdf here so it doesn't depend on numba
         return self._apply(ecdf, dims=dims, **kwargs).rename(ecdf_axis="plot_axis")
 
-    def pareto_min_ss(self, dims=None):
+    def pareto_min_ss(self, dims=None, **kwargs):
         """Compute the min sample size for all variables in the dataset."""
-        return self._apply("pareto_min_ss", dims=dims)
+        return self._apply("pareto_min_ss", dims=dims, **kwargs)
 
     def power_scale_lw(self, dims=None, **kwargs):
         """Compute log weights for power-scaling of the DataTree."""
