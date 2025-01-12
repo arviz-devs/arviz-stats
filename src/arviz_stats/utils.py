@@ -118,6 +118,7 @@ def get_log_prior(idata, var_names=None):
     return idata.log_prior.ds[var_names]
 
 
+
 BASE_FMT = """Computed from {{n_samples}} posterior samples and \
 {{n_points}} observations log-likelihood matrix.
 

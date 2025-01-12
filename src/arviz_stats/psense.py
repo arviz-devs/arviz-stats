@@ -7,14 +7,17 @@ import pandas as pd
 import xarray as xr
 from arviz_base import extract
 from arviz_base.labels import BaseLabeller
-from arviz_base.sel_utils import xarray_var_iter
-
+from arviz_base.sel_utils import xarray_var_iter 
+from scipy.stats import gaussian_kde
+import logging
+# from arviz_stats.base.density import _DensityBase
+ 
 from arviz_stats.utils import get_log_likelihood_dataset, get_log_prior
 from arviz_stats.validate import validate_dims
 
 labeller = BaseLabeller()
 
-__all__ = ["psense", "psense_summary"]
+__all__ = ["psense", "psense_summary", "bayes_factor"]
 
 
 def psense(
@@ -34,27 +37,27 @@ def psense(
     Parameters
     ----------
     dt : obj
-        Any object that can be converted to an :class:`arviz.InferenceData` object.
-        Refer to documentation of :func:`arviz.convert_to_dataset` for details.
+        Any object that can be converted to an :class:arviz.InferenceData object.
+        Refer to documentation of :func:arviz.convert_to_dataset for details.
         For ndarray: shape = (chain, draw).
-        For n-dimensional ndarray transform first to dataset with ``az.convert_to_dataset``.
+        For n-dimensional ndarray transform first to dataset with `az.convert_to_dataset.
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
     filter_vars: {None, "like", "regex"}, default None
-        Used for `var_names` only.
-        If ``None`` (default), interpret var_names as the real variables names.
+        Used for var_names only.
+        If `None (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
         If "regex", interpret var_names as regular expressions on the real variables names.
     group : {"prior", "likelihood"}, default "prior"
         If "likelihood", the pointsize log likelihood values are retrieved
-        from the ``log_likelihood`` group and added together.
-        If "prior", the log prior values are retrieved from the ``log_prior`` group.
+        from the `log_likelihood group and added together.
+        If "prior", the log prior values are retrieved from the `log_prior group.
     coords : dict, optional
         Coordinates defining a subset over the posterior. Only these variables will
         be used when computing the prior sensitivity.
     sample_dims : str or sequence of hashable, optional
         Dimensions to reduce unless mapped to an aesthetic.
-        Defaults to ``rcParams["data.sample_dims"]``
+        Defaults to `rcParams["data.sample_dims"]
     alphas : tuple
         Lower and upper alpha values for gradient calculation. Defaults to (0.99, 1.01).
     group_var_names : str, optional
@@ -132,8 +135,8 @@ def psense_summary(
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
     filter_vars: {None, "like", "regex"}, default None
-        Used for `var_names` only.
-        If ``None`` (default), interpret var_names as the real variables names.
+        Used for var_names only.
+        If `None (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
         If "regex", interpret var_names as regular expressions on the real variables names.
     coords : dict, optional
@@ -141,7 +144,7 @@ def psense_summary(
         be used when computing the prior sensitivity.
     sample_dims : str or sequence of hashable, optional
         Dimensions to reduce unless mapped to an aesthetic.
-        Defaults to ``rcParams["data.sample_dims"]``
+        Defaults to `rcParams["data.sample_dims"]
     threshold : float, optional
         Threshold value to determine the sensitivity diagnosis. Default is 0.05.
     alphas : tuple
@@ -287,7 +290,7 @@ def _get_power_scale_weights(
     elif group == "prior":
         group_draws = get_log_prior(dt, var_names=group_var_names)
     else:
-        raise ValueError("Value for `group` argument not recognized")
+        raise ValueError("Value for group argument not recognized")
 
     if group_coords is not None:
         group_draws = group_draws.sel(group_coords)
@@ -306,3 +309,87 @@ def _get_power_scale_weights(
     upper_w = upper_w / upper_w.sum(sample_dims)
 
     return lower_w, upper_w
+
+
+
+# Configure logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+
+def bayes_factor(idata, var_name, ref_val=0, prior=None, return_ref_vals=False):
+    """
+    Approximates the Bayes Factor for comparing hypotheses of two nested models.
+    
+    The Bayes factor compares a model (H1) against a model where the parameter
+    is constrained to a point-null (H0). This uses the Savage-Dickey density ratio method.
+    
+    Parameters
+    ----------
+    idata : InferenceData
+        Object containing posterior and prior data.
+    var_name : str
+        Name of the variable to test.
+    ref_val : int, default 0
+        Reference (point-null) value for Bayes factor estimation.
+    prior : numpy.array, optional
+        Custom prior for sensitivity analysis. Defaults to prior extracted from idata.
+    return_ref_vals : bool, default False
+        If True, also return the values of prior and posterior densities at the reference value.
+    
+    Returns
+    -------
+    dict
+        A dictionary with Bayes Factor values: BF10 (H1/H0 ratio) and BF01 (H0/H1 ratio).
+    """
+    # Extract the posterior values for the specified variable
+    posterior = extract(idata, var_names=var_name).values
+
+    # Warn if the reference value is outside the range of the posterior
+    if ref_val > posterior.max() or ref_val < posterior.min():
+        logger.warning(
+            "The reference value is outside of the posterior range. "
+            "This results in infinite support for H1, which may overstate evidence."
+        )
+
+    # Warn if the posterior has more than one dimension
+    if posterior.ndim > 1:
+        logger.warning(f"Posterior distribution has {posterior.ndim} dimensions.")
+
+    # Use the default prior if none is provided
+    if prior is None:
+        prior = extract(idata, var_names=var_name, group="prior").values
+
+    # Handle continuous data with Gaussian KDE
+    if posterior.dtype.kind == "f":
+        kde_posterior = gaussian_kde(posterior)
+        kde_prior = gaussian_kde(prior)
+
+        # Generate grids for interpolation
+        posterior_grid = np.linspace(min(posterior), max(posterior), 1000)
+        prior_grid = np.linspace(min(prior), max(prior), 1000)
+
+        # Evaluate PDF on the grid
+        posterior_pdf = kde_posterior(posterior_grid)
+        prior_pdf = kde_prior(prior_grid)
+
+        # Get the density at the reference value
+        posterior_at_ref_val = np.interp(ref_val, posterior_grid, posterior_pdf)
+        prior_at_ref_val = np.interp(ref_val, prior_grid, prior_pdf)
+
+    # Handle discrete data
+    elif posterior.dtype.kind == "i":
+        posterior_at_ref_val = (posterior == ref_val).mean()
+        prior_at_ref_val = (prior == ref_val).mean()
+
+    else:
+        raise ValueError("Unsupported data type for posterior/prior.")
+
+    # Compute Bayes Factor
+    bf_10 = prior_at_ref_val / posterior_at_ref_val
+    bf = {"BF10": bf_10, "BF01": 1 / bf_10}
+
+    # Optionally return prior and posterior values at the reference value
+    if return_ref_vals:
+        return (bf, {"prior": prior_at_ref_val, "posterior": posterior_at_ref_val})
+    else:
+        return bf
