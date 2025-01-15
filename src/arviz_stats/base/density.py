@@ -1,7 +1,6 @@
 # pylint: disable=invalid-name,too-many-lines
 """Density estimation functions for ArviZ."""
 
-from grp import getgrgid
 import math
 import warnings
 

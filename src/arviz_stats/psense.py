@@ -8,9 +8,6 @@ import xarray as xr
 from arviz_base import extract
 from arviz_base.labels import BaseLabeller
 from arviz_base.sel_utils import xarray_var_iter 
-from scipy.stats import gaussian_kde
-import logging
-# from arviz_stats.base.density import _DensityBase
  
 from arviz_stats.utils import get_log_likelihood_dataset, get_log_prior
 from arviz_stats.validate import validate_dims
@@ -309,87 +306,3 @@ def _get_power_scale_weights(
     upper_w = upper_w / upper_w.sum(sample_dims)
 
     return lower_w, upper_w
-
-
-
-# Configure logging
-logging.basicConfig(level=logging.WARNING)
-logger = logging.getLogger(__name__)
-
-def bayes_factor(idata, var_name, ref_val=0, prior=None, return_ref_vals=False):
-    """
-    Approximates the Bayes Factor for comparing hypotheses of two nested models.
-    
-    The Bayes factor compares a model (H1) against a model where the parameter
-    is constrained to a point-null (H0). This uses the Savage-Dickey density ratio method.
-    
-    Parameters
-    ----------
-    idata : InferenceData
-        Object containing posterior and prior data.
-    var_name : str
-        Name of the variable to test.
-    ref_val : int, default 0
-        Reference (point-null) value for Bayes factor estimation.
-    prior : numpy.array, optional
-        Custom prior for sensitivity analysis. Defaults to prior extracted from idata.
-    return_ref_vals : bool, default False
-        If True, also return the values of prior and posterior densities at the reference value.
-    
-    Returns
-    -------
-    dict
-        A dictionary with Bayes Factor values: BF10 (H1/H0 ratio) and BF01 (H0/H1 ratio).
-    """
-    # Extract the posterior values for the specified variable
-    posterior = extract(idata, var_names=var_name).values
-
-    # Warn if the reference value is outside the range of the posterior
-    if ref_val > posterior.max() or ref_val < posterior.min():
-        logger.warning(
-            "The reference value is outside of the posterior range. "
-            "This results in infinite support for H1, which may overstate evidence."
-        )
-
-    # Warn if the posterior has more than one dimension
-    if posterior.ndim > 1:
-        logger.warning(f"Posterior distribution has {posterior.ndim} dimensions.")
-
-    # Use the default prior if none is provided
-    if prior is None:
-        prior = extract(idata, var_names=var_name, group="prior").values
-
-    # Handle continuous data with Gaussian KDE
-    if posterior.dtype.kind == "f":
-        kde_posterior = gaussian_kde(posterior)
-        kde_prior = gaussian_kde(prior)
-
-        # Generate grids for interpolation
-        posterior_grid = np.linspace(min(posterior), max(posterior), 1000)
-        prior_grid = np.linspace(min(prior), max(prior), 1000)
-
-        # Evaluate PDF on the grid
-        posterior_pdf = kde_posterior(posterior_grid)
-        prior_pdf = kde_prior(prior_grid)
-
-        # Get the density at the reference value
-        posterior_at_ref_val = np.interp(ref_val, posterior_grid, posterior_pdf)
-        prior_at_ref_val = np.interp(ref_val, prior_grid, prior_pdf)
-
-    # Handle discrete data
-    elif posterior.dtype.kind == "i":
-        posterior_at_ref_val = (posterior == ref_val).mean()
-        prior_at_ref_val = (prior == ref_val).mean()
-
-    else:
-        raise ValueError("Unsupported data type for posterior/prior.")
-
-    # Compute Bayes Factor
-    bf_10 = prior_at_ref_val / posterior_at_ref_val
-    bf = {"BF10": bf_10, "BF01": 1 / bf_10}
-
-    # Optionally return prior and posterior values at the reference value
-    if return_ref_vals:
-        return (bf, {"prior": prior_at_ref_val, "posterior": posterior_at_ref_val})
-    else:
-        return bf
