@@ -1,6 +1,7 @@
 # pylint: disable=invalid-name,too-many-lines
 """Density estimation functions for ArviZ."""
 
+from grp import getgrgid
 import math
 import warnings
 
@@ -12,7 +13,6 @@ from scipy.sparse import coo_matrix
 from scipy.special import ive  # pylint: disable=no-name-in-module
 
 from arviz_stats.base.core import _CoreBase
-
 
 class _DensityBase(_CoreBase):
     """Class with numpy+scipy only density related functions."""
@@ -130,7 +130,7 @@ class _DensityBase(_CoreBase):
             x_max = np.max(x)
             x_range = x_max - x_min
 
-        # Relative frequency per bin
+
         if grid_counts is None:
             x_std = np.std(x)
             grid_len = 256
@@ -144,7 +144,7 @@ class _DensityBase(_CoreBase):
 
         grid_relfreq = grid_counts / x_len
 
-        # Discrete cosine transform of the data
+
         a_k = self.dct1d(grid_relfreq)
 
         k_sq = np.arange(1, grid_len) ** 2
@@ -160,53 +160,29 @@ class _DensityBase(_CoreBase):
         bw_isj = self.bw_isj(x, grid_counts=grid_counts, x_range=x_range)
         return 0.5 * (bw_silverman + bw_isj)
 
-    def get_bw(self, x, bw, grid_counts=None, x_std=None, x_range=None):
-        """Compute bandwidth for a given data `x` and `bw`.
 
-        Also checks `bw` is correctly specified.
+    def _get_bw(self, x, bw, grid_counts=None, x_std=None, x_range=None):
 
-        Parameters
-        ----------
-        x : 1-D numpy array
-            1 dimensional array of sample data from the
-            variable for which a density estimate is desired.
-        bw: int, float or str
-            If numeric, indicates the bandwidth and must be positive.
-            If str, indicates the method to estimate the bandwidth.
+        _BW_METHODS_LINEAR = {
+            "scott": self.bw_scott,
+            "silverman": self.bw_silverman,
+            "isj": self.bw_isj,
+            "experimental": self.bw_experimental,
+        }
 
-        Returns
-        -------
-        bw: float
-            Bandwidth
-        """
-        if isinstance(bw, bool):
-            raise ValueError(
-                "`bw` must not be of type `bool`.\n"
-                "Expected a positive numeric or one of the following strings:\n"
-                f"{self.bw_methods_linear}."
-            )
-        if isinstance(bw, int | float):
-            if bw < 0:
-                raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
-        elif isinstance(bw, str):
+        if isinstance(bw, str):
             bw_lower = bw.lower()
-
-            if bw_lower not in self.bw_methods_linear:
+            if bw_lower not in _BW_METHODS_LINEAR:
                 raise ValueError(
-                    "Unrecognized bandwidth method.\n"
-                    f"Input is: {bw_lower}.\n"
-                    f"Expected one of: {self.bw_methods_linear}."
+                    f"Unrecognized bandwidth method: {bw_lower}. "
+                    f"Expected one of: {list(_BW_METHODS_LINEAR)}."
                 )
-
-            bw_fun = getattr(self, f"bw_{bw}")
+            bw_fun = _BW_METHODS_LINEAR[bw_lower]
             bw = bw_fun(x, grid_counts=grid_counts, x_std=x_std, x_range=x_range)
-        else:
-            raise ValueError(
-                "Unrecognized `bw` argument.\n"
-                "Expected a positive numeric or one of the following strings:\n"
-                f"{self.bw_methods_linear}."
-            )
+
         return bw
+    
+
 
     def _normalize_angle(self, x, zero_centered=True):  # pylint: disable=no-self-use
         """Normalize angles.
@@ -315,7 +291,7 @@ class _DensityBase(_CoreBase):
 
         return custom_lims
 
-    def get_grid(
+    def _get_grid(
         self,
         x_min,
         x_max,
@@ -478,8 +454,152 @@ class _DensityBase(_CoreBase):
             pdf = np.sum(pdf_mat, axis=0) / len(x)
 
         return grid, pdf
-
     
+
+
+    def _kde(self, x, circular=False, grid_len=512, **kwargs):
+        x = x.flatten()
+        x = x[np.isfinite(x)]
+        if x.size == 0 or np.all(x == x[0]):
+            warnings.warn("Your data appears to have a single value or no finite values")
+
+            return np.zeros(grid_len), np.full(grid_len, np.nan), np.nan
+
+        if circular:
+            if circular == "degrees":
+                x = np.radians(x)
+            kde_fun = self.kde_circular
+        else:
+            kde_fun = self.kde_linear
+
+        return kde_fun(x, grid_len=grid_len, **kwargs)
+
+
+    def histogram(self, data, bins, range_hist=None):
+        """Conditionally jitted histogram.
+
+        Parameters
+        ----------
+        data : array-like
+            Input data. Passed as first positional argument to ``np.histogram``.
+        bins : int or array-like
+            Passed as keyword argument ``bins`` to ``np.histogram``.
+        range_hist : (float, float), optional
+            Passed as keyword argument ``range`` to ``np.histogram``.
+
+        Returns
+        -------
+        hist : array
+            The number of counts per bin.
+        density : array
+            The density corresponding to each bin.
+        bin_edges : array
+            The edges of the bins used.
+        """
+        hist, bin_edges = np.histogram(data, bins=bins, range=range_hist)
+        hist_dens = hist / (hist.sum() * np.diff(bin_edges))
+        return hist, hist_dens, bin_edges
+
+
+    def kde_linear(
+        self,
+        x,
+        bw="experimental",
+        adaptive=False,
+        extend=False,
+        bound_correction=True,
+        extend_fct=0,
+        bw_fct=1,
+        bw_return=False,
+        custom_lims=None,
+        cumulative=False,
+        grid_len=512,
+        **kwargs,  
+    ):
+        """One dimensional density estimation for linear data.
+
+        Given an array of data points `x` it returns an estimate of
+        the probability density function that generated the samples in `x`.
+
+        Parameters
+        ----------
+        x : 1D numpy array
+            Data used to calculate the density estimation.
+        bw: int, float or str, optional
+            If numeric, indicates the bandwidth and must be positive.
+            If str, indicates the method to estimate the bandwidth and must be one of "scott",
+            "silverman", "isj" or "experimental". Defaults to "experimental".
+        adaptive: boolean, optional
+            Indicates if the bandwidth is adaptive or not.
+            It is the recommended approach when there are multiple modes with different spread.
+            It is not compatible with convolution. Defaults to False.
+        extend: boolean, optional
+            Whether to extend the observed range for `x` in the estimation.
+            It extends each bound by a multiple of the standard deviation of `x` given by `extend_fct`.
+            Defaults to False.
+        bound_correction: boolean, optional
+            Whether to perform boundary correction on the bounds of `x` or not.
+            Defaults to True.
+        extend_fct: float, optional
+            Number of standard deviations used to widen the lower and upper bounds of `x`.
+            Defaults to 0.5.
+        bw_fct: float, optional
+            A value that multiplies `bw` which enables tuning smoothness by hand.
+            Must be positive. Values below 1 decrease smoothness while values above 1 decrease it.
+            Defaults to 1 (no modification).
+        bw_return: bool, optional
+            Whether to return the estimated bandwidth in addition to the other objects.
+            Defaults to False.
+        custom_lims: list or tuple, optional
+            A list or tuple of length 2 indicating custom bounds for the range of `x`.
+            Defaults to None which disables custom bounds.
+        cumulative: bool, optional
+            Whether return the PDF or the cumulative PDF. Defaults to False.
+        grid_len: int, optional
+            The number of intervals used to bin the data points i.e. the length of the grid used in
+            the estimation. Defaults to 512.
+
+        Returns
+        -------
+        grid : Gridded numpy array for the x values.
+        pdf : Numpy array for the density estimates.
+        bw: optional, the estimated bandwidth.
+        """
+        
+        if not isinstance(bw_fct, (int, float, np.integer, np.floating)):
+            raise TypeError(f"`bw_fct` must be a positive number, not an object of {type(bw_fct)}.")
+
+        if bw_fct <= 0:
+            raise ValueError(f"`bw_fct` must be a positive number, not {bw_fct}.")
+
+        
+        x_min = x.min()
+        x_max = x.max()
+        x_std = np.std(x)
+        x_range = x_max - x_min
+
+        
+        grid_min, grid_max, grid_len = self._get_grid(
+            x_min, x_max, x_std, extend_fct, grid_len, custom_lims, extend, bound_correction
+        )
+        grid_counts, _, grid_edges = self.histogram(x, grid_len, (grid_min, grid_max))
+        
+        bw = bw_fct * self._get_bw(x, bw, grid_counts, x_std, x_range)
+
+        if adaptive:
+            grid, pdf = self.kde_adaptive(x, bw, grid_edges, grid_counts, grid_len, bound_correction)
+        else:
+            grid, pdf = self.kde_convolution(x, bw, grid_edges, grid_counts, grid_len, bound_correction)
+
+        if cumulative:
+            pdf = pdf.cumsum() / pdf.sum()
+
+        if bw_return:
+            return grid, pdf, bw
+        else:
+            return grid, pdf
+
+
 
     def kde_circular(
         self,
@@ -489,7 +609,7 @@ class _DensityBase(_CoreBase):
         custom_lims=None,
         cumulative=False,
         grid_len=512,
-        **kwargs,  # pylint: disable=unused-argument
+        **kwargs,  
     ):
         """One dimensional density estimation for circular data.
 
@@ -517,17 +637,15 @@ class _DensityBase(_CoreBase):
             The number of intervals used to bin the data points
             i.e. the length of the grid used in the estimation. Defaults to 512.
         """
-        # All values between -pi and pi
+        
         x = self._normalize_angle(x)
 
-        # Check `bw_fct` is numeric and positive
-        if not isinstance(bw_fct, int | float | np.integer | np.floating):
+        if not isinstance(bw_fct, (int, float, np.integer, np.floating)):
             raise TypeError(f"`bw_fct` must be a positive number, not an object of {type(bw_fct)}.")
 
         if bw_fct <= 0:
             raise ValueError(f"`bw_fct` must be a positive number, not {bw_fct}.")
 
-        # Determine bandwidth
         if isinstance(bw, bool):
             raise ValueError(
                 "`bw` can't be of type `bool`.\nExpected a positive numeric or 'taylor'"
@@ -541,7 +659,6 @@ class _DensityBase(_CoreBase):
                 raise ValueError(f"`bw` must be a positive numeric or `taylor`, not {bw}")
         bw *= bw_fct
 
-        # Determine grid
         if custom_lims is not None:
             custom_lims = self._check_custom_lims(custom_lims, x.min(), x.max())
             grid_min = custom_lims[0]
@@ -564,23 +681,7 @@ class _DensityBase(_CoreBase):
             pdf = pdf.cumsum() / pdf.sum()
 
         return grid, pdf, bw
-
-    def _kde(self, x, circular=False, grid_len=512, **kwargs):
-        x = x.flatten()
-        x = x[np.isfinite(x)]
-        if x.size == 0 or np.all(x == x[0]):
-            warnings.warn("Your data appears to have a single value or no finite values")
-
-            return np.zeros(grid_len), np.full(grid_len, np.nan), np.nan
-
-        if circular:
-            if circular == "degrees":
-                x = np.radians(x)
-            kde_fun = self.kde_circular
-        else:
-            kde_fun = self.kde_linear
-
-        return kde_fun(x, grid_len=grid_len, **kwargs)
+    
 
     def _fast_kde_2d(self, x, y, gridsize=(128, 128), circular=False):
         """
@@ -669,7 +770,7 @@ class _DensityBase(_CoreBase):
         contour_levels : array
             The contour levels corresponding to the given HDI probabilities.
         """
-        # Using the algorithm from corner.py
+
         sorted_density = np.sort(density, axis=None)[::-1]
         sm = sorted_density.cumsum()
         sm /= sm[-1]
