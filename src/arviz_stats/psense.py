@@ -14,7 +14,7 @@ from arviz_stats.validate import validate_dims
 
 labeller = BaseLabeller()
 
-__all__ = ["psense", "psense_summary", "bayes_factor"]
+__all__ = ["psense", "psense_summary"]
 
 
 def psense(

@@ -160,26 +160,54 @@ class _DensityBase(_CoreBase):
         return 0.5 * (bw_silverman + bw_isj)
 
 
-    def _get_bw(self, x, bw, grid_counts=None, x_std=None, x_range=None):
+    def get_bw(self, x, bw, grid_counts=None, x_std=None, x_range=None):
+        """Compute bandwidth for a given data `x` and `bw`.
 
-        _BW_METHODS_LINEAR = {
-            "scott": self.bw_scott,
-            "silverman": self.bw_silverman,
-            "isj": self.bw_isj,
-            "experimental": self.bw_experimental,
-        }
+        Also checks `bw` is correctly specified.
 
-        if isinstance(bw, str):
+        Parameters
+        ----------
+        x : 1-D numpy array
+            1 dimensional array of sample data from the
+            variable for which a density estimate is desired.
+        bw: int, float or str
+            If numeric, indicates the bandwidth and must be positive.
+            If str, indicates the method to estimate the bandwidth.
+
+        Returns
+        -------
+        bw: float
+            Bandwidth
+        """
+        if isinstance(bw, bool):
+            raise ValueError(
+                "`bw` must not be of type `bool`.\n"
+                "Expected a positive numeric or one of the following strings:\n"
+                f"{self.bw_methods_linear}."
+            )
+        if isinstance(bw, int | float):
+            if bw < 0:
+                raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
+        elif isinstance(bw, str):
             bw_lower = bw.lower()
-            if bw_lower not in _BW_METHODS_LINEAR:
-                raise ValueError(
-                    f"Unrecognized bandwidth method: {bw_lower}. "
-                    f"Expected one of: {list(_BW_METHODS_LINEAR)}."
-                )
-            bw_fun = _BW_METHODS_LINEAR[bw_lower]
-            bw = bw_fun(x, grid_counts=grid_counts, x_std=x_std, x_range=x_range)
 
+            if bw_lower not in self.bw_methods_linear:
+                raise ValueError(
+                    "Unrecognized bandwidth method.\n"
+                    f"Input is: {bw_lower}.\n"
+                    f"Expected one of: {self.bw_methods_linear}."
+                )
+
+            bw_fun = getattr(self, f"bw_{bw}")
+            bw = bw_fun(x, grid_counts=grid_counts, x_std=x_std, x_range=x_range)
+        else:
+            raise ValueError(
+                "Unrecognized `bw` argument.\n"
+                "Expected a positive numeric or one of the following strings:\n"
+                f"{self.bw_methods_linear}."
+            )
         return bw
+
     
 
 
@@ -290,7 +318,7 @@ class _DensityBase(_CoreBase):
 
         return custom_lims
 
-    def _get_grid(
+    def get_grid(
         self,
         x_min,
         x_max,
@@ -578,12 +606,12 @@ class _DensityBase(_CoreBase):
         x_range = x_max - x_min
 
         
-        grid_min, grid_max, grid_len = self._get_grid(
+        grid_min, grid_max, grid_len = self.get_grid(
             x_min, x_max, x_std, extend_fct, grid_len, custom_lims, extend, bound_correction
         )
         grid_counts, _, grid_edges = self.histogram(x, grid_len, (grid_min, grid_max))
         
-        bw = bw_fct * self._get_bw(x, bw, grid_counts, x_std, x_range)
+        bw = bw_fct * self.get_bw(x, bw, grid_counts, x_std, x_range)
 
         if adaptive:
             grid, pdf = self.kde_adaptive(x, bw, grid_edges, grid_counts, grid_len, bound_correction)
