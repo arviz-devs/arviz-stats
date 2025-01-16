@@ -9,21 +9,21 @@ def test_bayes_factor_comparison():
         posterior={"a": np.random.normal(1, 0.5, 5000)},
         prior={"a": np.random.normal(0, 1, 5000)}
     )
-    
+
     bf_dict0 = bayes_factor(idata=idata, var_name="a", ref_val=0)
 
     custom_prior = np.random.normal(1, 2, 5000)  
     bf_dict1 = bayes_factor(idata=idata, var_name="a", prior={"a": custom_prior}, ref_val=1)
-    
+
 
     print(f"bf_dict0: {bf_dict0}")
     print(f"bf_dict1: {bf_dict1}")
-    
+
 
     assert "BF10" in bf_dict0
     assert "BF01" in bf_dict0
     assert bf_dict0["BF10"] > bf_dict0["BF01"], "BF10 should be greater than BF01 in bf_dict0"
-    
+
     assert "BF10" in bf_dict1
     assert "BF01" in bf_dict1
     assert bf_dict1["BF10"] < bf_dict1["BF01"], "BF10 should be less than BF01 in bf_dict1"

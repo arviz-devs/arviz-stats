@@ -228,11 +228,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         if bins is None:
             bins = self.get_bins(ary, axes=np.arange(-len(axes), 0, dtype=int))
         if isinstance(bins, int | str):
-
+            # avoid broadcasting over bins -> can't be positional argument
             if (range is None) or (np.size(range) == 2):
-
+                # avoid broadcasting over range
                 if weights is not None:
-
+                    # ensure broadcasting over weights
                     histogram_ufunc = make_ufunc(
                         lambda ary, weights: self._histogram(
                             ary, bins=bins, range=range, weights=weights, density=density
@@ -242,17 +242,17 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                         n_dims=len(axes),
                     )
                     return histogram_ufunc(ary, weights, shape_from_1st=True)
-
+                # avoid broadcasting over weights -> no broadcasting anywhere
                 histogram_ufunc = make_ufunc(
                     self._histogram, n_output=2, n_input=1, n_dims=len(axes)
                 )
                 return histogram_ufunc(
                     ary, bins=bins, range=range, density=density, shape_from_1st=True
                 )
-
+            # ensure broadcasting over range
             assert range.shape[:-1] == broadcased_shape
             if weights is not None:
-
+                # ensure broadcasting over weights
                 histogram_ufunc = make_ufunc(
                     lambda ary, range, weights: self._histogram(
                         ary, bins=bins, range=range, weights=weights, density=density
@@ -262,7 +262,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                     n_dims=len(axes),
                 )
                 return histogram_ufunc(ary, range, weights, shape_from_1st=True)
-
+            # avoid broadcasting over weights while broadcasting over range
             histogram_ufunc = make_ufunc(
                 lambda ary, range: self._histogram(ary, bins=bins, range=range, density=density),
                 n_output=2,
@@ -270,12 +270,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                 n_dims=len(axes),
             )
             return histogram_ufunc(ary, range, shape_from_1st=True)
-
+        # ensure broadcasting over bins
         assert bins.shape[:-1] == broadcased_shape
         if (range is None) or (np.size(range) == 2):
-
+            # avoid broadcasting over range
             if weights is not None:
-
+                # ensure broadcasting over weights
                 histogram_ufunc = make_ufunc(
                     lambda ary, bins, weights: self._histogram(
                         ary, bins=bins, range=range, weights=weights, density=density
@@ -285,7 +285,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                     n_dims=len(axes),
                 )
                 return histogram_ufunc(ary, bins, weights, shape_from_1st=True)
-
+            # avoid broadcasting over weights
             histogram_ufunc = make_ufunc(
                 lambda ary, bins: self._histogram(ary, bins=bins, range=range, density=density),
                 n_output=2,
@@ -293,10 +293,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                 n_dims=len(axes),
             )
             return histogram_ufunc(ary, bins, shape_from_1st=True)
-
+        # ensure broadcasting over range
         assert range.shape[:-1] == broadcased_shape
         if weights is not None:
-
+            # ensure broadcasting over weights
             histogram_ufunc = make_ufunc(
                 lambda ary, bins, range, weights: self._histogram(
                     ary, bins=bins, range=range, weights=weights, density=density
@@ -306,7 +306,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                 n_dims=len(axes),
             )
             return histogram_ufunc(ary, bins, range, weights, shape_from_1st=True)
-
+        # avoid broadcasting over weights
         histogram_ufunc = make_ufunc(
             lambda ary, bins, range: self._histogram(ary, bins=bins, range=range, density=density),
             n_output=2,
@@ -331,5 +331,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             circular=circular,
             **kwargs,
         )
+
 
 array_stats = BaseArray()

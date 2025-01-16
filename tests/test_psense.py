@@ -6,7 +6,6 @@ from numpy.testing import assert_almost_equal
 
 from arviz_stats import psense, psense_summary
 
-
 file_path = os.path.join(os.path.dirname(__file__), "univariate_normal.nc")
 uni_dt = convert_to_datatree(file_path)
 
@@ -34,5 +33,3 @@ def test_psense_summary():
 
     psense_df = psense_summary(uni_dt, threshold=1)
     assert all(psense_df["diagnosis"] == "✓")
-
-

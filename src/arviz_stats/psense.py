@@ -7,8 +7,8 @@ import pandas as pd
 import xarray as xr
 from arviz_base import extract
 from arviz_base.labels import BaseLabeller
-from arviz_base.sel_utils import xarray_var_iter 
- 
+from arviz_base.sel_utils import xarray_var_iter
+
 from arviz_stats.utils import get_log_likelihood_dataset, get_log_prior
 from arviz_stats.validate import validate_dims
 
@@ -34,27 +34,27 @@ def psense(
     Parameters
     ----------
     dt : obj
-        Any object that can be converted to an :class:arviz.InferenceData object.
-        Refer to documentation of :func:arviz.convert_to_dataset for details.
+        Any object that can be converted to an :class:`arviz.InferenceData` object.
+        Refer to documentation of :func:`arviz.convert_to_dataset` for details.
         For ndarray: shape = (chain, draw).
-        For n-dimensional ndarray transform first to dataset with `az.convert_to_dataset.
+        For n-dimensional ndarray transform first to dataset with ``az.convert_to_dataset``.
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
     filter_vars: {None, "like", "regex"}, default None
-        Used for var_names only.
-        If `None (default), interpret var_names as the real variables names.
+        Used for `var_names` only.
+        If ``None`` (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
         If "regex", interpret var_names as regular expressions on the real variables names.
     group : {"prior", "likelihood"}, default "prior"
         If "likelihood", the pointsize log likelihood values are retrieved
-        from the `log_likelihood group and added together.
-        If "prior", the log prior values are retrieved from the `log_prior group.
+        from the ``log_likelihood`` group and added together.
+        If "prior", the log prior values are retrieved from the ``log_prior`` group.
     coords : dict, optional
         Coordinates defining a subset over the posterior. Only these variables will
         be used when computing the prior sensitivity.
     sample_dims : str or sequence of hashable, optional
         Dimensions to reduce unless mapped to an aesthetic.
-        Defaults to `rcParams["data.sample_dims"]
+        Defaults to ``rcParams["data.sample_dims"]``
     alphas : tuple
         Lower and upper alpha values for gradient calculation. Defaults to (0.99, 1.01).
     group_var_names : str, optional
@@ -132,8 +132,8 @@ def psense_summary(
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
     filter_vars: {None, "like", "regex"}, default None
-        Used for var_names only.
-        If `None (default), interpret var_names as the real variables names.
+        Used for `var_names` only.
+        If ``None`` (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
         If "regex", interpret var_names as regular expressions on the real variables names.
     coords : dict, optional
@@ -141,7 +141,7 @@ def psense_summary(
         be used when computing the prior sensitivity.
     sample_dims : str or sequence of hashable, optional
         Dimensions to reduce unless mapped to an aesthetic.
-        Defaults to `rcParams["data.sample_dims"]
+        Defaults to ``rcParams["data.sample_dims"]``
     threshold : float, optional
         Threshold value to determine the sensitivity diagnosis. Default is 0.05.
     alphas : tuple
@@ -287,7 +287,7 @@ def _get_power_scale_weights(
     elif group == "prior":
         group_draws = get_log_prior(dt, var_names=group_var_names)
     else:
-        raise ValueError("Value for group argument not recognized")
+        raise ValueError("Value for `group` argument not recognized")
 
     if group_coords is not None:
         group_draws = group_draws.sel(group_coords)
