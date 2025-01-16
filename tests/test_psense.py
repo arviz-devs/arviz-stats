@@ -33,3 +33,4 @@ def test_psense_summary():
 
     psense_df = psense_summary(uni_dt, threshold=1)
     assert all(psense_df["diagnosis"] == "✓")
+    

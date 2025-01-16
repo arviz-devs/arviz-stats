@@ -782,3 +782,4 @@ class _DensityBase(_CoreBase):
                 contours[idx] = sorted_density[0]
 
         return contours
+        
