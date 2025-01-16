@@ -2,8 +2,7 @@ from .base.density import _DensityBase
 import numpy as np 
 import warnings
 
-def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior= None):
-
+def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
     """
     Approximated Bayes Factor for comparing hypotheses of two nested models, 
     using KDE for density estimation.
@@ -22,12 +21,8 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior= None)
     dict
         A dictionary with Bayes Factor values: BF10 (H1/H0 ratio) and BF01 (H0/H1 ratio).
     """
-
-    posterior = idata.posterior[var_name].values.flatten()
-    prior = idata.prior[var_name].values.flatten()
-
-    posterior = posterior[np.isfinite(posterior)]
-    prior = prior[np.isfinite(prior)]
+    posterior = extract(idata, var_names=var_name).values
+    prior = extract(idata, var_names=var_name, group="prior").values
 
     if not isinstance(ref_val, (int, float)):
         raise ValueError("The reference value (ref_val) must be a numerical value (int or float).")
@@ -37,13 +32,18 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior= None)
             "The reference value is outside the posterior range. "
             "This results in infinite support for H1, which may overstate evidence."
         )
-    density_instance = _DensityBase()
-    posterior_grid, posterior_pdf, _ = density_instance._kde(x=posterior, grid_len=512, circular=False)
-    prior_grid, prior_pdf, _ = density_instance._kde(x=prior, grid_len=512, circular=False)
+    if posterior.dtype.kind == "f":
+        density_instance = _DensityBase()
+        posterior_grid, posterior_pdf, _ = density_instance._kde(x=posterior, grid_len=512, circular=False)
+        prior_grid, prior_pdf, _ = density_instance._kde(x=prior, grid_len=512, circular=False)
 
 
-    posterior_at_ref_val = np.interp(ref_val, posterior_grid, posterior_pdf)
-    prior_at_ref_val = np.interp(ref_val, prior_grid, prior_pdf)
+        posterior_at_ref_val = np.interp(ref_val, posterior_grid, posterior_pdf)
+        prior_at_ref_val = np.interp(ref_val, prior_grid, prior_pdf)
+
+    elif posterior.dtype.kind == "i":
+        posterior_at_ref_val = (posterior == ref_val).mean()
+        prior_at_ref_val = (prior == ref_val).mean()
 
     bf_10 = prior_at_ref_val / posterior_at_ref_val
     bf = {"BF10": bf_10, "BF01": 1 / bf_10}
