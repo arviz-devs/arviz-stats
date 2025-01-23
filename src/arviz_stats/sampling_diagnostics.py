@@ -31,6 +31,7 @@ def ess(
         - array-like: call array layer within ``arviz-stats``.
         - xarray object: apply dimension aware function to all relevant subsets
         - others: passed to :func:`arviz_base.convert_to_dataset`
+
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
@@ -169,13 +170,16 @@ def rhat(
 
     Parameters
     ----------
-    data : obj
-        Any object that can be converted to an :class:`arviz.InferenceData` object.
-        Refer to documentation of :func:`arviz.convert_to_dataset` for details.
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset`
+
         At least 2 posterior chains are needed to compute this diagnostic of one or more
         stochastic parameters.
-        For ndarray: shape = (chain, draw).
-        For n-dimensional ndarray transform first to dataset with ``az.convert_to_dataset``.
+
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
@@ -310,11 +314,13 @@ def mcse(
 
     Parameters
     ----------
-    data : obj
-        Any object that can be converted to an :class:`arviz.InferenceData` object
-        Refer to documentation of :func:`arviz.convert_to_dataset` for details
-        For ndarray: shape = (chain, draw).
-        For n-dimensional ndarray transform first to dataset with ``az.convert_to_dataset``.
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset`
+
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
@@ -363,7 +369,7 @@ def mcse(
 
     .. ipython::
 
-        In [1]: az.mcse(data, method="quantile", prob=0.7)
+        In [1]: azs.mcse(data, method="quantile", prob=0.7)
 
     """
     if isinstance(data, list | tuple | np.ndarray):
