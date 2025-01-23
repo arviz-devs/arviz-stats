@@ -19,8 +19,10 @@
    :toctree: generated/
 
    arviz_stats.ess
+   arviz_stats.mcse
    arviz_stats.psense
    arviz_stats.psense_summary
+   arviz_stats.rhat
 ```
 
 ## Accessors
