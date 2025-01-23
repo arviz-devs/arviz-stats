@@ -128,9 +128,7 @@ def ess(
     if isinstance(data, xr.DataArray):
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.ess(
-            sample_dims=sample_dims, method=method, relative=relative, prob=prob
-        )
+        return data.azstats.ess(dims=sample_dims, method=method, relative=relative, prob=prob)
 
     if isinstance(data, xr.DataTree):
         data = data.azstats.filter_vars(
@@ -139,7 +137,7 @@ def ess(
         if coords is not None:
             data = data.sel(coords)
         return data.azstats.ess(
-            sample_dims=sample_dims, group=group, method=method, relative=relative, prob=prob
+            dims=sample_dims, group=group, method=method, relative=relative, prob=prob
         )
 
     data = convert_to_dataset(data, group=group)
@@ -148,4 +146,4 @@ def ess(
     if coords is not None:
         data = data.sel(coords)
 
-    return data.azstats.ess(sample_dims=sample_dims, method=method, relative=relative, prob=prob)
+    return data.azstats.ess(dims=sample_dims, method=method, relative=relative, prob=prob)
