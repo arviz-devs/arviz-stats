@@ -268,9 +268,11 @@ class AzStatsDtAccessor(_BaseAccessor):
             hashable_group = True
         out_dt = xr.DataTree.from_dict(
             {
-                group_i: self._process_input(
+                group_i: self._process_input(  # pylint: disable=protected-access
                     group_i, "filter_vars", allow_non_matching=hashable_group
-                ).dataset.azstats.filter_vars(var_names=var_names, filter_vars=filter_vars)
+                )
+                .dataset.azstats.filter_vars(var_names=var_names, filter_vars=filter_vars)
+                ._obj
                 for group_i in group
             }
         )
