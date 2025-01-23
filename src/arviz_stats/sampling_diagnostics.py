@@ -156,7 +156,7 @@ def rhat(
     var_names=None,
     filter_vars=None,
     coords=None,
-    method="bulk",
+    method="rank",
     chain_axis=0,
     draw_axis=1,
 ):
