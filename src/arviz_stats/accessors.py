@@ -80,10 +80,7 @@ class _BaseAccessor:
         return self._apply("hdi", dims=dims, **kwargs)
 
     def ess(self, dims=None, method="bulk", relative=False, prob=None, **kwargs):
-        """Compute the ess of all the variables in the dataset.
-
-        For full documentation and available arguments see :ref:`~arviz_stats.ess`
-        """
+        """Compute the ess of all the variables in the dataset."""
         return self._apply("ess", dims=dims, method=method, relative=relative, prob=prob, **kwargs)
 
     def rhat(self, dims=None, method="rank", **kwargs):
