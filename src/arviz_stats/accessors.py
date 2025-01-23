@@ -70,10 +70,7 @@ class _BaseAccessor:
         raise NotImplementedError("_apply private method needs to be implemented in subclasses")
 
     def eti(self, prob=None, dims=None, **kwargs):
-        """Compute the equal tail interval.
-
-        For full documentation and available arguments see :ref:`~arviz_stats.eti`
-        """
+        """Compute the equal tail interval."""
         kwargs["prob"] = prob
         return self._apply("eti", dims=dims, **kwargs)
 
@@ -83,7 +80,10 @@ class _BaseAccessor:
         return self._apply("hdi", dims=dims, **kwargs)
 
     def ess(self, dims=None, method="bulk", relative=False, prob=None, **kwargs):
-        """Compute the ess of all the variables in the dataset."""
+        """Compute the ess of all the variables in the dataset.
+
+        For full documentation and available arguments see :ref:`~arviz_stats.ess`
+        """
         return self._apply("ess", dims=dims, method=method, relative=relative, prob=prob, **kwargs)
 
     def rhat(self, dims=None, method="rank", **kwargs):
