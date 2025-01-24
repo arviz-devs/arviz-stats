@@ -20,16 +20,16 @@ def test_bayes_factor_comparison():
 
 def test_bayes_factor_invalid_ref_val():
     idata = from_dict(
-        {"posterior": {"a": np.random.normal(1, 0.5, (1, 500))},
-         "prior": {"a": np.random.normal(0, 1, (1, 5000))}}
+        {"posterior": {"a": np.random.normal(1, 0.5, (2, 1000))},
+         "prior": {"a": np.random.normal(0, 1, (2, 1000))}}
     )
     with pytest.raises(ValueError, match="The reference value.*must be a numerical value.*"):
         bayes_factor(idata=idata, var_name="a", ref_val="invalid")
 
 def test_bayes_factor_custom_prior():
     posterior_data = np.random.normal(1, 0.5, (2, 1000))
-    prior_data = np.random.normal(0, 1, (5000, 1))
-    custom_prior = np.random.normal(0, 10, (5000, 1))
+    prior_data = np.random.normal(0, 1, (2, 1000))
+    custom_prior = np.random.normal(0, 10, (2, 1000))
     idata = from_dict(
         {"posterior": {"a": posterior_data},
          "prior": {"a": prior_data}}
@@ -42,8 +42,8 @@ def test_bayes_factor_custom_prior():
 
 def test_bayes_factor_different_ref_vals():
     idata = from_dict(
-        {"posterior": {"a": np.random.normal(1, 0.5, (5000, 1))},
-         "prior": {"a": np.random.normal(0, 1, (5000, 1))}}
+        {"posterior": {"a": np.random.normal(1, 0.5, (2, 1000))},
+         "prior": {"a": np.random.normal(0, 1, (2, 1000))}}
     )
     ref_vals = [-1, 0, 1]
     for ref_val in ref_vals:
@@ -54,8 +54,8 @@ def test_bayes_factor_different_ref_vals():
         assert result["BF01"] > 0
 
 def test_bayes_factor_large_data():
-    posterior_data = np.random.normal(1, 0.5, (10000, 1))
-    prior_data = np.random.normal(0, 1, (10000, 1))
+    posterior_data = np.random.normal(1, 0.5, (2, 1000))
+    prior_data = np.random.normal(0, 1, (2, 1000))
     idata = from_dict(
         {"posterior": {"a": posterior_data},
          "prior": {"a": prior_data}}
