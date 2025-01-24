@@ -1,13 +1,21 @@
-import numpy as np 
+"""
+Module containing the Bayes Factor calculation for nested models.
+
+This module provides a function for approximating Bayes Factors using KDE for density estimation.
+"""
+
 import warnings
+
+import numpy as np
 from arviz_base import extract
 
-from arviz_stats.base.density import _DensityBase 
+from arviz_stats.base.density import _DensityBase
+
 
 def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
     """
-    Approximated Bayes Factor for comparing hypotheses of two nested models, 
-    using KDE for density estimation.
+    Approximated Bayes Factor for comparing hypotheses of two nested models using KDE estimation.
+
     Parameters
     ----------
     idata : InferenceData
@@ -18,6 +26,7 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
         Reference (point-null) value for Bayes factor estimation.
     return_ref_vals : bool, default False
         If True, also return the values of prior and posterior densities at the reference value.
+
     Returns
     -------
     dict
@@ -26,7 +35,7 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
     posterior = extract(idata, var_names=var_name).values
     prior = extract(idata, var_names=var_name, group="prior").values
 
-    if not isinstance(ref_val, (int, float)):
+    if not isinstance(ref_val, int | float):
         raise ValueError("The reference value (ref_val) must be a numerical value (int or float).")
 
     if ref_val > posterior.max() or ref_val < posterior.min():
@@ -34,11 +43,15 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
             "The reference value is outside the posterior range. "
             "This results in infinite support for H1, which may overstate evidence."
         )
+
     if posterior.dtype.kind == "f":
         density_instance = _DensityBase()
-        posterior_grid, posterior_pdf, _ = density_instance._kde(x=posterior, grid_len=512, circular=False)
-        prior_grid, prior_pdf, _ = density_instance._kde(x=prior, grid_len=512, circular=False)
-
+        posterior_grid, posterior_pdf, _ = density_instance._kde(
+            x=posterior, grid_len=512, circular=False
+        )
+        prior_grid, prior_pdf, _ = density_instance._kde(
+            x=prior, grid_len=512, circular=False
+        )
 
         posterior_at_ref_val = np.interp(ref_val, posterior_grid, posterior_pdf)
         prior_at_ref_val = np.interp(ref_val, prior_grid, prior_pdf)
