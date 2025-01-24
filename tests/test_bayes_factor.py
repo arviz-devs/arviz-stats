@@ -27,7 +27,7 @@ def test_bayes_factor_invalid_ref_val():
         bayes_factor(idata=idata, var_name="a", ref_val="invalid")
 
 def test_bayes_factor_custom_prior():
-    posterior_data = np.random.normal(1, 0.5, (5000, 1))
+    posterior_data = np.random.normal(1, 0.5, (2, 1000))
     prior_data = np.random.normal(0, 1, (5000, 1))
     custom_prior = np.random.normal(0, 10, (5000, 1))
     idata = from_dict(
