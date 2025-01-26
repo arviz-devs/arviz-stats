@@ -360,6 +360,7 @@ def mcse(
     Calculate the Markov Chain Standard Error using the default arguments:
 
     .. ipython::
+
         In [1]: from arviz_base import load_arviz_data
            ...: import arviz_stats as azs
            ...: data = load_arviz_data('non_centered_eight')
