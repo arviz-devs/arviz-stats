@@ -6,6 +6,7 @@ try:
     from arviz_stats.accessors import *
     from arviz_stats.psense import psense, psense_summary
     from arviz_stats.sampling_diagnostics import ess, mcse, rhat
+    from arviz_stats.manipulation import thin
 
 except ModuleNotFoundError:
     pass
