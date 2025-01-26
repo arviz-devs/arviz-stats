@@ -132,16 +132,15 @@ class _DiagnosticsBase(_CoreBase):
             return np.nan
         return self._rhat(ary)
 
-
     def _rhat_nested(self, ary, superchain_ids=None):
         """Compute nested rhat for a 2D array.
 
         Computation follows https://doi.org/10.1214/24-BA1453
         """
-        superchain_ids=[1, 2, 3, 4]
+        superchain_ids = [1, 2, 3, 4]
         print("diagnostics")
-        #ary = np.asarray(ary)
-        #if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+        # ary = np.asarray(ary)
+        # if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
         #    return np.nan
         ary = np.asarray(ary)
         nchains, niterations = ary.shape
@@ -155,7 +154,9 @@ class _DiagnosticsBase(_CoreBase):
         nchains_per_superchain = np.max(superchain_id_table)
 
         if nchains_per_superchain != np.min(superchain_id_table):
-            warnings.warn("Number of chains per superchain is not the same for each superchain, returning NaN.")
+            warnings.warn(
+                "Number of chains per superchain is not the same for each superchain, returning NaN."
+            )
             return np.nan
 
         superchains = np.unique(superchain_ids)
@@ -168,18 +169,21 @@ class _DiagnosticsBase(_CoreBase):
         if nchains_per_superchain == 1:
             var_between_chain = 0
         else:
-            var_between_chain = np.array([np.var(chain_mean[superchain_ids == k], ddof=1) for k in superchains])
+            var_between_chain = np.array(
+                [np.var(chain_mean[superchain_ids == k], ddof=1) for k in superchains]
+            )
 
         if niterations == 1:
             var_within_chain = 0
         else:
-            var_within_chain = np.array([np.mean(chain_var[superchain_ids == k]) for k in superchains])
+            var_within_chain = np.array(
+                [np.mean(chain_var[superchain_ids == k]) for k in superchains]
+            )
 
         var_between_superchain = np.var(superchain_mean, ddof=1)
         var_within_superchain = np.mean(var_within_chain + var_between_chain)
 
         return np.sqrt(1 + var_between_superchain / var_within_superchain)
-   
 
     def _ess(self, ary, relative=False):
         """Compute the effective sample size for a 2D array."""
