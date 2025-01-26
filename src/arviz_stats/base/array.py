@@ -120,8 +120,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
     def rhat(self, ary, chain_axis=-2, draw_axis=-1, method="rank"):
         """Compute of rhat on array-like inputs."""
+        print("array")
         method = method.lower()
-        valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
+        valid_methods = {"rank", "folded", "z_scale", "split", "identity", "nested"}
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
         if chain_axis is None:
