@@ -100,7 +100,7 @@ def _rhat(da):
 def _rhat_rank(da, **kwargs):
     """Compute the rank normalized rhat for an n-D DataArray.
 
-    Computation follows https://arxiv.org/abs/1903.08008
+    Computation follows https://doi.org/10.1214/20-BA1221
     """
     split_da = _split_chains(da, **kwargs)
     rhat_bulk = _rhat(_z_scale(split_da, **kwargs))
@@ -113,7 +113,8 @@ def _rhat_rank(da, **kwargs):
 
 def rhat(ds, group="posterior", method="rank", **kwargs):
     """Calculate rhat diagnostic."""
-    func_map = {"identity": _rhat, "rank": _rhat_rank}
+    print("diagnostics")
+    func_map = {"identity": _rhat, "rank": _rhat_rank, "nested": _rhat_rank}
     if method not in func_map:
         raise ValueError("method not recognized")
     rhat_func = func_map[method]

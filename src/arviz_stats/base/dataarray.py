@@ -82,8 +82,9 @@ class BaseDataArray:
             func_kwargs={"relative": relative},
         )
 
-    def rhat(self, da, dims=None, method="bulk"):
+    def rhat(self, da, dims=None, method="rank"):
         """Compute rhat on DataArray input."""
+        print("data_array")
         dims = validate_dims(dims)
         if len(dims) != 2:
             raise ValueError("dims must be of length 2 for rhat computation")

@@ -85,6 +85,7 @@ class _BaseAccessor:
 
     def rhat(self, dims=None, method="rank", **kwargs):
         """Compute the rhat of all the variables in the dataset."""
+        print("accessors")
         return self._apply("rhat", dims=dims, method=method, **kwargs)
 
     def mcse(self, dims=None, method="mean", prob=None, **kwargs):
