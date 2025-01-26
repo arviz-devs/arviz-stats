@@ -254,7 +254,6 @@ class BaseDataArray:
         """Perform thinning on DataArray input."""
         if factor == "auto" and dims is not None:
             warnings.warn("dims are ignored if factor is auto")
-
         if factor == "auto":
             factor = self.thin_factor(da)
             dims = "draw"

@@ -23,6 +23,7 @@
    arviz_stats.psense
    arviz_stats.psense_summary
    arviz_stats.rhat
+   arviz_stats.thin
 ```
 
 ## Accessors
