@@ -44,14 +44,16 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
             "This results in infinite support for H1, which may overstate evidence."
         )
 
+    prior_at_ref_val = 0
+    posterior_at_ref_val = 0
+
     if posterior.dtype.kind == "f":
+        # pylint: disable=W0212
         density_instance = _DensityBase()
         posterior_grid, posterior_pdf, _ = density_instance._kde(
             x=posterior, grid_len=512, circular=False
         )
-        prior_grid, prior_pdf, _ = density_instance._kde(
-            x=prior, grid_len=512, circular=False
-        )
+        prior_grid, prior_pdf, _ = density_instance._kde(x=prior, grid_len=512, circular=False)
 
         posterior_at_ref_val = np.interp(ref_val, posterior_grid, posterior_pdf)
         prior_at_ref_val = np.interp(ref_val, prior_grid, prior_pdf)
@@ -65,5 +67,4 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
 
     if return_ref_vals:
         return (bf, {"prior": prior_at_ref_val, "posterior": posterior_at_ref_val})
-    else:
-        return bf
+    return bf
