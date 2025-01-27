@@ -76,16 +76,17 @@ def summary(
     --------
     .. ipython::
 
-        In [1]: import arviz as az
-           ...: data = az.load_arviz_data("centered_eight")
-           ...: az.summary(data, var_names=["mu", "tau"])
+        In [1]: from arviz_base import load_arviz_data
+           ...: import arviz_stats as azs
+           ...: data = load_arviz_data("centered_eight")
+           ...: azs.summary(data, var_names=["mu", "tau"])
 
     You can use ``filter_vars`` to select variables without having to specify all the exact
     names. Use ``filter_vars="like"`` to select based on partial naming:
 
     .. ipython::
 
-        In [1]: az.summary(data, var_names=["the"], filter_vars="like")
+        In [1]: azs.summary(data, var_names=["the"], filter_vars="like")
 
     Use ``filter_vars="regex"`` to select based on regular expressions, and prefix the variables
     you want to exclude by ``~``. Here, we exclude from the summary all the variables
@@ -93,7 +94,7 @@ def summary(
 
     .. ipython::
 
-        In [1]: az.summary(data, var_names=["~^t"], filter_vars="regex")
+        In [1]: azs.summary(data, var_names=["~^t"], filter_vars="regex")
 
     """
     if ci_kind not in ("hdi", "eti", None):
