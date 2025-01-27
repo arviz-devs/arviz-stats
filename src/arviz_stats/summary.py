@@ -127,12 +127,10 @@ def summary(
                 summary=[f"eti_{ci_perc}"]
             )
             # ci = dataset.azstats.eti(prob=ci_prob, dims=dims).assign_coords(summary=["lb", "ub"])
-        elif ci_kind == "hdi":
+        else:
             ci = dataset.azstats.hdi(prob=ci_prob, dims=sample_dims).expand_dims(
                 summary=[f"hdi_{ci_perc}"]
             )
-        else:
-            raise ValueError("ci_kind must be either 'hdi' or 'eti'")
 
         to_concat.extend((mean, std, ci))
 
