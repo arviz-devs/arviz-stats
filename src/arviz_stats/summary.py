@@ -119,7 +119,7 @@ def summary(
 
     to_concat = []
 
-    if kind == "stats" or kind == "all":
+    if kind in ["stats", "all"]:
         mean = dataset.mean(dim=sample_dims).expand_dims(summary=["mean"])
         std = dataset.std(dim=sample_dims).expand_dims(summary=["std"])
         if ci_kind == "eti":
@@ -131,10 +131,12 @@ def summary(
             ci = dataset.azstats.hdi(prob=ci_prob, dims=sample_dims).expand_dims(
                 summary=[f"hdi_{ci_perc}"]
             )
+        else:
+            raise ValueError("ci_kind must be either 'hdi' or 'eti'")
 
         to_concat.extend((mean, std, ci))
 
-    if kind == "diagnostics" or kind == "all":
+    if kind in ["diagnostics", "all"]:
         ess_bulk = dataset.azstats.ess(dims=sample_dims, method="bulk").expand_dims(
             summary=["ess_bulk"]
         )
@@ -151,7 +153,7 @@ def summary(
 
         to_concat.extend((ess_bulk, ess_tail, rhat, mcse_mean, mcse_sd))
 
-    if kind == "stats_median" or kind == "all_median":
+    if kind in ["stats_median", "all_median"]:
         median = dataset.median(dim=sample_dims).expand_dims(summary=["median"])
         mad = stats.median_abs_deviation(dataset.to_dataset(), dims=("chain", "draw")).expand_dims(
             summary=["mad"]
@@ -168,7 +170,7 @@ def summary(
 
         to_concat.extend((median, mad, ci))
 
-    if kind == "diagnostics_median" or kind == "all_median":
+    if kind in ["diagnostics_median", "all_median"]:
         ess_median = dataset.azstats.ess(dims=sample_dims, method="median").expand_dims(
             summary=["ess_median"]
         )
