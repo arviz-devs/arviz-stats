@@ -247,10 +247,10 @@ def power_scale_dataset(dt, group, alphas, sample_dims, group_var_names, group_c
     sample_dims : str or sequence of hashable
         Dimensions to reduce unless mapped to an aesthetic.
     group_var_names : str
-        Name of the prior or log likelihood variables to use.
+        Name of the log-prior or log-likelihood variables to use.
     group_coords : dict
         Coordinates defining a subset over the group element for which to
-        compute the prior sensitivity diagnostic.
+        compute the sensitivity diagnostic.
 
     Returns
     -------
