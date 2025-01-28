@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from arviz_base import from_dict
 
-from src.arviz_stats.bayes_factor import bayes_factor
+from arviz_stats.bayes_factor import bayes_factor
 
 
 def test_bayes_factor_comparison():
