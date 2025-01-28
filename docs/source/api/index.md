@@ -24,6 +24,7 @@
    arviz_stats.psense_summary
    arviz_stats.rhat
    arviz_stats.thin
+   arviz_stats.bayes_factor
 ```
 
 ## Accessors

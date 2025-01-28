@@ -4,7 +4,8 @@ import warnings
 
 import numpy as np
 from arviz_base import extract
-from base.density import _DensityBase
+
+from arviz_stats.base.density import _DensityBase
 
 
 def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
