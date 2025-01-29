@@ -119,8 +119,10 @@ def psense_summary(
     sample_dims=None,
     threshold=0.05,
     alphas=(0.99, 1.01),
-    group_var_names=None,
-    group_coords=None,
+    prior_var_names=None,
+    likelihood_var_names=None,
+    prior_coords=None,
+    likelihood_coords=None,
     round_to=3,
 ):
     """
@@ -146,11 +148,16 @@ def psense_summary(
         Threshold value to determine the sensitivity diagnosis. Default is 0.05.
     alphas : tuple
         Lower and upper alpha values for gradient calculation. Defaults to (0.99, 1.01).
-    group_var_names : str, optional
-        Name of the prior or log likelihood variables to use
-    group_coords : dict, optional
+    prior_var_names : str, optional
+        Name of the log-prior variables to include in the power scaling sensitivity diagnostic
+    likelihood_var_names : str, optional
+        Name of the log-likelihood variables to include in the power scaling sensitivity diagnostic
+    prior_coords : dict, optional
         Coordinates defining a subset over the group element for which to
-        compute the prior sensitivity diagnostic
+        compute the log-prior sensitivity diagnostic
+    likelihood_coords : dict, optional
+        Coordinates defining a subset over the group element for which to
+        compute the log-likelihood sensitivity diagnostic
     round_to : int, optional
         Number of decimal places to round the sensitivity values. Default is 3.
 
@@ -181,8 +188,8 @@ def psense_summary(
         sample_dims=sample_dims,
         coords=coords,
         alphas=alphas,
-        group_var_names=group_var_names,
-        group_coords=group_coords,
+        group_var_names=prior_var_names,
+        group_coords=prior_coords,
     )
     pssdl = psense(
         data,
@@ -192,8 +199,8 @@ def psense_summary(
         coords=coords,
         sample_dims=sample_dims,
         alphas=alphas,
-        group_var_names=group_var_names,
-        group_coords=group_coords,
+        group_var_names=likelihood_var_names,
+        group_coords=likelihood_coords,
     )
 
     joined = xr.concat([pssdp, pssdl], dim="component").assign_coords(
@@ -227,7 +234,7 @@ def psense_summary(
     return psense_df.round(round_to)
 
 
-def power_scale_dataset(dt, group, alphas, sample_dims):
+def power_scale_dataset(dt, group, alphas, sample_dims, group_var_names, group_coords):
     """Resample the dataset with the power scale weights.
 
     Parameters
@@ -239,12 +246,25 @@ def power_scale_dataset(dt, group, alphas, sample_dims):
         Lower and upper alpha values for power scaling.
     sample_dims : str or sequence of hashable
         Dimensions to reduce unless mapped to an aesthetic.
+    group_var_names : str
+        Name of the log-prior or log-likelihood variables to use.
+    group_coords : dict
+        Coordinates defining a subset over the group element for which to
+        compute the sensitivity diagnostic.
 
     Returns
     -------
     DataSet with resampled data.
     """
-    lower_w, upper_w = _get_power_scale_weights(dt, alphas, group=group, sample_dims=sample_dims)
+    lower_w, upper_w = _get_power_scale_weights(
+        dt,
+        alphas,
+        group=group,
+        sample_dims=sample_dims,
+        group_var_names=group_var_names,
+        group_coords=group_coords,
+    )
+
     lower_w = lower_w.values.flatten()
     upper_w = upper_w.values.flatten()
     s_size = len(lower_w)
