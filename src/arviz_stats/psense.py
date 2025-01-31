@@ -5,7 +5,7 @@ from typing import cast
 import numpy as np
 import pandas as pd
 import xarray as xr
-from arviz_base import extract
+from arviz_base import convert_to_datatree, extract
 from arviz_base.labels import BaseLabeller
 from arviz_base.sel_utils import xarray_var_iter
 
@@ -18,7 +18,7 @@ __all__ = ["psense", "psense_summary"]
 
 
 def psense(
-    dt,
+    data,
     var_names=None,
     filter_vars=None,
     group="prior",
@@ -33,11 +33,8 @@ def psense(
 
     Parameters
     ----------
-    dt : obj
-        Any object that can be converted to an :class:`arviz.InferenceData` object.
-        Refer to documentation of :func:`arviz.convert_to_dataset` for details.
-        For ndarray: shape = (chain, draw).
-        For n-dimensional ndarray transform first to dataset with ``az.convert_to_dataset``.
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior and the log_likelihood and/or log_prior groups.
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
     filter_vars: {None, "like", "regex"}, default None
@@ -82,8 +79,10 @@ def psense(
     .. [1] Kallioinen et al, *Detecting and diagnosing prior and likelihood sensitivity with
        power-scaling*, Stat Comput 34, 57 (2024), https://doi.org/10.1007/s11222-023-10366-5
     """
+    data = convert_to_datatree(data)
+
     dataset = extract(
-        dt,
+        data,
         var_names=var_names,
         filter_vars=filter_vars,
         group="posterior",
@@ -94,7 +93,7 @@ def psense(
         dataset = dataset.sel(coords)
 
     lower_w, upper_w = _get_power_scale_weights(
-        dt,
+        data,
         alphas=alphas,
         group=group,
         sample_dims=sample_dims,
@@ -130,7 +129,8 @@ def psense_summary(
 
     Parameters
     ----------
-    data : DataTree
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior and the log_likelihood and/or log_prior groups.
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
     filter_vars: {None, "like", "regex"}, default None
@@ -234,12 +234,13 @@ def psense_summary(
     return psense_df.round(round_to)
 
 
-def power_scale_dataset(dt, group, alphas, sample_dims, group_var_names, group_coords):
-    """Resample the dataset with the power scale weights.
+def power_scale_dataset(data, group, alphas, sample_dims, group_var_names, group_coords):
+    """Resample posterior based on power-scaled weights.
 
     Parameters
     ----------
-    dt : DataSet
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior and the log_likelihood and/or log_prior groups.
     group : str
         Group to resample. Either "prior" or "likelihood"
     alphas : tuple of float
@@ -256,6 +257,8 @@ def power_scale_dataset(dt, group, alphas, sample_dims, group_var_names, group_c
     -------
     DataSet with resampled data.
     """
+    dt = convert_to_datatree(data)
+
     lower_w, upper_w = _get_power_scale_weights(
         dt,
         alphas,
