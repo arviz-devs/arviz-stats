@@ -104,7 +104,11 @@ class _CoreBase:
         "Sample quantiles in statistical packages,"
         The American Statistician, 50(4), pp. 361-365, 1996
         """
-        result = np.quantile(ary, quantile, **kwargs)
+        skipna = kwargs.pop("skipna", False)
+        if skipna:
+            result = np.nanquantile(ary, quantile, **kwargs)
+        else:
+            result = np.quantile(ary, quantile, **kwargs)
         if np.ndim(quantile) == 0:
             return result
         return np.moveaxis(result, 0, -1)

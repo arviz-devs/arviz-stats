@@ -1,7 +1,7 @@
 """Summaries for various statistics and diagnostics."""
 
 import xarray as xr
-from arviz_base import extract, rcParams
+from arviz_base import dataset_to_dataframe, extract, rcParams
 from xarray_einstats import stats
 
 __all__ = ["summary"]
@@ -17,6 +17,8 @@ def summary(
     kind="all",
     ci_prob=None,
     ci_kind=None,
+    round_to=2,
+    skipna=False,
 ):
     """
     Create a data frame with summary statistics and or diagnostics.
@@ -58,6 +60,11 @@ def summary(
         Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``.
     ci_kind : {"hdi", "eti"}, optional
         Type of credible interval. Defaults to ``rcParams["stats.ci_kind"]``.
+        If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
+    round_to : int
+        Number of decimals used to round results. Defaults to 2. Use "none" to return raw numbers.
+    skipna: bool
+        If true ignores nan values when computing the summary statistics. Defaults to false.
 
     Returns
     -------
@@ -100,6 +107,20 @@ def summary(
     if ci_kind not in ("hdi", "eti", None):
         raise ValueError("ci_kind must be either 'hdi' or 'eti'")
 
+    if kind not in [
+        "all",
+        "stats",
+        "diagnostics",
+        "all_median",
+        "stats_median",
+        "diagnostics_median",
+        "mc_diagnostics",
+    ]:
+        raise ValueError(
+            """kind must be either 'all', 'stats', 'diagnostics', 'all_median',
+            'stats_median', 'diagnostics_median', 'mc_diagnostics'"""
+        )
+
     if ci_prob is None:
         ci_prob = rcParams["stats.ci_prob"]
     if ci_kind is None:
@@ -121,18 +142,18 @@ def summary(
     to_concat = []
 
     if kind in ["stats", "all"]:
-        mean = dataset.mean(dim=sample_dims).expand_dims(summary=["mean"])
-        std = dataset.std(dim=sample_dims).expand_dims(summary=["std"])
+        mean = dataset.mean(dim=sample_dims, skipna=skipna).expand_dims(summary=["mean"])
+        std = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["std"])
         if ci_kind == "eti":
-            ci = dataset.azstats.eti(prob=ci_prob, dims=sample_dims).expand_dims(
-                summary=[f"eti_{ci_perc}"]
+            ci = dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna).assign_coords(
+                summary=[f"eti_{ci_perc}_lb", f"eti_{ci_perc}_ub"]
             )
-            # ci = dataset.azstats.eti(prob=ci_prob, dims=dims).assign_coords(summary=["lb", "ub"])
         else:
-            ci = dataset.azstats.hdi(prob=ci_prob, dims=sample_dims).expand_dims(
-                summary=[f"hdi_{ci_perc}"]
+            ci = (
+                dataset.azstats.hdi(prob=ci_prob, dims=sample_dims, skipna=skipna)
+                .rename({"hdi": "summary"})
+                .assign_coords(summary=[f"hdi_{ci_perc}_lb", f"hdi_{ci_perc}_ub"])
             )
-
         to_concat.extend((mean, std, ci))
 
     if kind in ["diagnostics", "all"]:
@@ -153,19 +174,13 @@ def summary(
         to_concat.extend((ess_bulk, ess_tail, rhat, mcse_mean, mcse_sd))
 
     if kind in ["stats_median", "all_median"]:
-        median = dataset.median(dim=sample_dims).expand_dims(summary=["median"])
-        mad = stats.median_abs_deviation(dataset.to_dataset(), dims=("chain", "draw")).expand_dims(
-            summary=["mad"]
+        median = dataset.median(dim=sample_dims, skipna=skipna).expand_dims(summary=["median"])
+        mad = stats.median_abs_deviation(
+            dataset, dims=("chain", "draw"), nan_policy="omit" if skipna else "propagate"
+        ).expand_dims(summary=["mad"])
+        ci = dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna).assign_coords(
+            summary=[f"eti_{ci_perc}_lb", f"eti_{ci_perc}_ub"]
         )
-        if ci_kind == "eti":
-            ci = dataset.azstats.eti(prob=ci_prob, dims=sample_dims).expand_dims(
-                summary=[f"eti_{ci_perc}"]
-            )
-            # ci = dataset.azstats.eti(prob=ci_prob, dims=dims).assign_coords(summary=["lb", "ub"])
-        elif ci_kind == "hdi":
-            ci = dataset.azstats.hdi(prob=ci_prob, dims=sample_dims).expand_dims(
-                summary=[f"hdi_{ci_perc}"]
-            )
 
         to_concat.extend((median, mad, ci))
 
@@ -194,8 +209,10 @@ def summary(
 
         to_concat.extend((mcse_mean, ess_mean, min_ss))
 
-    summaries = xr.concat(to_concat, dim="summary")
+    summary_df = dataset_to_dataframe(
+        xr.concat(to_concat, dim="summary"), sample_dims=["summary"]
+    ).T
+    if (round_to is not None) and (round_to not in ("None", "none")):
+        summary_df = summary_df.round(round_to)
 
-    # Uncomment once we have https://github.com/arviz-devs/arviz-base/pull/25
-    # dataset_to_dataframe(summaries, sample_dims=["summary"]).T
-    return summaries
+    return summary_df
