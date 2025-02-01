@@ -145,8 +145,10 @@ def summary(
         mean = dataset.mean(dim=sample_dims, skipna=skipna).expand_dims(summary=["mean"])
         std = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["std"])
         if ci_kind == "eti":
-            ci = dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna).assign_coords(
-                summary=[f"eti_{ci_perc}_lb", f"eti_{ci_perc}_ub"]
+            ci = (
+                dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
+                .rename({"quantile": "summary"})
+                .assign_coords(summary=[f"eti_{ci_perc}_lb", f"eti_{ci_perc}_ub"])
             )
         else:
             ci = (
@@ -178,8 +180,10 @@ def summary(
         mad = stats.median_abs_deviation(
             dataset, dims=("chain", "draw"), nan_policy="omit" if skipna else "propagate"
         ).expand_dims(summary=["mad"])
-        ci = dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna).assign_coords(
-            summary=[f"eti_{ci_perc}_lb", f"eti_{ci_perc}_ub"]
+        ci = (
+            dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
+            .rename({"quantile": "summary"})
+            .assign_coords(summary=[f"eti_{ci_perc}_lb", f"eti_{ci_perc}_ub"])
         )
 
         to_concat.extend((median, mad, ci))
