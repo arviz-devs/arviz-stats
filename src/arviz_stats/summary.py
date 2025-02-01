@@ -107,7 +107,7 @@ def summary(
     if ci_kind not in ("hdi", "eti", None):
         raise ValueError("ci_kind must be either 'hdi' or 'eti'")
 
-    if kind not in [
+    kinds = [
         "all",
         "stats",
         "diagnostics",
@@ -115,10 +115,10 @@ def summary(
         "stats_median",
         "diagnostics_median",
         "mc_diagnostics",
-    ]:
+    ]
+    if kind not in kinds:
         raise ValueError(
-            """kind must be either 'all', 'stats', 'diagnostics', 'all_median',
-            'stats_median', 'diagnostics_median', 'mc_diagnostics'"""
+            "valid options for kind are: " + ", ".join(kinds[:-1]) + " or " + kinds[-1]
         )
 
     if ci_prob is None:
