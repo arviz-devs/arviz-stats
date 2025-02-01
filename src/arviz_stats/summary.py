@@ -143,18 +143,18 @@ def summary(
 
     if kind in ["stats", "all"]:
         mean = dataset.mean(dim=sample_dims, skipna=skipna).expand_dims(summary=["mean"])
-        std = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["std"])
+        std = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
         if ci_kind == "eti":
             ci = (
                 dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
                 .rename({"quantile": "summary"})
-                .assign_coords(summary=[f"eti_{ci_perc}_lb", f"eti_{ci_perc}_ub"])
+                .assign_coords(summary=[f"eti{ci_perc}_", f"eti{ci_perc}^"])
             )
         else:
             ci = (
                 dataset.azstats.hdi(prob=ci_prob, dims=sample_dims, skipna=skipna)
                 .rename({"hdi": "summary"})
-                .assign_coords(summary=[f"hdi_{ci_perc}_lb", f"hdi_{ci_perc}_ub"])
+                .assign_coords(summary=[f"hdi{ci_perc}_", f"hdi{ci_perc}^"])
             )
         to_concat.extend((mean, std, ci))
 
@@ -165,7 +165,7 @@ def summary(
         ess_tail = dataset.azstats.ess(dims=sample_dims, method="tail").expand_dims(
             summary=["ess_tail"]
         )
-        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["rhat"])
+        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["R̂"])
         mcse_mean = dataset.azstats.mcse(dims=sample_dims, method="mean").expand_dims(
             summary=["mcse_mean"]
         )
@@ -183,7 +183,7 @@ def summary(
         ci = (
             dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
             .rename({"quantile": "summary"})
-            .assign_coords(summary=[f"eti_{ci_perc}_lb", f"eti_{ci_perc}_ub"])
+            .assign_coords(summary=[f"eti{ci_perc}_", f"eti{ci_perc}^"])
         )
 
         to_concat.extend((median, mad, ci))
@@ -195,7 +195,7 @@ def summary(
         ess_tail = dataset.azstats.ess(dims=sample_dims, method="tail").expand_dims(
             summary=["ess_tail"]
         )
-        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["rhat"])
+        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["R̂"])
         mcse_median = dataset.azstats.mcse(dims=sample_dims, method="median").expand_dims(
             summary=["mcse_median"]
         )
