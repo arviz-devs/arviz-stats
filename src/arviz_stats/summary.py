@@ -1,7 +1,10 @@
 """Summaries for various statistics and diagnostics."""
 
+from typing import Hashbale, Literal, Sequence
+
 import xarray as xr
 from arviz_base import dataset_to_dataframe, extract, rcParams
+from xarray.core.datatree import DataTree
 from xarray_einstats import stats
 
 __all__ = ["summary"]
