@@ -1,54 +1,46 @@
 """Summaries for various statistics and diagnostics."""
 
-from typing import Hashbale, Literal, Sequence
+from typing import Any
 
 import xarray as xr
 from arviz_base import dataset_to_dataframe, extract, rcParams
-from xarray.core.datatree import DataTree
+from pandas import DataFrame
 from xarray_einstats import stats
 
 __all__ = ["summary"]
 
 
 def summary(
-    dt,
-    var_names=None,
-    filter_vars=None,
-    group="posterior",
-    coords=None,
-    sample_dims=None,
-    kind="all",
-    ci_prob=None,
-    ci_kind=None,
-    round_to=2,
-    skipna=False,
-):
+    data: Any,
+    var_names: list[str] | None = None,
+    filter_vars: str | None = None,
+    group: str = "posterior",
+    coords: list[str, Any] | None = None,
+    sample_dims: str | list[str] | None = None,
+    kind: str = "all",
+    ci_prob: float | None = None,
+    ci_kind: str | None = None,
+    round_to: int | str | None = 2,
+    skipna: bool = False,
+) -> DataFrame:
     """
     Create a data frame with summary statistics and or diagnostics.
 
     Parameters
     ----------
-    dt : obj
-        Any object that can be converted to an :class:`arviz.InferenceData` object.
-        Refer to documentation of :func:`arviz.convert_to_dataset` for details.
-        For ndarray: shape = (chain, draw).
-        For n-dimensional ndarray transform first to dataset with ``az.convert_to_dataset``.
+    data : DataTree, DataSet or InferenceData
     var_names : list of str, optional
-        Names of posterior variables to include in the power scaling sensitivity diagnostic
+        Names of variables to include in summary. If None all variables are included.
     filter_vars: {None, "like", "regex"}, default None
         Used for `var_names` only.
         If ``None`` (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
         If "regex", interpret var_names as regular expressions on the real variables names.
-    group : {"prior", "likelihood"}, default "prior"
-        If "likelihood", the pointsize log likelihood values are retrieved
-        from the ``log_likelihood`` group and added together.
-        If "prior", the log prior values are retrieved from the ``log_prior`` group.
+    group: str
+        Select a group for summary. Defaults to “posterior”.
     coords : dict, optional
-        Coordinates defining a subset over the posterior. Only these variables will
-        be used when computing the prior sensitivity.
+        Coordinates defining a subset over the selected group.
     sample_dims : str or sequence of hashable, optional
-        Dimensions to reduce unless mapped to an aesthetic.
         Defaults to ``rcParams["data.sample_dims"]``
     kind: {'all', 'stats', 'diagnostics', 'all_median', 'stats_median',
     'diagnostics_median', 'mc_diagnostics'}, default 'all'
@@ -71,7 +63,7 @@ def summary(
 
     Returns
     -------
-    pandas.DataFrame or xarray.Dataset
+    pandas.DataFrame
 
     See Also
     --------
@@ -132,7 +124,7 @@ def summary(
     ci_perc = int(ci_prob * 100)
 
     dataset = extract(
-        dt,
+        data,
         var_names=var_names,
         filter_vars=filter_vars,
         group=group,
