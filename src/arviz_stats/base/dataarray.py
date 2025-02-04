@@ -20,10 +20,11 @@ class BaseDataArray:
     def __init__(self, array_class=None):
         self.array_class = array_stats if array_class is None else array_class
 
-    def eti(self, da, prob=None, dims=None, method="linear"):
+    def eti(self, da, prob=None, dims=None, method="linear", **kwargs):
         """Compute eti on DataArray input."""
         dims = validate_dims(dims)
         prob = validate_ci_prob(prob)
+        eti_coord = DataArray(["lower", "higher"], dims=["quantile"], attrs={"eti_prob": prob})
 
         return apply_ufunc(
             self.array_class.eti,
@@ -31,8 +32,8 @@ class BaseDataArray:
             prob,
             input_core_dims=[dims, []],
             output_core_dims=[["quantile"]],
-            kwargs={"axis": np.arange(-len(dims), 0, 1), "method": method},
-        )
+            kwargs={"axis": np.arange(-len(dims), 0, 1), "method": method, **kwargs},
+        ).assign_coords({"quantile": eti_coord})
 
     def hdi(self, da, prob=None, dims=None, method="nearest", **kwargs):
         """Compute hdi on DataArray input."""
