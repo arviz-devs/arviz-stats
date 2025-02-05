@@ -248,7 +248,7 @@ def psense_summary(
     if "potential" in "".join(psense_df["diagnosis"]):
         _log.warning(
             "We detected potential issues. For more information on how to interpret the results, "
-            ", please check\n"
+            "please check\n"
             "https://arviz-devs.github.io/Exploratory-Analysis-of-Bayesian-Models/Chapters/"
             "Sensitivity_checks.html#interpreting-sensitivity-diagnostics-summary\n"
             "or read original paper https://doi.org/10.1007/s11222-023-10366-5"
