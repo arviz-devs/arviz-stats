@@ -1,5 +1,6 @@
 """Power-scaling sensitivity diagnostics."""
 
+import logging
 from typing import cast
 
 import numpy as np
@@ -11,6 +12,8 @@ from arviz_base.sel_utils import xarray_var_iter
 
 from arviz_stats.utils import get_log_likelihood_dataset, get_log_prior
 from arviz_stats.validate import validate_dims
+
+_log = logging.getLogger(__name__)
 
 labeller = BaseLabeller()
 
@@ -179,6 +182,17 @@ def psense_summary(
            ...: from arviz_stats import psense_summary
            ...: rugby = load_arviz_data("rugby")
            ...: psense_summary(rugby, var_names="atts")
+
+    Notes
+    -----
+    The diagnostic is computed by power-scaling either the prior or likelihood
+    and determining the degree to which the posterior changes as described in [1]_.
+    It uses Pareto-smoothed importance sampling to avoid refitting the model.
+
+    References
+    ----------
+    .. [1] Kallioinen et al, *Detecting and diagnosing prior and likelihood sensitivity with
+       power-scaling*, Stat Comput 34, 57 (2024), https://doi.org/10.1007/s11222-023-10366-5
     """
     pssdp = psense(
         data,
@@ -223,13 +237,22 @@ def psense_summary(
 
     def _diagnose(row):
         if row["prior"] >= threshold and row["likelihood"] >= threshold:
-            return "prior-data conflict"
+            return "potential prior-data conflict"
         if row["prior"] > threshold > row["likelihood"]:
-            return "strong prior / weak likelihood"
+            return "potential strong prior / weak likelihood"
 
         return "✓"
 
     psense_df["diagnosis"] = psense_df.apply(_diagnose, axis=1)
+
+    if "potential" in "".join(psense_df["diagnosis"]):
+        _log.warning(
+            "We detected potential issues. For more information on how to interpret the results, "
+            ", please check\n"
+            "https://arviz-devs.github.io/Exploratory-Analysis-of-Bayesian-Models/Chapters/"
+            "Sensitivity_checks.html#interpreting-sensitivity-diagnostics-summary\n"
+            "or read original paper https://doi.org/10.1007/s11222-023-10366-5"
+        )
 
     return psense_df.round(round_to)
 
