@@ -21,11 +21,6 @@ def isotonic_fit(dt, var_names, n_bootstrap, ci_prob):
     ci_prob : float, optional
         The probability for the credible interval.
     """
-    if "/observed_data" not in dt.groups:
-        raise ValueError("DataTree must have an 'observed_data' group.")
-    if "/posterior_predictive" not in dt.groups:
-        raise ValueError("DataTree must have a 'posterior_predictive' group.")
-
     pp = extract(dt, group="posterior_predictive", keep_dataset=True)
 
     dictio = {}
@@ -97,3 +92,82 @@ def _sort_pred_with_obs(pred, obs):
     obs = obs[sorter]
 
     return pred, obs
+
+
+def point_interval_unique(dt, var_names, group, ci_prob=None):
+    """
+    Compute the mean frequency and confidence intervals for unique values.
+
+    Parameters
+    ----------
+    dt: DataTree
+        DataTree with "posterior_predictive" and "observed_data" groups
+    var_names : list of str, optional
+        The variables to perform the isotonic regression on.
+    ci_prob : float, optional
+        The probability for the credible interval.
+    """
+    pp = extract(dt, group=group, keep_dataset=True)
+
+    dictio = {}
+
+    if var_names is None:
+        var_names = dt[group].data_vars
+
+    for var in dt[group].data_vars:
+        if var in var_names:
+            unique_values = np.unique(pp[var])
+            group_counts = []
+            for y in unique_values:
+                mask = pp[var] == y
+                unique_counts = mask.mean(dim="sample").values
+                group_counts.append(unique_counts)
+
+            lb = (1 - ci_prob) / 2 * 100
+            ub = (1 + ci_prob) / 2 * 100
+            ci = np.nanpercentile(group_counts, [lb, ub], axis=1) * np.sum(group_counts)
+            means = np.sum(group_counts, axis=1)
+
+            dictio[var] = np.stack([unique_values, means, ci[0], ci[1]])
+
+    return (
+        dict_to_dataset(dictio)
+        .rename({"draw": "x_values", "chain": "plot_axis"})
+        .assign_coords({"plot_axis": ["x", "y", "y_bottom", "y_top"]})
+    )
+
+
+def point_unique(dt, var_names):
+    """
+    Compute the mean frequency for unique values.
+
+    Parameters
+    ----------
+    dt: DataTree
+        DataTree with "posterior_predictive" and "observed_data" groups
+    var_names : list of str, optional
+        The variables to perform the isotonic regression on.
+    """
+    pp = dt["observed_data"]
+
+    dictio = {}
+
+    if var_names is None:
+        var_names = pp.data_vars
+
+    for var in pp.data_vars:
+        if var in var_names:
+            unique_values = np.unique(pp[var])
+            group_counts = []
+            for y in unique_values:
+                mask = pp[var] == y
+                unique_counts = mask.sum().values
+                group_counts.append(unique_counts)
+
+            dictio[var] = np.stack([unique_values, np.array(group_counts)])
+
+    return (
+        dict_to_dataset(dictio)
+        .rename({"draw": "x_values", "chain": "plot_axis"})
+        .assign_coords({"plot_axis": ["x", "y"]})
+    )
