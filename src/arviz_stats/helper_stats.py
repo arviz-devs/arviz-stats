@@ -45,7 +45,7 @@ def isotonic_fit(dt, var_names, n_bootstrap, ci_prob):
     )
 
 
-def _isotonic_fit(pred, obs, n_bootstrap, ci_prob=None):
+def _isotonic_fit(pred, obs, n_bootstrap, ci_prob):
     """
     Perform isotonic regression on the observed data and return the fitted values.
 
@@ -94,7 +94,7 @@ def _sort_pred_with_obs(pred, obs):
     return pred, obs
 
 
-def point_interval_unique(dt, var_names, group, ci_prob=None):
+def point_interval_unique(dt, var_names, group, ci_prob):
     """
     Compute the mean frequency and confidence intervals for unique values.
 
@@ -102,8 +102,10 @@ def point_interval_unique(dt, var_names, group, ci_prob=None):
     ----------
     dt: DataTree
         DataTree with "posterior_predictive" and "observed_data" groups
+    group : str
+        The group from which to get the unique values.
     var_names : list of str, optional
-        The variables to perform the isotonic regression on.
+        The variables to compute the unique values.
     ci_prob : float, optional
         The probability for the credible interval.
     """
