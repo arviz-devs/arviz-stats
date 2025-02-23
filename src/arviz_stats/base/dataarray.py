@@ -58,6 +58,7 @@ class BaseDataArray:
     def ess(self, da, dims=None, method="bulk", relative=False, prob=None):
         """Compute ess on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
+        prob = validate_ci_prob(prob)
         return apply_ufunc(
             self.array_class.ess,
             da,
