@@ -6,7 +6,7 @@ from scipy import interpolate
 from scipy.optimize import isotonic_regression
 
 
-def isotonic_fit(dt, var_names, n_bootstrap, ci_prob):
+def isotonic_fit(dt, data_pairs, n_bootstrap, ci_prob):
     """
     Perform isotonic regression over a DataTree.
 
@@ -14,8 +14,8 @@ def isotonic_fit(dt, var_names, n_bootstrap, ci_prob):
     ----------
     dt: DataTree
         DataTree with "posterior_predictive" and "observed_data" groups
-    var_names : list of str, optional
-        The variables to perform the isotonic regression on.
+    data_pairs : dict
+        Dictionary of keys prior/posterior predictive data and values observed data variable names.
     n_bootstrap : int
         The number of bootstrap samples to use.
     ci_prob : float, optional
@@ -26,17 +26,16 @@ def isotonic_fit(dt, var_names, n_bootstrap, ci_prob):
     dictio = {}
     vars_ = []
 
-    if var_names is None:
-        var_names = dt.posterior_predictive.data_vars
+    if None in data_pairs.keys():
+        data_pairs = dict(zip(dt.posterior_predictive.data_vars, dt.observed_data.data_vars))
 
-    for var in dt.posterior_predictive.data_vars:
-        if var in var_names:
-            pred = pp[var].mean("sample")
-            cep, counts, forecasted, ci_lb, ci_ub = _isotonic_fit(
-                pred, dt.observed_data[var], n_bootstrap, ci_prob
-            )
-            dictio[var] = np.stack([cep, counts, forecasted, ci_lb, ci_ub])
-            vars_.append(var)
+    for var_predictive, var_obs in data_pairs.items():
+        pred = pp[var_predictive].mean("sample")
+        cep, counts, forecasted, ci_lb, ci_ub = _isotonic_fit(
+            pred, dt.observed_data[var_obs], n_bootstrap, ci_prob
+        )
+        dictio[var_predictive] = np.stack([cep, counts, forecasted, ci_lb, ci_ub])
+        vars_.append(var_predictive)
 
     return (
         dict_to_dataset(dictio)
