@@ -123,6 +123,11 @@ class _BaseAccessor:
     def power_scale_sense(self, dims=None, **kwargs):
         """Compute power-scaling sensitivity."""
         return self._apply("power_scale_sense", dims=dims, **kwargs)
+    
+    def autocorr(self, max_lag=None, dims=None, **kwargs):
+        """Compute autocorrelation for all variables in the dataset."""
+        kwargs["max_lag"] = max_lag
+        return self._apply("autocorr", dims=dims, **kwargs)
 
 
 @xr.register_dataarray_accessor("azstats")
