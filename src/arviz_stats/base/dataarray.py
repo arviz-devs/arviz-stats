@@ -312,5 +312,21 @@ class BaseDataArray:
             kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
         )
 
+    def autocorr(self, da, dims=None):
+        """Compute autocorrelation on DataArray input."""
+        dims = validate_dims(dims)
+        autocorr_result = apply_ufunc(
+            self.array_class.autocorr,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[dims],
+        )
+        # Add coordinates for plotting
+        autocorr_result = autocorr_result.assign_coords(
+            {"lag": np.arange(autocorr_result.sizes[dims[0]])}
+        ).rename({dims[0]: "lag"})
+
+        return autocorr_result
+
 
 dataarray_stats = BaseDataArray(array_class=array_stats)

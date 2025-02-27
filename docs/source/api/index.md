@@ -55,6 +55,7 @@ In addition, many functions are also available via accessors:
    xarray.Dataset.azstats.kde
    xarray.Dataset.azstats.histogram
    xarray.Dataset.azstats.ecdf
+   xarray.Dataset.azstats.autocorr
 
 ```
 
@@ -74,6 +75,7 @@ In addition, many functions are also available via accessors:
    arviz_stats.base.dataarray_stats.mcse
    arviz_stats.base.dataarray_stats.histogram
    arviz_stats.base.dataarray_stats.kde
+   arviz_stats.base.dataarray_stats.autocorr
 ```
 
 ### Numba submodule
