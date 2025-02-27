@@ -31,16 +31,16 @@ def isotonic_fit(dt, data_pairs, n_bootstrap, ci_prob):
 
     for var_predictive, var_obs in data_pairs.items():
         pred = pp[var_predictive].mean("sample")
-        cep, counts, forecasted, ci_lb, ci_ub = _isotonic_fit(
+        cep, forecasted, ci_lb, ci_ub = _isotonic_fit(
             pred, dt.observed_data[var_obs], n_bootstrap, ci_prob
         )
-        dictio[var_predictive] = np.stack([cep, counts, forecasted, ci_lb, ci_ub])
+        dictio[var_predictive] = np.stack([forecasted, cep, ci_lb, ci_ub])
         vars_.append(var_predictive)
 
     return (
         dict_to_dataset(dictio)
         .rename({"draw": "x_values", "chain": "plot_axis"})
-        .assign_coords({"plot_axis": ["y", "counts", "x", "y_bottom", "y_top"]})
+        .assign_coords({"plot_axis": ["x", "y", "y_bottom", "y_top"]})
     )
 
 
@@ -60,28 +60,28 @@ def _isotonic_fit(pred, obs, n_bootstrap, ci_prob):
         The probability for the credible interval.
     """
     pred, obs = _sort_pred_with_obs(pred, obs)
+
     y_out = isotonic_regression(obs, increasing=True).x
     rng = np.random.default_rng(42)
 
     # calculate the fitting function
-    forecasted, counts = np.unique(pred, return_counts=True)
     ir_func = interpolate.interp1d(pred, y_out, bounds_error=False)
-    cep = ir_func(forecasted)
+    cep = ir_func(pred)
 
     # bootstrap the isotonic regression
-    result = np.zeros((n_bootstrap, len(counts)))
+    result = np.zeros((n_bootstrap, len(pred)))
     for i in range(n_bootstrap):
         idx = rng.choice(len(pred), len(pred), replace=True)
         pred_boot, obs_boot = _sort_pred_with_obs(pred[idx], obs[idx])
         y_out_boot = isotonic_regression(obs_boot, increasing=True).x
 
-        result[i] = interpolate.interp1d(pred_boot, y_out_boot, bounds_error=False)(forecasted)
+        result[i] = interpolate.interp1d(pred_boot, y_out_boot, bounds_error=False)(pred)
 
     lb = (1 - ci_prob) / 2 * 100
     ub = (1 + ci_prob) / 2 * 100
     ci = np.nanpercentile(result, [lb, ub], axis=0)
 
-    return cep, counts, forecasted, ci[0], ci[1]
+    return cep, pred, ci[0], ci[1]
 
 
 def _sort_pred_with_obs(pred, obs):
