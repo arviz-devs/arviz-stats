@@ -10,7 +10,7 @@ from scipy.special import bdtr, bdtrik  # pylint: disable=no-name-in-module
 from scipy.stats import uniform
 
 
-def difference_ecdf_pit(dt, data_pairs, ci_prob, method, n_simulations):
+def difference_ecdf_pit(dt, data_pairs, ci_prob, randomized, method, n_simulations):
     """Compute the difference PIT ECDF values.
 
     The probability of the posterior predictive being less than or equal to the observed data.
@@ -26,18 +26,29 @@ def difference_ecdf_pit(dt, data_pairs, ci_prob, method, n_simulations):
         and the second element contains the observed data variable name (or list of names).
     ci_prob : float, optional
         The probability for the credible interval.
+    randomized : list of bool
+        Whether to randomize the PIT values. Randomization is needed for discrete data.
     n_simulations : int
         The number of simulations to use with method `simulation`.
     method : str
         The method to use to compute the confidence bands. Either `simulation` or `optimized`.
     """
     dictio = {}
+    rng = np.random.default_rng(214)
 
-    for var_predictive, var_obs in data_pairs.items():
+    for idx, (var_predictive, var_obs) in enumerate(data_pairs.items()):
         vals = (dt.posterior_predictive[var_predictive] <= dt.observed_data[var_obs]).mean(
             ("chain", "draw")
         )
-        eval_points, ecdf, ci_lb, ci_ub = ecdf_pit(vals, ci_prob, method, n_simulations)
+        if randomized[idx]:
+            vals_less = (dt.posterior_predictive[var_predictive] < dt.observed_data[var_obs]).mean(
+                ("chain", "draw")
+            )
+
+            urvs = rng.uniform(size=vals.shape)
+            vals = urvs * vals_less + (1 - urvs) * vals
+
+        eval_points, ecdf, ci_lb, ci_ub = ecdf_pit(vals, ci_prob, method, n_simulations, rng)
         dictio[var_predictive] = np.stack(
             [eval_points, ecdf - eval_points, ci_lb - eval_points, ci_ub - eval_points]
         )
@@ -49,7 +60,7 @@ def difference_ecdf_pit(dt, data_pairs, ci_prob, method, n_simulations):
     )
 
 
-def ecdf_pit(vals, ci_prob, method, n_simulations):
+def ecdf_pit(vals, ci_prob, method, n_simulations, rng=None):
     """
     Compute the PIT ECDF and the pointwise confidence bands.
 
@@ -63,6 +74,8 @@ def ecdf_pit(vals, ci_prob, method, n_simulations):
         The method to use to compute the confidence bands. Either `simulation` or `optimized`.
     n_simulations : int
         The number of simulations to use with method `simulation`.
+    rng : Generator, optional
+        The random number generator to use with the simulation method.
 
     Returns
     -------
@@ -83,7 +96,12 @@ def ecdf_pit(vals, ci_prob, method, n_simulations):
 
     if method == "simulation":
         prob_pointwise = simulate_confidence_bands(
-            n_draws, eval_points, cdf_at_eval_points, ci_prob, n_simulations
+            n_draws,
+            eval_points,
+            cdf_at_eval_points,
+            ci_prob,
+            n_simulations,
+            rng,
         )
 
     elif method == "optimized":
@@ -118,7 +136,7 @@ def get_pointwise_confidence_band(prob, ndraws, cdf_at_eval_points):
 
 
 ### Simulation method
-def simulate_confidence_bands(n_draws, eval_points, cdf_at_eval_points, prob, n_simulations):
+def simulate_confidence_bands(n_draws, eval_points, cdf_at_eval_points, prob, n_simulations, rng):
     """Simulate method for simultaneous confidence bands.
 
     Compute the smallest marginal probability of a pointwise confidence band that
@@ -136,9 +154,10 @@ def simulate_confidence_bands(n_draws, eval_points, cdf_at_eval_points, prob, n_
         The probability for the credible interval.
     num_trials : int
         The number of trials to use.
+    rng : Generator
+        The random number generator to use.
     """
     probs_pointwise = np.empty(n_simulations)
-    rng = np.random.default_rng(214)
     for i in range(n_simulations):
         sample = rng.uniform(0, 1, size=n_draws)
         ecdf_at_eval_points = compute_ecdf(sample, eval_points)
