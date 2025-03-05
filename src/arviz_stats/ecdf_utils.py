@@ -26,7 +26,7 @@ def difference_ecdf_pit(dt, data_pairs, ci_prob, randomized, method, n_simulatio
         and the second element contains the observed data variable name (or list of names).
     ci_prob : float, optional
         The probability for the credible interval.
-    randomized : bool
+    randomized : list of bool
         Whether to randomize the PIT values. Randomization is needed for discrete data.
     n_simulations : int
         The number of simulations to use with method `simulation`.
@@ -36,11 +36,11 @@ def difference_ecdf_pit(dt, data_pairs, ci_prob, randomized, method, n_simulatio
     dictio = {}
     rng = np.random.default_rng(214)
 
-    for var_predictive, var_obs in data_pairs.items():
+    for idx, (var_predictive, var_obs) in enumerate(data_pairs.items()):
         vals = (dt.posterior_predictive[var_predictive] <= dt.observed_data[var_obs]).mean(
             ("chain", "draw")
         )
-        if randomized:
+        if randomized[idx]:
             vals_less = (dt.posterior_predictive[var_predictive] < dt.observed_data[var_obs]).mean(
                 ("chain", "draw")
             )
