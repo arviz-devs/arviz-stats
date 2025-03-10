@@ -88,10 +88,13 @@ def ecdf_pit(vals, ci_prob, method, n_simulations, rng=None):
     upper : array-like
         The upper confidence band.
     """
+    if rng is None:
+        rng = np.random.default_rng(214)
+
     n_draws = len(vals)
     eval_points = np.linspace(1 / n_draws, 1, n_draws)
-    vals = np.sort(vals)
     ecdf = compute_ecdf(vals, eval_points)
+
     cdf_at_eval_points = uniform(0, 1).cdf(eval_points)
 
     if method == "simulation":
