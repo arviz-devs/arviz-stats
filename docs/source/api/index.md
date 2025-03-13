@@ -20,6 +20,7 @@
 
    arviz_stats.bayes_factor
    arviz_stats.ess
+   arviz_stats.loo
    arviz_stats.mcse
    arviz_stats.psense
    arviz_stats.psense_summary

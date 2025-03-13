@@ -287,6 +287,18 @@ class BaseDataArray:
             kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
         )
 
+    def psislw(self, da, r_eff=1, dims=None):
+        """."""
+        dims = validate_dims(dims)
+        return apply_ufunc(
+            self.array_class.psislw,
+            da,
+            r_eff,
+            input_core_dims=[dims, []],
+            output_core_dims=[dims, []],
+            kwargs={"axes": np.arange(-len(dims), 0, 1)},
+        )
+
     def power_scale_lw(self, da, alpha=0, dims=None):
         """Compute log weights for power-scaling component by alpha."""
         dims = validate_dims(dims)
