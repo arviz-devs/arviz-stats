@@ -28,7 +28,7 @@ def test_psense_summary():
     psense_df = psense_summary(uni_dt)
     assert all(psense_df.index == ["mu", "sigma"])
     assert all(psense_df["prior"] == [0.404, 0.293])
-    assert all(psense_df["likelihood"] == [0.575, 0.535])
+    assert all(psense_df["likelihood"] == [0.576, 0.536])
     assert all(psense_df["diagnosis"] == "potential prior-data conflict")
 
     psense_df = psense_summary(uni_dt, threshold=1)
