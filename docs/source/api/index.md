@@ -19,6 +19,7 @@
    :toctree: generated/
 
    arviz_stats.bayes_factor
+   arviz_stats.compare
    arviz_stats.ess
    arviz_stats.loo
    arviz_stats.mcse
