@@ -25,7 +25,7 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         :func:`arviz.convert_to_dataset` for details.
     pointwise: bool, optional
         If True the pointwise predictive accuracy will be returned. Defaults to
-        ``stats.ic_pointwise`` rcParam.
+        ``rcParams["stats.ic_pointwise"]``.
     var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
@@ -35,19 +35,21 @@ def loo(data, pointwise=None, var_name=None, reff=None):
 
     Returns
     -------
-    ELPDData object with the following attributes:
-    elpd: expected log pointwise predictive density
-    se: standard error of the elpd
-    p: effective number of parameters
-    n_samples: number of samples
-    n_data_points: number of data points
-    warning: bool
-        True if the estimated shape parameter of Pareto distribution is greater than
-        ``good_k``.
-    elp_i: :class:`~xarray.DataArray` with the pointwise predictive accuracy,
-            only if pointwise=True
-    pareto_k: array of Pareto shape values, only if pointwise=True
-    good_k: For a sample size S, the threshold is compute as min(1 - 1/log10(S), 0.7)
+    ELPDData
+        Object with the following attributes:
+
+        - **elpd**: expected log pointwise predictive density
+        - **se**: standard error of the elpd
+        - **p**: effective number of parameters
+        - **n_samples**: number of samples
+        - **n_data_points**: number of data points
+        - **warning**: True if the estimated shape parameter of Pareto distribution is greater
+          than ``good_k``.
+        - **elp_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
+          ``pointwise=True``
+        - **pareto_k**: array of Pareto shape values, only if ``pointwise=True``
+        - **good_k**: For a sample size S, the threshold is computed as
+          ``min(1 - 1/log10(S), 0.7)``
 
     Examples
     --------
@@ -55,9 +57,10 @@ def loo(data, pointwise=None, var_name=None, reff=None):
 
     .. ipython::
 
-        In [1]: import arviz as az
-           ...: data = az.load_arviz_data("centered_eight")
-           ...: loo_data = az.loo(data)
+        In [1]: from arviz_stats import loo
+           ...: from arviz_base import load_arviz_data
+           ...: data = load_arviz_data("centered_eight")
+           ...: loo_data = loo(data)
            ...: loo_data
 
     Return the pointwise values:
