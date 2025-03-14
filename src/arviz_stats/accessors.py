@@ -43,18 +43,27 @@ def check_var_name_subset(obj, var_name):
 
 
 def apply_function_to_dataset(func, ds, kwargs):
-    return xr.Dataset(
-        {
-            var_name: func(
-                da,
-                **{
-                    key: check_var_name_subset(value, var_name)
-                    for key, value in update_kwargs_with_dims(da, kwargs).items()
-                },
-            )
-            for var_name, da in ds.items()
+    result_dicts = None
+
+    for var_name, da in ds.items():
+        updated_kwargs = update_kwargs_with_dims(da, kwargs)
+        subset_kwargs = {
+            key: check_var_name_subset(value, var_name) for key, value in updated_kwargs.items()
         }
-    )
+        result = func(da, **subset_kwargs)
+
+        if not isinstance(result, tuple):
+            result = (result,)
+
+        if result_dicts is None:
+            result_dicts = [{} for _ in range(len(result))]
+
+        for i, res in enumerate(result):
+            result_dicts[i][var_name] = res
+
+    datasets = tuple(xr.Dataset(res_dict) for res_dict in result_dicts)
+
+    return datasets if len(datasets) > 1 else datasets[0]
 
 
 unset = UnsetDefault()
@@ -123,6 +132,10 @@ class _BaseAccessor:
     def pareto_min_ss(self, dims=None, **kwargs):
         """Compute the min sample size for all variables in the dataset."""
         return self._apply("pareto_min_ss", dims=dims, **kwargs)
+
+    def psislw(self, dims=None, **kwargs):
+        """Pareto smoothed importance sampling."""
+        return self._apply("psislw", dims=dims, **kwargs)
 
     def power_scale_lw(self, dims=None, **kwargs):
         """Compute log weights for power-scaling of the DataTree."""

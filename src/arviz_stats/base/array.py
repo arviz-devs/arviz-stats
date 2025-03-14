@@ -156,8 +156,20 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         pms_array = make_ufunc(self._pareto_min_ss, n_output=1, n_input=1, n_dims=2, ravel=False)
         return pms_array(ary)
 
+    def psislw(self, ary, r_eff=1, axes=-1):
+        """-"""
+        ary, axes = process_ary_axes(ary, axes)
+        psl_ufunc = make_ufunc(
+            self._psislw,
+            n_output=2,
+            n_input=1,
+            n_dims=len(axes),
+            ravel=False,
+        )
+        return psl_ufunc(ary, out_shape=[(ary.shape[i] for i in axes), []], r_eff=r_eff)
+
     def power_scale_lw(self, ary, alpha=0, axes=-1):
-        """Compute ranks of MCMC samples."""
+        """Compute log weights for power-scaling component by alpha."""
         ary, axes = process_ary_axes(ary, axes)
         psl_ufunc = make_ufunc(
             self._power_scale_lw,

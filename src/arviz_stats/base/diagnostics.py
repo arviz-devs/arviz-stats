@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 import numpy as np
 from scipy import stats
+from scipy.special import logsumexp
 
 from arviz_stats.base.core import _CoreBase
 from arviz_stats.base.stats_utils import not_valid as _not_valid
@@ -337,12 +338,23 @@ class _DiagnosticsBase(_CoreBase):
         ary_flatten = ary.flatten()
         r_eff = self._ess_tail(ary, relative=True)
 
-        kappa = self._pareto_khat(ary_flatten, r_eff=r_eff, tail="both", log_weights=False)
+        _, kappa = self._pareto_khat(ary_flatten, r_eff=r_eff, tail="both", log_weights=False)
 
         if kappa < 1:
             return 10 ** (1 / (1 - max(0, kappa)))
 
         return np.inf
+
+    def _psislw(self, ary, r_eff):
+        ary_shape = ary.shape
+        ary = ary.flatten()
+        n_draws = len(ary)
+        n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail="right")
+        ary, khat = self._ps_tail(
+            -ary, n_draws, n_draws_tail, smooth_draws=True, tail="right", log_weights=True
+        )
+
+        return ary.reshape(ary_shape), khat
 
     def _pareto_khat(self, ary, r_eff=1, tail="both", log_weights=False):
         """
@@ -378,9 +390,9 @@ class _DiagnosticsBase(_CoreBase):
                 for t in ("left", "right")
             )
         else:
-            _, khat = self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail)
+            ary, khat = self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail)
 
-        return khat
+        return ary, khat
 
     @staticmethod
     def _get_ps_tails(n_draws, r_eff, tail):
@@ -463,11 +475,12 @@ class _DiagnosticsBase(_CoreBase):
             khat, sigma = self._gpdfit(draws_tail - cutoff)
 
             if np.isfinite(khat) and smooth_draws:
-                p = (np.arange(0.5, n_draws_tail)) / n_draws_tail
+                p = np.arange(0.5, n_draws_tail) / n_draws_tail
                 smoothed = self._gpinv(p, khat, sigma, cutoff)
 
                 if log_weights:
                     smoothed = np.log(smoothed)
+
             else:
                 smoothed = None
         else:
@@ -479,6 +492,12 @@ class _DiagnosticsBase(_CoreBase):
 
         if tail == "left":
             ary = -ary
+
+        # normalise weights
+        if log_weights:
+            ary -= logsumexp(ary)
+        else:
+            ary /= np.sum(ary)
 
         return ary, khat
 
@@ -543,7 +562,6 @@ class _DiagnosticsBase(_CoreBase):
         if sigma <= 0:
             return np.full_like(probs, np.nan)
 
-        probs = 1 - probs
         if kappa == 0:
             q = mu - sigma * np.log1p(-probs)
         else:
@@ -574,7 +592,7 @@ class _DiagnosticsBase(_CoreBase):
             log_weights,
             n_draws,
             n_draws_tail,
-            smooth_draws=False,
+            smooth_draws=True,
             log_weights=True,
         )
 
