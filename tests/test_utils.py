@@ -87,6 +87,7 @@ def test_elpddata_base():
         n_data_points=370,
         scale="log",
         warning=False,
+        good_k=0.7,
     )
 
     printed = str(elpddata)
