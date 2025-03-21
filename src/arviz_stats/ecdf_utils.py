@@ -10,7 +10,7 @@ from scipy.special import bdtr, bdtrik  # pylint: disable=no-name-in-module
 from scipy.stats import uniform
 
 
-def difference_ecdf_pit(dt, data_pairs, ci_prob, randomized, method, n_simulations):
+def difference_ecdf_pit(dt, data_pairs, ci_prob, coverage, randomized, method, n_simulations):
     """Compute the difference PIT ECDF values.
 
     The probability of the posterior predictive being less than or equal to the observed data.
@@ -47,6 +47,9 @@ def difference_ecdf_pit(dt, data_pairs, ci_prob, randomized, method, n_simulatio
 
             urvs = rng.uniform(size=vals.shape)
             vals = urvs * vals_less + (1 - urvs) * vals
+
+        if coverage:
+            vals = 2 * np.abs(vals - 0.5)
 
         eval_points, ecdf, ci_lb, ci_ub = ecdf_pit(vals, ci_prob, method, n_simulations, rng)
         dictio[var_predictive] = np.stack(
