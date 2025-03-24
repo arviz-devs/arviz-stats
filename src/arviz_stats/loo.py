@@ -187,8 +187,8 @@ def loo_pit(data, y_obs=None, y_pred=None, log_weights=None):
 
         In [1]: from arviz_stats import loo_pit
            ...: from arviz_base import load_arviz_data, from_dict
-           ...: data = load_arviz_data("centered_eight")
-           ...: loo_pit(data, y_obs="obs")
+           ...: dt = load_arviz_data("centered_eight")
+           ...: loo_pit(dt, y_obs="obs")
 
     Calculate LOO-PIT values using as test quantity the square of the difference between
     each observation and `mu`. For this we create a new DataTree, copying the posterior and
@@ -196,13 +196,16 @@ def loo_pit(data, y_obs=None, y_pred=None, log_weights=None):
 
     .. ipython::
 
-        In [1]: new_dt = from_dict({"posterior": dt.posterior, "log_likelihood": dt.log_likelihood,
-        ...:                     "observed_data": {
-        ...:                         "obs": (dt.observed_data.obs
-        ...:                                - dt.posterior.mu.median(dim=("chain", "draw")))**2},
-        ...:                     "posterior_predictive": {
-        ...:                         "obs": (dt.posterior_predictive.obs - dt.posterior.mu)**2}})
-        ...: loo_pit(new_dt)
+        In [1]: new_dt = from_dict({"posterior": dt.posterior,
+           ...:                 "log_likelihood": dt.log_likelihood,
+           ...:                 "observed_data": {
+           ...:                     "obs": (dt.observed_data.obs
+           ...:                            - dt.posterior.mu.median(dim=("chain", "draw")))**2},
+           ...:                 "posterior_predictive": {
+           ...:                     "obs": (dt.posterior_predictive.obs - dt.posterior.mu)**2}})
+           ...: loo_pit(new_dt)
+
+
 
     References
     ----------
