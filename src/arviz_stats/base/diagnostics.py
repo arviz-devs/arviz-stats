@@ -346,6 +346,7 @@ class _DiagnosticsBase(_CoreBase):
         return np.inf
 
     def _psislw(self, ary, r_eff):
+        """Compute Pareto smoothed importance sampling (PSIS) log weights."""
         ary_shape = ary.shape
         ary = ary.flatten()
         n_draws = len(ary)

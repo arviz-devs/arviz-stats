@@ -157,7 +157,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return pms_array(ary)
 
     def psislw(self, ary, r_eff=1, axes=-1):
-        """-"""
+        """Compute log weights for Pareto-smoothed importance sampling (PSIS) method."""
         ary, axes = process_ary_axes(ary, axes)
         psl_ufunc = make_ufunc(
             self._psislw,
