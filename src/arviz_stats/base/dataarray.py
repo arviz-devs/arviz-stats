@@ -288,7 +288,7 @@ class BaseDataArray:
         )
 
     def psislw(self, da, r_eff=1, dims=None):
-        """."""
+        """Compute log weights for Pareto-smoothed importance sampling (PSIS) method."""
         dims = validate_dims(dims)
         return apply_ufunc(
             self.array_class.psislw,

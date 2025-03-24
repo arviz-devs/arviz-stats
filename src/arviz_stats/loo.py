@@ -6,7 +6,7 @@ from copy import deepcopy
 
 import numpy as np
 import pandas as pd
-from arviz_base import convert_to_datatree, rcParams
+from arviz_base import convert_to_datatree, extract, rcParams
 from scipy.optimize import minimize
 from scipy.stats import dirichlet
 from xarray_einstats.stats import logsumexp
@@ -102,18 +102,7 @@ def loo(data, pointwise=None, var_name=None, reff=None):
     )
 
     if reff is None:
-        if not hasattr(data, "posterior"):
-            raise TypeError("Must be able to extract a posterior group from data.")
-        posterior = data.posterior
-        n_chains = len(posterior.chain)
-        if n_chains == 1:
-            reff = 1.0
-        else:
-            ess_p = posterior.azstats.ess(method="mean")
-            # this mean is over all data variables
-            reff = (
-                np.hstack([ess_p[v].values.flatten() for v in ess_p.data_vars]).mean() / n_samples
-            )
+        reff = _get_r_eff(data, n_samples)
 
     log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dims=sample_dims)
     pareto_k_da = pareto_k[var_name]
@@ -162,6 +151,102 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         loo_lppd_i,
         pareto_k_da,
     )
+
+
+def loo_pit(data, y_obs=None, y_pred=None, log_weights=None):
+    """Compute leave one out (PSIS-LOO) probability integral transform (PIT) values.
+
+    The LOO-PIT for observed value y_i, is the probability of the posterior predictive for y_i
+    being less than or equal to y_i, when we leave out observation y_i. It should be uniformly
+    distributed.
+    LOO-PIT values are computed using the PSIS-LOO-CV method described in [1]_ and [2]_.
+
+    Parameters
+    ----------
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior, posterior_predictive and log_likelihood groups.
+    y_obs : str or list of str
+        Observed data. Defaults to None, all observed data variables are used.
+    y_pred : str or list of str
+        Posterior predictive samples for ``y_pred``.
+        Defaults to None, all posterior predictive variables are used.
+    log_weights: DataArray
+        Smoothed log_weights. It must have the same shape as ``y_pred``
+        Defaults to None, it will be computed using the PSIS-LOO method.
+
+    Returns
+    -------
+    loo_pit: array or DataArray
+        Value of the LOO-PIT at each observed data point.
+
+    Examples
+    --------
+    Calculate LOO-PIT values using as test quantity the observed values themselves.
+
+    .. ipython::
+
+        In [1]: from arviz_stats import loo_pit
+           ...: from arviz_base import load_arviz_data, from_dict
+           ...: dt = load_arviz_data("centered_eight")
+           ...: loo_pit(dt, y_obs="obs")
+
+    Calculate LOO-PIT values using as test quantity the square of the difference between
+    each observation and `mu`. For this we create a new DataTree, copying the posterior and
+    log_likelihood groups and creating new observed and posterior_predictive groups.
+
+    .. ipython::
+
+        In [1]: new_dt = from_dict({"posterior": dt.posterior,
+           ...:                 "log_likelihood": dt.log_likelihood,
+           ...:                 "observed_data": {
+           ...:                     "obs": (dt.observed_data.obs
+           ...:                            - dt.posterior.mu.median(dim=("chain", "draw")))**2},
+           ...:                 "posterior_predictive": {
+           ...:                     "obs": (dt.posterior_predictive.obs - dt.posterior.mu)**2}})
+           ...: loo_pit(new_dt)
+
+
+
+    References
+    ----------
+
+    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+        arXiv preprint https://arxiv.org/abs/1507.04544.
+
+    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+        arXiv preprint https://arxiv.org/abs/1507.02646
+    """
+    data = convert_to_datatree(data)
+
+    if y_obs is None and y_pred is not None:
+        y_obs = y_pred
+
+    if y_pred is None and y_obs is not None:
+        y_pred = y_obs
+
+    log_likelihood = get_log_likelihood_dataset(data, var_names=y_obs)
+
+    if log_weights is None:
+        n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+        reff = _get_r_eff(data, n_samples)
+        log_weights, _ = log_likelihood.azstats.psislw(r_eff=reff)
+        # This should not be necessary
+        log_weights = log_weights.transpose(*list(log_likelihood.dims))
+
+    posterior_predictive = extract(
+        data, group="posterior_predictive", combined=False, var_names=y_pred
+    )
+    observed_data = extract(data, group="observed_data", combined=False, var_names=y_obs)
+
+    loo_pit_values = np.exp(
+        logsumexp(
+            log_weights.where(posterior_predictive <= observed_data, 0), dims=["chain", "draw"]
+        )
+    )
+
+    return loo_pit_values
 
 
 def compare(
@@ -357,6 +442,20 @@ def compare(
     df_comp["rank"] = df_comp["rank"].astype(int)
     df_comp["warning"] = df_comp["warning"].astype(bool)
     return df_comp.sort_values(by="elpd", ascending=False)
+
+
+def _get_r_eff(data, n_samples):
+    if not hasattr(data, "posterior"):
+        raise TypeError("Must be able to extract a posterior group from data.")
+    posterior = data.posterior
+    n_chains = len(posterior.chain)
+    if n_chains == 1:
+        reff = 1.0
+    else:
+        ess_p = posterior.azstats.ess(method="mean")
+        # this mean is over all data variables
+        reff = np.hstack([ess_p[v].values.flatten() for v in ess_p.data_vars]).mean() / n_samples
+    return reff
 
 
 def _ic_matrix(ics):

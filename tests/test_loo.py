@@ -6,8 +6,9 @@ from arviz_base import load_arviz_data
 from numpy.testing import assert_allclose, assert_almost_equal
 from xarray import DataArray
 
-from arviz_stats import compare, loo
+from arviz_stats import compare, loo, loo_pit
 from arviz_stats.loo import _calculate_ics
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 @pytest.fixture(name="centered_eight", scope="session")
@@ -115,3 +116,24 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
     }
     with pytest.raises(ValueError, match="should have been calculated with pointwise=True"):
         _calculate_ics(in_dict)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {},
+        {"y_obs": "obs"},
+        {"y_obs": "obs", "y_pred": "obs"},
+        {"log_weights": "arr"},
+    ],
+)
+def test_loo_pit(centered_eight, args):
+    y_obs = args.get("y", None)
+    y_pred = args.get("y_hat", None)
+    log_weights = args.get("log_weights", None)
+    if log_weights == "arr":
+        log_weights = get_log_likelihood_dataset(centered_eight, var_names=y_obs)
+
+    loo_pit_values = loo_pit(centered_eight, y_obs=y_obs, y_pred=y_pred, log_weights=log_weights)
+    assert np.all(loo_pit_values >= 0)
+    assert np.all(loo_pit_values <= 1)
