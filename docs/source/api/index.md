@@ -27,6 +27,7 @@
    arviz_stats.psense
    arviz_stats.psense_summary
    arviz_stats.rhat
+   arviz_stats.rhat_nested
    arviz_stats.summary
    arviz_stats.thin
 ```
@@ -53,6 +54,7 @@ In addition, many functions are also available via accessors:
    xarray.Dataset.azstats.compute_ranks
    xarray.Dataset.azstats.ess
    xarray.Dataset.azstats.rhat
+   xarray.Dataset.azstats.rhat_nested
    xarray.Dataset.azstats.mcse
    xarray.Dataset.azstats.thin
    xarray.Dataset.azstats.kde
@@ -75,6 +77,7 @@ In addition, many functions are also available via accessors:
    arviz_stats.base.dataarray_stats.hdi
    arviz_stats.base.dataarray_stats.ess
    arviz_stats.base.dataarray_stats.rhat
+   arviz_stats.base.dataarray_stats.rhat_nested
    arviz_stats.base.dataarray_stats.mcse
    arviz_stats.base.dataarray_stats.histogram
    arviz_stats.base.dataarray_stats.kde
@@ -103,6 +106,7 @@ Implementation differences are thus documented below, at the array facing classe
    arviz_stats.base.array_stats.hdi
    arviz_stats.base.array_stats.ess
    arviz_stats.base.array_stats.rhat
+   arviz_stats.base.array_stats.rhat_nested
    arviz_stats.base.array_stats.mcse
    arviz_stats.base.array_stats.get_bins
    arviz_stats.base.array_stats.histogram

@@ -638,3 +638,54 @@ class _DiagnosticsBase(_CoreBase):
         bound = cdf_p_int + cdf_q_int
 
         return np.sqrt((cjs_pq + cjs_qp) / bound)
+
+    @staticmethod
+    def _rhat_nested(ary, superchain_ids):
+        ary = np.asarray(ary)
+        nchains, niterations = ary.shape
+
+        # Check that all chains are assigned a superchain
+        if len(superchain_ids) != nchains:
+            raise ValueError("Length of superchain_ids not equal to number of chains")
+
+        # Check that superchains have equal length
+        superchain_counts = np.bincount(superchain_ids)
+        nchains_per_superchain = np.max(superchain_counts)
+
+        if nchains_per_superchain != np.min(superchain_counts):
+            raise ValueError("Number of chains per superchain is not the same for each superchain")
+
+        superchains = np.unique(superchain_ids)
+
+        # Compute chain means and variances
+        chain_mean = np.mean(ary, axis=1)
+        chain_var = np.var(ary, axis=1, ddof=1)
+
+        # mean of superchains calculated by only including specified chains
+        # (equation 4 in Margossian et al. 2024)
+        superchain_mean = np.array([np.mean(chain_mean[superchain_ids == k]) for k in superchains])
+
+        # between-chain variance estimate (Bhat_k in equation 7 in Margossian et al. 2024)
+        if nchains_per_superchain == 1:
+            var_between_chain = np.zeros(len(superchains))
+        else:
+            var_between_chain = np.array(
+                [np.var(chain_mean[superchain_ids == k], ddof=1) for k in superchains]
+            )
+
+        #  within-chain variance estimate (What_k in equation 7 in Margossian et al. 2024)
+        if niterations == 1:
+            var_within_chain = np.zeros(len(superchains))
+        else:
+            var_within_chain = np.array(
+                [np.mean(chain_var[np.where(superchain_ids == k)[0]]) for k in superchains]
+            )
+
+        # between-superchain variance (Bhat_nu in equation 6 in Margossian et al. 2024)
+        var_between_superchain = np.var(superchain_mean, ddof=1)
+
+        # within-superchain variance (What_nu in equation 7 in Margossian et al. 2024)
+        var_within_superchain = np.mean(var_within_chain + var_between_chain)
+
+        # nested Rhat (Rhat_nu in equation 8 in Margossian et al. 2024)
+        return np.sqrt(1 + var_between_superchain / var_within_superchain)
