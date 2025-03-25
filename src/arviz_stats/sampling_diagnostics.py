@@ -352,14 +352,14 @@ def rhat_nested(
 
     See Also
     --------
-    arviz.ess : Calculate estimate of the effective sample size (ess).
-    arviz.mcse : Calculate Markov Chain Standard Error statistic.
+    arviz.rhat : Calculate estimate of the effective sample size (ess).
+    arviz.ess : Calculate Markov Chain Standard Error statistic.
     plot_forest : Forest plot to compare HDI intervals from a number of distributions.
 
     References
     ----------
-    .. [1] Margossian et al *Nested R-hat: Assessing the Convergence of Markov Chain Monte Carlo
-        When Running Many Short Chains*.
+    .. [1] Margossian et al *Nested R-hat: Assessing the convergence of Markov Chain Monte Carlo
+        when running many short chains*.
         Bayesian Analysis, (2024). https://doi.org/10.1214/24-BA1453
     """
     if isinstance(data, list | tuple | np.ndarray):
