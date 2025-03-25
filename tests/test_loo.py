@@ -122,18 +122,24 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
     "args",
     [
         {},
-        {"y_obs": "obs"},
-        {"y_obs": "obs", "y_pred": "obs"},
+        {"var_names": ["obs"]},
         {"log_weights": "arr"},
     ],
 )
 def test_loo_pit(centered_eight, args):
-    y_obs = args.get("y", None)
-    y_pred = args.get("y_hat", None)
+    var_names = args.get("var_names", None)
     log_weights = args.get("log_weights", None)
     if log_weights == "arr":
-        log_weights = get_log_likelihood_dataset(centered_eight, var_names=y_obs)
+        log_weights = get_log_likelihood_dataset(centered_eight, var_names=var_names)
 
-    loo_pit_values = loo_pit(centered_eight, y_obs=y_obs, y_pred=y_pred, log_weights=log_weights)
+    loo_pit_values = loo_pit(centered_eight, var_names=var_names, log_weights=log_weights)
+    assert np.all(loo_pit_values >= 0)
+    assert np.all(loo_pit_values <= 1)
+
+
+def test_loo_pit_discrete(centered_eight):
+    centered_eight.observed_data["obs"] = centered_eight.observed_data["obs"].astype(int)
+
+    loo_pit_values = loo_pit(centered_eight)
     assert np.all(loo_pit_values >= 0)
     assert np.all(loo_pit_values <= 1)
