@@ -192,7 +192,7 @@ def loo_pit(data, var_names=None, log_weights=None, randomize=False):
         In [1]: from arviz_stats import loo_pit
            ...: from arviz_base import load_arviz_data, from_dict
            ...: dt = load_arviz_data("centered_eight")
-           ...: loo_pit(dt, y_obs="obs")
+           ...: loo_pit(dt)
 
     Calculate LOO-PIT values using as test quantity the square of the difference between
     each observation and `mu`. For this we create a new DataTree, copying the posterior and
