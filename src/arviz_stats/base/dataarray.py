@@ -96,6 +96,19 @@ class BaseDataArray:
             kwargs={"method": method, "chain_axis": -2, "draw_axis": -1},
         )
 
+    def rhat_nested(self, da, superchain_ids, dims=None):
+        """Compute nested rhat on DataArray input."""
+        dims = validate_dims(dims)
+        if len(dims) != 2:
+            raise ValueError("dims must be of length 2 for rhat computation")
+        return apply_ufunc(
+            self.array_class.rhat_nested,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[]],
+            kwargs={"superchain_ids": superchain_ids, "chain_axis": -2, "draw_axis": -1},
+        )
+
     def mcse(self, da, dims=None, method="mean", prob=None):
         """Compute mcse on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)

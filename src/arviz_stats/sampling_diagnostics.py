@@ -298,6 +298,114 @@ def rhat(
     return data.azstats.rhat(dims=sample_dims, method=method)
 
 
+def rhat_nested(
+    data,
+    sample_dims=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    superchain_ids=None,
+    chain_axis=0,
+    draw_axis=1,
+):
+    """Compute nested R-hat.
+
+    Nested R-hat is a convergence diagnostic useful when running many short chains.
+    It is calculated on superchains, which are groups of chains that have been
+    initialized at the same point.
+
+    Note that there is a slight difference in the calculation of R-hat and nested R-hat,
+    as nested R-hat is lower bounded by 1. This means that nested R-hat with one chain per
+    superchain will not be exactly equal to basic R-hat see [1]_ for details.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset`
+
+        At least 2 posterior chains are needed to compute this diagnostic of one or more
+        stochastic parameters.
+
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions and are to be reduced.
+        Default ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the R-hat.
+    var_names : str or list of str, optional
+        Names of the variables for which the Rhat should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    superchain_ids : list
+        Lisf ot length ``chains`` specifying which superchain each chain belongs to.
+        There should be equal numbers of chains in each superchain. All chains within
+        the same superchain are assumed to have been initialized at the same point.
+    chain_axis, draw_axis : int, optional
+        Integer indicators of the axis that correspond to the chain and the draw dimension.
+        `chain_axis` can be ``None``.
+
+    See Also
+    --------
+    arviz.ess : Calculate estimate of the effective sample size (ess).
+    arviz.mcse : Calculate Markov Chain Standard Error statistic.
+    plot_forest : Forest plot to compare HDI intervals from a number of distributions.
+
+    References
+    ----------
+    .. [1] Margossian et al *Nested R-hat: Assessing the Convergence of Markov Chain Monte Carlo
+        When Running Many Short Chains*.
+        Bayesian Analysis, (2024). https://doi.org/10.1214/24-BA1453
+    """
+    if isinstance(data, list | tuple | np.ndarray):
+        data = np.array(data)
+        return get_array_function("rhat_nested")(
+            data,
+            chain_axis=chain_axis,
+            draw_axis=draw_axis,
+            superchain_ids=superchain_ids,
+        )
+
+    if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
+        # Make sure the grouped dimension is added as one of the dimensions to be reduced
+        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
+        return data.map(
+            rhat,
+            sample_dims=sample_dims,
+            var_names=var_names,
+            coords=coords,
+            superchain_ids=superchain_ids,
+        )
+
+    if isinstance(data, xr.DataArray):
+        if coords is not None:
+            data = data.sel(coords)
+        return data.azstats.rhat_nested(dims=sample_dims, superchain_ids=superchain_ids)
+
+    if isinstance(data, xr.DataTree):
+        data = data.azstats.filter_vars(
+            group=group, var_names=var_names, filter_vars=filter_vars
+        ).datatree
+        if coords is not None:
+            data = data.sel(coords)
+        return data.azstats.rhat_nested(
+            dims=sample_dims, group=group, superchain_ids=superchain_ids
+        )
+
+    data = convert_to_dataset(data, group=group)
+
+    data = data.azstats.filter_vars(var_names=var_names, filter_vars=filter_vars).dataset
+    if coords is not None:
+        data = data.sel(coords)
+
+    return data.azstats.rhat_nested(dims=sample_dims, superchain_ids=superchain_ids)
+
+
 def mcse(
     data,
     sample_dims=None,
