@@ -121,18 +121,18 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         )
         warn_mg = True
 
-    loo_lppd_i = logsumexp(log_weights, dims=sample_dims)[var_name].values
-    lppd = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum()[var_name].values
-    loo_lppd = loo_lppd_i.sum()
-    loo_lppd_se = (n_data_points * np.var(loo_lppd_i)) ** 0.5
-    p_loo = lppd - loo_lppd
+    elpd_i = logsumexp(log_weights, dims=sample_dims)[var_name].values
+    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum()[var_name].values
+    elpd = elpd_i.sum()
+    elpd_se = (n_data_points * np.var(elpd_i)) ** 0.5
+    p_loo = elpd_raw - elpd
 
     if not pointwise:
         return ELPDData(
-            "loo", loo_lppd, loo_lppd_se, p_loo, n_samples, n_data_points, "log", warn_mg, good_k
+            "loo", elpd, elpd_se, p_loo, n_samples, n_data_points, "log", warn_mg, good_k
         )
 
-    if np.equal(loo_lppd, loo_lppd_i).all():  # pylint: disable=no-member
+    if np.equal(elpd, elpd_i).all():  # pylint: disable=no-member
         warnings.warn(
             "The point-wise LOO is the same with the sum LOO, please double check "
             "the Observed RV in your model to make sure it returns element-wise logp."
@@ -140,15 +140,15 @@ def loo(data, pointwise=None, var_name=None, reff=None):
 
     return ELPDData(
         "loo",
-        loo_lppd,
-        loo_lppd_se,
+        elpd,
+        elpd_se,
         p_loo,
         n_samples,
         n_data_points,
         "log",
         warn_mg,
         good_k,
-        loo_lppd_i,
+        elpd_i,
         pareto_k_da,
     )
 
@@ -266,6 +266,52 @@ def loo_pit(data, var_names=None, log_weights=None, randomize=False):
     loo_pit_values = np.exp(logsumexp(log_weights.where(pit_vals, 0), dims=["chain", "draw"]))
 
     return loo_pit_values
+
+
+def loo_expectations(data,  var_name=None, kind="mean", probs=[0.5]):
+    """
+    """
+    if kind not in ["mean", "var", "sd", "quantile"]:
+        raise ValueError("kind must be either 'mean', 'median', 'var', 'sd' or 'quantile'")
+    
+    dims = ('chain', 'draw')
+    if var_name is None:
+        var_name = list(data.observed_data.data_vars.keys())[0]
+
+    # Should we store the log_weights in the datatree when computing LOO? 
+    # Then we should be able to use the same log_weights for different variables
+
+    data = convert_to_datatree(data)
+
+    log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
+    log_weights, _ = log_likelihood.azstats.psislw()
+    weights = np.exp(log_weights)
+
+    weighted_predictions = azb.extract(data, group="posterior_predictive", var_names=var_name, combined=False).weighted(weights[var_name])
+
+    if kind == "mean":
+       loo_exp = weighted_predictions.mean(dim=dims)
+
+    if kind == "median":
+        loo_exp = weighted_predictions.quantile([0.5], dim=dims)
+         
+    if kind == "var":
+        # We use a Bessel's like correction term
+        # instead of n/(n-1) we use ESS/(ESS-1)
+        # where ESS/(ESS-1) = 1/(1-sum(weights**2))
+        loo_exp = weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))
+
+    if kind == "sd":
+        loo_exp = (weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2)))**0.5
+
+    if kind == "quantile":
+        loo_exp = weighted_predictions.quantile(probs, dim=dims)
+
+    #khat = get_khat(loo_exp, ...)
+
+
+    return loo_exp#, khat
+
 
 
 def compare(
