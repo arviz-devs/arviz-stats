@@ -222,3 +222,28 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     def __setitem__(self, key, item):
         """Define setitem magic method."""
         setattr(self, key, item)
+
+
+def round_num(value, precision):
+    """Round a number to a given precision.
+
+    Parameters
+    ----------
+    value : float, numpy array or DataArray
+        The value to round. If array assumes it contains a single value.
+    precision : int or str
+        If an integer, specifies decimal places. If a string ending in 'g',
+        specifies significant digits. Use "None" for no rounding.
+    """
+    if isinstance(value, np.ndarray | DataArray):
+        value = value.item()
+
+    if precision is not None:
+        if isinstance(precision, int):
+            return round(value, precision)
+
+        if isinstance(precision, str) and precision.endswith("g"):
+            sig_digits = int(precision[:-1])
+            return round(value, sig_digits - int(np.floor(np.log10(abs(value)))) - 1)
+
+    return value

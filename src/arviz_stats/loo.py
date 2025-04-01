@@ -2,6 +2,7 @@
 
 import itertools
 import warnings
+from collections import namedtuple
 from copy import deepcopy
 
 import numpy as np
@@ -11,7 +12,7 @@ from scipy.optimize import minimize
 from scipy.stats import dirichlet
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
+from arviz_stats.utils import ELPDData, get_log_likelihood_dataset, round_num
 
 
 def loo(data, pointwise=None, var_name=None, reff=None):
@@ -121,18 +122,18 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         )
         warn_mg = True
 
-    loo_lppd_i = logsumexp(log_weights, dims=sample_dims)[var_name].values
-    lppd = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum()[var_name].values
-    loo_lppd = loo_lppd_i.sum()
-    loo_lppd_se = (n_data_points * np.var(loo_lppd_i)) ** 0.5
-    p_loo = lppd - loo_lppd
+    elpd_i = logsumexp(log_weights, dims=sample_dims)[var_name].values
+    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum()[var_name].values
+    elpd = elpd_i.sum()
+    elpd_se = (n_data_points * np.var(elpd_i)) ** 0.5
+    p_loo = elpd_raw - elpd
 
     if not pointwise:
         return ELPDData(
-            "loo", loo_lppd, loo_lppd_se, p_loo, n_samples, n_data_points, "log", warn_mg, good_k
+            "loo", elpd, elpd_se, p_loo, n_samples, n_data_points, "log", warn_mg, good_k
         )
 
-    if np.equal(loo_lppd, loo_lppd_i).all():  # pylint: disable=no-member
+    if np.equal(elpd, elpd_i).all():  # pylint: disable=no-member
         warnings.warn(
             "The point-wise LOO is the same with the sum LOO, please double check "
             "the Observed RV in your model to make sure it returns element-wise logp."
@@ -140,17 +141,224 @@ def loo(data, pointwise=None, var_name=None, reff=None):
 
     return ELPDData(
         "loo",
-        loo_lppd,
-        loo_lppd_se,
+        elpd,
+        elpd_se,
         p_loo,
         n_samples,
         n_data_points,
         "log",
         warn_mg,
         good_k,
-        loo_lppd_i,
+        elpd_i,
         pareto_k_da,
     )
+
+
+def loo_expectations(data, var_name=None, kind="mean", probs=None):
+    """
+    Compute weighted expectations using the PSIS-LOO-CV method.
+
+    The expectations assume that the PSIS approximation is working well.
+    The PSIS-LOO-CV method is described in [1]_ and [2]_.
+
+    Parameters
+    ----------
+    data: DataTree or InferenceData
+        It should contain the groups `posterior_predictive` and `log_likelihood`.
+    var_name: str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation.
+    kind: str, optional
+        The kind of expectation to compute. Available options are:
+
+        - 'mean': the mean of the posterior predictive distribution. Default.
+        - 'median': the median of the posterior predictive distribution.
+        - 'var': the variance of the posterior predictive distribution.
+        - 'sd': the standard deviation of the posterior predictive distribution.
+        - 'quantile': the quantile of the posterior predictive distribution.
+    probs: float or list of float, optional
+        The quantile(s) to compute when kind is 'quantile'.
+
+    Returns
+    -------
+    loo_expec : DataArray
+        The weighted expectations.
+
+    Examples
+    --------
+    Calculate predictive 0.25 and 0.75 quantiles
+
+    .. ipython::
+
+        In [1]: from arviz_stats import loo_expectations
+           ...: from arviz_base import load_arviz_data
+           ...: dt = load_arviz_data("radon")
+           ...: loo_expectations(dt, kind="quantile", probs=[0.25, 0.75])
+
+    References
+    ----------
+
+    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+        arXiv preprint https://arxiv.org/abs/1507.04544.
+
+    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+        arXiv preprint https://arxiv.org/abs/1507.02646
+    """
+    if kind not in ["mean", "median", "var", "sd", "quantile"]:
+        raise ValueError("kind must be either 'mean', 'median', 'var', 'sd' or 'quantile'")
+
+    if kind == "quantile" and probs is None:
+        raise ValueError("probs must be provided when kind is 'quantile'")
+
+    dims = ("chain", "draw")
+    if var_name is None:
+        var_name = list(data.observed_data.data_vars.keys())[0]
+
+    # Should we store the log_weights in the datatree when computing LOO?
+    # Then we should be able to use the same log_weights for different variables
+
+    data = convert_to_datatree(data)
+
+    log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
+    log_weights, _ = log_likelihood.azstats.psislw()
+    weights = np.exp(log_weights)
+
+    weighted_predictions = extract(
+        data, group="posterior_predictive", var_names=var_name, combined=False
+    ).weighted(weights[var_name])
+
+    if kind == "mean":
+        loo_expec = weighted_predictions.mean(dim=dims)
+
+    elif kind == "median":
+        loo_expec = weighted_predictions.quantile([0.5], dim=dims)
+
+    elif kind == "var":
+        # We use a Bessel's like correction term
+        # instead of n/(n-1) we use ESS/(ESS-1)
+        # where ESS/(ESS-1) = 1/(1-sum(weights**2))
+        loo_expec = weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))
+
+    elif kind == "sd":
+        loo_expec = (weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))) ** 0.5
+
+    else:
+        loo_expec = weighted_predictions.quantile(probs, dim=dims)
+
+    # Computation of specific khat should go here
+    # log_ratios = -log_likelihood
+    # khat = get_khat(loo_exp, ...)
+
+    return loo_expec  # , khat
+
+
+def loo_metrics(data, kind="rmse", var_name=None, round_to="2g"):
+    """
+    Compute predictive metrics using the PSIS-LOO-CV method.
+
+    Currently supported metrics are mean absolute error, mean squared error and
+    root mean squared error.
+    For classification problems, accuracy and balanced accuracy are also supported.
+
+    The PSIS-LOO-CV method is described in [1]_ and [2]_.
+
+    Parameters
+    ----------
+    data: DataTree or InferenceData
+        It should contain groups `observed_data`, `posterior_predictive` and  `log_likelihood`.
+    kind: str
+        The kind of metric to compute. Available options are:
+
+        - 'mae': mean absolute error.
+        - 'mse': mean squared error.
+        - 'rmse': root mean squared error. Default.
+        - 'acc': classification accuracy.
+        - 'balanced_acc': balanced classification accuracy.
+
+    var_name: str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation.
+    round_to: int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+
+    Returns
+    -------
+    estimate: namedtuple
+        A namedtuple with the mean of the computed metric and its standard error.
+
+    Examples
+    --------
+    Calculate predictive root mean squared error
+
+    .. ipython::
+
+        In [1]: from arviz_stats import loo_metrics
+           ...: from arviz_base import load_arviz_data
+           ...: dt = load_arviz_data("radon")
+           ...: loo_metrics(dt, kind="rmse")
+
+    References
+    ----------
+
+    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+        arXiv preprint https://arxiv.org/abs/1507.04544.
+
+    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+        arXiv preprint https://arxiv.org/abs/1507.02646
+    """
+    valid_kind = ["mae", "rmse", "mse", "acc", "balanced_acc"]
+    if kind not in valid_kind:
+        raise ValueError(f"kind must be one of {valid_kind}")
+
+    if var_name is None:
+        var_name = list(data.observed_data.data_vars.keys())[0]
+
+    estimate = namedtuple(kind, ["mean", "se"])
+    observed = data.observed_data[var_name]
+    elpd_pred = loo_expectations(data, kind="mean", var_name=var_name)
+
+    n_obs = len(observed)
+
+    if kind == "mae":
+        abs_e = np.abs(observed - elpd_pred)
+        mean = np.mean(abs_e)
+        std_error = np.std(abs_e) / n_obs**0.5
+
+    elif kind == "mse":
+        sq_e = (observed - elpd_pred) ** 2
+        mean = np.mean(sq_e)
+        std_error = np.std(sq_e) / n_obs**0.5
+
+    elif kind == "rmse":
+        sq_e = (observed - elpd_pred) ** 2
+        mean_mse = np.mean(sq_e)
+        var_mse = np.var(sq_e) / n_obs
+        var_rmse = var_mse / mean_mse / 4  # Comes from the first order Taylor approx.
+        mean = mean_mse**0.5
+        std_error = var_rmse**0.5
+
+    elif kind == "acc":
+        yhat = elpd_pred > 0.5
+        acc = yhat == observed
+        mean = np.mean(acc)
+        std_error = (mean * (1 - mean) / n_obs) ** 0.5
+
+    else:
+        yhat = elpd_pred > 0.5
+        mask = observed == 0
+        true_neg = np.mean(yhat[mask] == observed[mask])
+        true_pos = np.mean(yhat[~mask] == observed[~mask])
+        mean = (true_pos + true_neg) / 2
+        # This approximation has quite large bias for small samples
+        bls_acc_var = (true_pos * (1 - true_pos) + true_neg * (1 - true_neg)) / 4
+        std_error = bls_acc_var / n_obs**0.5
+
+    return estimate(round_num(mean, round_to), round_num(std_error, round_to))
 
 
 def loo_pit(data, var_names=None, log_weights=None, randomize=False):
