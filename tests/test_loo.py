@@ -21,6 +21,11 @@ def fixture_non_centered_eight():
     return load_arviz_data("non_centered_eight")
 
 
+@pytest.fixture(name="anes", scope="session")
+def fixture_anes():
+    return load_arviz_data("anes")
+
+
 @pytest.fixture(scope="module")
 def multivariable_log_likelihood(centered_eight):
     centered_eight = centered_eight.copy()
@@ -150,17 +155,17 @@ def test_loo_metrics(centered_eight, kind, round_to, expected_mean, expected_se)
     assert_almost_equal(metrics.se, expected_se, decimal=4)
 
 
-# @pytest.mark.parametrize(
-#     "kind, round_to, expected_mean, expected_se",
-#     [
-#         ("acc", 2, x.xx, x.xx),
-#         ("balanced_acc", "2g", x.xx, x.xx),
-#         ],
-# )
-# def test_loo_metrics_acc(classification1d, kind, expected_mean, expected_se):
-#     metrics = loo_metrics(classification1d, kind=kind)
-#     assert_almost_equal(metrics.mean, expected_mean, decimal=4)
-#     assert_almost_equal(metrics.se, expected_se, decimal=4)
+@pytest.mark.parametrize(
+    "kind, round_to, expected_mean, expected_se",
+    [
+        ("acc", 2, 0.82, 0.02),
+        ("acc_balanced", "2g", 0.81, 0.0039),
+    ],
+)
+def test_loo_metrics_acc(anes, kind, round_to, expected_mean, expected_se):
+    metrics = loo_metrics(anes, kind=kind, round_to=round_to)
+    assert_almost_equal(metrics.mean, expected_mean, decimal=4)
+    assert_almost_equal(metrics.se, expected_se, decimal=4)
 
 
 def test_loo_metrics_invalid_kind(centered_eight):

@@ -300,6 +300,13 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to="2g"):
            ...: dt = load_arviz_data("radon")
            ...: loo_metrics(dt, kind="rmse")
 
+    Calculate accuracy of a logistic regression model
+
+    .. ipython::
+
+        In [1]: dt = load_arviz_data("anes")
+           ...: loo_metrics(dt, kind="acc")
+
     References
     ----------
 
