@@ -275,7 +275,7 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to="2g"):
         - 'mse': mean squared error.
         - 'rmse': root mean squared error. Default.
         - 'acc': classification accuracy.
-        - 'balanced_acc': balanced classification accuracy.
+        - 'acc_balanced': balanced classification accuracy.
 
     var_name: str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
@@ -318,7 +318,7 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to="2g"):
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    valid_kind = ["mae", "rmse", "mse", "acc", "balanced_acc"]
+    valid_kind = ["mae", "rmse", "mse", "acc", "acc_balanced"]
     if kind not in valid_kind:
         raise ValueError(f"kind must be one of {valid_kind}")
 
