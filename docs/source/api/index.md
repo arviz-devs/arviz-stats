@@ -22,6 +22,8 @@
    arviz_stats.compare
    arviz_stats.ess
    arviz_stats.loo
+   arviz_stats.loo_expectations
+   arviz_stats.loo_metrics
    arviz_stats.loo_pit
    arviz_stats.mcse
    arviz_stats.psense

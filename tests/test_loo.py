@@ -6,7 +6,7 @@ from arviz_base import load_arviz_data
 from numpy.testing import assert_allclose, assert_almost_equal
 from xarray import DataArray
 
-from arviz_stats import compare, loo, loo_pit
+from arviz_stats import compare, loo, loo_expectations, loo_metrics, loo_pit
 from arviz_stats.loo import _calculate_ics
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -116,6 +116,56 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
     }
     with pytest.raises(ValueError, match="should have been calculated with pointwise=True"):
         _calculate_ics(in_dict)
+
+
+@pytest.mark.parametrize(
+    "kind, probs, expected_vals",
+    [
+        ("mean", None, 3.81),
+        ("quantile", [0.25, 0.75], [-6.26, 14.44]),
+    ],
+)
+def test_loo_expectations(centered_eight, kind, probs, expected_vals):
+    loo_exp_vals = loo_expectations(centered_eight, kind=kind, probs=probs)
+
+    if kind == "quantile":
+        assert loo_exp_vals.shape == (2, 8)
+    else:
+        assert loo_exp_vals.shape == (8,)
+
+    assert_almost_equal(loo_exp_vals.sel({"school": "Choate"}), expected_vals, decimal=2)
+
+
+@pytest.mark.parametrize(
+    "kind, round_to, expected_mean, expected_se",
+    [
+        ("mae", 2, 8.78, 2.43),
+        ("mse", "2g", 120.0, 66.0),
+        ("rmse", None, 11.1565, 2.9405),
+    ],
+)
+def test_loo_metrics(centered_eight, kind, round_to, expected_mean, expected_se):
+    metrics = loo_metrics(centered_eight, kind=kind, round_to=round_to)
+    assert_almost_equal(metrics.mean, expected_mean, decimal=4)
+    assert_almost_equal(metrics.se, expected_se, decimal=4)
+
+
+# @pytest.mark.parametrize(
+#     "kind, round_to, expected_mean, expected_se",
+#     [
+#         ("acc", 2, x.xx, x.xx),
+#         ("balanced_acc", "2g", x.xx, x.xx),
+#         ],
+# )
+# def test_loo_metrics_acc(classification1d, kind, expected_mean, expected_se):
+#     metrics = loo_metrics(classification1d, kind=kind)
+#     assert_almost_equal(metrics.mean, expected_mean, decimal=4)
+#     assert_almost_equal(metrics.se, expected_se, decimal=4)
+
+
+def test_loo_metrics_invalid_kind(centered_eight):
+    with pytest.raises(ValueError, match="kind must be one of"):
+        loo_metrics(centered_eight, kind="invalid_kind")
 
 
 @pytest.mark.parametrize(
