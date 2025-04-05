@@ -6,7 +6,7 @@ from scipy import interpolate
 from scipy.optimize import isotonic_regression
 
 
-def isotonic_fit(dt, data_pairs, n_bootstrap, ci_prob):
+def isotonic_fit(dt, data_pairs, group, n_bootstrap, ci_prob):
     """
     Perform isotonic regression over a DataTree.
 
@@ -16,18 +16,20 @@ def isotonic_fit(dt, data_pairs, n_bootstrap, ci_prob):
         DataTree with "posterior_predictive" and "observed_data" groups
     data_pairs : dict
         Dictionary of keys prior/posterior predictive data and values observed data variable names.
+    group : str
+        The group from which to get the unique values.
     n_bootstrap : int
         The number of bootstrap samples to use.
     ci_prob : float, optional
         The probability for the credible interval.
     """
-    pp = extract(dt, group="posterior_predictive", keep_dataset=True)
+    pp = extract(dt, group=group, keep_dataset=True)
 
     dictio = {}
     vars_ = []
 
     if None in data_pairs.keys():
-        data_pairs = dict(zip(dt.posterior_predictive.data_vars, dt.observed_data.data_vars))
+        data_pairs = dict(zip(dt[group].data_vars, dt.observed_data.data_vars))
 
     for var_predictive, var_obs in data_pairs.items():
         pred = pp[var_predictive].mean("sample")
