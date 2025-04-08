@@ -10,7 +10,9 @@ from scipy.special import bdtr, bdtrik  # pylint: disable=no-name-in-module
 from scipy.stats import uniform
 
 
-def difference_ecdf_pit(dt, data_pairs, ci_prob, coverage, randomized, method, n_simulations):
+def difference_ecdf_pit(
+    dt, data_pairs, group, ci_prob, coverage, randomized, method, n_simulations
+):
     """Compute the difference PIT ECDF values.
 
     The probability of the posterior predictive being less than or equal to the observed data.
@@ -24,6 +26,8 @@ def difference_ecdf_pit(dt, data_pairs, ci_prob, coverage, randomized, method, n
     data_pairs : tuple
         Tuple with first element contains the posterior predictive name (or list of names)
         and the second element contains the observed data variable name (or list of names).
+    group : str
+        The group from which to get the unique values.
     ci_prob : float, optional
         The probability for the credible interval.
     randomized : list of bool
@@ -37,11 +41,9 @@ def difference_ecdf_pit(dt, data_pairs, ci_prob, coverage, randomized, method, n
     rng = np.random.default_rng(214)
 
     for idx, (var_predictive, var_obs) in enumerate(data_pairs.items()):
-        vals = (dt.posterior_predictive[var_predictive] <= dt.observed_data[var_obs]).mean(
-            ("chain", "draw")
-        )
+        vals = (dt[group][var_predictive] <= dt.observed_data[var_obs]).mean(("chain", "draw"))
         if randomized[idx]:
-            vals_less = (dt.posterior_predictive[var_predictive] < dt.observed_data[var_obs]).mean(
+            vals_less = (dt[group][var_predictive] < dt.observed_data[var_obs]).mean(
                 ("chain", "draw")
             )
 
