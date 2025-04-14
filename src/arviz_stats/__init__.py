@@ -9,6 +9,7 @@ try:
     from arviz_stats.sampling_diagnostics import ess, mcse, rhat, rhat_nested
     from arviz_stats.summary import summary
     from arviz_stats.manipulation import thin
+    from arviz_stats.bayes_factor import bayes_factor
 
 except ModuleNotFoundError:
     pass

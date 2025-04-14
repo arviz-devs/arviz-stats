@@ -3,14 +3,14 @@
 import warnings
 
 import numpy as np
-from arviz_base import extract
-
-from arviz_stats.base.density import _DensityBase
 
 
 def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
     """
-    Approximated Bayes Factor for comparing hypothesis of two nested models.
+    Compute Bayes factor using Savage–Dickey ratio.
+
+    We can apply this method when the null (`ref_val`) is a particular valueof the model
+    we are building. See [1]_ for details.
 
     Parameters
     ----------
@@ -42,12 +42,12 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
         In [1]: import numpy as np
            ...: from arviz_base import from_dict
            ...: import arviz_stats as azs
-           ...: idata = from_dict({"posterior":{"a":np.random.normal(1, 0.5, (2, 1000))},
-           ...:                    {"prior":{"a":np.random.normal(0, 1, (2, 1000))}}})
-           ...: azs.plot_bf(idata, var_name="a", ref_val=0)
+           ...: dt = from_dict({"posterior":{"a":np.random.normal(1, 0.5, (2, 1000))},
+           ...:                    "prior":{"a":np.random.normal(0, 1, (2, 1000))}})
+           ...: azs.bayes_factor(dt, var_name="a", ref_val=0)
     """
-    posterior = extract(idata, var_names=var_name).values
-    prior = extract(idata, var_names=var_name, group="prior").values
+    posterior = idata.posterior[var_name]
+    prior = idata.prior[var_name]
 
     if not isinstance(ref_val, int | float):
         raise ValueError("The reference value (ref_val) must be a numerical value (int or float).")
@@ -62,12 +62,10 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
     posterior_at_ref_val = 0
 
     if posterior.dtype.kind == "f":
-        # pylint: disable=W0212
-        density_instance = _DensityBase()
-        posterior_grid, posterior_pdf, _ = density_instance._kde(
-            x=posterior, grid_len=512, circular=False
+        posterior_grid, posterior_pdf = posterior.azstats.kde(
+            grid_len=512, circular=False, return_grid=True
         )
-        prior_grid, prior_pdf, _ = density_instance._kde(x=prior, grid_len=512, circular=False)
+        prior_grid, prior_pdf = prior.azstats.kde(grid_len=512, circular=False, return_grid=True)
 
         posterior_at_ref_val = np.interp(ref_val, posterior_grid, posterior_pdf)
         prior_at_ref_val = np.interp(ref_val, prior_grid, prior_pdf)
