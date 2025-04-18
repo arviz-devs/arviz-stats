@@ -503,11 +503,11 @@ def loo_approximate_posterior(
         Input data. It should contain the log_likelihood group corresponding to samples
         drawn from the proposal distribution (q).
     log_p : np.ndarray
-        The log-posterior (target) evaluated at S samples from the proposal distribution (q).
+        The log-posterior (target) evaluated at S samples from the target distribution (p).
         A vector of length S where S is the number of samples.
     log_q : np.ndarray
         The log-density (proposal) evaluated at S samples from the proposal distribution (q).
-        A vector of length S.
+        A vector of length S where S is the number of samples.
     pointwise : bool, optional
         If True, returns pointwise values. Defaults to rcParams["stats.ic_pointwise"].
     var_name : str, optional
@@ -561,6 +561,17 @@ def loo_approximate_posterior(
     --------
     loo : Standard PSIS-LOO cross-validation for MCMC samples.
     compare : Compare models based on their ELPD.
+
+    References
+    ----------
+
+    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+        arXiv preprint https://arxiv.org/abs/1507.04544.
+
+    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+        arXiv preprint https://arxiv.org/abs/1507.02646
     """
     data = convert_to_datatree(data)
 
@@ -581,8 +592,11 @@ def loo_approximate_posterior(
         [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
     )
 
-    # Calculate the correction term
+    # Correction term
     approx_correction = log_p - log_q
+
+    # Handle underflow/overflow
+    approx_correction = approx_correction - np.max(approx_correction)
 
     log_likelihood_stacked = log_likelihood[var_name].stack(__sample__=sample_dims)
     sample_coord = log_likelihood_stacked.coords["__sample__"]
@@ -598,7 +612,11 @@ def loo_approximate_posterior(
     corrected_log_ratios = -log_likelihood.copy()
     corrected_log_ratios[var_name] = corrected_log_ratios[var_name] + correction_unstacked
 
-    # ignore r_eff, set to r_eff=1.0
+    # Handle underflow/overflow
+    log_ratio_max = corrected_log_ratios[var_name].max(dim=sample_dims)
+    corrected_log_ratios[var_name] = corrected_log_ratios[var_name] - log_ratio_max
+
+    # ignore r_eff here, set to r_eff=1.0
     log_weights, pareto_k = corrected_log_ratios.azstats.psislw(r_eff=1.0, dims=sample_dims)
     pareto_k_da = pareto_k[var_name]
     log_weights += log_likelihood
