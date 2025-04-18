@@ -491,11 +491,12 @@ def loo_approximate_posterior(
     pointwise: bool | None = None,
     var_name: str | None = None,
 ) -> ELPDData:
-    """Efficient approximate leave-one-out cross-validation (LOO) for posterior approximations.
+    """Compute LOO cross-validation for approximate posteriors using Pareto smoothing.
 
-    Estimates the expected log pointwise predictive density (elpd) using importance sampling
-    leave-one-out cross-validation for approximate posteriors (e.g., from variational inference).
-    Requires log-densities of the target (log_p) and proposal (log_q) distributions.
+    Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
+    importance sampling leave-one-out cross-validation (PSIS-LOO-CV) for approximate
+    posteriors (e.g., from variational inference). Requires log-densities of the target (log_p)
+    and proposal (log_q) distributions. The PSIS-LOO-CV method is described in [1]_ and [2]_.
 
     Parameters
     ----------
@@ -503,10 +504,10 @@ def loo_approximate_posterior(
         Input data. It should contain the log_likelihood group corresponding to samples
         drawn from the proposal distribution (q).
     log_p : np.ndarray
-        The log-posterior (target) evaluated at S samples from the target distribution (p).
+        The (target) log-density evaluated at S samples from the target distribution (p).
         A vector of length S where S is the number of samples.
     log_q : np.ndarray
-        The log-density (proposal) evaluated at S samples from the proposal distribution (q).
+        The (proposal) log-density evaluated at S samples from the proposal distribution (q).
         A vector of length S where S is the number of samples.
     pointwise : bool, optional
         If True, returns pointwise values. Defaults to rcParams["stats.ic_pointwise"].
@@ -531,7 +532,6 @@ def loo_approximate_posterior(
         - **pareto_k**: array of Pareto shape values, only if ``pointwise=True``
         - **good_k**: For a sample size S, the threshold is computed as
           ``min(1 - 1/log10(S), 0.7)``
-        - **approximate_posterior**: dictionary with log_p and log_q values used.
 
     Examples
     --------
