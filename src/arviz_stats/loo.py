@@ -484,6 +484,179 @@ def loo_pit(data, var_names=None, log_weights=None, randomize=False):
     return loo_pit_values
 
 
+def loo_approximate_posterior(
+    data,
+    log_p: np.ndarray,
+    log_q: np.ndarray,
+    pointwise: bool | None = None,
+    var_name: str | None = None,
+) -> ELPDData:
+    """Efficient approximate leave-one-out cross-validation (LOO) for posterior approximations.
+
+    Estimates the expected log pointwise predictive density (elpd) using importance sampling
+    leave-one-out cross-validation for approximate posteriors (e.g., from variational inference).
+    Requires log-densities of the target (log_p) and proposal (log_q) distributions.
+
+    Parameters
+    ----------
+    data : DataTree or InferenceData
+        Input data. It should contain the log_likelihood group corresponding to samples
+        drawn from the proposal distribution (q).
+    log_p : np.ndarray
+        The log-posterior (target) evaluated at S samples from the proposal distribution (q).
+        A vector of length S where S is the number of samples.
+    log_q : np.ndarray
+        The log-density (proposal) evaluated at S samples from the proposal distribution (q).
+        A vector of length S.
+    pointwise : bool, optional
+        If True, returns pointwise values. Defaults to rcParams["stats.ic_pointwise"].
+    var_name : str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation.
+
+    Returns
+    -------
+    ELPDData
+        Object with the following attributes:
+
+        - **elpd**: expected log pointwise predictive density
+        - **se**: standard error of the elpd
+        - **p**: effective number of parameters
+        - **n_samples**: number of samples
+        - **n_data_points**: number of data points
+        - **warning**: True if the estimated shape parameter of Pareto distribution is greater
+          than ``good_k``.
+        - **elpd_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
+          ``pointwise=True``
+        - **pareto_k**: array of Pareto shape values, only if ``pointwise=True``
+        - **good_k**: For a sample size S, the threshold is computed as
+          ``min(1 - 1/log10(S), 0.7)``
+        - **approximate_posterior**: dictionary with log_p and log_q values used.
+
+    Examples
+    --------
+    Calculate LOO for an approximate posterior.
+
+    .. ipython::
+
+        In [1]: import numpy as np
+           ...: from arviz_stats import loo_approximate_posterior
+           ...: from arviz_base import load_arviz_data, extract
+           ...:
+           ...: data = load_arviz_data("centered_eight")
+           ...: log_lik = extract(data, group="log_likelihood", var_names="obs", combined=True)
+           ...: n_samples = log_lik.shape[0]
+           ...:
+           ...: log_p = np.random.randn(n_samples)
+           ...: log_q = np.random.randn(n_samples) - 1 # Make proposal slightly different
+           ...: loo_approx_data = loo_approximate_posterior(
+           ...:     data,
+           ...:     log_p=log_p,
+           ...:     log_q=log_q,
+           ...:     var_name="obs",
+           ...:     pointwise=True
+           ...: )
+
+    See Also
+    --------
+    loo : Standard PSIS-LOO cross-validation for MCMC samples.
+    compare : Compare models based on their ELPD.
+    """
+    data = convert_to_datatree(data)
+
+    log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
+    if var_name is None:
+        var_name = list(log_likelihood.data_vars.keys())[0]
+    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
+    sample_dims = ["chain", "draw"]
+
+    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+    if len(log_p) != n_samples or len(log_q) != n_samples:
+        raise ValueError(
+            f"Length of log_p ({len(log_p)}) and log_q ({len(log_q)}) must match "
+            f"the total number of samples in log_likelihood ({n_samples})."
+        )
+
+    n_data_points = np.prod(
+        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
+    )
+
+    # Calculate the correction term
+    approx_correction = log_p - log_q
+
+    log_likelihood_stacked = log_likelihood[var_name].stack(__sample__=sample_dims)
+    sample_coord = log_likelihood_stacked.coords["__sample__"]
+
+    correction_da = xr.DataArray(
+        approx_correction,
+        coords=[sample_coord],
+        dims=["__sample__"],
+    )
+
+    correction_unstacked = correction_da.unstack("__sample__")
+
+    corrected_log_ratios = -log_likelihood.copy()
+    corrected_log_ratios[var_name] = corrected_log_ratios[var_name] + correction_unstacked
+
+    # ignore r_eff, set to r_eff=1.0
+    log_weights, pareto_k = corrected_log_ratios.azstats.psislw(r_eff=1.0, dims=sample_dims)
+    pareto_k_da = pareto_k[var_name]
+    log_weights += log_likelihood
+
+    warn_mg = False
+    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
+
+    if np.any(pareto_k_da > good_k):
+        warnings.warn(
+            f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
+            "for one or more samples. You should consider using a more robust model, this is "
+            "because importance sampling is less likely to work well if the marginal posterior "
+            "and LOO posterior are very different. This is more likely to happen with a "
+            "non-robust model and highly influential observations."
+        )
+        warn_mg = True
+
+    elpd_i = logsumexp(log_weights + log_likelihood, dims=sample_dims)[var_name].values
+    elpd = elpd_i.sum()
+    elpd_se = (n_data_points * np.var(elpd_i)) ** 0.5
+
+    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum()[var_name].values
+    p_loo = elpd_raw - elpd
+
+    if not pointwise:
+        return ELPDData(
+            "loo_approx",
+            elpd,
+            elpd_se,
+            p_loo,
+            n_samples,
+            n_data_points,
+            "log",
+            warn_mg,
+            good_k,
+        )
+
+    if np.equal(elpd, elpd_i).all():  # pylint: disable=no-member
+        warnings.warn(
+            "The point-wise LOO is the same with the sum LOO, please double check "
+            "the Observed RV in your model to make sure it returns element-wise logp."
+        )
+
+    return ELPDData(
+        "loo_approx",
+        elpd,
+        elpd_se,
+        p_loo,
+        n_samples,
+        n_data_points,
+        "log",
+        warn_mg,
+        good_k,
+        elpd_i,
+        pareto_k_da,
+    )
+
+
 def compare(
     compare_dict,
     method="stacking",
@@ -759,151 +932,3 @@ def _calculate_ics(
                     f"Encountered error trying to compute elpd from model {name}."
                 ) from e
     return compare_dict
-
-
-def loo_approximate_posterior(
-    data,
-    log_p: np.ndarray,
-    log_q: np.ndarray,
-    pointwise: bool | None = None,
-    var_name: str | None = None,
-) -> ELPDData:
-    """Efficient approximate leave-one-out cross-validation (LOO) for posterior approximations.
-
-    Estimates the expected log pointwise predictive density (elpd) using importance sampling
-    leave-one-out cross-validation for approximate posteriors (e.g., from variational inference).
-    Requires log-densities of the target (log_p) and proposal (log_q) distributions.
-
-    Parameters
-    ----------
-    data : DataTree or InferenceData
-        Input data. It should contain the log_likelihood group corresponding to samples
-        drawn from the proposal distribution (q).
-    log_p : np.ndarray
-        The log-posterior (target) evaluated at S samples from the proposal distribution (q).
-        A vector of length S where S is the number of samples.
-    log_q : np.ndarray
-        The log-density (proposal) evaluated at S samples from the proposal distribution (q).
-        A vector of length S.
-    pointwise : bool, optional
-        If True, returns pointwise values. Defaults to rcParams["stats.ic_pointwise"].
-    var_name : str, optional
-        The name of the variable in log_likelihood groups storing the pointwise log
-        likelihood data to use for loo computation.
-
-    Returns
-    -------
-    ELPDData
-        Object with the following attributes:
-
-        - **elpd**: expected log pointwise predictive density
-        - **se**: standard error of the elpd
-        - **p**: effective number of parameters
-        - **n_samples**: number of samples
-        - **n_data_points**: number of data points
-        - **warning**: True if the estimated shape parameter of Pareto distribution is greater
-          than ``good_k``.
-        - **elpd_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
-          ``pointwise=True``
-        - **pareto_k**: array of Pareto shape values, only if ``pointwise=True``
-        - **good_k**: For a sample size S, the threshold is computed as
-          ``min(1 - 1/log10(S), 0.7)``
-        - **approximate_posterior**: dictionary with log_p and log_q values used.
-
-    See Also
-    --------
-    loo : Standard PSIS-LOO cross-validation for MCMC samples.
-    compare : Compare models based on their ELPD.
-    """
-    data = convert_to_datatree(data)
-
-    log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
-    if var_name is None:
-        var_name = list(log_likelihood.data_vars.keys())[0]
-    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
-    sample_dims = ["chain", "draw"]
-
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    if len(log_p) != n_samples or len(log_q) != n_samples:
-        raise ValueError(
-            f"Length of log_p ({len(log_p)}) and log_q ({len(log_q)}) must match "
-            f"the total number of samples in log_likelihood ({n_samples})."
-        )
-
-    n_data_points = np.prod(
-        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
-    )
-
-    # Calculate the correction term
-    approx_correction = log_p - log_q
-
-    correction_da = xr.DataArray(
-        approx_correction,
-        dims=["__sample__"],
-        coords={"__sample__": np.arange(len(approx_correction))},
-    )
-
-    log_likelihood_stacked = log_likelihood[var_name].stack(__sample__=sample_dims)
-    correction_reshaped = correction_da.reindex(__sample__=log_likelihood_stacked.__sample__)
-
-    corrected_log_ratios = -log_likelihood.copy()
-    correction_unstacked = correction_reshaped.unstack("__sample__")
-    corrected_log_ratios[var_name] = corrected_log_ratios[var_name] + correction_unstacked
-
-    # r_eff=1.0 is ignored here
-    log_weights, pareto_k = corrected_log_ratios.azstats.psislw(r_eff=1.0, dims=sample_dims)
-    pareto_k_da = pareto_k[var_name]
-    log_weights += log_likelihood
-
-    warn_mg = False
-    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
-
-    if np.any(pareto_k_da > good_k):
-        warnings.warn(
-            f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-            "for one or more samples. You should consider using a more robust model, this is "
-            "because importance sampling is less likely to work well if the marginal posterior "
-            "and LOO posterior are very different. This is more likely to happen with a "
-            "non-robust model and highly influential observations."
-        )
-        warn_mg = True
-
-    elpd_i = logsumexp(log_weights + log_likelihood, dims=sample_dims)[var_name].values
-    elpd = elpd_i.sum()
-    elpd_se = (n_data_points * np.var(elpd_i)) ** 0.5
-
-    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum()[var_name].values
-    p_loo = elpd_raw - elpd
-
-    if not pointwise:
-        return ELPDData(
-            "loo_approx",
-            elpd,
-            elpd_se,
-            p_loo,
-            n_samples,
-            n_data_points,
-            "log",
-            warn_mg,
-            good_k,
-        )
-
-    if np.equal(elpd, elpd_i).all():  # pylint: disable=no-member
-        warnings.warn(
-            "The point-wise LOO is the same with the sum LOO, please double check "
-            "the Observed RV in your model to make sure it returns element-wise logp."
-        )
-
-    return ELPDData(
-        "loo_approx",
-        elpd,
-        elpd_se,
-        p_loo,
-        n_samples,
-        n_data_points,
-        "log",
-        warn_mg,
-        good_k,
-        elpd_i,
-        pareto_k_da,
-    )

@@ -6,7 +6,14 @@ from arviz_base import load_arviz_data
 from numpy.testing import assert_allclose, assert_almost_equal
 from xarray import DataArray
 
-from arviz_stats import compare, loo, loo_expectations, loo_metrics, loo_pit
+from arviz_stats import (
+    compare,
+    loo,
+    loo_approximate_posterior,
+    loo_expectations,
+    loo_metrics,
+    loo_pit,
+)
 from arviz_stats.loo import _calculate_ics
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -198,3 +205,36 @@ def test_loo_pit_discrete(centered_eight):
     loo_pit_values = loo_pit(centered_eight)
     assert np.all(loo_pit_values >= 0)
     assert np.all(loo_pit_values <= 1)
+
+
+@pytest.mark.parametrize("pointwise", [True, False])
+def test_loo_approximate_posterior(centered_eight, pointwise):
+    """Test the loo_approximate_posterior function."""
+    log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")
+    n_samples = log_lik.chain.size * log_lik.draw.size
+    n_data_points = log_lik.obs.size // n_samples
+
+    rng = np.random.default_rng(42)
+    log_p = rng.normal(size=n_samples)
+    log_q = rng.normal(loc=-1, size=n_samples)
+
+    loo_approx_data = loo_approximate_posterior(
+        centered_eight, log_p=log_p, log_q=log_q, pointwise=pointwise, var_name="obs"
+    )
+
+    assert loo_approx_data.kind == "loo_approx"
+    assert loo_approx_data.n_samples == n_samples
+    assert loo_approx_data.n_data_points == n_data_points
+    assert isinstance(loo_approx_data.elpd, float)
+    assert isinstance(loo_approx_data.se, float)
+    assert isinstance(loo_approx_data.p, float)
+    assert isinstance(loo_approx_data.warning, bool)
+
+    if pointwise:
+        assert loo_approx_data.elpd_i is not None
+        assert loo_approx_data.pareto_k is not None
+        assert loo_approx_data.elpd_i.shape == (n_data_points,)
+        assert loo_approx_data.pareto_k.shape == (n_data_points,)
+    else:
+        assert loo_approx_data.elpd_i is None
+        assert loo_approx_data.pareto_k is None
