@@ -497,15 +497,15 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     data : DataTree or InferenceData
         Input data. It should contain the log_likelihood group corresponding to samples
         drawn from the proposal distribution (q).
-    log_p : numpy.ndarray or xarray.DataArray
+    log_p : ndarray or DataArray
         The (target) log-density evaluated at S samples from the target distribution (p).
-        If numpy.ndarray, should be a vector of length S where S is the number of samples.
-        If xarray.DataArray, should have dimensions matching the sample dimensions
+        If ndarray, should be a vector of length S where S is the number of samples.
+        If DataArray, should have dimensions matching the sample dimensions
         ("chain", "draw").
-    log_q : numpy.ndarray or xarray.DataArray
+    log_q : ndarray or DataArray
         The (proposal) log-density evaluated at S samples from the proposal distribution (q).
-        If numpy.ndarray, should be a vector of length S where S is the number of samples.
-        If xarray.DataArray, should have dimensions matching the sample dimensions
+        If ndarray, should be a vector of length S where S is the number of samples.
+        If DataArray, should have dimensions matching the sample dimensions
         ("chain", "draw").
     pointwise : bool, optional
         If True, returns pointwise values. Defaults to rcParams["stats.ic_pointwise"].
@@ -655,7 +655,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
         )
         warn_mg = True
 
-    elpd_i = logsumexp(log_weights + log_likelihood, dims=sample_dims)[var_name].values
+    elpd_i = logsumexp(log_weights, dims=sample_dims)[var_name].values
     elpd = elpd_i.sum()
     elpd_se = (n_data_points * np.var(elpd_i)) ** 0.5
 

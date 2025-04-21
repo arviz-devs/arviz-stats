@@ -46,6 +46,35 @@ def multivariable_log_likelihood(centered_eight):
     return centered_eight
 
 
+@pytest.fixture(scope="module")
+def log_densities(centered_eight):
+    log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")
+    rng = np.random.default_rng(seed=42)
+
+    p_values = rng.normal(size=(log_lik.chain.size, log_lik.draw.size))
+    q_values = rng.normal(loc=-1.0, size=(log_lik.chain.size, log_lik.draw.size))
+
+    log_p_da = xr.DataArray(
+        p_values,
+        dims=["chain", "draw"],
+        coords={"chain": log_lik.chain, "draw": log_lik.draw},
+    )
+    log_q_da = xr.DataArray(
+        q_values,
+        dims=["chain", "draw"],
+        coords={"chain": log_lik.chain, "draw": log_lik.draw},
+    )
+
+    log_p_np = p_values.ravel()
+    log_q_np = q_values.ravel()
+
+    return {
+        "log_lik": log_lik,
+        "dataarray": (log_p_da, log_q_da),
+        "numpy": (log_p_np, log_q_np),
+    }
+
+
 @pytest.mark.parametrize("pointwise", [True, False])
 def test_loo(centered_eight, pointwise):
     loo_data = loo(centered_eight, pointwise=pointwise)
@@ -208,47 +237,78 @@ def test_loo_pit_discrete(centered_eight):
     assert np.all(loo_pit_values <= 1)
 
 
-@pytest.mark.parametrize("pointwise", [True, False])
 @pytest.mark.parametrize("input_type", ["dataarray", "numpy"])
-def test_loo_approximate_posterior(centered_eight, pointwise, input_type):
-    log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")
+def test_loo_approx_basic(centered_eight, log_densities, input_type):
+    log_p, log_q = log_densities[input_type]
+    log_lik = log_densities["log_lik"]
+
     n_samples = log_lik.chain.size * log_lik.draw.size
-    n_data_points = log_lik.obs.size // n_samples
-
-    rng = np.random.default_rng(42)
-
-    p_values = rng.normal(size=(log_lik.chain.size, log_lik.draw.size))
-    q_values = rng.normal(loc=-1, size=(log_lik.chain.size, log_lik.draw.size))
-
-    if input_type == "dataarray":
-        log_p = xr.DataArray(
-            p_values, dims=["chain", "draw"], coords={"chain": log_lik.chain, "draw": log_lik.draw}
-        )
-
-        log_q = xr.DataArray(
-            q_values, dims=["chain", "draw"], coords={"chain": log_lik.chain, "draw": log_lik.draw}
-        )
-    else:
-        log_p = p_values.flatten()
-        log_q = q_values.flatten()
-
-    loo_approx_data = loo_approximate_posterior(
-        centered_eight, log_p=log_p, log_q=log_q, pointwise=pointwise, var_name="obs"
+    n_data_points = np.prod(
+        [log_lik[dim].size for dim in log_lik.dims if dim not in ["chain", "draw"]]
     )
 
-    assert loo_approx_data.kind == "loo_approx"
-    assert loo_approx_data.n_samples == n_samples
-    assert loo_approx_data.n_data_points == n_data_points
-    assert isinstance(loo_approx_data.elpd, float)
-    assert isinstance(loo_approx_data.se, float)
-    assert isinstance(loo_approx_data.p, float)
-    assert isinstance(loo_approx_data.warning, bool)
+    result = loo_approximate_posterior(centered_eight, log_p=log_p, log_q=log_q, var_name="obs")
+
+    assert result.kind == "loo_approx"
+    assert result.n_samples == n_samples
+    assert result.n_data_points == n_data_points
+    assert isinstance(result.elpd, float)
+    assert isinstance(result.se, float)
+    assert isinstance(result.p, float)
+    assert isinstance(result.warning, bool)
+
+
+@pytest.mark.parametrize("pointwise", [True, False])
+def test_loo_approx_pointwise(centered_eight, log_densities, pointwise):
+    log_p, log_q = log_densities["dataarray"]
+    log_lik = log_densities["log_lik"]
+    n_data_points = np.prod(
+        [log_lik[dim].size for dim in log_lik.dims if dim not in ["chain", "draw"]]
+    )
+
+    result = loo_approximate_posterior(
+        centered_eight,
+        log_p=log_p,
+        log_q=log_q,
+        pointwise=pointwise,
+        var_name="obs",
+    )
 
     if pointwise:
-        assert loo_approx_data.elpd_i is not None
-        assert loo_approx_data.pareto_k is not None
-        assert loo_approx_data.elpd_i.shape == (n_data_points,)
-        assert loo_approx_data.pareto_k.shape == (n_data_points,)
+        assert result.elpd_i is not None
+        assert result.pareto_k is not None
+        assert result.elpd_i.shape == (n_data_points,)
+        assert result.pareto_k.shape == (n_data_points,)
     else:
-        assert loo_approx_data.elpd_i is None
-        assert loo_approx_data.pareto_k is None
+        assert result.elpd_i is None
+        assert result.pareto_k is None
+
+
+@pytest.mark.parametrize(
+    "error_case,error_type,error_match",
+    [
+        ("wrong_type", TypeError, None),
+        ("length_mismatch", ValueError, "Length of log_p"),
+        ("missing_dims", ValueError, "must have dimension 'chain'"),
+    ],
+)
+def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type, error_match):
+    log_p, log_q = log_densities["dataarray"]
+
+    kwargs = {}
+
+    if error_case == "wrong_type":
+        kwargs = {"log_p": list(log_p.values.ravel()), "log_q": log_q}
+
+    elif error_case == "length_mismatch":
+        kwargs = {"log_p": np.random.randn(log_p.size - 1), "log_q": log_q}
+
+    elif error_case == "missing_dims":
+        broken = xr.DataArray(log_p.values.reshape(-1), dims=["sample"])
+        kwargs = {"log_p": broken, "log_q": log_q}
+
+    else:
+        pytest.skip("Unhandled error case")
+
+    with pytest.raises(error_type, match=error_match):
+        loo_approximate_posterior(centered_eight, var_name="obs", **kwargs)
