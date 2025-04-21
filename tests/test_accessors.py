@@ -11,8 +11,6 @@ import pytest
 from arviz_base import from_dict
 from xarray import DataTree
 
-from arviz_stats import accessors  # noqa
-
 
 @pytest.fixture(scope="module")
 def idata():
