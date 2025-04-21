@@ -484,13 +484,7 @@ def loo_pit(data, var_names=None, log_weights=None, randomize=False):
     return loo_pit_values
 
 
-def loo_approximate_posterior(
-    data,
-    log_p: np.ndarray,
-    log_q: np.ndarray,
-    pointwise: bool | None = None,
-    var_name: str | None = None,
-) -> ELPDData:
+def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None):
     """Compute LOO cross-validation for approximate posteriors using Pareto smoothing.
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
@@ -503,12 +497,16 @@ def loo_approximate_posterior(
     data : DataTree or InferenceData
         Input data. It should contain the log_likelihood group corresponding to samples
         drawn from the proposal distribution (q).
-    log_p : np.ndarray
+    log_p : numpy.ndarray or xarray.DataArray
         The (target) log-density evaluated at S samples from the target distribution (p).
-        A vector of length S where S is the number of samples.
-    log_q : np.ndarray
+        If numpy.ndarray, should be a vector of length S where S is the number of samples.
+        If xarray.DataArray, should have dimensions matching the sample dimensions
+        ("chain", "draw").
+    log_q : numpy.ndarray or xarray.DataArray
         The (proposal) log-density evaluated at S samples from the proposal distribution (q).
-        A vector of length S where S is the number of samples.
+        If numpy.ndarray, should be a vector of length S where S is the number of samples.
+        If xarray.DataArray, should have dimensions matching the sample dimensions
+        ("chain", "draw").
     pointwise : bool, optional
         If True, returns pointwise values. Defaults to rcParams["stats.ic_pointwise"].
     var_name : str, optional
@@ -540,15 +538,28 @@ def loo_approximate_posterior(
     .. ipython::
 
         In [1]: import numpy as np
+           ...: import xarray as xr
            ...: from arviz_stats import loo_approximate_posterior
            ...: from arviz_base import load_arviz_data, extract
            ...:
            ...: data = load_arviz_data("centered_eight")
-           ...: log_lik = extract(data, group="log_likelihood", var_names="obs", combined=True)
-           ...: n_samples = log_lik.shape[0]
+           ...: log_lik = extract(data, group="log_likelihood", var_names="obs")
            ...:
-           ...: log_p = np.random.randn(n_samples)
-           ...: log_q = np.random.randn(n_samples) - 1 # Make proposal slightly different
+           ...: rng = np.random.default_rng(42)
+           ...: values = rng.normal(size=(log_lik.chain.size, log_lik.draw.size))
+           ...: log_p = xr.DataArray(
+           ...:     values,
+           ...:     dims=["chain", "draw"],
+           ...:     coords={"chain": log_lik.chain, "draw": log_lik.draw}
+           ...: )
+           ...:
+           ...: values_q = rng.normal(loc=-1, size=(log_lik.chain.size, log_lik.draw.size))
+           ...: log_q = xr.DataArray(
+           ...:     values_q,
+           ...:     dims=["chain", "draw"],
+           ...:     coords={"chain": log_lik.chain, "draw": log_lik.draw}
+           ...: )
+           ...:
            ...: loo_approx_data = loo_approximate_posterior(
            ...:     data,
            ...:     log_p=log_p,
@@ -582,35 +593,45 @@ def loo_approximate_posterior(
     sample_dims = ["chain", "draw"]
 
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    if len(log_p) != n_samples or len(log_q) != n_samples:
-        raise ValueError(
-            f"Length of log_p ({len(log_p)}) and log_q ({len(log_q)}) must match "
-            f"the total number of samples in log_likelihood ({n_samples})."
-        )
-
     n_data_points = np.prod(
         [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
     )
 
-    # Correction term
+    for name, log_dens in [("log_p", log_p), ("log_q", log_q)]:
+        if isinstance(log_dens, np.ndarray):
+            if len(log_dens) != n_samples:
+                raise ValueError(
+                    f"Length of {name} ({len(log_dens)}) must match "
+                    f"the total number of samples in log_likelihood ({n_samples})."
+                )
+            log_dens_values = log_dens.reshape(log_likelihood.chain.size, log_likelihood.draw.size)
+            if name == "log_p":
+                log_p = xr.DataArray(
+                    log_dens_values,
+                    dims=sample_dims,
+                    coords={dim: log_likelihood[dim] for dim in sample_dims},
+                )
+            else:
+                log_q = xr.DataArray(
+                    log_dens_values,
+                    dims=sample_dims,
+                    coords={dim: log_likelihood[dim] for dim in sample_dims},
+                )
+        elif not isinstance(log_dens, xr.DataArray):
+            raise TypeError(f"{name} must be a numpy.ndarray or xarray.DataArray")
+
+    for dim in sample_dims:
+        for name, log_dens in [("log_p", log_p), ("log_q", log_q)]:
+            if dim not in log_dens.dims:
+                raise ValueError(f"{name} must have dimension '{dim}'")
+
     approx_correction = log_p - log_q
 
     # Handle underflow/overflow
-    approx_correction = approx_correction - np.max(approx_correction)
-
-    log_likelihood_stacked = log_likelihood[var_name].stack(__sample__=sample_dims)
-    sample_coord = log_likelihood_stacked.coords["__sample__"]
-
-    correction_da = xr.DataArray(
-        approx_correction,
-        coords=[sample_coord],
-        dims=["__sample__"],
-    )
-
-    correction_unstacked = correction_da.unstack("__sample__")
+    approx_correction = approx_correction - approx_correction.max()
 
     corrected_log_ratios = -log_likelihood.copy()
-    corrected_log_ratios[var_name] = corrected_log_ratios[var_name] + correction_unstacked
+    corrected_log_ratios[var_name] = corrected_log_ratios[var_name] + approx_correction
 
     # Handle underflow/overflow
     log_ratio_max = corrected_log_ratios[var_name].max(dim=sample_dims)

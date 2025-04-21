@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import xarray as xr
 from arviz_base import load_arviz_data
 from numpy.testing import assert_allclose, assert_almost_equal
 from xarray import DataArray
@@ -207,16 +208,31 @@ def test_loo_pit_discrete(centered_eight):
     assert np.all(loo_pit_values <= 1)
 
 
-@pytest.mark.parametrize("pointwise", [True, False])
-def test_loo_approximate_posterior(centered_eight, pointwise):
-    """Test the loo_approximate_posterior function."""
+@pytest.mark.parametrize(
+    "pointwise,input_type",
+    [(True, "dataarray"), (True, "numpy"), (False, "dataarray"), (False, "numpy")],
+)
+def test_loo_approximate_posterior(centered_eight, pointwise, input_type):
     log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")
     n_samples = log_lik.chain.size * log_lik.draw.size
     n_data_points = log_lik.obs.size // n_samples
 
     rng = np.random.default_rng(42)
-    log_p = rng.normal(size=n_samples)
-    log_q = rng.normal(loc=-1, size=n_samples)
+
+    p_values = rng.normal(size=(log_lik.chain.size, log_lik.draw.size))
+    q_values = rng.normal(loc=-1, size=(log_lik.chain.size, log_lik.draw.size))
+
+    if input_type == "dataarray":
+        log_p = xr.DataArray(
+            p_values, dims=["chain", "draw"], coords={"chain": log_lik.chain, "draw": log_lik.draw}
+        )
+
+        log_q = xr.DataArray(
+            q_values, dims=["chain", "draw"], coords={"chain": log_lik.chain, "draw": log_lik.draw}
+        )
+    else:
+        log_p = p_values.flatten()
+        log_q = q_values.flatten()
 
     loo_approx_data = loo_approximate_posterior(
         centered_eight, log_p=log_p, log_q=log_q, pointwise=pointwise, var_name="obs"
