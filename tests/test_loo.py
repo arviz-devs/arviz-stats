@@ -208,10 +208,8 @@ def test_loo_pit_discrete(centered_eight):
     assert np.all(loo_pit_values <= 1)
 
 
-@pytest.mark.parametrize(
-    "pointwise,input_type",
-    [(True, "dataarray"), (True, "numpy"), (False, "dataarray"), (False, "numpy")],
-)
+@pytest.mark.parametrize("pointwise", [True, False])
+@pytest.mark.parametrize("input_type", ["dataarray", "numpy"])
 def test_loo_approximate_posterior(centered_eight, pointwise, input_type):
     log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")
     n_samples = log_lik.chain.size * log_lik.draw.size
