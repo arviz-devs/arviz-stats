@@ -596,33 +596,8 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
         [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
     )
 
-    for name, log_dens in [("log_p", log_p), ("log_q", log_q)]:
-        if isinstance(log_dens, np.ndarray):
-            if len(log_dens) != n_samples:
-                raise ValueError(
-                    f"Length of {name} ({len(log_dens)}) must match "
-                    f"the total number of samples in log_likelihood ({n_samples})."
-                )
-            log_dens_values = log_dens.reshape(log_likelihood.chain.size, log_likelihood.draw.size)
-            if name == "log_p":
-                log_p = xr.DataArray(
-                    log_dens_values,
-                    dims=sample_dims,
-                    coords={dim: log_likelihood[dim] for dim in sample_dims},
-                )
-            else:
-                log_q = xr.DataArray(
-                    log_dens_values,
-                    dims=sample_dims,
-                    coords={dim: log_likelihood[dim] for dim in sample_dims},
-                )
-        elif not isinstance(log_dens, xr.DataArray):
-            raise TypeError(f"{name} must be a numpy.ndarray or xarray.DataArray")
-
-    for dim in sample_dims:
-        for name, log_dens in [("log_p", log_p), ("log_q", log_q)]:
-            if dim not in log_dens.dims:
-                raise ValueError(f"{name} must have dimension '{dim}'")
+    log_p = _check_log_density(log_p, "log_p", log_likelihood, n_samples, sample_dims)
+    log_q = _check_log_density(log_q, "log_q", log_likelihood, n_samples, sample_dims)
 
     approx_correction = log_p - log_q
 
@@ -970,3 +945,52 @@ def _calculate_ics(
                     f"Encountered error trying to compute elpd from model {name}."
                 ) from e
     return compare_dict
+
+
+def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
+    """Validate log_p or log_q input for loo_approximate_posterior.
+
+    Parameters
+    ----------
+    log_dens : ndarray or DataArray
+        Log density array (log_p or log_q).
+    name : str
+        Name for error messages ("log_p" or "log_q").
+    log_likelihood : Dataset
+        Used for coordinate and shape info.
+    n_samples : int
+        Expected total number of samples.
+    sample_dims : list of str
+        Expected sample dimensions (e.g., ["chain", "draw"]).
+
+    Returns
+    -------
+    DataArray
+        Validated log density as a DataArray.
+
+    Raises
+    ------
+    ValueError : If shapes or dimensions mismatch.
+    TypeError : If input is not ndarray or DataArray.
+    """
+    if isinstance(log_dens, np.ndarray):
+        if len(log_dens) != n_samples:
+            raise ValueError(
+                f"Length of {name} ({len(log_dens)}) must match "
+                f"the total number of samples in log_likelihood ({n_samples})."
+            )
+        sample_shape = tuple(log_likelihood[dim].size for dim in sample_dims)
+        log_dens_values = log_dens.reshape(sample_shape)
+        coords = {dim: log_likelihood[dim] for dim in sample_dims}
+        validated_log_dens = xr.DataArray(log_dens_values, dims=sample_dims, coords=coords)
+
+    elif isinstance(log_dens, xr.DataArray):
+        validated_log_dens = log_dens
+    else:
+        raise TypeError(f"{name} must be a ndarray or DataArray")
+
+    for dim in sample_dims:
+        if dim not in validated_log_dens.dims:
+            raise ValueError(f"{name} must have dimension '{dim}'")
+
+    return validated_log_dens
