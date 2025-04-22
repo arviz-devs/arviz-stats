@@ -543,7 +543,8 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
            ...: from arviz_base import load_arviz_data, extract
            ...:
            ...: data = load_arviz_data("centered_eight")
-           ...: log_lik = extract(data, group="log_likelihood", var_names="obs")
+           ...: log_lik = extract(data, group="log_likelihood", var_names="obs", combined=False)
+           ...: rng = np.random.default_rng(214)
            ...:
            ...: values_p = rng.normal(size=(log_lik.chain.size, log_lik.draw.size))
            ...: log_p = xr.DataArray(
