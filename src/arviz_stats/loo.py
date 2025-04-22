@@ -948,35 +948,11 @@ def _calculate_ics(
 
 
 def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
-    """Validate log_p or log_q input for loo_approximate_posterior.
-
-    Parameters
-    ----------
-    log_dens : ndarray or DataArray
-        Log density array (log_p or log_q).
-    name : str
-        Name for error messages ("log_p" or "log_q").
-    log_likelihood : Dataset
-        Used for coordinate and shape info.
-    n_samples : int
-        Expected total number of samples.
-    sample_dims : list of str
-        Expected sample dimensions (e.g., ["chain", "draw"]).
-
-    Returns
-    -------
-    DataArray
-        Validated log density as a DataArray.
-
-    Raises
-    ------
-    ValueError : If shapes or dimensions mismatch.
-    TypeError : If input is not ndarray or DataArray.
-    """
+    """Validate log_p or log_q input for loo_approximate_posterior."""
     if isinstance(log_dens, np.ndarray):
-        if len(log_dens) != n_samples:
+        if log_dens.size != n_samples:
             raise ValueError(
-                f"Length of {name} ({len(log_dens)}) must match "
+                f"Size of {name} ({log_dens.size}) must match "
                 f"the total number of samples in log_likelihood ({n_samples})."
             )
         sample_shape = tuple(log_likelihood[dim].size for dim in sample_dims)
@@ -986,11 +962,24 @@ def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
 
     elif isinstance(log_dens, xr.DataArray):
         validated_log_dens = log_dens
+        for dim in sample_dims:
+            if dim not in validated_log_dens.dims:
+                raise ValueError(f"{name} must have dimension '{dim}'")
+            if validated_log_dens[dim].size != log_likelihood[dim].size:
+                raise ValueError(
+                    f"Size of dimension '{dim}' in {name} ({validated_log_dens[dim].size}) "
+                    f"must match the size in log_likelihood ({log_likelihood[dim].size})."
+                )
+        for dim in sample_dims:
+            if dim in validated_log_dens.coords and not np.array_equal(
+                validated_log_dens[dim].values, log_likelihood[dim].values
+            ):
+                warnings.warn(
+                    f"Coordinates for dimension '{dim}' in {name} do not match "
+                    f"those in log_likelihood. Ensure they correspond to the same samples.",
+                    UserWarning,
+                )
     else:
-        raise TypeError(f"{name} must be a ndarray or DataArray")
-
-    for dim in sample_dims:
-        if dim not in validated_log_dens.dims:
-            raise ValueError(f"{name} must have dimension '{dim}'")
+        raise TypeError(f"{name} must be a numpy ndarray or xarray DataArray")
 
     return validated_log_dens

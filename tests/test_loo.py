@@ -288,27 +288,39 @@ def test_loo_approx_pointwise(centered_eight, log_densities, pointwise):
     "error_case,error_type,error_match",
     [
         ("wrong_type", TypeError, None),
-        ("length_mismatch", ValueError, "Length of log_p"),
+        ("length_mismatch", ValueError, "Size of log_p"),
         ("missing_dims", ValueError, "must have dimension 'chain'"),
+        ("dim_size_mismatch", ValueError, r"Size of dimension 'chain' in log_p"),
     ],
 )
 def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type, error_match):
-    log_p, log_q = log_densities["dataarray"]
+    log_p_da, log_q_da = log_densities["dataarray"]
+    log_p_np, log_q_np = log_densities["numpy"]
+    log_lik = log_densities["log_lik"]
 
     kwargs = {}
 
     if error_case == "wrong_type":
-        kwargs = {"log_p": list(log_p.values.ravel()), "log_q": log_q}
+        kwargs = {"log_p": list(log_p_np), "log_q": log_q_np}
 
     elif error_case == "length_mismatch":
-        kwargs = {"log_p": np.random.randn(log_p.size - 1), "log_q": log_q}
+        kwargs = {"log_p": np.random.randn(log_p_np.size - 1), "log_q": log_q_np}
 
     elif error_case == "missing_dims":
-        broken = xr.DataArray(log_p.values.reshape(-1), dims=["sample"])
-        kwargs = {"log_p": broken, "log_q": log_q}
+        broken_p = xr.DataArray(log_p_da.values.reshape(-1), dims=["sample"])
+        kwargs = {"log_p": broken_p, "log_q": log_q_da}
 
-    else:
-        pytest.skip("Unhandled error case")
+    elif error_case == "dim_size_mismatch":
+        mismatched_p_values = np.random.randn(log_lik.chain.size - 1, log_lik.draw.size)
+        mismatched_p = xr.DataArray(
+            mismatched_p_values,
+            dims=["chain", "draw"],
+            coords={
+                "chain": log_lik.chain[:-1],
+                "draw": log_lik.draw,
+            },
+        )
+        kwargs = {"log_p": mismatched_p, "log_q": log_q_da}
 
     with pytest.raises(error_type, match=error_match):
         loo_approximate_posterior(centered_eight, var_name="obs", **kwargs)
