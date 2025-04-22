@@ -533,7 +533,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
 
     Examples
     --------
-    Calculate LOO for an approximate posterior.
+    Calculate LOO for an approximate posterior:
 
     .. ipython::
 
@@ -546,27 +546,33 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
            ...: log_lik = extract(data, group="log_likelihood", var_names="obs", combined=False)
            ...: rng = np.random.default_rng(214)
            ...:
-           ...: values_p = rng.normal(size=(log_lik.chain.size, log_lik.draw.size))
+           ...: values_p = rng.normal(loc=0, scale=1, size=(log_lik.chain.size, log_lik.draw.size))
            ...: log_p = xr.DataArray(
            ...:     values_p,
            ...:     dims=["chain", "draw"],
            ...:     coords={"chain": log_lik.chain, "draw": log_lik.draw}
            ...: )
            ...:
-           ...: values_q = rng.normal(loc=-1, size=(log_lik.chain.size, log_lik.draw.size))
+           ...: values_q = rng.normal(loc=-1, scale=1, size=(log_lik.chain.size, log_lik.draw.size))
            ...: log_q = xr.DataArray(
            ...:     values_q,
            ...:     dims=["chain", "draw"],
            ...:     coords={"chain": log_lik.chain, "draw": log_lik.draw}
            ...: )
-           ...:
-           ...: loo_approx_data = loo_approximate_posterior(
+
+    Note that this example is simplified for demonstration purposes and our approximate posterior
+    is not a good match for the data which can lead to strange results.
+
+    .. ipython::
+
+        In [2]: loo_approx = loo_approximate_posterior(
            ...:     data,
            ...:     log_p=log_p,
            ...:     log_q=log_q,
            ...:     var_name="obs",
            ...:     pointwise=True
            ...: )
+           ...: loo_approx
 
     See Also
     --------
@@ -639,7 +645,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
 
     if not pointwise:
         return ELPDData(
-            "loo_approx",
+            "loo",
             elpd,
             elpd_se,
             p_loo,
@@ -648,6 +654,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
             "log",
             warn_mg,
             good_k,
+            approx_posterior=True,
         )
 
     if np.equal(elpd, elpd_i).all():  # pylint: disable=no-member
@@ -657,7 +664,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
         )
 
     return ELPDData(
-        "loo_approx",
+        "loo",
         elpd,
         elpd_se,
         p_loo,
@@ -668,6 +675,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
         good_k,
         elpd_i,
         pareto_k_da,
+        approx_posterior=True,
     )
 
 
