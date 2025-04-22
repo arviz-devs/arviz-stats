@@ -304,6 +304,7 @@ def rhat_nested(
     group="posterior",
     var_names=None,
     filter_vars=None,
+    method="rank",
     coords=None,
     superchain_ids=None,
     chain_axis=0,
@@ -339,6 +340,13 @@ def rhat_nested(
     var_names : str or list of str, optional
         Names of the variables for which the Rhat should be computed.
     filter_vars : {None, "like", "regex"}, default None
+    method : str, default "rank"
+        Valid methods are:
+        - "rank"        # recommended by Vehtari et al. (2021)
+        - "split"
+        - "folded"
+        - "z_scale"
+        - "identity"
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
@@ -403,7 +411,7 @@ def rhat_nested(
     if coords is not None:
         data = data.sel(coords)
 
-    return data.azstats.rhat_nested(dims=sample_dims, superchain_ids=superchain_ids)
+    return data.azstats.rhat_nested(dims=sample_dims, method=method, superchain_ids=superchain_ids)
 
 
 def mcse(
