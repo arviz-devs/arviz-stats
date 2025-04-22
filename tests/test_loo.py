@@ -249,7 +249,7 @@ def test_loo_approx_basic(centered_eight, log_densities, input_type):
 
     result = loo_approximate_posterior(centered_eight, log_p=log_p, log_q=log_q, var_name="obs")
 
-    assert result.kind == "loo_approx"
+    assert result.kind == "loo"
     assert result.n_samples == n_samples
     assert result.n_data_points == n_data_points
     assert isinstance(result.elpd, float)
