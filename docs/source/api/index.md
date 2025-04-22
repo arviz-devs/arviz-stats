@@ -25,7 +25,7 @@
    arviz_stats.loo_expectations
    arviz_stats.loo_metrics
    arviz_stats.loo_pit
-   arvix_stats.loo_approximate_posterior
+   arviz_stats.loo_approximate_posterior
    arviz_stats.mcse
    arviz_stats.psense
    arviz_stats.psense_summary
