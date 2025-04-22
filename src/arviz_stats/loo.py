@@ -485,7 +485,7 @@ def loo_pit(data, var_names=None, log_weights=None, randomize=False):
 
 
 def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None):
-    """Compute LOO cross-validation for approximate posteriors using Pareto smoothing.
+    """Compute PSIS-LOO-CV for approximate posteriors.
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV) for approximate
@@ -560,8 +560,9 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
            ...:     coords={"chain": log_lik.chain, "draw": log_lik.draw}
            ...: )
 
-    Note that this example is simplified for demonstration purposes and our approximate posterior
-    is not a good match for the data which can lead to strange results.
+    This example focuses on demonstrating the function's usage. The provided approximate
+    posterior is deliberately simple and may not accurately represent the data, potentially
+    leading to less meaningful LOO results.
 
     .. ipython::
 
