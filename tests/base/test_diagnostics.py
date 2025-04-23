@@ -4,9 +4,12 @@
 import os
 
 import numpy as np
-import pandas as pd
 import pytest
-from arviz_base import load_arviz_data, xarray_var_iter
+
+from ..helpers import importorskip
+
+azb = importorskip("arviz_base")
+pd = importorskip("pandas")
 
 from arviz_stats.base import array_stats
 
@@ -17,7 +20,7 @@ GOOD_RHAT = 1.1
 
 @pytest.fixture(scope="session")
 def idata():
-    centered_eight = load_arviz_data("centered_eight")
+    centered_eight = azb.load_arviz_data("centered_eight")
     return centered_eight.posterior
 
 
@@ -128,7 +131,7 @@ def test_deterministic():
         "mcse_quantile30": lambda x: array_stats.mcse(x, method="quantile", prob=0.3),
     }
     results = {}
-    for key, coord_dict, _, vals in xarray_var_iter(posterior.posterior, combined=True):
+    for key, coord_dict, _, vals in azb.xarray_var_iter(posterior.posterior, combined=True):
         if coord_dict:
             key = f"{key}.{list(coord_dict.values())[0] + 1}"
         results[key] = {func_name: func(vals) for func_name, func in funcs.items()}

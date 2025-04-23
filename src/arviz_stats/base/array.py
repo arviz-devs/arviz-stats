@@ -11,6 +11,15 @@ from arviz_stats.base.diagnostics import _DiagnosticsBase
 from arviz_stats.base.stats_utils import make_ufunc
 
 
+def process_chain_none(ary, chain_axis, draw_axis):
+    """Process array with chain and draw axis to cover the case ``chain_axis=None``."""
+    if chain_axis is None:
+        ary = np.expand_dims(ary, axis=0)
+        chain_axis = 0
+        draw_axis = draw_axis + 1 if draw_axis > 0 else draw_axis
+    return ary, chain_axis, draw_axis
+
+
 def process_ary_axes(ary, axes):
     """Process input array and axes to ensure input core dims are the last ones.
 
@@ -107,9 +116,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         # fmt: on
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         ess_func = getattr(self, f"_ess_{method}")
         func_kwargs = {"relative": relative}
@@ -124,9 +131,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         rhat_func = getattr(self, f"_rhat_{method}")
         rhat_array = make_ufunc(rhat_func, n_output=1, n_input=1, n_dims=2, ravel=False)
@@ -152,9 +156,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         valid_methods = {"mean", "sd", "median", "quantile"}
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         mcse_func = getattr(self, f"_mcse_{method}")
         func_kwargs = {} if prob is None else {"prob": prob}
@@ -163,9 +165,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
     def pareto_min_ss(self, ary, chain_axis=-2, draw_axis=-1):
         """Compute minimum effective sample size."""
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         pms_array = make_ufunc(self._pareto_min_ss, n_output=1, n_input=1, n_dims=2, ravel=False)
         return pms_array(ary)
@@ -198,11 +198,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         self, ary, lower_w, upper_w, lower_alpha, upper_alpha, chain_axis=-2, draw_axis=-1
     ):
         """Compute power-scaling sensitivity."""
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            lower_w = np.expand_dims(lower_w, axis=0)
-            upper_w = np.expand_dims(upper_w, axis=0)
-            chain_axis = 0
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
+        lower_w, _, _ = process_chain_none(lower_w, chain_axis, draw_axis)
+        upper_w, _, _ = process_chain_none(upper_w, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         lower_w, _ = process_ary_axes(lower_w, [chain_axis, draw_axis])
         upper_w, _ = process_ary_axes(upper_w, [chain_axis, draw_axis])

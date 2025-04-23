@@ -47,6 +47,10 @@ xarray = [
 test = [
     "pytest",
     "pytest-cov",
+]
+test-xarray = [
+    "pytest",
+    "pytest-cov",
     "h5netcdf",
 ]
 doc = [
@@ -90,7 +94,7 @@ ignore = [
 "src/arviz_stats/__init__.py" = ["I", "F401", "E402", "F403"]
 "src/arviz_stats/numba/*" = ["F841"]
 "src/arviz_stats/**/__init__.py" = ["I", "F401", "E402", "F403"]
-"tests/**/*" = ["D", "PLR2004", "NPY002"]
+"tests/**/*" = ["D", "E402", "PLR2004", "NPY002"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

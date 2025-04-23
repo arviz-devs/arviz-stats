@@ -1,13 +1,16 @@
 import os
 
-from arviz_base import convert_to_datatree
 from numpy import isclose
 from numpy.testing import assert_almost_equal
+
+from .helpers import importorskip
+
+azb = importorskip("arviz_base")
 
 from arviz_stats import psense, psense_summary
 
 file_path = os.path.join(os.path.dirname(__file__), "univariate_normal.nc")
-uni_dt = convert_to_datatree(file_path)
+uni_dt = azb.convert_to_datatree(file_path)
 
 
 def test_psense():
