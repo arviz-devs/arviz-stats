@@ -98,7 +98,9 @@ class _BaseAccessor:
 
     def rhat_nested(self, dims=None, method="rank", superchain_ids=None, **kwargs):
         """Compute nested rhat of all the variables in the dataset."""
-        return self._apply("rhat_nested", dims=dims, method=method, superchain_ids=superchain_ids, **kwargs)
+        return self._apply(
+            "rhat_nested", dims=dims, method=method, superchain_ids=superchain_ids, **kwargs
+        )
 
     def mcse(self, dims=None, method="mean", prob=None, **kwargs):
         """Compute the mcse of all the variables in the dataset."""
