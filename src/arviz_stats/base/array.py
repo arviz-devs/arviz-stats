@@ -131,6 +131,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         rhat_func = getattr(self, f"_rhat_{method}")
         rhat_array = make_ufunc(rhat_func, n_output=1, n_input=1, n_dims=2, ravel=False)
@@ -142,9 +143,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         rhat_func = getattr(self, f"_rhat_nested_{method}")
         rhat_ufunc = make_ufunc(rhat_func, n_output=1, n_input=1, n_dims=2, ravel=False)
