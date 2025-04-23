@@ -682,7 +682,8 @@ class _DiagnosticsBase(_CoreBase):
             return np.nan
         return self._rhat_nested(ary, superchain_ids)
 
-    def _rhat_nested(self, ary, superchain_ids):
+    @staticmethod
+    def _rhat_nested(ary, superchain_ids):
         ary = np.asarray(ary)
         nchains, niterations = ary.shape
 
