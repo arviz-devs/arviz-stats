@@ -639,6 +639,49 @@ class _DiagnosticsBase(_CoreBase):
 
         return np.sqrt((cjs_pq + cjs_qp) / bound)
 
+    def _rhat_nested_rank(self, ary, superchain_ids):
+        """Compute the rank normalized rhat for 2d array.
+
+        Computation follows https://arxiv.org/abs/1903.08008
+        """
+        ary = np.asarray(ary)
+        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+            return np.nan
+        split_ary = self._split_chains(ary)
+        rhat_bulk = self._rhat_nested(self._z_scale(split_ary), superchain_ids)
+
+        split_ary_folded = abs(split_ary - np.median(split_ary))
+        rhat_tail = self._rhat_nested(self._z_scale(split_ary_folded), superchain_ids)
+
+        rhat_rank = max(rhat_bulk, rhat_tail)
+        return rhat_rank
+
+    def _rhat_nested_folded(self, ary, superchain_ids):
+        """Calculate split-Rhat for folded z-values."""
+        ary = np.asarray(ary)
+        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+            return np.nan
+        ary = self._z_fold(self._split_chains(ary))
+        return self._rhat_nested(ary, superchain_ids)
+
+    def _rhat_nested_z_scale(self, ary, superchain_ids):
+        ary = np.asarray(ary)
+        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+            return np.nan
+        return self._rhat_nested(self._z_scale(self._split_chains(ary)), superchain_ids)
+
+    def _rhat_nested_split(self, ary, superchain_ids):
+        ary = np.asarray(ary)
+        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+            return np.nan
+        return self._rhat_nested(self._split_chains(ary), superchain_ids)
+
+    def _rhat_nested_identity(self, ary, superchain_ids):
+        ary = np.asarray(ary)
+        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+            return np.nan
+        return self._rhat_nested(ary, superchain_ids)
+
     @staticmethod
     def _rhat_nested(ary, superchain_ids):
         ary = np.asarray(ary)

@@ -105,7 +105,12 @@ def test_deterministic():
     funcs = {
         "rhat_rank": lambda x: array_stats.rhat(x, method="rank"),
         "rhat_raw": lambda x: array_stats.rhat(x, method="identity"),
-        "rhat_nested": lambda x: array_stats.rhat_nested(x, superchain_ids=[0, 0, 1, 1]),
+        "rhat_nested_rank": lambda x: array_stats.rhat_nested(
+            x, method="rank", superchain_ids=[0, 0, 1, 1]
+        ),
+        "rhat_nested": lambda x: array_stats.rhat_nested(
+            x, method="identity", superchain_ids=[0, 0, 1, 1]
+        ),
         "ess_bulk": lambda x: array_stats.ess(x, method="bulk"),
         "ess_tail": lambda x: array_stats.ess(x, method="tail"),
         "ess_mean": lambda x: array_stats.ess(x, method="mean"),

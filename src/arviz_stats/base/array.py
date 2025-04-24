@@ -132,13 +132,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         rhat_array = make_ufunc(rhat_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return rhat_array(ary)
 
-    def rhat_nested(self, ary, superchain_ids, chain_axis=-2, draw_axis=-1):
+    def rhat_nested(self, ary, superchain_ids, method="rank", chain_axis=-2, draw_axis=-1):
         """Compute nested rhat on array-like inputs."""
+        method = method.lower()
+        valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
+        if method not in valid_methods:
+            raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
         if chain_axis is None:
             ary = np.expand_dims(ary, axis=0)
             chain_axis = 0
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
-        rhat_ufunc = make_ufunc(self._rhat_nested, n_output=1, n_input=1, n_dims=2, ravel=False)
+        rhat_func = getattr(self, f"_rhat_nested_{method}")
+        rhat_ufunc = make_ufunc(rhat_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return rhat_ufunc(ary, superchain_ids=superchain_ids)
 
     def mcse(self, ary, chain_axis=-2, draw_axis=-1, method="mean", prob=None):
