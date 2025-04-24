@@ -177,6 +177,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     good_k: float
     elpd_i: DataArray = None
     pareto_k: DataArray = None
+    approx_posterior: bool = False
 
     def __str__(self):
         """Print elpd data in a user friendly way."""
@@ -195,6 +196,10 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
             p_value=self.p,
         )
 
+        if self.approx_posterior:
+            header, table = base.split("\n\n", 1)
+            base = header + "\nPosterior approximation correction used.\n\n" + table
+
         if self.warning:
             base += "\n\nThere has been a warning during the calculation. Please check the results."
 
@@ -209,6 +214,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
                 self.good_k,
             )
             base = "\n".join([base, extended])
+
         return base
 
     def __repr__(self):

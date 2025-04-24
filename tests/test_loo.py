@@ -2,11 +2,19 @@
 
 import numpy as np
 import pytest
+import xarray as xr
 from arviz_base import load_arviz_data
 from numpy.testing import assert_allclose, assert_almost_equal
 from xarray import DataArray
 
-from arviz_stats import compare, loo, loo_expectations, loo_metrics, loo_pit
+from arviz_stats import (
+    compare,
+    loo,
+    loo_approximate_posterior,
+    loo_expectations,
+    loo_metrics,
+    loo_pit,
+)
 from arviz_stats.loo import _calculate_ics
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -36,6 +44,35 @@ def multivariable_log_likelihood(centered_eight):
     )
     centered_eight.log_likelihood["decoy"] = new_arr
     return centered_eight
+
+
+@pytest.fixture(scope="module")
+def log_densities(centered_eight):
+    log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")
+    rng = np.random.default_rng(seed=42)
+
+    p_values = rng.normal(size=(log_lik.chain.size, log_lik.draw.size))
+    q_values = rng.normal(loc=-1.0, size=(log_lik.chain.size, log_lik.draw.size))
+
+    log_p_da = xr.DataArray(
+        p_values,
+        dims=["chain", "draw"],
+        coords={"chain": log_lik.chain, "draw": log_lik.draw},
+    )
+    log_q_da = xr.DataArray(
+        q_values,
+        dims=["chain", "draw"],
+        coords={"chain": log_lik.chain, "draw": log_lik.draw},
+    )
+
+    log_p_np = p_values.ravel()
+    log_q_np = q_values.ravel()
+
+    return {
+        "log_lik": log_lik,
+        "dataarray": (log_p_da, log_q_da),
+        "numpy": (log_p_np, log_q_np),
+    }
 
 
 @pytest.mark.parametrize("pointwise", [True, False])
@@ -198,3 +235,92 @@ def test_loo_pit_discrete(centered_eight):
     loo_pit_values = loo_pit(centered_eight)
     assert np.all(loo_pit_values >= 0)
     assert np.all(loo_pit_values <= 1)
+
+
+@pytest.mark.parametrize("input_type", ["dataarray", "numpy"])
+def test_loo_approx_basic(centered_eight, log_densities, input_type):
+    log_p, log_q = log_densities[input_type]
+    log_lik = log_densities["log_lik"]
+
+    n_samples = log_lik.chain.size * log_lik.draw.size
+    n_data_points = np.prod(
+        [log_lik[dim].size for dim in log_lik.dims if dim not in ["chain", "draw"]]
+    )
+
+    result = loo_approximate_posterior(centered_eight, log_p=log_p, log_q=log_q, var_name="obs")
+
+    assert result.kind == "loo"
+    assert result.n_samples == n_samples
+    assert result.n_data_points == n_data_points
+    assert isinstance(result.elpd, float)
+    assert isinstance(result.se, float)
+    assert isinstance(result.p, float)
+    assert isinstance(result.warning, bool)
+
+
+@pytest.mark.parametrize("pointwise", [True, False])
+def test_loo_approx_pointwise(centered_eight, log_densities, pointwise):
+    log_p, log_q = log_densities["dataarray"]
+    log_lik = log_densities["log_lik"]
+    n_data_points = np.prod(
+        [log_lik[dim].size for dim in log_lik.dims if dim not in ["chain", "draw"]]
+    )
+
+    result = loo_approximate_posterior(
+        centered_eight,
+        log_p=log_p,
+        log_q=log_q,
+        pointwise=pointwise,
+        var_name="obs",
+    )
+
+    if pointwise:
+        assert result.elpd_i is not None
+        assert result.pareto_k is not None
+        assert result.elpd_i.shape == (n_data_points,)
+        assert result.pareto_k.shape == (n_data_points,)
+    else:
+        assert result.elpd_i is None
+        assert result.pareto_k is None
+
+
+@pytest.mark.parametrize(
+    "error_case,error_type,error_match",
+    [
+        ("wrong_type", TypeError, None),
+        ("length_mismatch", ValueError, "Size of log_p"),
+        ("missing_dims", ValueError, "must have dimension 'chain'"),
+        ("dim_size_mismatch", ValueError, r"Size of dimension 'chain' in log_p"),
+    ],
+)
+def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type, error_match):
+    log_p_da, log_q_da = log_densities["dataarray"]
+    log_p_np, log_q_np = log_densities["numpy"]
+    log_lik = log_densities["log_lik"]
+
+    kwargs = {}
+
+    if error_case == "wrong_type":
+        kwargs = {"log_p": list(log_p_np), "log_q": log_q_np}
+
+    elif error_case == "length_mismatch":
+        kwargs = {"log_p": np.random.randn(log_p_np.size - 1), "log_q": log_q_np}
+
+    elif error_case == "missing_dims":
+        broken_p = xr.DataArray(log_p_da.values.reshape(-1), dims=["sample"])
+        kwargs = {"log_p": broken_p, "log_q": log_q_da}
+
+    elif error_case == "dim_size_mismatch":
+        mismatched_p_values = np.random.randn(log_lik.chain.size - 1, log_lik.draw.size)
+        mismatched_p = xr.DataArray(
+            mismatched_p_values,
+            dims=["chain", "draw"],
+            coords={
+                "chain": log_lik.chain[:-1],
+                "draw": log_lik.draw,
+            },
+        )
+        kwargs = {"log_p": mismatched_p, "log_q": log_q_da}
+
+    with pytest.raises(error_type, match=error_match):
+        loo_approximate_posterior(centered_eight, var_name="obs", **kwargs)
