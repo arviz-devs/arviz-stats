@@ -335,33 +335,31 @@ def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type
 @pytest.mark.parametrize("pointwise", [True, False])
 def test_loo_subsample(radon, pointwise):
     observations = 200
-    loo_sub_data = loo_subsample(
-        radon, observations=observations, pointwise=pointwise, var_name="y"
-    )
+    loo_sub = loo_subsample(radon, observations=observations, pointwise=pointwise, var_name="y")
 
-    assert isinstance(loo_sub_data, ELPDData)
-    assert loo_sub_data.kind == "loo"
-    assert loo_sub_data.subsample_size == observations
-    assert isinstance(loo_sub_data.elpd, float)
-    assert isinstance(loo_sub_data.se, float) and loo_sub_data.se >= 0
-    assert isinstance(loo_sub_data.p, float)
-    assert isinstance(loo_sub_data.subsampling_se, float) and loo_sub_data.subsampling_se >= 0
-    assert loo_sub_data.n_data_points == radon.observed_data.y.size
+    assert isinstance(loo_sub, ELPDData)
+    assert loo_sub.kind == "loo"
+    assert loo_sub.subsample_size == observations
+    assert isinstance(loo_sub.elpd, float)
+    assert isinstance(loo_sub.se, float) and loo_sub.se >= 0
+    assert isinstance(loo_sub.p, float)
+    assert isinstance(loo_sub.subsampling_se, float) and loo_sub.subsampling_se >= 0
+    assert loo_sub.n_data_points == radon.observed_data.y.size
 
     if pointwise:
-        assert hasattr(loo_sub_data, "elpd_i")
-        assert hasattr(loo_sub_data, "pareto_k")
-        assert loo_sub_data.elpd_i is not None
-        assert loo_sub_data.pareto_k is not None
-        assert loo_sub_data.elpd_i.dims == ("obs_id",)
-        assert loo_sub_data.elpd_i.shape == (loo_sub_data.n_data_points,)
-        assert loo_sub_data.pareto_k.dims == ("obs_id_subsample",)
-        assert loo_sub_data.pareto_k.shape == (observations,)
-        assert np.isnan(loo_sub_data.elpd_i).sum() == loo_sub_data.n_data_points - observations
-        assert not np.isnan(loo_sub_data.elpd_i).all()
+        assert hasattr(loo_sub, "elpd_i")
+        assert hasattr(loo_sub, "pareto_k")
+        assert loo_sub.elpd_i is not None
+        assert loo_sub.pareto_k is not None
+        assert loo_sub.elpd_i.dims == ("obs_id",)
+        assert loo_sub.elpd_i.shape == (loo_sub.n_data_points,)
+        assert loo_sub.pareto_k.dims == ("obs_id_subsample",)
+        assert loo_sub.pareto_k.shape == (observations,)
+        assert np.isnan(loo_sub.elpd_i).sum() == loo_sub.n_data_points - observations
+        assert not np.isnan(loo_sub.elpd_i).all()
     else:
-        assert not hasattr(loo_sub_data, "elpd_i") or loo_sub_data.elpd_i is None
-        assert not hasattr(loo_sub_data, "pareto_k") or loo_sub_data.pareto_k is None
+        assert not hasattr(loo_sub, "elpd_i") or loo_sub.elpd_i is None
+        assert not hasattr(loo_sub, "pareto_k") or loo_sub.pareto_k is None
 
 
 def test_loo_subsample_errors(radon):

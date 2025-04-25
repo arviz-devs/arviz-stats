@@ -611,13 +611,14 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV) with sub-sampling.
     Uses a log predictive density (LPD) approximation for all observations and applies
     a difference estimator based on a simple random sample without replacement of
-    observations. The method is described in [1]_, [2]_, and [3]_.
+    observations. The PSIS-LOO-CV with sub-sampling method is described in [1]_, [2]_,
+    and [3]_.
 
     Parameters
     ----------
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
-    observations : int or np.ndarray
+    observations : int or ndarray
         The subsample observations to use:
         - An integer specifying the number of observations to randomly subsample without
           replacement.
@@ -660,6 +661,7 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
     See Also
     --------
     loo : Exact PSIS-LOO cross-validation.
+    loo_approximate_posterior : PSIS-LOO cross-validation for approximate posteriors.
     compare : Compare models based on ELPD.
 
     References
@@ -687,7 +689,9 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
 
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = np.prod([log_likelihood[dim].size for dim in obs_dims])
+    n_data_points = np.prod(
+        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
+    )
 
     if reff is None:
         reff = _get_r_eff(data, n_samples)
@@ -720,42 +724,39 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
     else:
         raise TypeError("observations must be an integer or a numpy array of integers.")
 
+    # LPD approximation
     lpd_approx_all = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).values
 
-    # TODO: Is this necessary?
-    # if len(obs_dims) > 1:
-    #     # For multi-dimensional data, need to flatten observation dims
-    #     stacked_obs_dim = "__obs__"
-    #     log_likelihood_stacked = log_likelihood.stack({stacked_obs_dim: obs_dims})
+    if len(obs_dims) > 1:
+        stacked_obs_dim = "__obs__"
+        log_likelihood_stacked = log_likelihood.stack({stacked_obs_dim: obs_dims})
 
-    #     # Create a mask for the selected indices
-    #     obs_mask = np.zeros(n_data_points, dtype=bool)
-    #     obs_mask[indices] = True
-    #     log_likelihood_sample = log_likelihood_stacked.sel(
-    #         {stacked_obs_dim: log_likelihood_stacked[stacked_obs_dim][obs_mask]}
-    #     )
-    # else:
-
-    obs_dim = obs_dims[0]
-    valid_indices = [i for i in indices if i < log_likelihood.sizes[obs_dim]]
-    log_likelihood_sample = log_likelihood.isel({obs_dim: valid_indices})
+        obs_mask = np.zeros(n_data_points, dtype=bool)
+        obs_mask[indices] = True
+        log_likelihood_sample = log_likelihood_stacked.sel(
+            {stacked_obs_dim: log_likelihood_stacked[stacked_obs_dim][obs_mask]}
+        )
+    else:
+        obs_dim = obs_dims[0]
+        valid_indices = [i for i in indices if i < log_likelihood.sizes[obs_dim]]
+        log_likelihood_sample = log_likelihood.isel({obs_dim: valid_indices})
 
     sample_ds = xr.Dataset({var_name: log_likelihood_sample})
+    # PSIS-LOO weights
     log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(r_eff=reff, dims=sample_dims)
 
-    combined_weights = log_weights_ds + sample_ds
-    elpd_loo_i_sample = logsumexp(combined_weights[var_name], dims=sample_dims).values
+    log_weights_ds += sample_ds
+    elpd_loo_i_sample = logsumexp(log_weights_ds, dims=sample_dims)[var_name].values
 
     lpd_approx_sample = lpd_approx_all[indices]
     e_i = elpd_loo_i_sample - lpd_approx_sample
 
     t_pi_tilde = np.sum(lpd_approx_all)
-    # Estimated total difference
     t_e = n_data_points * np.mean(e_i)
     elpd_loo_hat = t_pi_tilde + t_e
 
     if subsample_size > 1:
-        # Subsampling variance (variance of the estimator)
+        # Subsampling variance
         v_y_hat = (
             (n_data_points**2)
             * (1 - subsample_size / n_data_points)
@@ -766,7 +767,6 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
 
         # Total variance (approximation + sampling)
         t_pi2_tilde = np.sum(lpd_approx_all**2)
-        # Estimate E[y_i^2 - \tilde{y}_i^2] for the sample
         y2_tilde_y2_diff_mean = np.mean(elpd_loo_i_sample**2 - lpd_approx_sample**2)
         t_hat_epsilon = n_data_points * y2_tilde_y2_diff_mean
 
@@ -785,7 +785,6 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
         subsampling_se_val = np.inf
         se_val = np.inf
 
-    # Calculate p_loo = E[log p(y|theta)] - elpd_loo
     elpd_raw = np.sum(
         lpd_approx_all
     )  # Sum of LPD approximations is our estimate for E[log p(y|theta)]
@@ -797,18 +796,15 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
 
     warn_mg = False
     good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
-    pareto_k_sample_np = pareto_k_ds[var_name].values
+    pareto_k_sample_da = pareto_k_ds[var_name]
 
-    if pareto_k_sample_np.ndim > 1:
-        pareto_k_sample_np = pareto_k_sample_np.reshape(subsample_size)
-
-    if np.any(pareto_k_sample_np > good_k):
+    if np.any(pareto_k_sample_da > good_k):
         warnings.warn(
-            f"Estimated shape parameter k of Pareto distribution is > {good_k:.2f} "
-            f"for {np.sum(pareto_k_sample_np > good_k)} observations in the subsample. "
-            "PSIS weights estimation may be unreliable.",
-            UserWarning,
-            stacklevel=2,
+            f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
+            "for one or more samples. You should consider using a more robust model, this is "
+            "because importance sampling is less likely to work well if the marginal posterior "
+            "and LOO posterior are very different. This is more likely to happen with a "
+            "non-robust model and highly influential observations."
         )
         warn_mg = True
 
@@ -825,19 +821,16 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
         )
 
         pareto_k_da = xr.DataArray(
-            pareto_k_sample_np,
+            pareto_k_sample_da,
             coords={"obs_id_subsample": indices},
             dims=["obs_id_subsample"],
             name="pareto_k",
         )
 
-        non_nan_elpd_i = elpd_i_full[~np.isnan(elpd_i_full)]
-        if len(non_nan_elpd_i) > 0 and np.allclose(non_nan_elpd_i, non_nan_elpd_i[0]):
+        if np.equal(elpd, elpd_i_da.values).all():  # pylint: disable=no-member
             warnings.warn(
-                "The point-wise LOO values for the subsample are identical. "
-                "Please double check your model specification.",
-                UserWarning,
-                stacklevel=2,
+                "The point-wise LOO is the same with the sum LOO, please double check "
+                "the Observed RV in your model to make sure it returns element-wise logp."
             )
 
         loo_results = ELPDData(
@@ -854,11 +847,6 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
             pareto_k_da,
             approx_posterior=False,
         )
-
-        loo_results.subsampling_se = subsampling_se
-        loo_results.subsample_size = subsample_size
-        loo_results.method = "loo_subsample"
-
     else:
         loo_results = ELPDData(
             "loo",
@@ -873,10 +861,9 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
             approx_posterior=False,
         )
 
-        loo_results.subsampling_se = subsampling_se
-        loo_results.subsample_size = subsample_size
-        loo_results.method = "loo_subsample"
-
+    loo_results.subsampling_se = subsampling_se
+    loo_results.subsample_size = subsample_size
+    loo_results.method = "loo_subsample"
     return loo_results
 
 
