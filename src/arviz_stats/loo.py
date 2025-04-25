@@ -608,10 +608,10 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
     """Compute approximate leave-one-out cross-validation (LOO-CV) using sub-sampling.
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto smoothed
-    importance sampling leave-one-out cross-validation (PSIS-LOO-CV) with sub-sampling.
-    Uses a log predictive density (LPD) approximation for all observations and applies
-    a difference estimator based on a simple random sample without replacement. The
-    PSIS-LOO-CV with sub-sampling method is described in [1]_, [2]_, and [3]_.
+    importance sampling leave-one-out cross-validation (PSIS-LOO-CV) with sub-sampling
+    for large datasets. Uses a log predictive density (LPD) approximation and applies a
+    difference estimator based on a simple random sample without replacement. The method
+    is described in [1]_, [2]_, and [3]_.
 
     Parameters
     ----------
@@ -619,6 +619,7 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
         Input data. It should contain the posterior and the log_likelihood groups.
     observations : int or ndarray
         The subsample observations to use:
+
         - An integer specifying the number of observations to randomly subsample without
           replacement.
         - An array of integer indices specifying the exact observations to use.
@@ -657,6 +658,26 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
         - **subsample_size**: Number of observations in the subsample (m).
         - **method**: "loo_subsample"
 
+    Examples
+    --------
+    Calculate sub-sampled LOO using 4 random observations:
+
+    .. ipython::
+        :okexcept:
+
+        In [1]: from arviz_stats import loo_subsample
+           ...: from arviz_base import load_arviz_data
+           ...: data = load_arviz_data("centered_eight")
+           ...: loo_results = loo_subsample(data, observations=4, var_name="obs", pointwise=True)
+           ...: loo_results
+
+    Return the pointwise values for the sub-sample. Note that the pointwise values are only
+    returned for the sub-sample observations:
+
+    .. ipython::
+
+        In [2]: loo_results.elpd_i
+
     See Also
     --------
     loo : Exact PSIS-LOO cross-validation.
@@ -677,6 +698,7 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
     .. [3] Magnusson, M., Riis Andersen, M., Jonasson, J., & Vehtari, A. *Bayesian Leave-One-Out
         Cross-Validation for Large Data.* Proceedings of the 36th International Conference on
         Machine Learning, PMLR 97:4244–4253 (2019)
+        https://proceedings.mlr.press/v97/magnusson19a.html
         arXiv preprint https://arxiv.org/abs/1904.10679
     """
     data = convert_to_datatree(data)
