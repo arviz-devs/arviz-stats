@@ -26,6 +26,7 @@
    arviz_stats.loo_metrics
    arviz_stats.loo_pit
    arviz_stats.loo_approximate_posterior
+   arviz_stats.loo_subsample
    arviz_stats.mcse
    arviz_stats.psense
    arviz_stats.psense_summary

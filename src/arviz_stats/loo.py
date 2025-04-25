@@ -604,6 +604,282 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     )
 
 
+def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, seed=315):
+    """Compute approximate leave-one-out cross-validation (LOO-CV) using subsampling.
+
+    Estimates the expected log pointwise predictive density (elpd) using Pareto smoothed
+    importance sampling leave-one-out cross-validation (PSIS-LOO-CV) with sub-sampling.
+    Uses a log predictive density (LPD) approximation for all observations and applies
+    a difference estimator based on a simple random sample without replacement of
+    observations. The method is described in [1]_, [2]_, and [3]_.
+
+    Parameters
+    ----------
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior and the log_likelihood groups.
+    observations : int or np.ndarray
+        The subsample observations to use:
+        - An integer specifying the number of observations to randomly subsample without
+          replacement.
+        - An array of integer indices specifying the exact observations to use.
+    pointwise: bool, optional
+        If True the pointwise predictive accuracy will be returned. Defaults to
+        ``rcParams["stats.ic_pointwise"]``.
+    var_name : str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation.
+    reff: float, optional
+        Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
+        of actual samples. Computed from trace by default.
+    seed: int, optional
+        Seed for random sampling.
+
+    Returns
+    -------
+    ELPDData
+        Object with the following attributes:
+
+        - **elpd**: approximated expected log pointwise predictive density (elpd)
+        - **se**: standard error of the elpd (includes approximation and sampling uncertainty)
+        - **p**: effective number of parameters
+        - **n_samples**: number of samples in the posterior
+        - **n_data_points**: total number of data points (N)
+        - **warning**: True if the estimated shape parameter k of the Pareto distribution
+          is > ``good_k`` for any observation in the subsample.
+        - **elpd_i**: :class:`~xarray.DataArray` with pointwise elpd values (filled with NaNs
+          for non-subsampled points), only if ``pointwise=True``.
+        - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values for the subsample
+          (filled with NaNs for non-subsampled points), only if ``pointwise=True``.
+        - **scale**: scale of the elpd results ("log", "negative_log", or "deviance").
+        - **good_k**: Threshold for Pareto k warnings.
+        - **approx_posterior**: True if approximate posterior was used.
+        - **subsampling_se**: Standard error estimate from subsampling uncertainty only.
+        - **subsample_size**: Number of observations in the subsample (m).
+        - **method**: "loo_subsample"
+
+    See Also
+    --------
+    loo : Exact PSIS-LOO cross-validation.
+    compare : Compare models based on ELPD.
+
+    References
+    ----------
+
+    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+        arXiv preprint https://arxiv.org/abs/1507.04544.
+    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+        arXiv preprint https://arxiv.org/abs/1507.02646
+    .. [3] Magnusson, M., Riis Andersen, M., Jonasson, J., & Vehtari, A. *Bayesian
+       Leave-One-Out Cross-Validation for Large Data.* ICML 2019.
+       arXiv preprint https://arxiv.org/abs/1904.10679
+    """
+    data = convert_to_datatree(data)
+
+    log_likelihood_ds = get_log_likelihood_dataset(data, var_names=var_name)
+    if var_name is None:
+        var_name = list(log_likelihood_ds.data_vars.keys())[0]
+    log_likelihood = log_likelihood_ds[var_name]
+
+    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
+    sample_dims = ["chain", "draw"]
+
+    obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
+    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+    n_data_points = np.prod([log_likelihood[dim].size for dim in obs_dims])
+
+    if reff is None:
+        reff = _get_r_eff(data, n_samples)
+
+    if isinstance(observations, int):
+        if not 1 <= observations <= n_data_points:
+            raise ValueError(
+                f"Number of observations must be between 1 and {n_data_points}, "
+                f"got {observations}"
+            )
+
+        # SRS-WOR
+        rng = np.random.default_rng(seed)
+        indices = rng.choice(n_data_points, size=observations, replace=False)
+        subsample_size = observations
+
+    elif isinstance(observations, np.ndarray):
+        if observations.dtype.kind != "i":
+            raise TypeError("observations array must contain integers.")
+        if observations.min() < 0 or observations.max() >= n_data_points:
+            raise ValueError(
+                f"Observation indices must be between 0 and {n_data_points - 1}, "
+                f"got range [{observations.min()}, {observations.max()}]"
+            )
+
+        indices = np.unique(observations)
+        subsample_size = len(indices)
+        if subsample_size == 0:
+            raise ValueError("observations array cannot be empty.")
+    else:
+        raise TypeError("observations must be an integer or a numpy array of integers.")
+
+    lpd_approx_all = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).values
+
+    # TODO: Is this necessary?
+    # if len(obs_dims) > 1:
+    #     # For multi-dimensional data, need to flatten observation dims
+    #     stacked_obs_dim = "__obs__"
+    #     log_likelihood_stacked = log_likelihood.stack({stacked_obs_dim: obs_dims})
+
+    #     # Create a mask for the selected indices
+    #     obs_mask = np.zeros(n_data_points, dtype=bool)
+    #     obs_mask[indices] = True
+    #     log_likelihood_sample = log_likelihood_stacked.sel(
+    #         {stacked_obs_dim: log_likelihood_stacked[stacked_obs_dim][obs_mask]}
+    #     )
+    # else:
+
+    obs_dim = obs_dims[0]
+    valid_indices = [i for i in indices if i < log_likelihood.sizes[obs_dim]]
+    log_likelihood_sample = log_likelihood.isel({obs_dim: valid_indices})
+
+    sample_ds = xr.Dataset({var_name: log_likelihood_sample})
+    log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(r_eff=reff, dims=sample_dims)
+
+    combined_weights = log_weights_ds + sample_ds
+    elpd_loo_i_sample = logsumexp(combined_weights[var_name], dims=sample_dims).values
+
+    lpd_approx_sample = lpd_approx_all[indices]
+    e_i = elpd_loo_i_sample - lpd_approx_sample
+
+    t_pi_tilde = np.sum(lpd_approx_all)
+    # Estimated total difference
+    t_e = n_data_points * np.mean(e_i)
+    elpd_loo_hat = t_pi_tilde + t_e
+
+    if subsample_size > 1:
+        # Subsampling variance (variance of the estimator)
+        v_y_hat = (
+            (n_data_points**2)
+            * (1 - subsample_size / n_data_points)
+            * np.var(e_i, ddof=1)
+            / subsample_size
+        )
+        subsampling_se_val = np.sqrt(v_y_hat) if v_y_hat >= 0 else np.inf
+
+        # Total variance (approximation + sampling)
+        t_pi2_tilde = np.sum(lpd_approx_all**2)
+        # Estimate E[y_i^2 - \tilde{y}_i^2] for the sample
+        y2_tilde_y2_diff_mean = np.mean(elpd_loo_i_sample**2 - lpd_approx_sample**2)
+        t_hat_epsilon = n_data_points * y2_tilde_y2_diff_mean
+
+        if n_data_points > 0:
+            hat_v_y = (t_pi2_tilde + t_hat_epsilon) - (1 / n_data_points) * (
+                t_e**2 - v_y_hat + 2 * t_pi_tilde * elpd_loo_hat - t_pi_tilde**2
+            )
+            hat_v_y = max(0, hat_v_y)
+        else:
+            hat_v_y = np.inf
+
+        se_val = np.sqrt(hat_v_y) if hat_v_y >= 0 else np.inf
+    else:
+        v_y_hat = np.inf
+        hat_v_y = np.inf
+        subsampling_se_val = np.inf
+        se_val = np.inf
+
+    # Calculate p_loo = E[log p(y|theta)] - elpd_loo
+    elpd_raw = np.sum(
+        lpd_approx_all
+    )  # Sum of LPD approximations is our estimate for E[log p(y|theta)]
+    p_loo_hat = elpd_raw - elpd_loo_hat
+
+    elpd = elpd_loo_hat
+    se = se_val
+    subsampling_se = subsampling_se_val
+
+    warn_mg = False
+    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
+    pareto_k_sample_np = pareto_k_ds[var_name].values
+
+    if pareto_k_sample_np.ndim > 1:
+        pareto_k_sample_np = pareto_k_sample_np.reshape(subsample_size)
+
+    if np.any(pareto_k_sample_np > good_k):
+        warnings.warn(
+            f"Estimated shape parameter k of Pareto distribution is > {good_k:.2f} "
+            f"for {np.sum(pareto_k_sample_np > good_k)} observations in the subsample. "
+            "PSIS weights estimation may be unreliable.",
+            UserWarning,
+            stacklevel=2,
+        )
+        warn_mg = True
+
+    if pointwise:
+        elpd_i_full = np.full(n_data_points, np.nan)
+        elpd_i_full[indices] = elpd_loo_i_sample
+
+        original_obs_shape = tuple(log_likelihood.sizes[d] for d in obs_dims)
+        elpd_i_da = xr.DataArray(
+            elpd_i_full.reshape(original_obs_shape),
+            coords={d: log_likelihood[d] for d in obs_dims},
+            dims=obs_dims,
+            name="elpd_i",
+        )
+
+        pareto_k_da = xr.DataArray(
+            pareto_k_sample_np,
+            coords={"obs_id_subsample": indices},
+            dims=["obs_id_subsample"],
+            name="pareto_k",
+        )
+
+        non_nan_elpd_i = elpd_i_full[~np.isnan(elpd_i_full)]
+        if len(non_nan_elpd_i) > 0 and np.allclose(non_nan_elpd_i, non_nan_elpd_i[0]):
+            warnings.warn(
+                "The point-wise LOO values for the subsample are identical. "
+                "Please double check your model specification.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        loo_results = ELPDData(
+            "loo",
+            elpd,
+            se,
+            p_loo_hat,
+            n_samples,
+            n_data_points,
+            "log",
+            warn_mg,
+            good_k,
+            elpd_i_da,
+            pareto_k_da,
+            approx_posterior=False,
+        )
+
+        loo_results.subsampling_se = subsampling_se
+        loo_results.subsample_size = subsample_size
+        loo_results.method = "loo_subsample"
+
+    else:
+        loo_results = ELPDData(
+            "loo",
+            elpd,
+            se,
+            p_loo_hat,
+            n_samples,
+            n_data_points,
+            "log",
+            warn_mg,
+            good_k,
+            approx_posterior=False,
+        )
+
+        loo_results.subsampling_se = subsampling_se
+        loo_results.subsample_size = subsample_size
+        loo_results.method = "loo_subsample"
+
+    return loo_results
+
+
 def compare(
     compare_dict,
     method="stacking",
@@ -984,5 +1260,4 @@ def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
                 )
     else:
         raise TypeError(f"{name} must be a numpy ndarray or xarray DataArray")
-
     return validated_log_dens
