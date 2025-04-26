@@ -180,7 +180,6 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     approx_posterior: bool = False
     subsampling_se: float = None
     subsample_size: int = None
-    method: str = None
 
     def __str__(self):
         """Print elpd data in a user friendly way."""
@@ -188,7 +187,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
         scale_str = SCALE_DICT[self["scale"]]
         padding = len(scale_str) + len(kind) + 1
 
-        if self.method == "loo_subsample":
+        if self.subsample_size:
             base = (
                 f"Computed from {self.n_samples} by {self.subsample_size} "
                 f"subsampled log-likelihood\n"
