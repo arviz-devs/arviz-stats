@@ -16,7 +16,7 @@ from arviz_stats import (
     loo_pit,
     loo_subsample,
 )
-from arviz_stats.loo import _calculate_ics
+from arviz_stats.loo import _calculate_ics, _difference_estimator
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
@@ -362,16 +362,6 @@ def test_loo_subsample(radon, pointwise):
         assert not hasattr(loo_sub, "pareto_k") or loo_sub.pareto_k is None
 
 
-def test_loo_subsample_errors(radon):
-    n_total = radon.observed_data.y.size
-    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
-        loo_subsample(radon, observations=0, var_name="y")
-    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
-        loo_subsample(radon, observations=n_total + 1, var_name="y")
-    with pytest.raises(TypeError, match="observations must be an integer"):
-        loo_subsample(radon, observations=50.5, var_name="y")
-
-
 @pytest.mark.parametrize("input_type", ["dataarray", "numpy"])
 @pytest.mark.parametrize("pointwise", [True, False])
 def test_loo_subsample_approx_posterior(radon, log_densities, input_type, pointwise):
@@ -410,3 +400,37 @@ def test_loo_subsample_approx_posterior(radon, log_densities, input_type, pointw
     else:
         assert not hasattr(loo_sub_approx, "elpd_i") or loo_sub_approx.elpd_i is None
         assert not hasattr(loo_sub_approx, "pareto_k") or loo_sub_approx.pareto_k is None
+
+
+def test_difference_estimator():
+    n_data_points = 10
+    subsample_size = 4
+    elpd_loo_i_sample = np.array([-1.0, -1.5, -0.5, -1.2])
+    lpd_approx_sample = np.array([-0.9, -1.4, -0.4, -1.1])
+    lpd_approx_all = np.array([-0.9, -1.4, -0.4, -1.1, -1.0, -1.3, -0.6, -1.0, -0.8, -1.5])
+
+    expected_elpd_loo_hat = -11.0
+    expected_subsampling_se = 0.0
+    expected_se = np.sqrt(0.98)
+
+    elpd_loo_hat, subsampling_se, se = _difference_estimator(
+        elpd_loo_i_sample=elpd_loo_i_sample,
+        lpd_approx_sample=lpd_approx_sample,
+        lpd_approx_all=lpd_approx_all,
+        n_data_points=n_data_points,
+        subsample_size=subsample_size,
+    )
+
+    assert_allclose(elpd_loo_hat, expected_elpd_loo_hat)
+    assert_almost_equal(subsampling_se, expected_subsampling_se)
+    assert_allclose(se, expected_se)
+
+
+def test_loo_subsample_errors(radon):
+    n_total = radon.observed_data.y.size
+    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
+        loo_subsample(radon, observations=0, var_name="y")
+    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
+        loo_subsample(radon, observations=n_total + 1, var_name="y")
+    with pytest.raises(TypeError, match="observations must be an integer"):
+        loo_subsample(radon, observations=50.5, var_name="y")

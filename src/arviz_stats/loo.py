@@ -627,9 +627,9 @@ def loo_subsample(
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
     observations : int or ndarray
-        The subsample observations to use:
+        The sub-sample observations to use:
 
-        - An integer specifying the number of observations to randomly subsample without
+        - An integer specifying the number of observations to randomly sub-sample without
           replacement.
         - An array of integer indices specifying the exact observations to use.
     pointwise: bool, optional
@@ -766,7 +766,6 @@ def loo_subsample(
 
     if len(obs_dims) > 1:
         log_likelihood_stacked = log_likelihood.stack({"__obs__": obs_dims})
-
         obs_mask = np.zeros(n_data_points, dtype=bool)
         obs_mask[indices] = True
         log_likelihood_sample = log_likelihood_stacked.sel(
@@ -799,7 +798,6 @@ def loo_subsample(
     else:
         # PSIS-LOO weights
         log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(r_eff=reff, dims=sample_dims)
-
         log_weights_ds += sample_ds
         elpd_loo_i_sample = logsumexp(log_weights_ds, dims=sample_dims)[var_name].values
         pareto_k_sample_da = pareto_k_ds[var_name]
