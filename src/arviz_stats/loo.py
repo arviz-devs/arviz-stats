@@ -671,7 +671,6 @@ def loo_subsample(
         - **approx_posterior**: True if approximate posterior was used.
         - **subsampling_se**: Standard error estimate from subsampling uncertainty only.
         - **subsample_size**: Number of observations in the subsample (m).
-        - **method**: "loo_subsample"
 
     Examples
     --------
