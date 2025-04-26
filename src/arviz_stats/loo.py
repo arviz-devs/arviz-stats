@@ -604,7 +604,9 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     )
 
 
-def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, seed=315):
+def loo_subsample(
+    data, observations, pointwise=None, var_name=None, reff=None, log_p=None, log_q=None, seed=315
+):
     """Compute approximate leave-one-out cross-validation (LOO-CV) using sub-sampling.
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto smoothed
@@ -632,6 +634,12 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
     reff: float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
+    log_p : ndarray or DataArray, optional
+        The (target) log-density evaluated at samples from the target distribution (p).
+        If provided along with log_q, approximate posterior correction will be applied.
+    log_q : ndarray or DataArray, optional
+        The (proposal) log-density evaluated at samples from the proposal distribution (q).
+        If provided along with log_p, approximate posterior correction will be applied.
     seed: int, optional
         Seed for random sampling.
 
@@ -766,52 +774,44 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
         log_likelihood_sample = log_likelihood.isel({obs_dim: valid_indices})
 
     sample_ds = xr.Dataset({var_name: log_likelihood_sample})
-    # PSIS-LOO weights
-    log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(r_eff=reff, dims=sample_dims)
 
-    log_weights_ds += sample_ds
-    elpd_loo_i_sample = logsumexp(log_weights_ds, dims=sample_dims)[var_name].values
+    if log_p is not None and log_q is not None:
+        sample_data = xr.DataTree()
+        sample_data["log_likelihood"] = sample_ds
+
+        loo_obj = loo_approximate_posterior(
+            data=sample_data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
+        )
+
+        elpd_loo_i_sample = loo_obj.elpd_i
+        if hasattr(elpd_loo_i_sample, "values"):
+            elpd_loo_i_sample = elpd_loo_i_sample.values
+
+        pareto_k_sample_da = loo_obj.pareto_k
+        if hasattr(pareto_k_sample_da, "values"):
+            pareto_k_sample_da = pareto_k_sample_da.values
+
+        approx_posterior = True
+    else:
+        # PSIS-LOO weights
+        log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(r_eff=reff, dims=sample_dims)
+
+        log_weights_ds += sample_ds
+        elpd_loo_i_sample = logsumexp(log_weights_ds, dims=sample_dims)[var_name].values
+        pareto_k_sample_da = pareto_k_ds[var_name]
+        approx_posterior = False
 
     lpd_approx_sample = lpd_approx_all[indices]
-    e_i = elpd_loo_i_sample - lpd_approx_sample
 
-    t_pi_tilde = np.sum(lpd_approx_all)
-    t_e = n_data_points * np.mean(e_i)
-    elpd_loo_hat = t_pi_tilde + t_e
+    elpd_loo_hat, subsampling_se_val, se_val = _difference_estimator(
+        elpd_loo_i_sample=elpd_loo_i_sample,
+        lpd_approx_sample=lpd_approx_sample,
+        lpd_approx_all=lpd_approx_all,
+        n_data_points=n_data_points,
+        subsample_size=subsample_size,
+    )
 
-    if subsample_size > 1:
-        # Subsampling variance
-        v_y_hat = (
-            (n_data_points**2)
-            * (1 - subsample_size / n_data_points)
-            * np.var(e_i, ddof=1)
-            / subsample_size
-        )
-        subsampling_se_val = np.sqrt(v_y_hat) if v_y_hat >= 0 else np.inf
-
-        # Total variance (approximation + sampling)
-        t_pi2_tilde = np.sum(lpd_approx_all**2)
-        y2_tilde_y2_diff_mean = np.mean(elpd_loo_i_sample**2 - lpd_approx_sample**2)
-        t_hat_epsilon = n_data_points * y2_tilde_y2_diff_mean
-
-        if n_data_points > 0:
-            hat_v_y = (t_pi2_tilde + t_hat_epsilon) - (1 / n_data_points) * (
-                t_e**2 - v_y_hat + 2 * t_pi_tilde * elpd_loo_hat - t_pi_tilde**2
-            )
-            hat_v_y = max(0, hat_v_y)
-        else:
-            hat_v_y = np.inf
-
-        se_val = np.sqrt(hat_v_y) if hat_v_y >= 0 else np.inf
-    else:
-        v_y_hat = np.inf
-        hat_v_y = np.inf
-        subsampling_se_val = np.inf
-        se_val = np.inf
-
-    elpd_raw = np.sum(
-        lpd_approx_all
-    )  # Sum of LPD approximations is our estimate for E[log p(y|theta)]
+    elpd_raw = np.sum(lpd_approx_all)
     p_loo_hat = elpd_raw - elpd_loo_hat
 
     elpd = elpd_loo_hat
@@ -820,7 +820,6 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
 
     warn_mg = False
     good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
-    pareto_k_sample_da = pareto_k_ds[var_name]
 
     if np.any(pareto_k_sample_da > good_k):
         warnings.warn(
@@ -869,7 +868,7 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
             good_k,
             elpd_i_da,
             pareto_k_da,
-            approx_posterior=False,
+            approx_posterior=approx_posterior,
         )
     else:
         loo_results = ELPDData(
@@ -882,7 +881,7 @@ def loo_subsample(data, observations, pointwise=None, var_name=None, reff=None, 
             "log",
             warn_mg,
             good_k,
-            approx_posterior=False,
+            approx_posterior=approx_posterior,
         )
 
     loo_results.subsampling_se = subsampling_se
@@ -1166,6 +1165,72 @@ def _calculate_ics(
                     f"Encountered error trying to compute elpd from model {name}."
                 ) from e
     return compare_dict
+
+
+def _difference_estimator(
+    elpd_loo_i_sample,
+    lpd_approx_sample,
+    lpd_approx_all,
+    n_data_points,
+    subsample_size,
+):
+    """Calculate the difference estimator for LOO sub-sampling.
+
+    Parameters
+    ----------
+    elpd_loo_i_sample : ndarray
+        Pointwise ELPD values for the subsample.
+    lpd_approx_sample : ndarray
+        LPD approximation values for the subsample.
+    lpd_approx_all : ndarray
+        LPD approximation values for the full dataset.
+    n_data_points : int
+        Total number of data points (N).
+    subsample_size : int
+        Number of observations in the subsample (m).
+
+    Returns
+    -------
+    tuple[float, float, float]
+        A tuple containing:
+
+        - elpd_loo_hat: The estimated ELPD using the difference estimator.
+        - subsampling_se_val: The standard error due to subsampling uncertainty.
+        - se_val: The total standard error (approximation + sampling uncertainty).
+    """
+    e_i = elpd_loo_i_sample - lpd_approx_sample
+    t_pi_tilde = np.sum(lpd_approx_all)
+    t_e = n_data_points * np.mean(e_i)
+    elpd_loo_hat = t_pi_tilde + t_e
+
+    if subsample_size > 1:
+        # Subsampling variance
+        v_y_hat = (
+            (n_data_points**2)
+            * (1 - subsample_size / n_data_points)
+            * np.var(e_i, ddof=1)
+            / subsample_size
+        )
+        subsampling_se_val = np.sqrt(v_y_hat) if v_y_hat >= 0 else np.inf
+
+        # Total variance (approximation + sampling)
+        t_pi2_tilde = np.sum(lpd_approx_all**2)
+        y2_tilde_y2_diff_mean = np.mean(elpd_loo_i_sample**2 - lpd_approx_sample**2)
+        t_hat_epsilon = n_data_points * y2_tilde_y2_diff_mean
+
+        if n_data_points > 0:
+            hat_v_y = (t_pi2_tilde + t_hat_epsilon) - (1 / n_data_points) * (
+                t_e**2 - v_y_hat + 2 * t_pi_tilde * elpd_loo_hat - t_pi_tilde**2
+            )
+            hat_v_y = max(0, hat_v_y)
+        else:
+            hat_v_y = np.inf
+
+        se_val = np.sqrt(hat_v_y) if hat_v_y >= 0 else np.inf
+    else:
+        subsampling_se_val = np.inf
+        se_val = np.inf
+    return elpd_loo_hat, subsampling_se_val, se_val
 
 
 def _compute_loo_results(

@@ -200,6 +200,9 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
                 f"           {self.subsampling_se:0.1f}\n"
             )
             base += f"p_{kind}         {self.p:4.1f}\n"
+            if self.approx_posterior:
+                header, table = base.split("\n\n", 1)
+                base = header + " Posterior approximation correction used.\n\n" + table
         else:
             base = BASE_FMT.format(padding, padding - 2)
             base = base.format(

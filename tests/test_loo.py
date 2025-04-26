@@ -370,3 +370,43 @@ def test_loo_subsample_errors(radon):
         loo_subsample(radon, observations=n_total + 1, var_name="y")
     with pytest.raises(TypeError, match="observations must be an integer"):
         loo_subsample(radon, observations=50.5, var_name="y")
+
+
+@pytest.mark.parametrize("input_type", ["dataarray", "numpy"])
+@pytest.mark.parametrize("pointwise", [True, False])
+def test_loo_subsample_approx_posterior(radon, log_densities, input_type, pointwise):
+    observations = 200
+    log_p, log_q = log_densities[input_type]
+
+    result = loo_subsample(
+        radon,
+        observations=observations,
+        log_p=log_p,
+        log_q=log_q,
+        pointwise=pointwise,
+        var_name="y",
+    )
+
+    assert isinstance(result, ELPDData)
+    assert result.kind == "loo"
+    assert result.subsample_size == observations
+    assert isinstance(result.elpd, float)
+    assert isinstance(result.se, float) and result.se >= 0
+    assert isinstance(result.p, float)
+    assert isinstance(result.subsampling_se, float) and result.subsampling_se >= 0
+    assert result.n_data_points == radon.observed_data.y.size
+
+    if pointwise:
+        assert hasattr(result, "elpd_i")
+        assert hasattr(result, "pareto_k")
+        assert result.elpd_i is not None
+        assert result.pareto_k is not None
+        assert result.elpd_i.dims == ("obs_id",)
+        assert result.elpd_i.shape == (result.n_data_points,)
+        assert result.pareto_k.dims == ("obs_id_subsample",)
+        assert result.pareto_k.shape == (observations,)
+        assert np.isnan(result.elpd_i).sum() == result.n_data_points - observations
+        assert not np.isnan(result.elpd_i).all()
+    else:
+        assert not hasattr(result, "elpd_i") or result.elpd_i is None
+        assert not hasattr(result, "pareto_k") or result.pareto_k is None
