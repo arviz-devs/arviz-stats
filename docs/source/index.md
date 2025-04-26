@@ -53,6 +53,13 @@ background
 ```
 
 ```{toctree}
+:caption: Contributing
+:hidden:
+
+contributing/testing.md
+```
+
+```{toctree}
 :caption: About
 :hidden:
 
