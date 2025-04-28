@@ -4,13 +4,19 @@ import warnings
 
 import numpy as np
 import xarray as xr
+from arviz_base import convert_to_datatree
+
+from arviz_stats.utils import get_log_likelihood_dataset
 
 __all__ = [
     "_get_r_eff",
     "_diff_srs_estimator",
     "_generate_subsample_indices",
+    "_prepare_loo_inputs",
     "_extract_loo",
     "_check_log_density",
+    "_warn_pareto_k",
+    "_warn_pointwise_loo",
 ]
 
 
@@ -128,6 +134,25 @@ def _generate_subsample_indices(n_data_points, observations, seed):
     return indices, subsample_size
 
 
+def _prepare_loo_inputs(data, var_name):
+    """Prepare inputs for LOO computation."""
+    data = convert_to_datatree(data)
+
+    log_likelihood_ds = get_log_likelihood_dataset(data, var_names=var_name)
+    if var_name is None:
+        var_name = list(log_likelihood_ds.data_vars.keys())[0]
+    log_likelihood = log_likelihood_ds[var_name]
+
+    sample_dims = ["chain", "draw"]
+    obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
+    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+    n_data_points = np.prod(
+        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
+    )
+
+    return log_likelihood_ds, var_name, sample_dims, obs_dims, n_samples, n_data_points
+
+
 def _extract_loo(loo_orig):
     """Extract data from original LOO object."""
     old_elpd_i = loo_orig.elpd_i
@@ -157,6 +182,33 @@ def _extract_loo(loo_orig):
             else:
                 old_pareto_k_values = np.full_like(old_elpd_i_values, np.nan)
     return old_indices, old_elpd_i_values, old_pareto_k_values
+
+
+def _warn_pareto_k(pareto_k_values, n_samples):
+    """Check Pareto k values and issue warnings if necessary."""
+    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
+    warn_mg = False
+
+    if np.any(pareto_k_values > good_k):
+        warnings.warn(
+            f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
+            "for one or more samples. You should consider using a more robust model, this is "
+            "because importance sampling is less likely to work well if the marginal posterior "
+            "and LOO posterior are very different. This is more likely to happen with a "
+            "non-robust model and highly influential observations."
+        )
+        warn_mg = True
+
+    return warn_mg, good_k
+
+
+def _warn_pointwise_loo(elpd, elpd_i_values):
+    """Check if pointwise LOO values sum to the same as total LOO."""
+    if np.equal(elpd, elpd_i_values).all():
+        warnings.warn(
+            "The point-wise LOO is the same with the sum LOO, please double check "
+            "the Observed RV in your model to make sure it returns element-wise logp."
+        )
 
 
 def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):

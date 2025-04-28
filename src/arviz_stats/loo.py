@@ -1,7 +1,6 @@
 """Pareto-smoothed importance sampling LOO (PSIS-LOO-CV) related functions."""
 
 import itertools
-import warnings
 from collections import namedtuple
 from copy import deepcopy
 
@@ -19,6 +18,9 @@ from arviz_stats.helper_loo import (
     _extract_loo,
     _generate_subsample_indices,
     _get_r_eff,
+    _prepare_loo_inputs,
+    _warn_pareto_k,
+    _warn_pointwise_loo,
 )
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset, round_num
 
@@ -98,25 +100,23 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    data = convert_to_datatree(data)
-
-    log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
-    var_name = list(log_likelihood.data_vars.keys())[0]
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
-    sample_dims = ["chain", "draw"]
-
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = np.prod(
-        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
-    )
+    (
+        log_likelihood_ds,
+        var_name,
+        sample_dims,
+        _,
+        n_samples,
+        n_data_points,
+    ) = _prepare_loo_inputs(data, var_name)
 
     if reff is None:
         reff = _get_r_eff(data, n_samples)
 
-    log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dims=sample_dims)
+    log_weights, pareto_k = log_likelihood_ds.azstats.psislw(r_eff=reff, dims=sample_dims)
 
     return _compute_loo_results(
-        log_likelihood=log_likelihood,
+        log_likelihood=log_likelihood_ds,
         var_name=var_name,
         pointwise=pointwise,
         sample_dims=sample_dims,
@@ -574,31 +574,29 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
         https://proceedings.mlr.press/v97/magnusson19a.html
         arXiv preprint https://arxiv.org/abs/1904.10679
     """
-    data = convert_to_datatree(data)
-
-    log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
-    if var_name is None:
-        var_name = list(log_likelihood.data_vars.keys())[0]
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
-    sample_dims = ["chain", "draw"]
+    (
+        log_likelihood_ds,
+        var_name,
+        sample_dims,
+        _,
+        n_samples,
+        n_data_points,
+    ) = _prepare_loo_inputs(data, var_name)
 
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = np.prod(
-        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
-    )
-
-    log_p = _check_log_density(log_p, "log_p", log_likelihood, n_samples, sample_dims)
-    log_q = _check_log_density(log_q, "log_q", log_likelihood, n_samples, sample_dims)
+    log_likelihood_da = log_likelihood_ds[var_name]
+    log_p = _check_log_density(log_p, "log_p", log_likelihood_da, n_samples, sample_dims)
+    log_q = _check_log_density(log_q, "log_q", log_likelihood_da, n_samples, sample_dims)
 
     approx_correction = log_p - log_q
 
     # Handle underflow/overflow
     approx_correction = approx_correction - approx_correction.max()
 
-    corrected_log_ratios = -log_likelihood.copy()
+    corrected_log_ratios = -log_likelihood_ds.copy()
     corrected_log_ratios[var_name] = corrected_log_ratios[var_name] + approx_correction
 
-    # Handle underflow/overflow
+    # Handle underflow/overflow on the DataArray
     log_ratio_max = corrected_log_ratios[var_name].max(dim=sample_dims)
     corrected_log_ratios[var_name] = corrected_log_ratios[var_name] - log_ratio_max
 
@@ -606,7 +604,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     log_weights, pareto_k = corrected_log_ratios.azstats.psislw(r_eff=1.0, dims=sample_dims)
 
     return _compute_loo_results(
-        log_likelihood=log_likelihood,
+        log_likelihood=log_likelihood_ds,
         var_name=var_name,
         pointwise=pointwise,
         sample_dims=sample_dims,
@@ -724,32 +722,27 @@ def loo_subsample(
         https://proceedings.mlr.press/v97/magnusson19a.html
         arXiv preprint https://arxiv.org/abs/1904.10679
     """
-    data = convert_to_datatree(data)
-
-    log_likelihood_ds = get_log_likelihood_dataset(data, var_names=var_name)
-    if var_name is None:
-        var_name = list(log_likelihood_ds.data_vars.keys())[0]
-    log_likelihood = log_likelihood_ds[var_name]
-
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
-    sample_dims = ["chain", "draw"]
-
-    obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = np.prod(
-        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
-    )
+    (
+        log_likelihood_ds,
+        var_name,
+        sample_dims,
+        obs_dims,
+        n_samples,
+        n_data_points,
+    ) = _prepare_loo_inputs(data, var_name)
 
     if reff is None:
         reff = _get_r_eff(data, n_samples)
 
     indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
+    log_likelihood_da = log_likelihood_ds[var_name]
 
     # LPD approximation
-    lpd_approx_all = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).values
+    lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples).values
 
     if len(obs_dims) > 1:
-        log_likelihood_stacked = log_likelihood.stack({"__obs__": obs_dims})
+        log_likelihood_stacked = log_likelihood_da.stack({"__obs__": obs_dims})
         obs_mask = np.zeros(n_data_points, dtype=bool)
         obs_mask[indices] = True
         log_likelihood_sample = log_likelihood_stacked.sel(
@@ -757,11 +750,11 @@ def loo_subsample(
         )
     else:
         obs_dim = obs_dims[0]
-        valid_indices = [i for i in indices if i < log_likelihood.sizes[obs_dim]]
-        log_likelihood_sample = log_likelihood.isel({obs_dim: valid_indices})
+        valid_indices = [i for i in indices if i < log_likelihood_da.sizes[obs_dim]]
+        log_likelihood_sample = log_likelihood_da.isel({obs_dim: valid_indices})
 
-    # Pointwise ELPD and Pareto k values for the sub-sample
     sample_ds = xr.Dataset({var_name: log_likelihood_sample})
+
     if log_p is not None and log_q is not None:
         sample_data = xr.DataTree()
         sample_data["log_likelihood"] = sample_ds
@@ -785,18 +778,7 @@ def loo_subsample(
         pareto_k_sample_da = pareto_k_ds[var_name]
         approx_posterior = False
 
-    warn_mg = False
-    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
-
-    if np.any(pareto_k_sample_da > good_k):
-        warnings.warn(
-            f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-            "for one or more samples. You should consider using a more robust model, this is "
-            "because importance sampling is less likely to work well if the marginal posterior "
-            "and LOO posterior are very different. This is more likely to happen with a "
-            "non-robust model and highly influential observations."
-        )
-        warn_mg = True
+    warn_mg, good_k = _warn_pareto_k(pareto_k_sample_da, n_samples)
 
     lpd_approx_sample = lpd_approx_all[indices]
     elpd_loo_hat, subsampling_se_val, se_val = _diff_srs_estimator(
@@ -835,11 +817,11 @@ def loo_subsample(
 
     elpd_i_full = np.full(n_data_points, np.nan)
     elpd_i_full[indices] = elpd_loo_i_sample
-    original_obs_shape = tuple(log_likelihood.sizes[d] for d in obs_dims)
+    original_obs_shape = tuple(log_likelihood_da.sizes[d] for d in obs_dims)
 
     elpd_i = xr.DataArray(
         elpd_i_full.reshape(original_obs_shape),
-        coords={d: log_likelihood[d] for d in obs_dims},
+        coords={d: log_likelihood_da[d] for d in obs_dims},
         dims=obs_dims,
         name="elpd_i",
     )
@@ -850,11 +832,7 @@ def loo_subsample(
         name="pareto_k",
     )
 
-    if np.equal(elpd, elpd_i.values).all():  # pylint: disable=no-member
-        warnings.warn(
-            "The point-wise LOO is the same with the sum LOO, please double check "
-            "the Observed RV in your model to make sure it returns element-wise logp."
-        )
+    _warn_pointwise_loo(elpd, elpd_i.values)
 
     return ELPDData(
         "loo",
@@ -963,24 +941,20 @@ def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=
     if loo_orig.elpd_i is None:
         raise ValueError("Original loo_subsample result must have pointwise=True")
 
-    data = convert_to_datatree(data)
-
-    log_likelihood_ds = get_log_likelihood_dataset(data, var_names=var_name)
-    if var_name is None:
-        var_name = list(log_likelihood_ds.data_vars.keys())[0]
-    log_likelihood = log_likelihood_ds[var_name]
-
-    sample_dims = ["chain", "draw"]
-    obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = np.prod(
-        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
-    )
+    (
+        log_likelihood_ds,
+        var_name,
+        sample_dims,
+        obs_dims,
+        n_samples,
+        n_data_points,
+    ) = _prepare_loo_inputs(data, var_name)
 
     if reff is None:
         reff = _get_r_eff(data, n_samples)
 
     old_indices, old_elpd_i_values, old_pareto_k_values = _extract_loo(loo_orig)
+    log_likelihood_da = log_likelihood_ds[var_name]
 
     if isinstance(observations, int):
         # Need to filter out existing indices before generating new ones
@@ -1002,17 +976,20 @@ def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=
         if len(overlap) > 0:
             raise ValueError(f"New indices {overlap} overlap with existing indices")
 
-    lpd_approx_all = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).values.flatten()
+    # LPD approximation
+    lpd_approx_all = logsumexp(
+        log_likelihood_da, dims=sample_dims, b=1 / n_samples
+    ).values.flatten()
 
     if len(obs_dims) > 1:
-        log_likelihood_stacked = log_likelihood.stack({"__obs__": obs_dims})
+        log_likelihood_stacked = log_likelihood_da.stack({"__obs__": obs_dims})
         mask = np.zeros(n_data_points, dtype=bool)
         mask[new_indices] = True
         log_likelihood_new = log_likelihood_stacked.sel(
             {"__obs__": log_likelihood_stacked["__obs__"][mask]}
         )
     else:
-        log_likelihood_new = log_likelihood.isel({obs_dims[0]: new_indices})
+        log_likelihood_new = log_likelihood_da.isel({obs_dims[0]: new_indices})
 
     log_p = None
     log_q = None
@@ -1021,8 +998,9 @@ def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=
     if hasattr(loo_orig, "log_q"):
         log_q = loo_orig.log_q
 
+    log_likelihood_new_ds = xr.Dataset({var_name: log_likelihood_new})
     elpd_loo_i_new, pareto_k_new, approx_posterior = _compute_loo_results(
-        log_likelihood=log_likelihood_new,
+        log_likelihood=log_likelihood_new_ds,
         var_name=var_name,
         sample_dims=sample_dims,
         n_samples=n_samples,
@@ -1034,16 +1012,8 @@ def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=
     )
 
     good_k = loo_orig.good_k
-    warn_mg = loo_orig.warning
-    if np.any(pareto_k_new > good_k):
-        warnings.warn(
-            f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-            "for one or more samples. You should consider using a more robust model, this is "
-            "because importance sampling is less likely to work well if the marginal posterior "
-            "and LOO posterior are very different. This is more likely to happen with a "
-            "non-robust model and highly influential observations."
-        )
-        warn_mg = True
+    new_warn_mg, _ = _warn_pareto_k(pareto_k_new, n_samples)
+    warn_mg = loo_orig.warning or new_warn_mg
 
     combined_indices = np.concatenate([old_indices, new_indices])
     combined_elpd_i = np.concatenate([old_elpd_i_values, elpd_loo_i_new])
@@ -1064,10 +1034,10 @@ def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=
     elpd_i_full = np.full(n_data_points, np.nan)
     elpd_i_full[combined_indices] = combined_elpd_i
 
-    original_obs_shape = tuple(log_likelihood.sizes[d] for d in obs_dims)
+    original_obs_shape = tuple(log_likelihood_da.sizes[d] for d in obs_dims)
     elpd_i = xr.DataArray(
         elpd_i_full.reshape(original_obs_shape),
-        coords={d: log_likelihood.coords[d] for d in obs_dims},
+        coords={d: log_likelihood_da.coords[d] for d in obs_dims},
         dims=obs_dims,
         name="elpd_i",
     )
@@ -1089,11 +1059,7 @@ def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=
             name="pareto_k",
         )
 
-    if np.equal(elpd, elpd_i.values).all():  # pylint: disable=no-member
-        warnings.warn(
-            "The point-wise LOO is the same with the sum LOO, please double check "
-            "the Observed RV in your model to make sure it returns element-wise logp."
-        )
+    _warn_pointwise_loo(elpd, elpd_i.values)
 
     return ELPDData(
         kind="loo",
@@ -1225,7 +1191,7 @@ def compare(
 
     ics = pd.DataFrame.from_dict(ics_dict, orient="index")
     ics.sort_values(by="elpd", inplace=True, ascending=False)
-    ics["elpd_i"] = ics["elpd_i"].apply(lambda x: x.flatten())
+    ics["elpd_i"] = ics["elpd_i"].apply(lambda x: x.values.flatten())
     ses = ics["se"]
 
     if method.lower() == "stacking":
@@ -1395,9 +1361,6 @@ def _compute_loo_results(
 ):
     """Compute PSIS-LOO-CV results."""
     if log_p is not None and log_q is not None:
-        if not isinstance(log_likelihood, xr.Dataset):
-            log_likelihood = xr.Dataset({var_name: log_likelihood})
-
         data = xr.DataTree()
         data["log_likelihood"] = log_likelihood
 
@@ -1421,28 +1384,13 @@ def _compute_loo_results(
             return elpd_loo_i, pareto_k_vals, True
         return loo_results
 
-    if not isinstance(log_likelihood, xr.Dataset):
-        log_likelihood = xr.Dataset({var_name: log_likelihood})
-
     if log_weights is None or pareto_k is None:
         log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dims=sample_dims)
 
-    log_weights += log_likelihood
+    log_weights[var_name] += log_likelihood[var_name]
     pareto_k_da = pareto_k[var_name]
 
-    warn_mg = False
-    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
-
-    if np.any(pareto_k_da > good_k):
-        warnings.warn(
-            f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-            "for one or more samples. You should consider using a more robust model, this is "
-            "because importance sampling is less likely to work well if the marginal posterior "
-            "and LOO posterior are very different. This is more likely to happen with a "
-            "non-robust model and highly influential observations."
-        )
-        warn_mg = True
-
+    warn_mg, good_k = _warn_pareto_k(pareto_k_da, n_samples)
     elpd_i = logsumexp(log_weights, dims=sample_dims)[var_name]
 
     if pointwise_values:
@@ -1477,11 +1425,7 @@ def _compute_loo_results(
             approx_posterior=approx_posterior,
         )
 
-    if np.equal(elpd, elpd_i_values).all():
-        warnings.warn(
-            "The point-wise LOO is the same with the sum LOO, please double check "
-            "the Observed RV in your model to make sure it returns element-wise logp."
-        )
+    _warn_pointwise_loo(elpd, elpd_i_values)
 
     return ELPDData(
         "loo",
@@ -1493,7 +1437,7 @@ def _compute_loo_results(
         "log",
         warn_mg,
         good_k,
-        elpd_i_values,
+        elpd_i,
         pareto_k_da,
         approx_posterior=approx_posterior,
     )
