@@ -15,7 +15,7 @@ from arviz_stats import (
     loo_metrics,
     loo_pit,
     loo_subsample,
-    update_loo_subsample,
+    update_subsample,
 )
 from arviz_stats.loo import _calculate_ics, _diff_srs_estimator
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
@@ -354,8 +354,8 @@ def test_loo_subsample(radon, pointwise):
         assert loo_sub.pareto_k is not None
         assert loo_sub.elpd_i.dims == ("obs_id",)
         assert loo_sub.elpd_i.shape == (loo_sub.n_data_points,)
-        assert loo_sub.pareto_k.dims == ("obs_id_subsample",)
-        assert loo_sub.pareto_k.shape == (observations,)
+        assert loo_sub.pareto_k.shape == (loo_sub.n_data_points,)
+        assert np.sum(~np.isnan(loo_sub.pareto_k.values)) == observations
         assert np.isnan(loo_sub.elpd_i).sum() == loo_sub.n_data_points - observations
         assert not np.isnan(loo_sub.elpd_i).all()
     else:
@@ -394,8 +394,9 @@ def test_loo_subsample_approx_posterior(radon, log_densities, input_type, pointw
         assert loo_sub_approx.pareto_k is not None
         assert loo_sub_approx.elpd_i.dims == ("obs_id",)
         assert loo_sub_approx.elpd_i.shape == (loo_sub_approx.n_data_points,)
-        assert loo_sub_approx.pareto_k.dims == ("obs_id_subsample",)
-        assert loo_sub_approx.pareto_k.shape == (observations,)
+        assert loo_sub_approx.pareto_k.dims == loo_sub_approx.elpd_i.dims
+        assert loo_sub_approx.pareto_k.shape == (loo_sub_approx.n_data_points,)
+        assert np.sum(~np.isnan(loo_sub_approx.pareto_k.values)) == observations
         assert np.isnan(loo_sub_approx.elpd_i).sum() == loo_sub_approx.n_data_points - observations
         assert not np.isnan(loo_sub_approx.elpd_i).all()
     else:
@@ -406,9 +407,31 @@ def test_loo_subsample_approx_posterior(radon, log_densities, input_type, pointw
 def test_difference_estimator():
     n_data_points = 10
     subsample_size = 4
-    elpd_loo_i_sample = np.array([-1.0, -1.5, -0.5, -1.2])
-    lpd_approx_sample = np.array([-0.9, -1.4, -0.4, -1.1])
-    lpd_approx_all = np.array([-0.9, -1.4, -0.4, -1.1, -1.0, -1.3, -0.6, -1.0, -0.8, -1.5])
+    indices = np.array([0, 1, 2, 3])
+
+    elpd_loo_i_values = np.array([-1.0, -1.5, -0.5, -1.2])
+    elpd_loo_i_sample = xr.DataArray(
+        elpd_loo_i_values,
+        dims=["obs_id_subsample"],
+        coords={"obs_id_subsample": indices},
+        name="elpd_loo_i_sample",
+    )
+
+    lpd_approx_sample_values = np.array([-0.9, -1.4, -0.4, -1.1])
+    lpd_approx_sample = xr.DataArray(
+        lpd_approx_sample_values,
+        dims=["obs_id_subsample"],
+        coords={"obs_id_subsample": indices},
+        name="lpd_approx_sample",
+    )
+
+    lpd_approx_all_values = np.array([-0.9, -1.4, -0.4, -1.1, -1.0, -1.3, -0.6, -1.0, -0.8, -1.5])
+    lpd_approx_all = xr.DataArray(
+        lpd_approx_all_values,
+        dims=["obs_id"],
+        coords={"obs_id": np.arange(10)},
+        name="lpd_approx_all",
+    )
 
     expected_elpd_loo_hat = -11.0
     expected_subsampling_se = 0.0
@@ -442,7 +465,7 @@ def test_update_loo_subsample(radon):
     initial_loo = loo_subsample(radon, observations=initial_observations, var_name="y")
 
     additional_observations = 400
-    updated_loo = update_loo_subsample(
+    updated_loo = update_subsample(
         initial_loo, radon, observations=additional_observations, var_name="y"
     )
 
@@ -459,9 +482,10 @@ def test_update_loo_subsample(radon):
     assert updated_loo.pareto_k is not None
     assert updated_loo.elpd_i.dims == ("obs_id",)
     assert updated_loo.elpd_i.shape == (updated_loo.n_data_points,)
-    assert updated_loo.pareto_k.dims == ("obs_id_subsample",)
-    assert updated_loo.pareto_k.shape == (updated_loo.subsample_size,)
+    assert updated_loo.pareto_k.dims == updated_loo.elpd_i.dims
+    assert updated_loo.pareto_k.shape == (updated_loo.n_data_points,)
     assert np.sum(~np.isnan(updated_loo.elpd_i.values)) == updated_loo.subsample_size
+    assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == updated_loo.subsample_size
 
 
 def test_update_loo_subsample_pointwise_false(radon):
@@ -472,7 +496,7 @@ def test_update_loo_subsample_pointwise_false(radon):
 
     additional_observations = 50
     with pytest.raises(ValueError, match="Original loo_subsample result must have pointwise=True"):
-        update_loo_subsample(
+        update_subsample(
             initial_loo_no_pointwise, radon, observations=additional_observations, var_name="y"
         )
 
@@ -490,16 +514,16 @@ def test_update_loo_subsample_approx_posterior(radon, log_densities, input_type)
     )
 
     additional_observations = 50
-    updated_with_implicit = update_loo_subsample(
+    updated_loo = update_subsample(
         initial_loo, radon, observations=additional_observations, var_name="y"
     )
 
-    assert isinstance(updated_with_implicit, ELPDData)
-    assert updated_with_implicit.subsample_size == initial_observations + additional_observations
-    assert updated_with_implicit.approx_posterior
+    assert isinstance(updated_loo, ELPDData)
+    assert updated_loo.subsample_size == initial_observations + additional_observations
+    assert updated_loo.approx_posterior
 
-    assert_allclose(updated_with_implicit.elpd, updated_with_implicit.elpd, rtol=1e-10)
-    assert_allclose(updated_with_implicit.se, updated_with_implicit.se, rtol=1e-10)
+    assert_allclose(updated_loo.elpd, updated_loo.elpd, rtol=1e-10)
+    assert_allclose(updated_loo.se, updated_loo.se, rtol=1e-10)
 
 
 def test_update_loo_subsample_errors(radon):
@@ -508,8 +532,8 @@ def test_update_loo_subsample_errors(radon):
 
     n_total = radon.observed_data.y.size
     with pytest.raises(ValueError, match="Cannot add 919 observations when only 819 are available"):
-        update_loo_subsample(initial_loo, radon, observations=n_total)
+        update_subsample(initial_loo, radon, observations=n_total)
 
     existing_indices = np.where(~np.isnan(initial_loo.elpd_i.values.flatten()))[0]
     with pytest.raises(ValueError, match="New indices .* overlap with existing indices"):
-        update_loo_subsample(initial_loo, radon, observations=existing_indices[:5])
+        update_subsample(initial_loo, radon, observations=existing_indices[:5])

@@ -13,7 +13,7 @@ __all__ = [
     "_diff_srs_estimator",
     "_generate_subsample_indices",
     "_prepare_loo_inputs",
-    "_extract_loo",
+    "_extract_loo_data",
     "_check_log_density",
     "_warn_pareto_k",
     "_warn_pointwise_loo",
@@ -45,11 +45,11 @@ def _diff_srs_estimator(
 
     Parameters
     ----------
-    elpd_loo_i_sample : ndarray
+    elpd_loo_i_sample : DataArray
         Pointwise ELPD values for the subsample.
-    lpd_approx_sample : ndarray
+    lpd_approx_sample : DataArray
         LPD approximation values for the subsample.
-    lpd_approx_all : ndarray
+    lpd_approx_all : DataArray
         LPD approximation values for the full dataset.
     n_data_points : int
         Total number of data points (N).
@@ -66,8 +66,8 @@ def _diff_srs_estimator(
         - se_val: The total standard error (approximation + sampling uncertainty).
     """
     pointwise_diff = elpd_loo_i_sample - lpd_approx_sample
-    lpd_approx_sum_all = np.sum(lpd_approx_all)
-    scaled_mean_pointwise_diff = n_data_points * np.mean(pointwise_diff)
+    lpd_approx_sum_all = lpd_approx_all.sum().values
+    scaled_mean_pointwise_diff = n_data_points * pointwise_diff.mean().values
     elpd_loo_estimate = lpd_approx_sum_all + scaled_mean_pointwise_diff
 
     if subsample_size > 1:
@@ -75,14 +75,14 @@ def _diff_srs_estimator(
         subsampling_variance = (
             (n_data_points**2)
             * (1 - subsample_size / n_data_points)
-            * np.var(pointwise_diff, ddof=1)
+            * pointwise_diff.var(ddof=1).values
             / subsample_size
         )
         subsampling_se = np.sqrt(subsampling_variance) if subsampling_variance >= 0 else np.inf
 
         # Total variance (approximation + sampling)
-        lpd_approx_sq_sum_all = np.sum(lpd_approx_all**2)
-        mean_sq_diff = np.mean(elpd_loo_i_sample**2 - lpd_approx_sample**2)
+        lpd_approx_sq_sum_all = (lpd_approx_all**2).sum().values
+        mean_sq_diff = ((elpd_loo_i_sample**2) - (lpd_approx_sample**2)).mean().values
         scaled_mean_sq_diff = n_data_points * mean_sq_diff
 
         if n_data_points > 0:
@@ -149,39 +149,46 @@ def _prepare_loo_inputs(data, var_name):
     n_data_points = np.prod(
         [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
     )
-
     return log_likelihood_ds, var_name, sample_dims, obs_dims, n_samples, n_data_points
 
 
-def _extract_loo(loo_orig):
-    """Extract data from original LOO object."""
-    old_elpd_i = loo_orig.elpd_i
-    old_elpd_i_flat = (
-        old_elpd_i.values.flatten()
-        if hasattr(old_elpd_i, "values")
-        else np.asarray(old_elpd_i).flatten()
-    )
-    valid_old_mask = ~np.isnan(old_elpd_i_flat)
-    old_indices = np.where(valid_old_mask)[0]
-    old_elpd_i_values = old_elpd_i_flat[valid_old_mask]
+def _extract_loo_data(loo_orig):
+    """Extract pointwise DataArrays from original LOO object."""
+    elpd_values = loo_orig.elpd_i
+    pareto_values = loo_orig.pareto_k
 
-    old_pareto_k_values = np.array([])
-    if loo_orig.pareto_k is not None:
-        pareto_k = loo_orig.pareto_k
-        if isinstance(pareto_k, xr.DataArray) and "obs_id_subsample" in pareto_k.coords:
-            k_dict = dict(zip(pareto_k.coords["obs_id_subsample"].values, pareto_k.values))
-            old_pareto_k_values = np.array([k_dict.get(idx, np.nan) for idx in old_indices])
+    valid_mask = ~np.isnan(elpd_values.values.flatten())
+    valid_indices = np.where(valid_mask)[0]
+
+    sample_dims = ["chain", "draw"]
+    obs_dims = [dim for dim in elpd_values.dims if dim not in sample_dims]
+    stacked_obs_dim = "__obs__"
+
+    if len(obs_dims) == 1:
+        obs_dim = obs_dims[0]
+        extracted_elpd = elpd_values.isel({obs_dim: valid_indices})
+    else:
+        is_already_stacked = stacked_obs_dim in elpd_values.dims
+        stacked_elpd = (
+            elpd_values if is_already_stacked else elpd_values.stack({stacked_obs_dim: obs_dims})
+        )
+        extracted_elpd = stacked_elpd.isel({stacked_obs_dim: valid_indices})
+
+    if pareto_values is not None:
+        if len(obs_dims) == 1:
+            obs_dim = obs_dims[0]
+            extracted_pareto = pareto_values.isel({obs_dim: valid_indices})
         else:
-            k_flat = (
-                pareto_k.values.flatten()
-                if hasattr(pareto_k, "values")
-                else np.asarray(pareto_k).flatten()
+            is_already_stacked = stacked_obs_dim in pareto_values.dims
+            stacked_pareto = (
+                pareto_values
+                if is_already_stacked
+                else pareto_values.stack({stacked_obs_dim: obs_dims})
             )
-            if len(k_flat) == len(old_indices):
-                old_pareto_k_values = k_flat
-            else:
-                old_pareto_k_values = np.full_like(old_elpd_i_values, np.nan)
-    return old_indices, old_elpd_i_values, old_pareto_k_values
+            extracted_pareto = stacked_pareto.isel({stacked_obs_dim: valid_indices})
+    else:
+        extracted_pareto = xr.full_like(extracted_elpd, np.nan)
+    return extracted_elpd, extracted_pareto
 
 
 def _warn_pareto_k(pareto_k_values, n_samples):
@@ -198,7 +205,6 @@ def _warn_pareto_k(pareto_k_values, n_samples):
             "non-robust model and highly influential observations."
         )
         warn_mg = True
-
     return warn_mg, good_k
 
 
