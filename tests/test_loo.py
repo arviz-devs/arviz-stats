@@ -471,9 +471,7 @@ def test_update_loo_subsample_pointwise_false(radon):
     )
 
     additional_observations = 50
-    with pytest.raises(
-        ValueError, match="Cannot update a loo_subsample result created with pointwise=False"
-    ):
+    with pytest.raises(ValueError, match="Original loo_subsample result must have pointwise=True"):
         update_loo_subsample(
             initial_loo_no_pointwise, radon, observations=additional_observations, var_name="y"
         )

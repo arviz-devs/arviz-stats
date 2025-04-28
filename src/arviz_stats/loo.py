@@ -13,6 +13,13 @@ from scipy.optimize import minimize
 from scipy.stats import dirichlet
 from xarray_einstats.stats import logsumexp
 
+from arviz_stats.helper_loo import (
+    _check_log_density,
+    _diff_srs_estimator,
+    _extract_loo,
+    _generate_subsample_indices,
+    _get_r_eff,
+)
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset, round_num
 
 
@@ -872,11 +879,10 @@ def loo_subsample(
 def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=None, seed=315):
     """Update a previously computed sub-sampled PSIS-LOO-CV object with new observations.
 
-    Extends a subsampled LOO-CV result by adding new observations to the subsample
+    Extends a sub-sampled LOO-CV result by adding new observations to the sub-sample
     without recomputing values for previously sampled observations. This allows for
     incrementally improving the subsampled LOO-CV estimate with additional observations
-    while preserving computational work already done. The subsampling method is described
-    in [1]_.
+    The sub-sampling method is described in [1]_.
 
     Parameters
     ----------
@@ -955,7 +961,7 @@ def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=
     if observations is None or (isinstance(observations, int) and observations == 0):
         return loo_orig
     if loo_orig.elpd_i is None:
-        raise ValueError("Cannot update a loo_subsample result created with pointwise=False")
+        raise ValueError("Original loo_subsample result must have pointwise=True")
 
     data = convert_to_datatree(data)
 
@@ -967,7 +973,9 @@ def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=
     sample_dims = ["chain", "draw"]
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = np.prod([log_likelihood.sizes[dim] for dim in obs_dims])
+    n_data_points = np.prod(
+        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
+    )
 
     if reff is None:
         reff = _get_r_eff(data, n_samples)
@@ -1013,8 +1021,16 @@ def update_loo_subsample(loo_orig, data, observations=None, var_name=None, reff=
     if hasattr(loo_orig, "log_q"):
         log_q = loo_orig.log_q
 
-    elpd_loo_i_new, pareto_k_new, approx_posterior = _compute_pointwise_loo(
-        log_likelihood_new, var_name, sample_dims, reff=reff, log_p=log_p, log_q=log_q
+    elpd_loo_i_new, pareto_k_new, approx_posterior = _compute_loo_results(
+        log_likelihood=log_likelihood_new,
+        var_name=var_name,
+        sample_dims=sample_dims,
+        n_samples=n_samples,
+        n_data_points=n_data_points,
+        reff=reff,
+        log_p=log_p,
+        log_q=log_q,
+        pointwise_values=True,
     )
 
     good_k = loo_orig.good_k
@@ -1362,35 +1378,58 @@ def _calculate_ics(
     return compare_dict
 
 
-def _get_r_eff(data, n_samples):
-    if not hasattr(data, "posterior"):
-        raise TypeError("Must be able to extract a posterior group from data.")
-    posterior = data.posterior
-    n_chains = len(posterior.chain)
-    if n_chains == 1:
-        reff = 1.0
-    else:
-        ess_p = posterior.azstats.ess(method="mean")
-        # this mean is over all data variables
-        reff = np.hstack([ess_p[v].values.flatten() for v in ess_p.data_vars]).mean() / n_samples
-    return reff
-
-
-# TODO: Add log_p and log_q to this for posterior approximation
 def _compute_loo_results(
     log_likelihood,
     var_name,
-    pointwise,
     sample_dims,
     n_samples,
     n_data_points,
-    log_weights,
-    pareto_k,
+    pointwise=None,
+    log_weights=None,
+    pareto_k=None,
+    reff=None,
+    log_p=None,
+    log_q=None,
     approx_posterior=False,
+    pointwise_values=False,
 ):
-    """Compute PSIS-LOO-CV results from log-likelihood and weights."""
-    pareto_k_da = pareto_k[var_name]
+    """Compute PSIS-LOO-CV results."""
+    if log_p is not None and log_q is not None:
+        if not isinstance(log_likelihood, xr.Dataset):
+            log_likelihood = xr.Dataset({var_name: log_likelihood})
+
+        data = xr.DataTree()
+        data["log_likelihood"] = log_likelihood
+
+        loo_results = loo_approximate_posterior(
+            data=data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
+        )
+
+        if pointwise_values:
+            elpd_loo_i = loo_results.elpd_i
+            elpd_loo_i = (
+                elpd_loo_i.values.flatten()
+                if hasattr(elpd_loo_i, "values")
+                else np.asarray(elpd_loo_i).flatten()
+            )
+            pareto_k_vals = loo_results.pareto_k
+            pareto_k_vals = (
+                pareto_k_vals.values.flatten()
+                if hasattr(pareto_k_vals, "values")
+                else np.asarray(pareto_k_vals).flatten()
+            )
+            return elpd_loo_i, pareto_k_vals, True
+        return loo_results
+
+    if not isinstance(log_likelihood, xr.Dataset):
+        log_likelihood = xr.Dataset({var_name: log_likelihood})
+
+    if log_weights is None or pareto_k is None:
+        log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dims=sample_dims)
+
     log_weights += log_likelihood
+    pareto_k_da = pareto_k[var_name]
+
     warn_mg = False
     good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
 
@@ -1404,12 +1443,26 @@ def _compute_loo_results(
         )
         warn_mg = True
 
-    elpd_i = logsumexp(log_weights, dims=sample_dims)[var_name].values
+    elpd_i = logsumexp(log_weights, dims=sample_dims)[var_name]
+
+    if pointwise_values:
+        elpd_i_vals = (
+            elpd_i.values.flatten() if hasattr(elpd_i, "values") else np.asarray(elpd_i).flatten()
+        )
+        pareto_k_vals = (
+            pareto_k_da.values.flatten()
+            if hasattr(pareto_k_da, "values")
+            else np.asarray(pareto_k_da).flatten()
+        )
+        return elpd_i_vals, pareto_k_vals, approx_posterior
+
+    elpd_i_values = elpd_i.values if hasattr(elpd_i, "values") else np.asarray(elpd_i)
     elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum()[var_name].values
-    elpd = elpd_i.sum()
-    elpd_se = (n_data_points * np.var(elpd_i)) ** 0.5
+    elpd = np.sum(elpd_i_values)
+    elpd_se = (n_data_points * np.var(elpd_i_values)) ** 0.5
     p_loo = elpd_raw - elpd
 
+    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
     if not pointwise:
         return ELPDData(
             "loo",
@@ -1424,7 +1477,7 @@ def _compute_loo_results(
             approx_posterior=approx_posterior,
         )
 
-    if np.equal(elpd, elpd_i).all():  # pylint: disable=no-member
+    if np.equal(elpd, elpd_i_values).all():
         warnings.warn(
             "The point-wise LOO is the same with the sum LOO, please double check "
             "the Observed RV in your model to make sure it returns element-wise logp."
@@ -1440,210 +1493,7 @@ def _compute_loo_results(
         "log",
         warn_mg,
         good_k,
-        elpd_i,
+        elpd_i_values,
         pareto_k_da,
         approx_posterior=approx_posterior,
     )
-
-
-def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
-    """Validate log_p or log_q input for loo_approximate_posterior."""
-    if isinstance(log_dens, np.ndarray):
-        if log_dens.size != n_samples:
-            raise ValueError(
-                f"Size of {name} ({log_dens.size}) must match "
-                f"the total number of samples in log_likelihood ({n_samples})."
-            )
-        sample_shape = tuple(log_likelihood[dim].size for dim in sample_dims)
-        log_dens_values = log_dens.reshape(sample_shape)
-        coords = {dim: log_likelihood[dim] for dim in sample_dims}
-        validated_log_dens = xr.DataArray(log_dens_values, dims=sample_dims, coords=coords)
-
-    elif isinstance(log_dens, xr.DataArray):
-        validated_log_dens = log_dens
-        for dim in sample_dims:
-            if dim not in validated_log_dens.dims:
-                raise ValueError(f"{name} must have dimension '{dim}'")
-            if validated_log_dens[dim].size != log_likelihood[dim].size:
-                raise ValueError(
-                    f"Size of dimension '{dim}' in {name} ({validated_log_dens[dim].size}) "
-                    f"must match the size in log_likelihood ({log_likelihood[dim].size})."
-                )
-        for dim in sample_dims:
-            if dim in validated_log_dens.coords and not np.array_equal(
-                validated_log_dens[dim].values, log_likelihood[dim].values
-            ):
-                warnings.warn(
-                    f"Coordinates for dimension '{dim}' in {name} do not match "
-                    f"those in log_likelihood. Ensure they correspond to the same samples.",
-                    UserWarning,
-                )
-    else:
-        raise TypeError(f"{name} must be a numpy ndarray or xarray DataArray")
-    return validated_log_dens
-
-
-def _diff_srs_estimator(
-    elpd_loo_i_sample,
-    lpd_approx_sample,
-    lpd_approx_all,
-    n_data_points,
-    subsample_size,
-):
-    """Calculate the difference estimator for sub-sampling PSIS-LOO-CV.
-
-    Parameters
-    ----------
-    elpd_loo_i_sample : ndarray
-        Pointwise ELPD values for the subsample.
-    lpd_approx_sample : ndarray
-        LPD approximation values for the subsample.
-    lpd_approx_all : ndarray
-        LPD approximation values for the full dataset.
-    n_data_points : int
-        Total number of data points (N).
-    subsample_size : int
-        Number of observations in the subsample (m).
-
-    Returns
-    -------
-    tuple[float, float, float]
-        A tuple containing:
-
-        - elpd_loo_hat: The estimated ELPD using the difference estimator.
-        - subsampling_se_val: The standard error due to subsampling uncertainty.
-        - se_val: The total standard error (approximation + sampling uncertainty).
-    """
-    pointwise_diff = elpd_loo_i_sample - lpd_approx_sample
-    lpd_approx_sum_all = np.sum(lpd_approx_all)
-    scaled_mean_pointwise_diff = n_data_points * np.mean(pointwise_diff)
-    elpd_loo_estimate = lpd_approx_sum_all + scaled_mean_pointwise_diff
-
-    if subsample_size > 1:
-        # Subsampling variance
-        subsampling_variance = (
-            (n_data_points**2)
-            * (1 - subsample_size / n_data_points)
-            * np.var(pointwise_diff, ddof=1)
-            / subsample_size
-        )
-        subsampling_se = np.sqrt(subsampling_variance) if subsampling_variance >= 0 else np.inf
-
-        # Total variance (approximation + sampling)
-        lpd_approx_sq_sum_all = np.sum(lpd_approx_all**2)
-        mean_sq_diff = np.mean(elpd_loo_i_sample**2 - lpd_approx_sample**2)
-        scaled_mean_sq_diff = n_data_points * mean_sq_diff
-
-        if n_data_points > 0:
-            total_variance_estimate = (lpd_approx_sq_sum_all + scaled_mean_sq_diff) - (
-                1 / n_data_points
-            ) * (
-                scaled_mean_pointwise_diff**2
-                - subsampling_variance
-                + 2 * lpd_approx_sum_all * elpd_loo_estimate
-                - lpd_approx_sum_all**2
-            )
-            total_variance_estimate = max(0, total_variance_estimate)
-        else:
-            total_variance_estimate = np.inf
-
-        total_se = np.sqrt(total_variance_estimate) if total_variance_estimate >= 0 else np.inf
-    else:
-        subsampling_se = np.inf
-        total_se = np.inf
-    return elpd_loo_estimate, subsampling_se, total_se
-
-
-def _generate_subsample_indices(n_data_points, observations, seed):
-    """Generate subsample indices based on input type."""
-    if isinstance(observations, int):
-        if not 1 <= observations <= n_data_points:
-            raise ValueError(
-                f"Number of observations must be between 1 and {n_data_points}, "
-                f"got {observations}"
-            )
-        # SRS-WOR
-        rng = np.random.default_rng(seed)
-        indices = rng.choice(n_data_points, size=observations, replace=False)
-        subsample_size = observations
-    elif isinstance(observations, np.ndarray):
-        if observations.dtype.kind != "i":
-            raise TypeError("observations array must contain integers.")
-        if n_data_points > 0 and (observations.min() < 0 or observations.max() >= n_data_points):
-            raise ValueError(
-                f"Observation indices must be between 0 and {n_data_points - 1}, "
-                f"got range [{observations.min()}, {observations.max()}]"
-            )
-        indices = np.unique(observations)
-        subsample_size = len(indices)
-        if subsample_size == 0:
-            raise ValueError("observations array cannot be empty.")
-    else:
-        raise TypeError("observations must be an integer or a numpy array of integers.")
-    return indices, subsample_size
-
-
-def _extract_loo(loo_orig):
-    """Extract data from original LOO object."""
-    old_elpd_i = loo_orig.elpd_i
-    old_elpd_i_flat = (
-        old_elpd_i.values.flatten()
-        if hasattr(old_elpd_i, "values")
-        else np.asarray(old_elpd_i).flatten()
-    )
-    valid_old_mask = ~np.isnan(old_elpd_i_flat)
-    old_indices = np.where(valid_old_mask)[0]
-    old_elpd_i_values = old_elpd_i_flat[valid_old_mask]
-
-    old_pareto_k_values = np.array([])
-    if loo_orig.pareto_k is not None:
-        pareto_k = loo_orig.pareto_k
-        if isinstance(pareto_k, xr.DataArray) and "obs_id_subsample" in pareto_k.coords:
-            k_dict = dict(zip(pareto_k.coords["obs_id_subsample"].values, pareto_k.values))
-            old_pareto_k_values = np.array([k_dict.get(idx, np.nan) for idx in old_indices])
-        else:
-            k_flat = (
-                pareto_k.values.flatten()
-                if hasattr(pareto_k, "values")
-                else np.asarray(pareto_k).flatten()
-            )
-            if len(k_flat) == len(old_indices):
-                old_pareto_k_values = k_flat
-            else:
-                old_pareto_k_values = np.full_like(old_elpd_i_values, np.nan)
-    return old_indices, old_elpd_i_values, old_pareto_k_values
-
-
-# TODO: Can this be combined with _compute_loo_results possibly?
-def _compute_pointwise_loo(
-    log_likelihood_subset, var_name, sample_dims, reff=None, log_p=None, log_q=None
-):
-    """Compute pointwise LOO ELPD and Pareto k for a subset of the log-likelihood."""
-    subset_ds = xr.Dataset({var_name: log_likelihood_subset})
-    approx_posterior = False
-
-    if log_p is not None and log_q is not None:
-        dummy_data = xr.DataTree()
-        dummy_data["log_likelihood"] = subset_ds
-
-        loo_results = loo_approximate_posterior(
-            data=dummy_data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
-        )
-        elpd_loo_i = loo_results.elpd_i
-        pareto_k = loo_results.pareto_k
-        approx_posterior = True
-    else:
-        log_weights_ds, pareto_k_ds = subset_ds.azstats.psislw(r_eff=reff, dims=sample_dims)
-        log_weights_ds += subset_ds
-        elpd_loo_i = logsumexp(log_weights_ds, dims=sample_dims)[var_name]
-        pareto_k = pareto_k_ds[var_name]
-
-    elpd_loo_i_np = (
-        elpd_loo_i.values.flatten()
-        if hasattr(elpd_loo_i, "values")
-        else np.asarray(elpd_loo_i).flatten()
-    )
-    pareto_k_np = (
-        pareto_k.values.flatten() if hasattr(pareto_k, "values") else np.asarray(pareto_k).flatten()
-    )
-    return elpd_loo_i_np, pareto_k_np, approx_posterior
