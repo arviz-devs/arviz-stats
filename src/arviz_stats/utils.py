@@ -180,6 +180,8 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     approx_posterior: bool = False
     subsampling_se: float = None
     subsample_size: int = None
+    log_p: object = None
+    log_q: object = None
 
     def __str__(self):
         """Print elpd data in a user friendly way."""

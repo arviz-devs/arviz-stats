@@ -15,8 +15,9 @@ from arviz_stats import (
     loo_metrics,
     loo_pit,
     loo_subsample,
+    update_loo_subsample,
 )
-from arviz_stats.loo import _calculate_ics, _difference_estimator
+from arviz_stats.loo import _calculate_ics, _diff_srs_estimator
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
@@ -413,7 +414,7 @@ def test_difference_estimator():
     expected_subsampling_se = 0.0
     expected_se = np.sqrt(0.98)
 
-    elpd_loo_hat, subsampling_se, se = _difference_estimator(
+    elpd_loo_hat, subsampling_se, se = _diff_srs_estimator(
         elpd_loo_i_sample=elpd_loo_i_sample,
         lpd_approx_sample=lpd_approx_sample,
         lpd_approx_all=lpd_approx_all,
@@ -434,3 +435,83 @@ def test_loo_subsample_errors(radon):
         loo_subsample(radon, observations=n_total + 1, var_name="y")
     with pytest.raises(TypeError, match="observations must be an integer"):
         loo_subsample(radon, observations=50.5, var_name="y")
+
+
+def test_update_loo_subsample(radon):
+    initial_observations = 100
+    initial_loo = loo_subsample(radon, observations=initial_observations, var_name="y")
+
+    additional_observations = 400
+    updated_loo = update_loo_subsample(
+        initial_loo, radon, observations=additional_observations, var_name="y"
+    )
+
+    assert isinstance(updated_loo, ELPDData)
+    assert updated_loo.kind == "loo"
+    assert updated_loo.subsample_size == initial_observations + additional_observations
+    assert isinstance(updated_loo.elpd, float)
+    assert isinstance(updated_loo.se, float) and updated_loo.se >= 0
+    assert isinstance(updated_loo.p, float)
+    assert isinstance(updated_loo.subsampling_se, float) and updated_loo.subsampling_se >= 0
+    assert np.isfinite(updated_loo.se)
+    assert updated_loo.subsampling_se <= initial_loo.subsampling_se
+    assert updated_loo.elpd_i is not None
+    assert updated_loo.pareto_k is not None
+    assert updated_loo.elpd_i.dims == ("obs_id",)
+    assert updated_loo.elpd_i.shape == (updated_loo.n_data_points,)
+    assert updated_loo.pareto_k.dims == ("obs_id_subsample",)
+    assert updated_loo.pareto_k.shape == (updated_loo.subsample_size,)
+    assert np.sum(~np.isnan(updated_loo.elpd_i.values)) == updated_loo.subsample_size
+
+
+def test_update_loo_subsample_pointwise_false(radon):
+    initial_observations = 100
+    initial_loo_no_pointwise = loo_subsample(
+        radon, observations=initial_observations, pointwise=False, var_name="y"
+    )
+
+    additional_observations = 50
+    with pytest.raises(
+        ValueError, match="Cannot update a loo_subsample result created with pointwise=False"
+    ):
+        update_loo_subsample(
+            initial_loo_no_pointwise, radon, observations=additional_observations, var_name="y"
+        )
+
+
+@pytest.mark.parametrize("input_type", ["dataarray", "numpy"])
+def test_update_loo_subsample_approx_posterior(radon, log_densities, input_type):
+    log_p, log_q = log_densities[input_type]
+    initial_observations = 100
+    initial_loo = loo_subsample(
+        radon,
+        observations=initial_observations,
+        var_name="y",
+        log_p=log_p,
+        log_q=log_q,
+    )
+
+    additional_observations = 50
+    updated_with_implicit = update_loo_subsample(
+        initial_loo, radon, observations=additional_observations, var_name="y"
+    )
+
+    assert isinstance(updated_with_implicit, ELPDData)
+    assert updated_with_implicit.subsample_size == initial_observations + additional_observations
+    assert updated_with_implicit.approx_posterior
+
+    assert_allclose(updated_with_implicit.elpd, updated_with_implicit.elpd, rtol=1e-10)
+    assert_allclose(updated_with_implicit.se, updated_with_implicit.se, rtol=1e-10)
+
+
+def test_update_loo_subsample_errors(radon):
+    initial_observations = 100
+    initial_loo = loo_subsample(radon, observations=initial_observations, var_name="y")
+
+    n_total = radon.observed_data.y.size
+    with pytest.raises(ValueError, match="Cannot add 919 observations when only 819 are available"):
+        update_loo_subsample(initial_loo, radon, observations=n_total)
+
+    existing_indices = np.where(~np.isnan(initial_loo.elpd_i.values.flatten()))[0]
+    with pytest.raises(ValueError, match="New indices .* overlap with existing indices"):
+        update_loo_subsample(initial_loo, radon, observations=existing_indices[:5])

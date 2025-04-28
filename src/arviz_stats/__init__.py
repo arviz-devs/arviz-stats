@@ -11,6 +11,7 @@ try:
         loo_pit,
         loo_approximate_posterior,
         loo_subsample,
+        update_loo_subsample,
         compare,
     )
     from arviz_stats.psense import psense, psense_summary
