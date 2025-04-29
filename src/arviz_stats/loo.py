@@ -622,7 +622,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
 def loo_subsample(
     data, observations, pointwise=None, var_name=None, reff=None, log_p=None, log_q=None, seed=315
 ):
-    """Compute approximate leave-one-out cross-validation (LOO-CV) using sub-sampling.
+    """Compute PSIS-LOO-CV using sub-sampling.
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV) with sub-sampling
@@ -848,15 +848,15 @@ def loo_subsample(
 def update_subsample(loo_orig, data, observations=None, var_name=None, reff=None, seed=315):
     """Update a previously computed sub-sampled PSIS-LOO-CV object with new observations.
 
-    Extends a sub-sampled LOO-CV result by adding new observations to the sub-sample
+    Extends a sub-sampled PSIS-LOO-CV result by adding new observations to the sub-sample
     without recomputing values for previously sampled observations. This allows for
-    incrementally improving the subsampled LOO-CV estimate with additional observations
+    incrementally improving the subsampled PSIS-LOO-CV estimate with additional observations
     The sub-sampling method is described in [1]_.
 
     Parameters
     ----------
     loo_orig : ELPDData
-        Original LOO-CV result created with ``loo_subsample`` with ``pointwise=True``.
+        Original PSIS-LOO-CV result created with ``loo_subsample`` with ``pointwise=True``.
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
     observations : int or ndarray, optional
@@ -865,7 +865,7 @@ def update_subsample(loo_orig, data, observations=None, var_name=None, reff=None
         - An integer specifying the number of new observations to randomly sub-sample
           without replacement.
         - An array of integer indices specifying the exact new observations to use.
-        - If None or 0, returns the original LOO result unchanged.
+        - If None or 0, returns the original PSIS-LOO-CV result unchanged.
     var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
