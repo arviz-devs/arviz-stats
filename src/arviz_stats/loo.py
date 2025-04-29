@@ -100,7 +100,6 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
     (
         log_likelihood_ds,
         var_name,
@@ -109,6 +108,8 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         n_samples,
         n_data_points,
     ) = _prepare_loo_inputs(data, var_name)
+
+    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     if reff is None:
         reff = _get_r_eff(data, n_samples)
