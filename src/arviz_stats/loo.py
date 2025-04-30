@@ -20,6 +20,7 @@ from arviz_stats.helper_loo import (
     _get_r_eff,
     _plpd_approx,
     _prepare_loo_inputs,
+    _select_observation_subsample,
     _srs_estimator,
     _warn_pareto_k,
     _warn_pointwise_loo,
@@ -784,19 +785,15 @@ def loo_subsample(
         log_likelihood_stacked = log_likelihood_da.stack({"__obs__": obs_dims})
         lpd_approx_all_stacked = lpd_approx_all.stack({"__obs__": obs_dims})
 
-        stacked_coord = log_likelihood_stacked["__obs__"]
-        subsample_coord_values = stacked_coord.values[indices]
-        log_likelihood_sample = log_likelihood_stacked.sel({"__obs__": subsample_coord_values})
-        lpd_approx_sample = lpd_approx_all_stacked.sel({"__obs__": subsample_coord_values})
+        log_likelihood_sample = _select_observation_subsample(
+            log_likelihood_stacked, indices, ["__obs__"]
+        )
+        lpd_approx_sample = _select_observation_subsample(
+            lpd_approx_all_stacked, indices, ["__obs__"]
+        )
     else:
-        obs_dim = obs_dims[0]
-        original_coord = log_likelihood_da[obs_dim]
-        valid_indices_mask = (indices >= 0) & (indices < original_coord.size)
-        valid_indices = indices[valid_indices_mask]
-        subsample_coord_values = original_coord.values[valid_indices]
-
-        log_likelihood_sample = log_likelihood_da.sel({obs_dim: subsample_coord_values})
-        lpd_approx_sample = lpd_approx_all.sel({obs_dim: subsample_coord_values})
+        log_likelihood_sample = _select_observation_subsample(log_likelihood_da, indices, obs_dims)
+        lpd_approx_sample = _select_observation_subsample(lpd_approx_all, indices, obs_dims)
 
     sample_ds = xr.Dataset({var_name: log_likelihood_sample})
 
@@ -1050,9 +1047,14 @@ def update_subsample(
     if len(obs_dims) > 1:
         stacked_obs_dim = "__obs__"
         log_likelihood_stacked = log_likelihood_da.stack({stacked_obs_dim: obs_dims})
-        log_likelihood_new_da = log_likelihood_stacked.isel({stacked_obs_dim: new_indices})
+
+        log_likelihood_new_da = _select_observation_subsample(
+            log_likelihood_stacked, new_indices, [stacked_obs_dim]
+        )
     else:
-        log_likelihood_new_da = log_likelihood_da.isel({obs_dims[0]: new_indices})
+        log_likelihood_new_da = _select_observation_subsample(
+            log_likelihood_da, new_indices, obs_dims
+        )
 
     # Get log densities from original ELPD data if they exist
     log_p = getattr(loo_orig, "log_p", None)

@@ -19,6 +19,7 @@ __all__ = [
     "_warn_pareto_k",
     "_warn_pointwise_loo",
     "_plpd_approx",
+    "_select_observation_subsample",
 ]
 
 
@@ -67,7 +68,7 @@ def _plpd_approx(
     Returns
     -------
     DataArray
-        DataArray containing PLPD values with the same dimensions as data.observed_data[var_name].
+        DataArray containing PLPD values with the same dimensions as observed data.
     """
     if not callable(log_lik_fn):
         raise TypeError("log_lik_fn must be a callable function.")
@@ -310,6 +311,23 @@ def _extract_loo_data(loo_orig):
     else:
         extracted_pareto = xr.full_like(extracted_elpd, np.nan)
     return extracted_elpd, extracted_pareto
+
+
+def _select_observation_subsample(data_array, indices, obs_dims, dim_name="__obs__"):
+    """Select a subsample from a data array based on indices along observation dimensions."""
+    if len(obs_dims) > 1:
+        stacked_data = data_array.stack({dim_name: obs_dims})
+        coord = stacked_data[dim_name]
+    else:
+        stacked_data = data_array
+        coord = stacked_data[obs_dims[0]]
+
+    valid_indices_mask = (indices >= 0) & (indices < coord.size)
+    valid_indices = indices[valid_indices_mask]
+    subsample_coord_values = coord.values[valid_indices]
+
+    dim = dim_name if len(obs_dims) > 1 else obs_dims[0]
+    return stacked_data.sel({dim: subsample_coord_values})
 
 
 def _warn_pareto_k(pareto_k_values, n_samples):

@@ -424,24 +424,24 @@ def test_update_loo_subsample(centered_eight, method, log_lik_fn):
     assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == updated_loo.subsample_size
 
 
-def test_loo_subsample_errors(radon):
-    n_total = radon.observed_data.y.size
+def test_loo_subsample_errors(centered_eight):
+    n_total = centered_eight.observed_data.obs.size
     with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
-        loo_subsample(radon, observations=0, var_name="y")
+        loo_subsample(centered_eight, observations=0, var_name="obs")
     with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
-        loo_subsample(radon, observations=n_total + 1, var_name="y")
+        loo_subsample(centered_eight, observations=n_total + 1, var_name="obs")
     with pytest.raises(TypeError, match="observations must be an integer"):
-        loo_subsample(radon, observations=50.5, var_name="y")
+        loo_subsample(centered_eight, observations=4.2, var_name="obs")
 
 
-def test_update_loo_subsample_errors(radon):
-    initial_observations = 100
-    initial_loo = loo_subsample(radon, observations=initial_observations, var_name="y")
+def test_update_loo_subsample_errors(centered_eight):
+    initial_observations = 3
+    initial_loo = loo_subsample(centered_eight, observations=initial_observations, var_name="obs")
 
-    n_total = radon.observed_data.y.size
-    with pytest.raises(ValueError, match="Cannot add 919 observations when only 819 are available"):
-        update_subsample(initial_loo, radon, observations=n_total)
+    n_total = centered_eight.observed_data.obs.size
+    with pytest.raises(ValueError, match="Cannot add .* observations when only .* are available"):
+        update_subsample(initial_loo, centered_eight, observations=n_total)
 
     existing_indices = np.where(~np.isnan(initial_loo.elpd_i.values.flatten()))[0]
     with pytest.raises(ValueError, match="New indices .* overlap with existing indices"):
-        update_subsample(initial_loo, radon, observations=existing_indices[:5])
+        update_subsample(initial_loo, centered_eight, observations=existing_indices[:5])
