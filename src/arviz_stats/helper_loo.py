@@ -4,19 +4,21 @@ import warnings
 
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_datatree
+from arviz_base import convert_to_datatree, extract
 
 from arviz_stats.utils import get_log_likelihood_dataset
 
 __all__ = [
     "_get_r_eff",
     "_diff_srs_estimator",
+    "_srs_estimator",
     "_generate_subsample_indices",
     "_prepare_loo_inputs",
     "_extract_loo_data",
     "_check_log_density",
     "_warn_pareto_k",
     "_warn_pointwise_loo",
+    "_plpd_approx",
 ]
 
 
@@ -32,6 +34,81 @@ def _get_r_eff(data, n_samples):
         # this mean is over all data variables
         reff = np.hstack([ess_p[v].values.flatten() for v in ess_p.data_vars]).mean() / n_samples
     return reff
+
+
+def _plpd_approx(
+    data,
+    var_name,
+    log_lik_fn,
+    param_names=None,
+    log=True,
+):
+    """Compute the Point Log Predictive Density (PLPD) approximation.
+
+    Parameters
+    ----------
+    data : DataTree or InferenceData
+        Input data containing `posterior` and `observed_data` groups.
+    var_name : str
+        Name of the variable in `observed_data` for which to compute the PLPD approximation.
+    log_lik_fn : callable
+        A user-provided function that computes the log likelihood. It must accept the
+        observed data as its first argument, followed by the *mean* values
+        of the posterior parameters specified by `param_names` as subsequent
+        positional arguments.
+    param_names : list[str], optional
+        An ordered list of parameter names from the posterior group whose mean values
+        will be passed as positional arguments (after the data point value) to `log_lik_fn`.
+        If None, all parameters from the posterior group are used in alphabetical order.
+    log : bool, optional
+        Whether the log_likelihood_fn returns log-likelihood (True) or likelihood (False).
+        Default is True. If False, the output will be log-transformed.
+
+    Returns
+    -------
+    DataArray
+        DataArray containing PLPD values with the same dimensions as data.observed_data[var_name].
+    """
+    if not callable(log_lik_fn):
+        raise TypeError("log_lik_fn must be a callable function.")
+    if not hasattr(data, "observed_data"):
+        raise ValueError("No observed_data group found in the data")
+    if var_name not in data.observed_data:
+        raise ValueError(f"Variable {var_name} not found in observed_data")
+
+    observed = data.observed_data[var_name]
+    posterior = extract(data, group="posterior", combined=True)
+
+    if param_names is None:
+        param_keys = sorted(list(posterior.data_vars.keys()))
+    else:
+        missing_params = [p for p in param_names if p not in posterior.data_vars]
+        if missing_params:
+            raise ValueError(f"Parameters {missing_params} not found in posterior group.")
+        param_keys = param_names
+
+    param_means = [float(posterior[key].mean()) for key in param_keys]
+    plpd_values = np.empty_like(observed.values, dtype=float)
+
+    for idx, value in np.ndenumerate(observed.values):
+        try:
+            result = log_lik_fn(value, *param_means)
+            if not log:
+                result = np.log(np.maximum(result, np.finfo(float).tiny))
+
+            if not isinstance(result, int | float | np.number):
+                raise TypeError(
+                    f"log_lik_fn must return a numeric scalar. Got type: {type(result)}"
+                )
+            plpd_values[idx] = result
+        except Exception as e:
+            raise RuntimeError(
+                f"Error computing log-likelihood with log_lik_fn for data point "
+                f"at index {idx} (value: {value}): {e}"
+            ) from e
+
+    plpd_da = xr.DataArray(plpd_values, dims=observed.dims, coords=observed.coords, name="plpd")
+    return plpd_da
 
 
 def _diff_srs_estimator(
@@ -103,6 +180,50 @@ def _diff_srs_estimator(
         subsampling_se = np.inf
         total_se = np.inf
     return elpd_loo_estimate, subsampling_se, total_se
+
+
+def _srs_estimator(
+    y_sample,
+    n_data_points,
+    subsample_size,
+):
+    """Calculate the SRS estimator for PSIS-LOO-CV with sub-sampling.
+
+    Parameters
+    ----------
+    y_sample : DataArray
+        Values of the statistic (e.g., p_loo) for the subsample.
+    n_data_points : int
+        Total number of data points (N).
+    subsample_size : int
+        Number of observations in the subsample (m).
+
+    Returns
+    -------
+    tuple[float, float, float]
+        A tuple containing:
+
+        - y_hat: The estimated statistic using simple random sampling.
+        - var_y_hat: The variance of the estimator (sampling uncertainty).
+        - hat_var_y: The estimated variance of the statistic.
+    """
+    y_sample_mean = y_sample.mean().values
+    y_hat = n_data_points * y_sample_mean
+
+    if subsample_size > 1:
+        y_sample_var = y_sample.var(ddof=1).values
+        var_y_hat = (
+            (n_data_points**2)
+            * (1 - subsample_size / n_data_points)
+            * y_sample_var
+            / subsample_size
+        )
+        hat_var_y = n_data_points * y_sample_var
+    else:
+        var_y_hat = np.inf
+        hat_var_y = np.inf
+
+    return y_hat, var_y_hat, hat_var_y
 
 
 def _generate_subsample_indices(n_data_points, observations, seed):

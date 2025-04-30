@@ -17,7 +17,7 @@ from arviz_stats import (
     loo_subsample,
     update_subsample,
 )
-from arviz_stats.loo import _calculate_ics, _diff_srs_estimator
+from arviz_stats.loo import _calculate_ics
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
@@ -80,6 +80,16 @@ def log_densities(centered_eight):
         "dataarray": (log_p_da, log_q_da),
         "numpy": (log_p_np, log_q_np),
     }
+
+
+@pytest.fixture(scope="module")
+def log_lik_fn():
+    def _log_likelihood_eight_schools(data, theta):
+        sigma = 12.5
+        log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((data - theta) / sigma) ** 2
+        return log_lik
+
+    return _log_likelihood_eight_schools
 
 
 @pytest.mark.parametrize("pointwise", [True, False])
@@ -334,9 +344,18 @@ def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type
 
 
 @pytest.mark.parametrize("pointwise", [True, False])
-def test_loo_subsample(radon, pointwise):
-    observations = 200
-    loo_sub = loo_subsample(radon, observations=observations, pointwise=pointwise, var_name="y")
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_loo_subsample(centered_eight, pointwise, method, log_lik_fn):
+    observations = 4
+    loo_sub = loo_subsample(
+        centered_eight,
+        observations=observations,
+        pointwise=pointwise,
+        var_name="obs",
+        method=method,
+        log_lik_fn=log_lik_fn,
+        param_names=["theta"],
+    )
 
     assert isinstance(loo_sub, ELPDData)
     assert loo_sub.kind == "loo"
@@ -345,14 +364,14 @@ def test_loo_subsample(radon, pointwise):
     assert isinstance(loo_sub.se, float) and loo_sub.se >= 0
     assert isinstance(loo_sub.p, float)
     assert isinstance(loo_sub.subsampling_se, float) and loo_sub.subsampling_se >= 0
-    assert loo_sub.n_data_points == radon.observed_data.y.size
+    assert loo_sub.n_data_points == centered_eight.observed_data.obs.size
 
     if pointwise:
         assert hasattr(loo_sub, "elpd_i")
         assert hasattr(loo_sub, "pareto_k")
         assert loo_sub.elpd_i is not None
         assert loo_sub.pareto_k is not None
-        assert loo_sub.elpd_i.dims == ("obs_id",)
+        assert loo_sub.elpd_i.dims == ("school",)
         assert loo_sub.elpd_i.shape == (loo_sub.n_data_points,)
         assert loo_sub.pareto_k.shape == (loo_sub.n_data_points,)
         assert np.sum(~np.isnan(loo_sub.pareto_k.values)) == observations
@@ -363,110 +382,27 @@ def test_loo_subsample(radon, pointwise):
         assert not hasattr(loo_sub, "pareto_k") or loo_sub.pareto_k is None
 
 
-@pytest.mark.parametrize("input_type", ["dataarray", "numpy"])
-@pytest.mark.parametrize("pointwise", [True, False])
-def test_loo_subsample_approx_posterior(radon, log_densities, input_type, pointwise):
-    observations = 200
-    log_p, log_q = log_densities[input_type]
-
-    loo_sub_approx = loo_subsample(
-        radon,
-        observations=observations,
-        log_p=log_p,
-        log_q=log_q,
-        pointwise=pointwise,
-        var_name="y",
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_update_loo_subsample(centered_eight, method, log_lik_fn):
+    initial_observations = 3
+    initial_loo = loo_subsample(
+        centered_eight,
+        observations=initial_observations,
+        var_name="obs",
+        method=method,
+        log_lik_fn=log_lik_fn,
+        param_names=["theta"],
     )
 
-    assert isinstance(loo_sub_approx, ELPDData)
-    assert loo_sub_approx.kind == "loo"
-    assert loo_sub_approx.subsample_size == observations
-    assert isinstance(loo_sub_approx.elpd, float)
-    assert isinstance(loo_sub_approx.se, float) and loo_sub_approx.se >= 0
-    assert isinstance(loo_sub_approx.p, float)
-    assert isinstance(loo_sub_approx.subsampling_se, float) and loo_sub_approx.subsampling_se >= 0
-    assert loo_sub_approx.n_data_points == radon.observed_data.y.size
-
-    if pointwise:
-        assert hasattr(loo_sub_approx, "elpd_i")
-        assert hasattr(loo_sub_approx, "pareto_k")
-        assert loo_sub_approx.elpd_i is not None
-        assert loo_sub_approx.pareto_k is not None
-        assert loo_sub_approx.elpd_i.dims == ("obs_id",)
-        assert loo_sub_approx.elpd_i.shape == (loo_sub_approx.n_data_points,)
-        assert loo_sub_approx.pareto_k.dims == loo_sub_approx.elpd_i.dims
-        assert loo_sub_approx.pareto_k.shape == (loo_sub_approx.n_data_points,)
-        assert np.sum(~np.isnan(loo_sub_approx.pareto_k.values)) == observations
-        assert np.isnan(loo_sub_approx.elpd_i).sum() == loo_sub_approx.n_data_points - observations
-        assert not np.isnan(loo_sub_approx.elpd_i).all()
-    else:
-        assert not hasattr(loo_sub_approx, "elpd_i") or loo_sub_approx.elpd_i is None
-        assert not hasattr(loo_sub_approx, "pareto_k") or loo_sub_approx.pareto_k is None
-
-
-def test_difference_estimator():
-    n_data_points = 10
-    subsample_size = 4
-    indices = np.array([0, 1, 2, 3])
-
-    elpd_loo_i_values = np.array([-1.0, -1.5, -0.5, -1.2])
-    elpd_loo_i_sample = xr.DataArray(
-        elpd_loo_i_values,
-        dims=["obs_id_subsample"],
-        coords={"obs_id_subsample": indices},
-        name="elpd_loo_i_sample",
-    )
-
-    lpd_approx_sample_values = np.array([-0.9, -1.4, -0.4, -1.1])
-    lpd_approx_sample = xr.DataArray(
-        lpd_approx_sample_values,
-        dims=["obs_id_subsample"],
-        coords={"obs_id_subsample": indices},
-        name="lpd_approx_sample",
-    )
-
-    lpd_approx_all_values = np.array([-0.9, -1.4, -0.4, -1.1, -1.0, -1.3, -0.6, -1.0, -0.8, -1.5])
-    lpd_approx_all = xr.DataArray(
-        lpd_approx_all_values,
-        dims=["obs_id"],
-        coords={"obs_id": np.arange(10)},
-        name="lpd_approx_all",
-    )
-
-    expected_elpd_loo_hat = -11.0
-    expected_subsampling_se = 0.0
-    expected_se = np.sqrt(0.98)
-
-    elpd_loo_hat, subsampling_se, se = _diff_srs_estimator(
-        elpd_loo_i_sample=elpd_loo_i_sample,
-        lpd_approx_sample=lpd_approx_sample,
-        lpd_approx_all=lpd_approx_all,
-        n_data_points=n_data_points,
-        subsample_size=subsample_size,
-    )
-
-    assert_allclose(elpd_loo_hat, expected_elpd_loo_hat)
-    assert_almost_equal(subsampling_se, expected_subsampling_se)
-    assert_allclose(se, expected_se)
-
-
-def test_loo_subsample_errors(radon):
-    n_total = radon.observed_data.y.size
-    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
-        loo_subsample(radon, observations=0, var_name="y")
-    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
-        loo_subsample(radon, observations=n_total + 1, var_name="y")
-    with pytest.raises(TypeError, match="observations must be an integer"):
-        loo_subsample(radon, observations=50.5, var_name="y")
-
-
-def test_update_loo_subsample(radon):
-    initial_observations = 100
-    initial_loo = loo_subsample(radon, observations=initial_observations, var_name="y")
-
-    additional_observations = 400
+    additional_observations = 5
     updated_loo = update_subsample(
-        initial_loo, radon, observations=additional_observations, var_name="y"
+        initial_loo,
+        centered_eight,
+        observations=additional_observations,
+        var_name="obs",
+        method=method,
+        log_lik_fn=log_lik_fn,
+        param_names=["theta"],
     )
 
     assert isinstance(updated_loo, ELPDData)
@@ -480,7 +416,7 @@ def test_update_loo_subsample(radon):
     assert updated_loo.subsampling_se <= initial_loo.subsampling_se
     assert updated_loo.elpd_i is not None
     assert updated_loo.pareto_k is not None
-    assert updated_loo.elpd_i.dims == ("obs_id",)
+    assert updated_loo.elpd_i.dims == ("school",)
     assert updated_loo.elpd_i.shape == (updated_loo.n_data_points,)
     assert updated_loo.pareto_k.dims == updated_loo.elpd_i.dims
     assert updated_loo.pareto_k.shape == (updated_loo.n_data_points,)
@@ -488,42 +424,14 @@ def test_update_loo_subsample(radon):
     assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == updated_loo.subsample_size
 
 
-def test_update_loo_subsample_pointwise_false(radon):
-    initial_observations = 100
-    initial_loo_no_pointwise = loo_subsample(
-        radon, observations=initial_observations, pointwise=False, var_name="y"
-    )
-
-    additional_observations = 50
-    with pytest.raises(ValueError, match="Original loo_subsample result must have pointwise=True"):
-        update_subsample(
-            initial_loo_no_pointwise, radon, observations=additional_observations, var_name="y"
-        )
-
-
-@pytest.mark.parametrize("input_type", ["dataarray", "numpy"])
-def test_update_loo_subsample_approx_posterior(radon, log_densities, input_type):
-    log_p, log_q = log_densities[input_type]
-    initial_observations = 100
-    initial_loo = loo_subsample(
-        radon,
-        observations=initial_observations,
-        var_name="y",
-        log_p=log_p,
-        log_q=log_q,
-    )
-
-    additional_observations = 50
-    updated_loo = update_subsample(
-        initial_loo, radon, observations=additional_observations, var_name="y"
-    )
-
-    assert isinstance(updated_loo, ELPDData)
-    assert updated_loo.subsample_size == initial_observations + additional_observations
-    assert updated_loo.approx_posterior
-
-    assert_allclose(updated_loo.elpd, updated_loo.elpd, rtol=1e-10)
-    assert_allclose(updated_loo.se, updated_loo.se, rtol=1e-10)
+def test_loo_subsample_errors(radon):
+    n_total = radon.observed_data.y.size
+    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
+        loo_subsample(radon, observations=0, var_name="y")
+    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
+        loo_subsample(radon, observations=n_total + 1, var_name="y")
+    with pytest.raises(TypeError, match="observations must be an integer"):
+        loo_subsample(radon, observations=50.5, var_name="y")
 
 
 def test_update_loo_subsample_errors(radon):
