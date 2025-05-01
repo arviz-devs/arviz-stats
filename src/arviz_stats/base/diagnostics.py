@@ -201,7 +201,7 @@ class _DiagnosticsBase(_CoreBase):
         if prob is None:
             prob = (0.05, 0.95)
         elif not isinstance(prob, Sequence):
-            prob = (prob, 1 - prob)
+            prob = sorted((prob, 1 - prob))
 
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -224,8 +224,8 @@ class _DiagnosticsBase(_CoreBase):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
-        ary = self._split_chains(ary)
-        return min(self._ess(ary, relative=relative), self._ess(ary**2, relative=relative))
+        ary = (ary - ary.mean()) ** 2
+        return self._ess(self._split_chains(ary), relative=relative)
 
     def _ess_quantile(self, ary, prob, relative=False):
         """Compute the effective sample size for the specific residual."""
@@ -304,10 +304,12 @@ class _DiagnosticsBase(_CoreBase):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
-        ess = self._ess_sd(ary)
-        sd = np.std(ary, ddof=1)
-        fac_mcse_sd = np.sqrt(np.exp(1) * (1 - 1 / ess) ** (ess - 1) - 1)
-        mcse_sd_value = sd * fac_mcse_sd
+        sims_c2 = (ary - ary.mean()) ** 2
+        ess = self._ess_mean(ary)
+        evar = sims_c2.mean()
+        varvar = ((sims_c2**2).mean() - evar**2) / ess
+        varsd = varvar / evar / 4
+        mcse_sd_value = np.sqrt(varsd)
         return mcse_sd_value
 
     def _mcse_median(self, ary):
