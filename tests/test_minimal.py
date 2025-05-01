@@ -7,13 +7,13 @@ from arviz_stats.base import array_stats
 
 @pytest.fixture(scope="module")
 def data_c0d1():
-    rng = np.random.default_rng(9)
+    rng = np.random.default_rng(19)
     return rng.normal(size=(4, 200, 3))
 
 
 @pytest.fixture(scope="module")
 def data_c2d0():
-    rng = np.random.default_rng(9)
+    rng = np.random.default_rng(19)
     return rng.normal(size=(200, 3, 4))
 
 
@@ -66,12 +66,34 @@ def test_hdi_multimodal_discrete(data_discrete_multimodal, axes):
     assert hdi.shape[-2] == 3
 
 
-@pytest.mark.parametrize("data", [0, 1])
-def test_ess(data, data_c0d1, data_c2d0):
-    if data == 0:
+@pytest.mark.parametrize("axes", ["01", "20"])
+def test_ess_axes(axes, data_c0d1, data_c2d0):
+    if axes == "01":
         ess = array_stats.ess(data_c0d1, chain_axis=0, draw_axis=1)
     else:
         ess = array_stats.ess(data_c2d0, chain_axis=2, draw_axis=0)
+    assert ess.shape == (3,)
+    assert np.all(ess > 700)
+
+
+@pytest.mark.parametrize(
+    "method", ["bulk", "mean", "sd", "median", "mad", "z_scale", "folded", "identity"]
+)
+def test_ess_methods(method, data_c0d1):
+    ess = array_stats.ess(data_c0d1, method=method, chain_axis=0, draw_axis=1)
+    assert ess.shape == (3,)
+    assert np.all(ess > 700)
+
+
+@pytest.mark.parametrize("method", ["quantile", "tail"])
+def test_ess_quantile_tail(method, data_c0d1):
+    ess = array_stats.ess(data_c0d1, method=method, prob=0.9, chain_axis=0, draw_axis=1)
+    assert ess.shape == (3,)
+    assert np.all(ess > 700)
+
+
+def test_ess_local(data_c0d1):
+    ess = array_stats.ess(data_c0d1, method="local", prob=(0.2, 0.3), chain_axis=0, draw_axis=1)
     assert ess.shape == (3,)
     assert np.all(ess > 700)
 
@@ -82,12 +104,19 @@ def test_ess_no_chain(data_c0d1):
     assert np.all(ess > 150)
 
 
-@pytest.mark.parametrize("data", [0, 1])
-def test_rhat(data, data_c0d1, data_c2d0):
-    if data == 0:
+@pytest.mark.parametrize("axes", ["01", "20"])
+def test_rhat_axes(axes, data_c0d1, data_c2d0):
+    if axes == "01":
         rhat = array_stats.rhat(data_c0d1, chain_axis=0, draw_axis=1)
     else:
         rhat = array_stats.rhat(data_c2d0, chain_axis=2, draw_axis=0)
+    assert rhat.shape == (3,)
+    assert np.all(rhat < 1.05)
+
+
+@pytest.mark.parametrize("method", ["rank", "split", "z_scale", "folded", "identity"])
+def test_rhat_methods(method, data_c0d1):
+    rhat = array_stats.rhat(data_c0d1, method=method, chain_axis=0, draw_axis=1)
     assert rhat.shape == (3,)
     assert np.all(rhat < 1.05)
 
@@ -98,9 +127,9 @@ def test_rhat_no_chain(data_c0d1):
     assert np.all(np.isnan(rhat))
 
 
-@pytest.mark.parametrize("data", [0, 1])
-def test_rhat_nested(data, data_c0d1, data_c2d0):
-    if data == 0:
+@pytest.mark.parametrize("axes", ["01", "20"])
+def test_rhat_nested_axes(axes, data_c0d1, data_c2d0):
+    if axes == "01":
         rhat = array_stats.rhat_nested(data_c0d1, (0, 0, 1, 1), chain_axis=0, draw_axis=1)
     else:
         rhat = array_stats.rhat_nested(data_c2d0, (0, 0, 1, 1), chain_axis=2, draw_axis=0)
@@ -108,9 +137,24 @@ def test_rhat_nested(data, data_c0d1, data_c2d0):
     assert np.all(rhat < 1.05)
 
 
-@pytest.mark.parametrize("data", [0, 1])
-def test_mcse(data, data_c0d1, data_c2d0):
-    if data == 0:
+def test_rhat_nested_no_chain(data_c0d1):
+    rhat = array_stats.rhat_nested(data_c0d1, (0,), chain_axis=None, draw_axis=1)
+    assert rhat.shape == (4, 3)
+    assert np.all(np.isnan(rhat))
+
+
+@pytest.mark.parametrize("method", ["rank", "split", "z_scale", "folded", "identity"])
+def test_rhat_nested_methods(method, data_c0d1):
+    rhat = array_stats.rhat_nested(
+        data_c0d1, (0, 0, 1, 1), method=method, chain_axis=0, draw_axis=1
+    )
+    assert rhat.shape == (3,)
+    assert np.all(rhat < 1.05)
+
+
+@pytest.mark.parametrize("axes", ["01", "20"])
+def test_mcse_axes(axes, data_c0d1, data_c2d0):
+    if axes == "01":
         mcse = array_stats.mcse(data_c0d1, chain_axis=0, draw_axis=1)
     else:
         mcse = array_stats.mcse(data_c2d0, chain_axis=2, draw_axis=0)
@@ -119,8 +163,35 @@ def test_mcse(data, data_c0d1, data_c2d0):
     assert np.all(mcse < 0.04)
 
 
+@pytest.mark.parametrize("method", ["mean", "sd", "median", "quantile"])
+def test_mcse_methods(method, data_c0d1):
+    kwargs = {"prob": 0.9} if method == "quantile" else {}
+    mcse = array_stats.mcse(data_c0d1, method=method, chain_axis=0, draw_axis=1, **kwargs)
+    assert mcse.shape == (3,)
+    assert np.all(mcse > 0.01)
+    assert np.all(mcse < 0.1)
+
+
 def test_mcse_no_chain(data_c0d1):
     mcse = array_stats.mcse(data_c0d1, chain_axis=None, draw_axis=1)
     assert mcse.shape == (4, 3)
     assert np.all(mcse > 0.05)
     assert np.all(mcse < 0.09)
+
+
+@pytest.mark.parametrize("axes", ["01", "20"])
+def test_pareto_min_ss_axes(axes, data_c0d1, data_c2d0):
+    if axes == "01":
+        pareto_min_ss = array_stats.pareto_min_ss(data_c0d1, chain_axis=0, draw_axis=1)
+    else:
+        pareto_min_ss = array_stats.pareto_min_ss(data_c2d0, chain_axis=2, draw_axis=0)
+    assert pareto_min_ss.shape == (3,)
+    assert np.all(pareto_min_ss > 9.9)
+    assert np.all(pareto_min_ss < 13)
+
+
+def test_pareto_min_ss_no_chain(data_c0d1):
+    pareto_min_ss = array_stats.pareto_min_ss(data_c0d1, chain_axis=None, draw_axis=1)
+    assert pareto_min_ss.shape == (4, 3)
+    assert np.all(pareto_min_ss > 9.9)
+    assert np.all(pareto_min_ss < 15)

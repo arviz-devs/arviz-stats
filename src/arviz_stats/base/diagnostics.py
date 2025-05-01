@@ -650,6 +650,10 @@ class _DiagnosticsBase(_CoreBase):
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
         split_ary = self._split_chains(ary)
+        # splitting we "duplicate the number of chains so we need to update
+        # superchain_ids accordingly if we had 3 chains (0, 1, 2) we end up
+        # with (0, 1, 2, 0, 1, 2) half-chains
+        superchain_ids = np.hstack((superchain_ids, superchain_ids))
         rhat_bulk = self._rhat_nested(self._z_scale(split_ary), superchain_ids)
 
         split_ary_folded = abs(split_ary - np.median(split_ary))
@@ -664,18 +668,22 @@ class _DiagnosticsBase(_CoreBase):
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
         ary = self._z_fold(self._split_chains(ary))
+        superchain_ids = np.hstack((superchain_ids, superchain_ids))
         return self._rhat_nested(ary, superchain_ids)
 
     def _rhat_nested_z_scale(self, ary, superchain_ids):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
-        return self._rhat_nested(self._z_scale(self._split_chains(ary)), superchain_ids)
+        ary = self._z_scale(self._split_chains(ary))
+        superchain_ids = np.hstack((superchain_ids, superchain_ids))
+        return self._rhat_nested(ary, superchain_ids)
 
     def _rhat_nested_split(self, ary, superchain_ids):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
+        superchain_ids = np.hstack((superchain_ids, superchain_ids))
         return self._rhat_nested(self._split_chains(ary), superchain_ids)
 
     def _rhat_nested_identity(self, ary, superchain_ids):
