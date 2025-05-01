@@ -1,6 +1,7 @@
 # arviz-stats
 ArviZ statistics and diagnostics functions.
 
+(installation)=
 ## Installation
 
 It currently can only be installed with pip:
@@ -42,6 +43,7 @@ api/index
 :hidden:
 :caption: Tutorials
 
+array_stats_only
 ArviZ in Context <https://arviz-devs.github.io/EABM/>
 ```
 

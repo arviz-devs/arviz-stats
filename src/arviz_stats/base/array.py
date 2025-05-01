@@ -51,17 +51,36 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         self,
         ary,
         prob,
-        axes=-1,
+        axis=-1,
         method="nearest",
         circular=False,
         max_modes=10,
         skipna=False,
         **kwargs,
     ):
-        """Compute HDI function on array-like input."""
+        """Compute highest density interval (HDI) on an array of samples.
+
+        See docstring of :func:`arviz_stats.hdi` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        prob : float
+        axis : int, sequence of int or None, default -1
+        method : str, default "nearest"
+            Valid options are "nearest", "multimodal" or "multimodal_sample"
+        circular : bool, default False
+        max_modes : int, default 10
+        skipna : bool, default False
+        **kwargs
+            Only used for multimodal methods with continuous data.
+            Passed to kde computation with a ``bw`` default of "taylor" for
+            circular data, "isj" otherwise.
+        """
         if not 1 >= prob > 0:
             raise ValueError("The value of `prob` must be in the (0, 1] interval.")
-        ary, axes = process_ary_axes(ary, axes)
+        ary, axes = process_ary_axes(ary, axis)
         is_discrete = np.issubdtype(ary.dtype, np.integer) or np.issubdtype(ary.dtype, np.bool_)
         is_multimodal = method.startswith("multimodal")
         if is_multimodal and circular and is_discrete:
@@ -106,7 +125,22 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return result
 
     def ess(self, ary, chain_axis=-2, draw_axis=-1, method="bulk", relative=False, prob=None):
-        """Compute of ess on array-like inputs."""
+        """Compute of ess on array-like inputs.
+
+        See docstring of :func:`arviz_stats.ess` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        method : str, default "bulk"
+        relative : bool, default False
+        prob : float or (float, float), default None
+            When using the array interface, `prob` is a required argument for
+            the "tail", "quantile" (as float) and "local" (as tuple) methods.
+        """
         method = method.lower()
         # fmt: off
         valid_methods = {
@@ -126,7 +160,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return ess_array(ary, **func_kwargs)
 
     def rhat(self, ary, chain_axis=-2, draw_axis=-1, method="rank"):
-        """Compute of rhat on array-like inputs."""
+        """Compute of rhat on array-like inputs.
+
+        See docstring of :func:`arviz_stats.rhat` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        method : str, default "rank"
+        """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
         if method not in valid_methods:
@@ -138,7 +183,19 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return rhat_array(ary)
 
     def rhat_nested(self, ary, superchain_ids, method="rank", chain_axis=-2, draw_axis=-1):
-        """Compute nested rhat on array-like inputs."""
+        """Compute nested rhat on array-like inputs.
+
+        See docstring of :func:`arviz_stats.rhat_nested` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        superchain_ids : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        method : str, default "rank"
+        """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
         if method not in valid_methods:
@@ -150,7 +207,21 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return rhat_ufunc(ary, superchain_ids=superchain_ids)
 
     def mcse(self, ary, chain_axis=-2, draw_axis=-1, method="mean", prob=None):
-        """Compute of mcse on array-like inputs."""
+        """Compute of mcse on array-like inputs.
+
+        See docstring of :func:`arviz_stats.mcse` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        method : str, default "mean"
+        prob : float, default None
+            When using the array interface, `prob` is a required argument for
+            "quantile" method.
+        """
         method = method.lower()
         valid_methods = {"mean", "sd", "median", "quantile"}
         if method not in valid_methods:
@@ -163,15 +234,25 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return mcse_array(ary, **func_kwargs)
 
     def pareto_min_ss(self, ary, chain_axis=-2, draw_axis=-1):
-        """Compute minimum effective sample size."""
+        """Compute minimum effective sample size.
+
+        See docstring of :func:`arviz_stats.pareto_min_ss` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         pms_array = make_ufunc(self._pareto_min_ss, n_output=1, n_input=1, n_dims=2, ravel=False)
         return pms_array(ary)
 
-    def psislw(self, ary, r_eff=1, axes=-1):
+    def psislw(self, ary, r_eff=1, axis=-1):
         """Compute log weights for Pareto-smoothed importance sampling (PSIS) method."""
-        ary, axes = process_ary_axes(ary, axes)
+        ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
             self._psislw,
             n_output=2,
@@ -181,9 +262,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return psl_ufunc(ary, out_shape=[(ary.shape[i] for i in axes), []], r_eff=r_eff)
 
-    def power_scale_lw(self, ary, alpha=0, axes=-1):
+    def power_scale_lw(self, ary, alpha=0, axis=-1):
         """Compute log weights for power-scaling component by alpha."""
-        ary, axes = process_ary_axes(ary, axes)
+        ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
             self._power_scale_lw,
             n_output=1,

@@ -41,9 +41,9 @@ def data_discrete_multimodal():
     return np.concatenate((m1, m2, m3), axis=1)
 
 
-@pytest.mark.parametrize("axes", [None, 1, (0, 1)])
-def test_hdi(data_c0d1, axes):
-    hdi = array_stats.hdi(data_c0d1, 0.8, axes=axes)
+@pytest.mark.parametrize("axis", [None, 1, (0, 1)])
+def test_hdi_axes(data_c0d1, axis):
+    hdi = array_stats.hdi(data_c0d1, 0.8, axis=axis)
     assert hdi.shape[-1] == 2
     assert np.all(-2 < hdi[..., 0])
     assert np.all(hdi[..., 0] < -0.75)
@@ -51,24 +51,24 @@ def test_hdi(data_c0d1, axes):
     assert np.all(hdi[..., 1] < 2)
 
 
-@pytest.mark.parametrize("axes", [None, 1, (0, 1)])
+@pytest.mark.parametrize("axis", [None, 1, (0, 1)])
 @pytest.mark.parametrize("method", ["multimodal", "multimodal_sample"])
-def test_hdi_multimodal(data_multimodal, method, axes):
-    hdi = array_stats.hdi(data_multimodal, 0.8, method=method, axes=axes)
+def test_hdi_multimodal(data_multimodal, method, axis):
+    hdi = array_stats.hdi(data_multimodal, 0.8, method=method, axis=axis)
     assert hdi.shape[-1] == 2
     assert hdi.shape[-2] == 3
 
 
-@pytest.mark.parametrize("axes", [None, 1, (0, 1)])
-def test_hdi_multimodal_discrete(data_discrete_multimodal, axes):
-    hdi = array_stats.hdi(data_discrete_multimodal, 0.8, method="multimodal", axes=axes)
+@pytest.mark.parametrize("axis", [None, 1, (0, 1)])
+def test_hdi_multimodal_discrete(data_discrete_multimodal, axis):
+    hdi = array_stats.hdi(data_discrete_multimodal, 0.8, method="multimodal", axis=axis)
     assert hdi.shape[-1] == 2
     assert hdi.shape[-2] == 3
 
 
-@pytest.mark.parametrize("axes", ["01", "20"])
-def test_ess_axes(axes, data_c0d1, data_c2d0):
-    if axes == "01":
+@pytest.mark.parametrize("axis", ["01", "20"])
+def test_ess_axes(axis, data_c0d1, data_c2d0):
+    if axis == "01":
         ess = array_stats.ess(data_c0d1, chain_axis=0, draw_axis=1)
     else:
         ess = array_stats.ess(data_c2d0, chain_axis=2, draw_axis=0)
@@ -104,9 +104,9 @@ def test_ess_no_chain(data_c0d1):
     assert np.all(ess > 150)
 
 
-@pytest.mark.parametrize("axes", ["01", "20"])
-def test_rhat_axes(axes, data_c0d1, data_c2d0):
-    if axes == "01":
+@pytest.mark.parametrize("axis", ["01", "20"])
+def test_rhat_axes(axis, data_c0d1, data_c2d0):
+    if axis == "01":
         rhat = array_stats.rhat(data_c0d1, chain_axis=0, draw_axis=1)
     else:
         rhat = array_stats.rhat(data_c2d0, chain_axis=2, draw_axis=0)
@@ -127,9 +127,9 @@ def test_rhat_no_chain(data_c0d1):
     assert np.all(np.isnan(rhat))
 
 
-@pytest.mark.parametrize("axes", ["01", "20"])
-def test_rhat_nested_axes(axes, data_c0d1, data_c2d0):
-    if axes == "01":
+@pytest.mark.parametrize("axis", ["01", "20"])
+def test_rhat_nested_axes(axis, data_c0d1, data_c2d0):
+    if axis == "01":
         rhat = array_stats.rhat_nested(data_c0d1, (0, 0, 1, 1), chain_axis=0, draw_axis=1)
     else:
         rhat = array_stats.rhat_nested(data_c2d0, (0, 0, 1, 1), chain_axis=2, draw_axis=0)
@@ -152,9 +152,9 @@ def test_rhat_nested_methods(method, data_c0d1):
     assert np.all(rhat < 1.05)
 
 
-@pytest.mark.parametrize("axes", ["01", "20"])
-def test_mcse_axes(axes, data_c0d1, data_c2d0):
-    if axes == "01":
+@pytest.mark.parametrize("axis", ["01", "20"])
+def test_mcse_axes(axis, data_c0d1, data_c2d0):
+    if axis == "01":
         mcse = array_stats.mcse(data_c0d1, chain_axis=0, draw_axis=1)
     else:
         mcse = array_stats.mcse(data_c2d0, chain_axis=2, draw_axis=0)
@@ -179,9 +179,9 @@ def test_mcse_no_chain(data_c0d1):
     assert np.all(mcse < 0.09)
 
 
-@pytest.mark.parametrize("axes", ["01", "20"])
-def test_pareto_min_ss_axes(axes, data_c0d1, data_c2d0):
-    if axes == "01":
+@pytest.mark.parametrize("axis", ["01", "20"])
+def test_pareto_min_ss_axes(axis, data_c0d1, data_c2d0):
+    if axis == "01":
         pareto_min_ss = array_stats.pareto_min_ss(data_c0d1, chain_axis=0, draw_axis=1)
     else:
         pareto_min_ss = array_stats.pareto_min_ss(data_c2d0, chain_axis=2, draw_axis=0)

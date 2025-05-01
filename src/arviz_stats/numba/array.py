@@ -46,11 +46,12 @@ class NumbaArray(BaseArray):
     """Class with numba accelerated/guvectorized functions that take array inputs."""
 
     def __init__(self):
+        """Initialize class to reimplement bottleneck methods with numba."""
         super().__init__()
         self._kde_ufunc = None
         self._hist_ufunc = None
 
-    def quantile(self, ary, quantile, method="linear", **kwargs):
+    def quantile(self, ary, quantile, axis=-1, method="linear", skipna=False, weights=None):
         """Compute the quantile.
 
         Notes
@@ -59,17 +60,18 @@ class NumbaArray(BaseArray):
         Otherwise, numba is used to jit compile the quantile function and ensure it is
         a ufunc.
         """
-        if method != "linear":
-            return super().quantile(ary, quantile, method=method, **kwargs)
+        if method != "linear" or weights is not None:
+            return super().quantile(ary, quantile, method=method, skipna=skipna, weights=weights)
 
-        axes = kwargs.pop("axis", None)
+        axes = axis
         if axes is not None:
             ary, axes = process_ary_axes(ary, axes)
-            kwargs["axes"] = [(-1,), (0,), (0,)]
+            axes = [(-1,), (0,), (0,)]
         else:
             ary = ary.ravel()
 
-        result = _quantile_ufunc(ary, quantile, **kwargs)
+        # pylint: disable=no-value-for-parameter, unexpected-keyword-arg
+        result = _quantile_ufunc(ary, quantile, axes=axes)
         if np.ndim(quantile) == 0:
             return result
         return np.moveaxis(result, 0, -1)

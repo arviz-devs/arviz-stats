@@ -49,7 +49,7 @@ class BaseDataArray:
             input_core_dims=[dims, []],
             output_core_dims=[[mode_dim, "hdi"] if method.startswith("multimodal") else ["hdi"]],
             kwargs={
-                "axes": np.arange(-len(dims), 0, 1),
+                "axis": np.arange(-len(dims), 0, 1),
                 "method": method,
                 **kwargs,
             },
@@ -311,7 +311,7 @@ class BaseDataArray:
             r_eff,
             input_core_dims=[dims, []],
             output_core_dims=[dims, []],
-            kwargs={"axes": np.arange(-len(dims), 0, 1)},
+            kwargs={"axis": np.arange(-len(dims), 0, 1)},
         )
 
     def power_scale_lw(self, da, alpha=0, dims=None):
@@ -323,7 +323,7 @@ class BaseDataArray:
             alpha,
             input_core_dims=[dims, []],
             output_core_dims=[dims],
-            kwargs={"axes": np.arange(-len(dims), 0, 1)},
+            kwargs={"axis": np.arange(-len(dims), 0, 1)},
         )
 
     def power_scale_sense(self, da, lower_w, upper_w, lower_alpha, upper_alpha, dims=None):
