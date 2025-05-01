@@ -20,7 +20,9 @@ from arviz_stats.helper_loo import (
     _get_r_eff,
     _plpd_approx,
     _prepare_loo_inputs,
-    _select_observation_subsample,
+    _prepare_subsample,
+    _select_obs_by_coords,
+    _select_obs_by_indices,
     _srs_estimator,
     _warn_pareto_k,
     _warn_pointwise_loo,
@@ -103,29 +105,23 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    (
-        log_likelihood_ds,
-        var_name,
-        sample_dims,
-        _,
-        n_samples,
-        n_data_points,
-    ) = _prepare_loo_inputs(data, var_name)
-
+    loo_inputs = _prepare_loo_inputs(data, var_name)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     if reff is None:
-        reff = _get_r_eff(data, n_samples)
+        reff = _get_r_eff(data, loo_inputs.n_samples)
 
-    log_weights, pareto_k = log_likelihood_ds.azstats.psislw(r_eff=reff, dims=sample_dims)
+    log_weights, pareto_k = loo_inputs.log_likelihood_ds.azstats.psislw(
+        r_eff=reff, dims=loo_inputs.sample_dims
+    )
 
     return _compute_loo_results(
-        log_likelihood=log_likelihood_ds,
-        var_name=var_name,
+        log_likelihood=loo_inputs.log_likelihood_ds,
+        var_name=loo_inputs.var_name,
         pointwise=pointwise,
-        sample_dims=sample_dims,
-        n_samples=n_samples,
-        n_data_points=n_data_points,
+        sample_dims=loo_inputs.sample_dims,
+        n_samples=loo_inputs.n_samples,
+        n_data_points=loo_inputs.n_data_points,
         log_weights=log_weights,
         pareto_k=pareto_k,
         approx_posterior=False,
@@ -579,43 +575,45 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
         https://proceedings.mlr.press/v97/magnusson19a.html
         arXiv preprint https://arxiv.org/abs/1904.10679
     """
-    (
-        log_likelihood_ds,
-        var_name,
-        sample_dims,
-        _,
-        n_samples,
-        n_data_points,
-    ) = _prepare_loo_inputs(data, var_name)
-
+    loo_inputs = _prepare_loo_inputs(data, var_name)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
-    log_likelihood_da = log_likelihood_ds[var_name]
-    log_p = _check_log_density(log_p, "log_p", log_likelihood_da, n_samples, sample_dims)
-    log_q = _check_log_density(log_q, "log_q", log_likelihood_da, n_samples, sample_dims)
+    log_likelihood_da = loo_inputs.log_likelihood_ds[loo_inputs.var_name]
+    log_p = _check_log_density(
+        log_p, "log_p", log_likelihood_da, loo_inputs.n_samples, loo_inputs.sample_dims
+    )
+    log_q = _check_log_density(
+        log_q, "log_q", log_likelihood_da, loo_inputs.n_samples, loo_inputs.sample_dims
+    )
 
     approx_correction = log_p - log_q
 
     # Handle underflow/overflow
     approx_correction = approx_correction - approx_correction.max()
 
-    corrected_log_ratios = -log_likelihood_ds.copy()
-    corrected_log_ratios[var_name] = corrected_log_ratios[var_name] + approx_correction
+    corrected_log_ratios = -loo_inputs.log_likelihood_ds.copy()
+    corrected_log_ratios[loo_inputs.var_name] = (
+        corrected_log_ratios[loo_inputs.var_name] + approx_correction
+    )
 
     # Handle underflow/overflow
-    log_ratio_max = corrected_log_ratios[var_name].max(dim=sample_dims)
-    corrected_log_ratios[var_name] = corrected_log_ratios[var_name] - log_ratio_max
+    log_ratio_max = corrected_log_ratios[loo_inputs.var_name].max(dim=loo_inputs.sample_dims)
+    corrected_log_ratios[loo_inputs.var_name] = (
+        corrected_log_ratios[loo_inputs.var_name] - log_ratio_max
+    )
 
     # ignore r_eff here, set to r_eff=1.0
-    log_weights, pareto_k = corrected_log_ratios.azstats.psislw(r_eff=1.0, dims=sample_dims)
+    log_weights, pareto_k = corrected_log_ratios.azstats.psislw(
+        r_eff=1.0, dims=loo_inputs.sample_dims
+    )
 
     return _compute_loo_results(
-        log_likelihood=log_likelihood_ds,
-        var_name=var_name,
+        log_likelihood=loo_inputs.log_likelihood_ds,
+        var_name=loo_inputs.var_name,
         pointwise=pointwise,
-        sample_dims=sample_dims,
-        n_samples=n_samples,
-        n_data_points=n_data_points,
+        sample_dims=loo_inputs.sample_dims,
+        n_samples=loo_inputs.n_samples,
+        n_data_points=loo_inputs.n_data_points,
         log_weights=log_weights,
         pareto_k=pareto_k,
         approx_posterior=True,
@@ -678,7 +676,7 @@ def loo_subsample(
         - 'plpd': Use Point Log Predictive Density approximation which requires a log_lik_fn
     log_lik_fn: callable, optional
         Required when method='plpd'. A user-provided function that computes the
-        log likelihood for each data point using parameter means.
+        log likelihood for each data point using posterior means.
     param_names: list, optional
         Only used when method='plpd'. List of parameter names to extract from
         the posterior. If None, all parameters are used.
@@ -752,15 +750,7 @@ def loo_subsample(
         https://proceedings.mlr.press/v97/magnusson19a.html
         arXiv preprint https://arxiv.org/abs/1904.10679
     """
-    (
-        log_likelihood_ds,
-        var_name,
-        sample_dims,
-        obs_dims,
-        n_samples,
-        n_data_points,
-    ) = _prepare_loo_inputs(data, var_name)
-
+    loo_inputs = _prepare_loo_inputs(data, var_name)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     if method not in ["lpd", "plpd"]:
@@ -768,70 +758,69 @@ def loo_subsample(
     if method == "plpd" and log_lik_fn is None:
         raise ValueError("log_lik_fn must be provided when method='plpd'")
 
-    log_likelihood_da = log_likelihood_ds[var_name]
+    log_likelihood_da = loo_inputs.log_likelihood_ds[loo_inputs.var_name]
     if reff is None:
-        reff = _get_r_eff(data, n_samples)
+        reff = _get_r_eff(data, loo_inputs.n_samples)
 
-    indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
+    subsample_data = _prepare_subsample(
+        data,
+        log_likelihood_da,
+        loo_inputs.var_name,
+        observations,
+        seed,
+        method,
+        log_lik_fn,
+        param_names,
+        log,
+        loo_inputs.obs_dims,
+        loo_inputs.sample_dims,
+        loo_inputs.n_data_points,
+        loo_inputs.n_samples,
+    )
 
-    if method == "lpd":
-        lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples)
-    else:  # method == "plpd"
-        lpd_approx_all = _plpd_approx(
-            data=data, var_name=var_name, log_lik_fn=log_lik_fn, param_names=param_names, log=log
-        )
-
-    if len(obs_dims) > 1:
-        log_likelihood_stacked = log_likelihood_da.stack({"__obs__": obs_dims})
-        lpd_approx_all_stacked = lpd_approx_all.stack({"__obs__": obs_dims})
-
-        log_likelihood_sample = _select_observation_subsample(
-            log_likelihood_stacked, indices, ["__obs__"]
-        )
-        lpd_approx_sample = _select_observation_subsample(
-            lpd_approx_all_stacked, indices, ["__obs__"]
-        )
-    else:
-        log_likelihood_sample = _select_observation_subsample(log_likelihood_da, indices, obs_dims)
-        lpd_approx_sample = _select_observation_subsample(lpd_approx_all, indices, obs_dims)
-
-    sample_ds = xr.Dataset({var_name: log_likelihood_sample})
+    sample_ds = xr.Dataset({loo_inputs.var_name: subsample_data.log_likelihood_sample})
 
     if log_p is not None and log_q is not None:
         sample_data = xr.DataTree()
         sample_data["log_likelihood"] = sample_ds
 
         loo_approx = loo_approximate_posterior(
-            data=sample_data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
+            sample_data,
+            log_p,
+            log_q,
+            True,
+            loo_inputs.var_name,
         )
         elpd_loo_i = loo_approx.elpd_i
         pareto_k_sample_da = loo_approx.pareto_k
         approx_posterior = True
     else:
-        log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(r_eff=reff, dims=sample_dims)
+        log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(
+            r_eff=reff, dims=loo_inputs.sample_dims
+        )
         log_weights_ds += sample_ds
 
-        elpd_loo_i = logsumexp(log_weights_ds, dims=sample_dims)[var_name]
-        pareto_k_sample_da = pareto_k_ds[var_name]
+        elpd_loo_i = logsumexp(log_weights_ds, dims=loo_inputs.sample_dims)[loo_inputs.var_name]
+        pareto_k_sample_da = pareto_k_ds[loo_inputs.var_name]
         approx_posterior = False
 
-    warn_mg, good_k = _warn_pareto_k(pareto_k_sample_da, n_samples)
+    warn_mg, good_k = _warn_pareto_k(pareto_k_sample_da, loo_inputs.n_samples)
 
     elpd_loo_hat, subsampling_se, se = _diff_srs_estimator(
-        elpd_loo_i_sample=elpd_loo_i,
-        lpd_approx_sample=lpd_approx_sample,
-        lpd_approx_all=lpd_approx_all,
-        n_data_points=n_data_points,
-        subsample_size=subsample_size,
+        elpd_loo_i,
+        subsample_data.lpd_approx_sample,
+        subsample_data.lpd_approx_all,
+        loo_inputs.n_data_points,
+        subsample_data.subsample_size,
     )
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
     # from the subsample
-    p_loo_sample = lpd_approx_sample - elpd_loo_i
+    p_loo_sample = subsample_data.lpd_approx_sample - elpd_loo_i
     p_loo, _, _ = _srs_estimator(
-        y_sample=p_loo_sample,
-        n_data_points=n_data_points,
-        subsample_size=subsample_size,
+        p_loo_sample,
+        loo_inputs.n_data_points,
+        subsample_data.subsample_size,
     )
 
     if not pointwise:
@@ -840,8 +829,8 @@ def loo_subsample(
             elpd_loo_hat,
             se,
             p_loo,
-            n_samples,
-            n_data_points,
+            loo_inputs.n_samples,
+            loo_inputs.n_data_points,
             "log",
             warn_mg,
             good_k,
@@ -849,28 +838,31 @@ def loo_subsample(
             None,
             approx_posterior,
             subsampling_se,
-            subsample_size,
+            subsample_data.subsample_size,
             log_p=log_p,
             log_q=log_q,
         )
 
     elpd_i_full, pareto_k_full = (
-        xr.full_like(lpd_approx_all, fill_value=np.nan, dtype=np.float64).rename("elpd_i"),
-        xr.full_like(lpd_approx_all, fill_value=np.nan, dtype=np.float64).rename("pareto_k"),
+        xr.full_like(subsample_data.lpd_approx_all, fill_value=np.nan, dtype=np.float64).rename(
+            "elpd_i"
+        ),
+        xr.full_like(subsample_data.lpd_approx_all, fill_value=np.nan, dtype=np.float64).rename(
+            "pareto_k"
+        ),
     )
 
     elpd_i_full.loc[elpd_loo_i.coords] = elpd_loo_i
     pareto_k_full.loc[pareto_k_sample_da.coords] = pareto_k_sample_da
 
     _warn_pointwise_loo(elpd_loo_hat, elpd_i_full.values)
-
     return ELPDData(
         "loo",
         elpd_loo_hat,
         se,
         p_loo,
-        n_samples,
-        n_data_points,
+        loo_inputs.n_samples,
+        loo_inputs.n_data_points,
         "log",
         warn_mg,
         good_k,
@@ -878,7 +870,7 @@ def loo_subsample(
         pareto_k_full,
         approx_posterior,
         subsampling_se,
-        subsample_size,
+        subsample_data.subsample_size,
         log_p,
         log_q,
     )
@@ -900,7 +892,7 @@ def update_subsample(
 
     Extends a sub-sampled PSIS-LOO-CV result by adding new observations to the sub-sample
     without recomputing values for previously sampled observations. This allows for
-    incrementally improving the subsampled PSIS-LOO-CV estimate with additional observations
+    incrementally improving the sub-sampled PSIS-LOO-CV estimate with additional observations
     The sub-sampling method is described in [1]_.
 
     Parameters
@@ -930,8 +922,10 @@ def update_subsample(
         - 'lpd': Use standard log predictive density approximation (default)
         - 'plpd': Use Point Log Predictive Density approximation which requires a log_lik_fn
     log_lik_fn: callable, optional
-        Required when method='plpd'. A user-provided function that computes the
-        log likelihood for each data point using parameter means.
+        A user-provided function that computes the log likelihood. It must accept the
+        observed data as its first argument, followed by the mean values
+        of the posterior parameters specified by `param_names` as subsequent
+        positional arguments.
     param_names: list, optional
         Only used when method='plpd'. List of parameter names to extract from
         the posterior. If None, all parameters are used.
@@ -968,7 +962,7 @@ def update_subsample(
     Calculate initial sub-sampled LOO using 4 observations, then update with 4 more:
 
     .. ipython::
-        :okwarning:
+        :okexcept:
 
         In [1]: from arviz_stats import loo_subsample, update_subsample
            ...: from arviz_base import load_arviz_data
@@ -1001,26 +995,19 @@ def update_subsample(
     if method == "plpd" and log_lik_fn is None:
         raise ValueError("log_lik_fn must be provided when method='plpd'")
 
-    (
-        log_likelihood_ds,
-        var_name,
-        sample_dims,
-        obs_dims,
-        n_samples,
-        n_data_points,
-    ) = _prepare_loo_inputs(data, var_name)
+    loo_inputs = _prepare_loo_inputs(data, var_name)
 
     if reff is None:
-        reff = _get_r_eff(data, n_samples)
+        reff = _get_r_eff(data, loo_inputs.n_samples)
 
     old_elpd_i_da, old_pareto_k_da = _extract_loo_data(loo_orig)
-    log_likelihood_da = log_likelihood_ds[var_name]
+    log_likelihood_da = loo_inputs.log_likelihood_ds[loo_inputs.var_name]
     concat_dim = old_elpd_i_da.dims[0]
 
     old_indices = np.where(~np.isnan(loo_orig.elpd_i.values.flatten()))[0]
     if isinstance(observations, int):
         # Need to filter out existing indices before generating new ones
-        available_indices = np.setdiff1d(np.arange(n_data_points), old_indices)
+        available_indices = np.setdiff1d(np.arange(loo_inputs.n_data_points), old_indices)
         if observations > len(available_indices):
             raise ValueError(
                 f"Cannot add {observations} observations when only {len(available_indices)} "
@@ -1030,7 +1017,7 @@ def update_subsample(
         new_indices = available_indices[temp_indices]
     else:
         new_indices = np.asarray(observations, dtype=int)
-        if np.any(new_indices < 0) or np.any(new_indices >= n_data_points):
+        if np.any(new_indices < 0) or np.any(new_indices >= loo_inputs.n_data_points):
             raise ValueError("New indices contain out-of-bounds values.")
         # Check for overlap with old indices
         overlap = np.intersect1d(new_indices, old_indices)
@@ -1038,34 +1025,32 @@ def update_subsample(
             raise ValueError(f"New indices {overlap} overlap with existing indices.")
 
     if method == "lpd":
-        lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples)
+        lpd_approx_all = logsumexp(
+            log_likelihood_da, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
+        )
     else:  # method == "plpd"
         lpd_approx_all = _plpd_approx(
-            data=data, var_name=var_name, log_lik_fn=log_lik_fn, param_names=param_names, log=log
+            data,
+            loo_inputs.var_name,
+            log_lik_fn,
+            param_names,
+            log,
         )
 
-    if len(obs_dims) > 1:
-        stacked_obs_dim = "__obs__"
-        log_likelihood_stacked = log_likelihood_da.stack({stacked_obs_dim: obs_dims})
-
-        log_likelihood_new_da = _select_observation_subsample(
-            log_likelihood_stacked, new_indices, [stacked_obs_dim]
-        )
-    else:
-        log_likelihood_new_da = _select_observation_subsample(
-            log_likelihood_da, new_indices, obs_dims
-        )
+    log_likelihood_new_da = _select_obs_by_indices(
+        log_likelihood_da, new_indices, loo_inputs.obs_dims, "__obs__"
+    )
 
     # Get log densities from original ELPD data if they exist
     log_p = getattr(loo_orig, "log_p", None)
     log_q = getattr(loo_orig, "log_q", None)
 
-    log_likelihood_new_ds = xr.Dataset({var_name: log_likelihood_new_da})
+    log_likelihood_new_ds = xr.Dataset({loo_inputs.var_name: log_likelihood_new_da})
     elpd_loo_i_new_da, pareto_k_new_da, approx_posterior = _compute_loo_results(
         log_likelihood=log_likelihood_new_ds,
-        var_name=var_name,
-        sample_dims=sample_dims,
-        n_samples=n_samples,
+        var_name=loo_inputs.var_name,
+        sample_dims=loo_inputs.sample_dims,
+        n_samples=loo_inputs.n_samples,
         n_data_points=len(new_indices),
         reff=reff,
         log_p=log_p,
@@ -1078,32 +1063,27 @@ def update_subsample(
     combined_size = combined_elpd_i_da[concat_dim].size
 
     good_k = loo_orig.good_k
-    warn_mg, _ = _warn_pareto_k(combined_pareto_k_da, n_samples)
+    warn_mg, _ = _warn_pareto_k(combined_pareto_k_da, loo_inputs.n_samples)
 
-    if len(obs_dims) > 1:
-        stacked_obs_dim = "__obs__"
-        lpd_approx_all_stacked = lpd_approx_all.stack({stacked_obs_dim: obs_dims})
-        lpd_approx_sample_da = lpd_approx_all_stacked.isel(
-            {stacked_obs_dim: combined_elpd_i_da[stacked_obs_dim]}
-        )
-    else:
-        lpd_approx_sample_da = lpd_approx_all.sel({obs_dims[0]: combined_elpd_i_da[obs_dims[0]]})
+    lpd_approx_sample_da = _select_obs_by_coords(
+        lpd_approx_all, combined_elpd_i_da, loo_inputs.obs_dims, "__obs__"
+    )
 
     elpd_loo_hat, subsampling_se, se = _diff_srs_estimator(
-        elpd_loo_i_sample=combined_elpd_i_da,
-        lpd_approx_sample=lpd_approx_sample_da,
-        lpd_approx_all=lpd_approx_all,
-        n_data_points=n_data_points,
-        subsample_size=combined_size,
+        combined_elpd_i_da,
+        lpd_approx_sample_da,
+        lpd_approx_all,
+        loo_inputs.n_data_points,
+        combined_size,
     )
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
     # from the subsample
     p_loo_sample = lpd_approx_sample_da - combined_elpd_i_da
     p_loo, _, _ = _srs_estimator(
-        y_sample=p_loo_sample,
-        n_data_points=n_data_points,
-        subsample_size=combined_size,
+        p_loo_sample,
+        loo_inputs.n_data_points,
+        combined_size,
     )
 
     elpd_i_full, pareto_k_full = (
@@ -1115,14 +1095,13 @@ def update_subsample(
     pareto_k_full.loc[combined_pareto_k_da.coords] = combined_pareto_k_da
 
     _warn_pointwise_loo(elpd_loo_hat, elpd_i_full.values)
-
     return ELPDData(
         "loo",
         elpd_loo_hat,
         se,
         p_loo,
-        n_samples,
-        n_data_points,
+        loo_inputs.n_samples,
+        loo_inputs.n_data_points,
         "log",
         warn_mg,
         good_k,

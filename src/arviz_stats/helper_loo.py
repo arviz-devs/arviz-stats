@@ -1,10 +1,12 @@
 """Helper functions for PSIS-LOO-CV."""
 
 import warnings
+from collections import namedtuple
 
 import numpy as np
 import xarray as xr
 from arviz_base import convert_to_datatree, extract
+from xarray_einstats.stats import logsumexp
 
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -19,8 +21,20 @@ __all__ = [
     "_warn_pareto_k",
     "_warn_pointwise_loo",
     "_plpd_approx",
-    "_select_observation_subsample",
+    "_prepare_subsample",
+    "_select_obs_by_indices",
+    "_select_obs_by_coords",
 ]
+
+
+LooInputs = namedtuple(
+    "LooInputs",
+    ["log_likelihood_ds", "var_name", "sample_dims", "obs_dims", "n_samples", "n_data_points"],
+)
+SubsampleData = namedtuple(
+    "SubsampleData",
+    ["log_likelihood_sample", "lpd_approx_sample", "lpd_approx_all", "indices", "subsample_size"],
+)
 
 
 def _get_r_eff(data, n_samples):
@@ -54,7 +68,7 @@ def _plpd_approx(
         Name of the variable in `observed_data` for which to compute the PLPD approximation.
     log_lik_fn : callable
         A user-provided function that computes the log likelihood. It must accept the
-        observed data as its first argument, followed by the *mean* values
+        observed data as its first argument, followed by the mean values
         of the posterior parameters specified by `param_names` as subsequent
         positional arguments.
     param_names : list[str], optional
@@ -108,7 +122,12 @@ def _plpd_approx(
                 f"at index {idx} (value: {value}): {e}"
             ) from e
 
-    plpd_da = xr.DataArray(plpd_values, dims=observed.dims, coords=observed.coords, name="plpd")
+    plpd_da = xr.DataArray(
+        plpd_values,
+        dims=observed.dims,
+        coords=observed.coords,
+        name="plpd",
+    )
     return plpd_da
 
 
@@ -119,7 +138,7 @@ def _diff_srs_estimator(
     n_data_points,
     subsample_size,
 ):
-    """Calculate the difference estimator for sub-sampling PSIS-LOO-CV.
+    """Calculate the difference estimator PSIS-LOO-CV with sub-sampling.
 
     Parameters
     ----------
@@ -228,7 +247,7 @@ def _srs_estimator(
 
 
 def _generate_subsample_indices(n_data_points, observations, seed):
-    """Generate subsample indices based on input type."""
+    """Generate subsample indices."""
     if isinstance(observations, int):
         if not 1 <= observations <= n_data_points:
             raise ValueError(
@@ -257,7 +276,7 @@ def _generate_subsample_indices(n_data_points, observations, seed):
 
 
 def _prepare_loo_inputs(data, var_name):
-    """Prepare inputs for LOO computation."""
+    """Prepare inputs for PSIS-LOO-CV."""
     data = convert_to_datatree(data)
 
     log_likelihood_ds = get_log_likelihood_dataset(data, var_names=var_name)
@@ -271,11 +290,70 @@ def _prepare_loo_inputs(data, var_name):
     n_data_points = np.prod(
         [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
     )
-    return log_likelihood_ds, var_name, sample_dims, obs_dims, n_samples, n_data_points
+    return LooInputs(
+        log_likelihood_ds=log_likelihood_ds,
+        var_name=var_name,
+        sample_dims=sample_dims,
+        obs_dims=obs_dims,
+        n_samples=n_samples,
+        n_data_points=n_data_points,
+    )
+
+
+def _prepare_subsample(
+    data,
+    log_likelihood_da,
+    var_name,
+    observations,
+    seed,
+    method,
+    log_lik_fn,
+    param_names,
+    log,
+    obs_dims,
+    sample_dims,
+    n_data_points,
+    n_samples,
+):
+    """Prepare inputs for PSIS-LOO-CV with sub-sampling."""
+    indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
+
+    if method == "lpd":
+        lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples)
+    else:  # method == "plpd"
+        lpd_approx_all = _plpd_approx(
+            data=data, var_name=var_name, log_lik_fn=log_lik_fn, param_names=param_names, log=log
+        )
+
+    stacked_obs_dim = "__obs__"
+    if len(obs_dims) > 1:
+        log_likelihood_stacked = log_likelihood_da.stack({stacked_obs_dim: obs_dims})
+        lpd_approx_all_stacked = lpd_approx_all.stack({stacked_obs_dim: obs_dims})
+
+        log_likelihood_sample = _select_obs_by_indices(
+            log_likelihood_stacked, indices, [stacked_obs_dim], stacked_obs_dim
+        )
+        lpd_approx_sample = _select_obs_by_indices(
+            lpd_approx_all_stacked, indices, [stacked_obs_dim], stacked_obs_dim
+        )
+    else:
+        obs_dim_name = obs_dims[0]
+        log_likelihood_sample = _select_obs_by_indices(
+            log_likelihood_da, indices, obs_dims, obs_dim_name
+        )
+        lpd_approx_sample = _select_obs_by_indices(lpd_approx_all, indices, obs_dims, obs_dim_name)
+
+    return SubsampleData(
+        log_likelihood_sample=log_likelihood_sample,
+        lpd_approx_sample=lpd_approx_sample,
+        lpd_approx_all=lpd_approx_all,
+        indices=indices,
+        subsample_size=subsample_size,
+    )
 
 
 def _extract_loo_data(loo_orig):
-    """Extract pointwise DataArrays from original LOO object."""
+    """Extract pointwise DataArrays from original PSIS-LOO-CV object."""
     elpd_values = loo_orig.elpd_i
     pareto_values = loo_orig.pareto_k
 
@@ -313,21 +391,29 @@ def _extract_loo_data(loo_orig):
     return extracted_elpd, extracted_pareto
 
 
-def _select_observation_subsample(data_array, indices, obs_dims, dim_name="__obs__"):
-    """Select a subsample from a data array based on indices along observation dimensions."""
-    if len(obs_dims) > 1:
-        stacked_data = data_array.stack({dim_name: obs_dims})
+def _select_obs_by_indices(data_array, indices, dims, dim_name):
+    """Select a sub-sample from a DataArray based on indices."""
+    if len(dims) > 1:
+        stacked_data = data_array.stack({dim_name: dims})
         coord = stacked_data[dim_name]
     else:
         stacked_data = data_array
-        coord = stacked_data[obs_dims[0]]
+        coord = stacked_data[dims[0]]
 
     valid_indices_mask = (indices >= 0) & (indices < coord.size)
     valid_indices = indices[valid_indices_mask]
     subsample_coord_values = coord.values[valid_indices]
 
-    dim = dim_name if len(obs_dims) > 1 else obs_dims[0]
+    dim = dim_name if len(dims) > 1 else dims[0]
     return stacked_data.sel({dim: subsample_coord_values})
+
+
+def _select_obs_by_coords(data_array, coord_array, dims, dim_name):
+    """Select a sub-sample from a DataArray based on coordinate values."""
+    if len(dims) > 1:
+        stacked_data = data_array.stack({dim_name: dims})
+        return stacked_data.sel({dim_name: coord_array[dim_name]})
+    return data_array.sel({dims[0]: coord_array[dims[0]]})
 
 
 def _warn_pareto_k(pareto_k_values, n_samples):
