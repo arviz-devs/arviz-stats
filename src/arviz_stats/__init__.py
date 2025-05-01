@@ -13,6 +13,7 @@ try:
         compare,
     )
     from arviz_stats.psense import psense, psense_summary
+    from arviz_stats.regression import R2
     from arviz_stats.sampling_diagnostics import ess, mcse, rhat, rhat_nested
     from arviz_stats.summary import summary
     from arviz_stats.manipulation import thin
