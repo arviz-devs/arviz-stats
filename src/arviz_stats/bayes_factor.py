@@ -2,31 +2,26 @@
 
 import warnings
 
-import numpy as np
 
-
-def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
+def bayes_factor(idata, var_names, ref_vals=0, return_ref_vals=False, prior=None):
     """
-    Compute Bayes factor using Savage–Dickey ratio.
-
-    We can apply this method when the null (`ref_val`) is a particular valueof the model
-    we are building. See [1]_ for details.
+    Compute Bayes factor(s) using Savage–Dickey ratio for one or more variables.
 
     Parameters
     ----------
     idata : InferenceData
         Object containing posterior and prior data.
-    var_name : str
-        Name of the variable to test.
-    ref_val : int or float, default 0
-        Reference (point-null) value for Bayes factor estimation.
+    var_names : str or list of str
+        Name(s) of the variable(s) to test.
+    ref_vals : float or list of float, default 0
+        Reference value(s) for each variable. Must match var_names in length if list.
     return_ref_vals : bool, default False
-        If True, also return the values of prior and posterior densities at the reference value.
+        If True, also return the values of prior and posterior densities at the reference value(s).
 
     Returns
     -------
     dict
-        A dictionary with Bayes Factor values: BF10 (H1/H0 ratio) and BF01 (H0/H1 ratio).
+        Dictionary with Bayes Factor values: BF10 and BF01 per variable.
 
     References
     ----------
@@ -35,48 +30,76 @@ def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
 
     Examples
     --------
-    Moderate evidence indicating that the parameter "a" is different from zero.
+    Moderate evidence indicating that the parameter "a" is different from zero,
+    and the parameter "b" is different from 1.
 
     .. ipython::
 
         In [1]: import numpy as np
            ...: from arviz_base import from_dict
            ...: import arviz_stats as azs
-           ...: dt = from_dict({"posterior":{"a":np.random.normal(1, 0.5, (2, 1000))},
-           ...:                    "prior":{"a":np.random.normal(0, 1, (2, 1000))}})
-           ...: azs.bayes_factor(dt, var_name="a", ref_val=0)
+           ...: dt = from_dict({
+           ...:     "posterior": {
+           ...:         "a": np.random.normal(1, 0.5, (2, 1000)),
+           ...:         "b": np.random.normal(2, 0.5, (2, 1000))
+           ...:     },
+           ...:     "prior": {
+           ...:         "a": np.random.normal(0, 1, (2, 1000)),
+           ...:         "b": np.random.normal(1, 1, (2, 1000))
+           ...: }})
+           ...: ref_vals = [0, 1]
+           ...: result = azs.bayes_factor(dt, var_names=["a", "b"], ref_vals=ref_vals)
+           ...: result
+
     """
-    posterior = idata.posterior[var_name]
-    prior = idata.prior[var_name]
+    if isinstance(var_names, str):
+        var_names = [var_names]
 
-    if not isinstance(ref_val, int | float):
-        raise ValueError("The reference value (ref_val) must be a numerical value (int or float).")
+    if isinstance(ref_vals, int | float):
+        ref_vals = [ref_vals] * len(var_names)
 
-    if ref_val > posterior.max() or ref_val < posterior.min():
-        warnings.warn(
-            "The reference value is outside the posterior range. "
-            "This results in infinite support for H1, which may overstate evidence."
-        )
+    if len(var_names) != len(ref_vals):
+        raise ValueError("Length of var_names and ref_vals must match.")
 
-    prior_at_ref_val = 0
-    posterior_at_ref_val = 0
+    results = {}
+    ref_density_vals = {}
 
-    if posterior.dtype.kind == "f":
-        posterior_grid, posterior_pdf = posterior.azstats.kde(
-            grid_len=512, circular=False, return_grid=True
-        )
-        prior_grid, prior_pdf = prior.azstats.kde(grid_len=512, circular=False, return_grid=True)
+    for var, ref_val in zip(var_names, ref_vals):
+        posterior = idata.posterior[var]
+        prior = idata.prior[var]
 
-        posterior_at_ref_val = np.interp(ref_val, posterior_grid, posterior_pdf)
-        prior_at_ref_val = np.interp(ref_val, prior_grid, prior_pdf)
+        if not isinstance(ref_val, int | float):
+            raise ValueError(f"Reference value for variable '{var}' must be numerical")
 
-    elif posterior.dtype.kind == "i":
-        posterior_at_ref_val = (posterior == ref_val).mean()
-        prior_at_ref_val = (prior == ref_val).mean()
+        if ref_val > posterior.max() or ref_val < posterior.min():
+            warnings.warn(
+                f"Reference value {ref_val} for '{var}' is outside the posterior range. "
+                "This may overstate evidence in favor of H1."
+            )
 
-    bf_10 = prior_at_ref_val / posterior_at_ref_val
-    bf = {"BF10": bf_10, "BF01": 1 / bf_10}
+        posterior_kde = posterior.azstats.kde(grid_len=512, circular=False)
+        prior_kde = prior.azstats.kde(grid_len=512, circular=False)
+
+        posterior_at_ref = posterior_kde.interp(kde_dim=ref_val)
+        prior_at_ref = prior_kde.interp(kde_dim=ref_val)
+
+        prior_val = float(prior_at_ref.sel(plot_axis="y"))
+        posterior_val = float(posterior_at_ref.sel(plot_axis="y"))
+
+        if prior_val <= 0 or posterior_val <= 0:
+            raise ValueError(
+                f"Invalid KDE values at ref_val={ref_val}: "
+                f"prior={prior_val}, posterior={posterior_val}"
+            )
+
+        bf_10 = prior_val / posterior_val
+        bf_01 = 1 / bf_10
+        results[var] = {"BF10": bf_10, "BF01": bf_01}
+
+        if return_ref_vals:
+            ref_density_vals[var] = {"prior": prior_val, "posterior": posterior_val}
 
     if return_ref_vals:
-        return (bf, {"prior": prior_at_ref_val, "posterior": posterior_at_ref_val})
-    return bf
+        return results, ref_density_vals
+
+    return results
