@@ -1,3 +1,4 @@
+(architecture)=
 # Architecture
 Currently `arviz_stats` has some top level general functionality, and then submodules
 that take care of the actual computations. Submodules can be completely independent or

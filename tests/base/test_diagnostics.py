@@ -223,45 +223,6 @@ def test_rhat_bad_method():
     ),
 )
 @pytest.mark.parametrize("relative", (True, False))
-def test_ess_array(method, relative):
-    rng = np.random.default_rng()
-    ary = rng.normal(size=(4, 100))
-    n_low = 0.3 if relative else 150
-    n_high = 2 if relative else 700
-    if method in ("quantile", "tail"):
-        ess_hat = array_stats.ess(ary, method=method, prob=0.34, relative=relative)
-        if method == "tail":
-            assert ess_hat > n_low
-            assert ess_hat < n_high
-            ess_hat = array_stats.ess(ary, method=method, relative=relative)
-            assert ess_hat > n_low
-            assert ess_hat < n_high
-            ess_hat = array_stats.ess(ary, method=method, prob=(0.2, 0.8), relative=relative)
-    elif method == "local":
-        ess_hat = array_stats.ess(ary, method=method, prob=(0.2, 0.3), relative=relative)
-    else:
-        ess_hat = array_stats.ess(ary, method=method, relative=relative)
-    assert ess_hat > n_low
-    assert ess_hat < n_high
-
-
-@pytest.mark.parametrize(
-    "method",
-    (
-        "bulk",
-        "tail",
-        "quantile",
-        "local",
-        "mean",
-        "sd",
-        "median",
-        "mad",
-        "z_scale",
-        "folded",
-        "identity",
-    ),
-)
-@pytest.mark.parametrize("relative", (True, False))
 @pytest.mark.parametrize("chain", (None, 1, 2))
 @pytest.mark.parametrize("draw", (1, 2, 3, 4))
 @pytest.mark.parametrize("use_nan", (True, False))

@@ -177,7 +177,6 @@ refer you to other pages for the full argument or algorithm descriptions.
    arviz_stats.base.array_stats.autocorr
    arviz_stats.base.array_stats.autocov
    arviz_stats.base.array_stats.compute_ranks
-   arviz_stats.base.array_stats.compute_ranks
    arviz_stats.base.array_stats.get_bins
    arviz_stats.base.array_stats.psislw
 ```
