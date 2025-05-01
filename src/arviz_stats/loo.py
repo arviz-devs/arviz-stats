@@ -960,7 +960,7 @@ def update_subsample(
     Calculate initial sub-sampled LOO using 4 observations, then update with 4 more:
 
     .. ipython::
-        :okexcept:
+        :okwarning:
 
         In [1]: from arviz_stats import loo_subsample, update_subsample
            ...: from arviz_base import load_arviz_data
