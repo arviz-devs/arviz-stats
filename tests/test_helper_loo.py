@@ -17,12 +17,14 @@ from arviz_stats.helper_loo import (
     _plpd_approx,
     _prepare_loo_inputs,
     _prepare_subsample,
+    _prepare_update_subsample,
     _select_obs_by_coords,
     _select_obs_by_indices,
     _srs_estimator,
     _warn_pareto_k,
     _warn_pointwise_loo,
 )
+from arviz_stats.loo import loo_subsample
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
@@ -311,14 +313,14 @@ def test_select_obs_by_coords():
     assert_allclose(result.values, np.array([5, 7, 9]))
 
 
-def test_prepare_subsample(centered_eight, log_lik_fn):
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_prepare_subsample(centered_eight, log_lik_fn, method):
     log_likelihood_ds = get_log_likelihood_dataset(centered_eight, var_names="obs")
     log_likelihood_da = log_likelihood_ds["obs"]
 
     var_name = "obs"
     observations = 3
     seed = 42
-    method = "lpd"
     param_names = ["theta"]
     log = True
     obs_dims = ["school"]
@@ -352,23 +354,52 @@ def test_prepare_subsample(centered_eight, log_lik_fn):
     assert result.lpd_approx_sample.sizes["school"] == result.subsample_size
     assert result.lpd_approx_all.shape[0] == n_data_points
 
-    method = "plpd"
-    result_plpd = _prepare_subsample(
-        centered_eight,
-        log_likelihood_da,
-        var_name,
-        observations,
-        seed,
-        method,
-        log_lik_fn,
-        param_names,
-        log,
-        obs_dims,
-        sample_dims,
-        n_data_points,
-        n_samples,
+
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_prepare_update_subsample(centered_eight, log_lik_fn, method):
+    var_name = "obs"
+    seed = 42
+    observations = 2
+    param_names = ["theta"]
+    log = True
+    n_data_points = centered_eight.observed_data[var_name].size
+    initial_observations = n_data_points - observations
+
+    loo_orig_subsample = loo_subsample(
+        data=centered_eight,
+        observations=initial_observations,
+        var_name=var_name,
+        seed=seed - 1,
+        method=method,
+        log_lik_fn=log_lik_fn,
+        param_names=param_names,
+        log=log,
     )
 
-    assert result_plpd.subsample_size == observations
-    assert isinstance(result_plpd.lpd_approx_all, xr.DataArray)
-    assert result_plpd.lpd_approx_all.dims == ("school",)
+    result = _prepare_update_subsample(
+        loo_orig=loo_orig_subsample,
+        data=centered_eight,
+        observations=observations,
+        var_name=var_name,
+        seed=seed,
+        method=method,
+        log_lik_fn=log_lik_fn,
+        param_names=param_names,
+        log=log,
+    )
+
+    old_indices = np.where(~np.isnan(loo_orig_subsample.elpd_i.values.flatten()))[0]
+    expected_combined_size = len(old_indices) + observations
+
+    assert result.combined_size == expected_combined_size
+    assert len(result.new_indices) == observations
+    assert isinstance(result.log_likelihood_new, xr.Dataset)
+    assert isinstance(result.lpd_approx_all, xr.DataArray)
+    assert isinstance(result.old_elpd_i, xr.DataArray)
+    assert isinstance(result.old_pareto_k, xr.DataArray)
+    assert result.concat_dim == "school"
+    assert var_name in result.log_likelihood_new
+    assert result.lpd_approx_all.dims == ("school",)
+    assert result.lpd_approx_all.shape == (n_data_points,)
+    assert not np.any(np.isin(result.new_indices, old_indices))
+    assert len(np.intersect1d(result.new_indices, old_indices)) == 0

@@ -22,6 +22,7 @@ __all__ = [
     "_warn_pointwise_loo",
     "_plpd_approx",
     "_prepare_subsample",
+    "_prepare_update_subsample",
     "_select_obs_by_indices",
     "_select_obs_by_coords",
 ]
@@ -34,6 +35,18 @@ LooInputs = namedtuple(
 SubsampleData = namedtuple(
     "SubsampleData",
     ["log_likelihood_sample", "lpd_approx_sample", "lpd_approx_all", "indices", "subsample_size"],
+)
+UpdateSubsampleData = namedtuple(
+    "UpdateSubsampleData",
+    [
+        "log_likelihood_new",
+        "lpd_approx_all",
+        "old_elpd_i",
+        "old_pareto_k",
+        "new_indices",
+        "concat_dim",
+        "combined_size",
+    ],
 )
 
 
@@ -291,12 +304,12 @@ def _prepare_loo_inputs(data, var_name):
         [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
     )
     return LooInputs(
-        log_likelihood_ds=log_likelihood_ds,
-        var_name=var_name,
-        sample_dims=sample_dims,
-        obs_dims=obs_dims,
-        n_samples=n_samples,
-        n_data_points=n_data_points,
+        log_likelihood_ds,
+        var_name,
+        sample_dims,
+        obs_dims,
+        n_samples,
+        n_data_points,
     )
 
 
@@ -344,11 +357,80 @@ def _prepare_subsample(
         lpd_approx_sample = _select_obs_by_indices(lpd_approx_all, indices, obs_dims, obs_dim_name)
 
     return SubsampleData(
-        log_likelihood_sample=log_likelihood_sample,
-        lpd_approx_sample=lpd_approx_sample,
-        lpd_approx_all=lpd_approx_all,
-        indices=indices,
-        subsample_size=subsample_size,
+        log_likelihood_sample,
+        lpd_approx_sample,
+        lpd_approx_all,
+        indices,
+        subsample_size,
+    )
+
+
+def _prepare_update_subsample(
+    loo_orig,
+    data,
+    observations,
+    var_name,
+    seed,
+    method,
+    log_lik_fn,
+    param_names,
+    log,
+):
+    """Prepare inputs for updating PSIS-LOO-CV with additional observations."""
+    loo_inputs = _prepare_loo_inputs(data, var_name)
+    old_elpd_i_da, old_pareto_k_da = _extract_loo_data(loo_orig)
+
+    log_likelihood_da = loo_inputs.log_likelihood_ds[loo_inputs.var_name]
+    concat_dim = old_elpd_i_da.dims[0]
+    old_indices = np.where(~np.isnan(loo_orig.elpd_i.values.flatten()))[0]
+
+    if isinstance(observations, int):
+        # Filter out existing indices before generating new ones
+        available_indices = np.setdiff1d(np.arange(loo_inputs.n_data_points), old_indices)
+        if observations > len(available_indices):
+            raise ValueError(
+                f"Cannot add {observations} observations when only {len(available_indices)} "
+                "are available."
+            )
+        temp_indices, _ = _generate_subsample_indices(len(available_indices), observations, seed)
+        new_indices = available_indices[temp_indices]
+    else:
+        new_indices = np.asarray(observations, dtype=int)
+        if np.any(new_indices < 0) or np.any(new_indices >= loo_inputs.n_data_points):
+            raise ValueError("New indices contain out-of-bounds values.")
+        # Check for overlap with old indices
+        overlap = np.intersect1d(new_indices, old_indices)
+        if len(overlap) > 0:
+            raise ValueError(f"New indices {overlap} overlap with existing indices.")
+
+    if method == "lpd":
+        lpd_approx_all = logsumexp(
+            log_likelihood_da, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
+        )
+    else:  # method == "plpd"
+        lpd_approx_all = _plpd_approx(
+            data,
+            loo_inputs.var_name,
+            log_lik_fn,
+            param_names,
+            log,
+        )
+
+    log_likelihood_new_da = _select_obs_by_indices(
+        log_likelihood_da, new_indices, loo_inputs.obs_dims, "__obs__"
+    )
+
+    log_likelihood_new_ds = xr.Dataset({loo_inputs.var_name: log_likelihood_new_da})
+    combined_size = len(old_indices) + len(new_indices)
+
+    return UpdateSubsampleData(
+        log_likelihood_new_ds,
+        lpd_approx_all,
+        old_elpd_i_da,
+        old_pareto_k_da,
+        new_indices,
+        concat_dim,
+        combined_size,
     )
 
 
