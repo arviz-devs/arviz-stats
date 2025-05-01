@@ -66,14 +66,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         is_multimodal = method.startswith("multimodal")
         if is_multimodal and circular and is_discrete:
             raise ValueError("Multimodal hdi not supported for discrete circular data.")
+        if is_discrete and method == "multimodal_sample":
+            raise ValueError("Method multimodal_sample not supported for discrete data.")
         hdi_func = {
             "nearest": self._hdi_nearest,
             "multimodal": (
                 self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
             ),
-            "multimodal_sample": (
-                self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
-            ),
+            "multimodal_sample": self._hdi_multimodal_continuous,
         }[method]
         hdi_array = make_ufunc(
             hdi_func,
