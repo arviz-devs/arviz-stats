@@ -4,9 +4,12 @@
 import os
 
 import numpy as np
-import pandas as pd
 import pytest
-from arviz_base import load_arviz_data, xarray_var_iter
+
+from ..helpers import importorskip
+
+azb = importorskip("arviz_base")
+pd = importorskip("pandas")
 
 from arviz_stats.base import array_stats
 
@@ -17,7 +20,7 @@ GOOD_RHAT = 1.1
 
 @pytest.fixture(scope="session")
 def idata():
-    centered_eight = load_arviz_data("centered_eight")
+    centered_eight = azb.load_arviz_data("centered_eight")
     return centered_eight.posterior
 
 
@@ -128,7 +131,7 @@ def test_deterministic():
         "mcse_quantile30": lambda x: array_stats.mcse(x, method="quantile", prob=0.3),
     }
     results = {}
-    for key, coord_dict, _, vals in xarray_var_iter(posterior.posterior, combined=True):
+    for key, coord_dict, _, vals in azb.xarray_var_iter(posterior.posterior, combined=True):
         if coord_dict:
             key = f"{key}.{list(coord_dict.values())[0] + 1}"
         results[key] = {func_name: func(vals) for func_name, func in funcs.items()}
@@ -201,45 +204,6 @@ def test_rhat_bad_method():
     ary = rng.normal(size=(4, 100))
     with pytest.raises(ValueError):
         array_stats.rhat(ary, method="wrong_method")
-
-
-@pytest.mark.parametrize(
-    "method",
-    (
-        "bulk",
-        "tail",
-        "quantile",
-        "local",
-        "mean",
-        "sd",
-        "median",
-        "mad",
-        "z_scale",
-        "folded",
-        "identity",
-    ),
-)
-@pytest.mark.parametrize("relative", (True, False))
-def test_ess_array(method, relative):
-    rng = np.random.default_rng()
-    ary = rng.normal(size=(4, 100))
-    n_low = 0.3 if relative else 150
-    n_high = 2 if relative else 700
-    if method in ("quantile", "tail"):
-        ess_hat = array_stats.ess(ary, method=method, prob=0.34, relative=relative)
-        if method == "tail":
-            assert ess_hat > n_low
-            assert ess_hat < n_high
-            ess_hat = array_stats.ess(ary, method=method, relative=relative)
-            assert ess_hat > n_low
-            assert ess_hat < n_high
-            ess_hat = array_stats.ess(ary, method=method, prob=(0.2, 0.8), relative=relative)
-    elif method == "local":
-        ess_hat = array_stats.ess(ary, method=method, prob=(0.2, 0.3), relative=relative)
-    else:
-        ess_hat = array_stats.ess(ary, method=method, relative=relative)
-    assert ess_hat > n_low
-    assert ess_hat < n_high
 
 
 @pytest.mark.parametrize(

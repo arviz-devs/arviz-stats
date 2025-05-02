@@ -193,14 +193,12 @@ class _DiagnosticsBase(_CoreBase):
         ess_bulk = self._ess(z_scaled, relative=relative)
         return ess_bulk
 
-    def _ess_tail(self, ary, prob=None, relative=False):
+    def _ess_tail(self, ary, prob, relative=False):
         """Compute the effective sample size for the tail.
 
         If `prob` defined, ess = min(qess(prob), qess(1-prob))
         """
-        if prob is None:
-            prob = (0.05, 0.95)
-        elif not isinstance(prob, Sequence):
+        if not isinstance(prob, Sequence):
             prob = sorted((prob, 1 - prob))
 
         ary = np.asarray(ary)
@@ -234,7 +232,7 @@ class _DiagnosticsBase(_CoreBase):
             return np.nan
         if prob is None:
             raise TypeError("Prob not defined.")
-        quantile = self.quantile(ary, prob)
+        quantile = self.quantile(ary, prob, axis=None)
         iquantile = ary <= quantile
         return self._ess(self._split_chains(iquantile), relative=relative)
 
@@ -247,7 +245,7 @@ class _DiagnosticsBase(_CoreBase):
             raise TypeError("Prob not defined.")
         if len(prob) != 2:
             raise ValueError("Prob argument in ess local must be upper and lower bound")
-        quantile = self.quantile(ary, prob)
+        quantile = self.quantile(ary, prob, axis=None)
         iquantile = (quantile[0] <= ary) & (ary <= quantile[1])
         return self._ess(self._split_chains(iquantile), relative=relative)
 
@@ -338,7 +336,7 @@ class _DiagnosticsBase(_CoreBase):
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
         ary_flatten = ary.flatten()
-        r_eff = self._ess_tail(ary, relative=True)
+        r_eff = self._ess_tail(ary, prob=0.05, relative=True)
 
         _, kappa = self._pareto_khat(ary_flatten, r_eff=r_eff, tail="both", log_weights=False)
 
@@ -589,7 +587,7 @@ class _DiagnosticsBase(_CoreBase):
         ary = np.ravel(ary)
         log_weights = (alpha - 1) * ary
         n_draws = len(log_weights)
-        r_eff = self._ess_tail(ary, relative=True)
+        r_eff = self._ess_tail(ary, prob=0.05, relative=True)
         n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail="both")
         log_weights, _ = self._ps_tail(
             log_weights,
@@ -650,6 +648,10 @@ class _DiagnosticsBase(_CoreBase):
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
         split_ary = self._split_chains(ary)
+        # splitting we "duplicate the number of chains so we need to update
+        # superchain_ids accordingly if we had 3 chains (0, 1, 2) we end up
+        # with (0, 1, 2, 0, 1, 2) half-chains
+        superchain_ids = np.hstack((superchain_ids, superchain_ids))
         rhat_bulk = self._rhat_nested(self._z_scale(split_ary), superchain_ids)
 
         split_ary_folded = abs(split_ary - np.median(split_ary))
@@ -664,18 +666,22 @@ class _DiagnosticsBase(_CoreBase):
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
         ary = self._z_fold(self._split_chains(ary))
+        superchain_ids = np.hstack((superchain_ids, superchain_ids))
         return self._rhat_nested(ary, superchain_ids)
 
     def _rhat_nested_z_scale(self, ary, superchain_ids):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
-        return self._rhat_nested(self._z_scale(self._split_chains(ary)), superchain_ids)
+        ary = self._z_scale(self._split_chains(ary))
+        superchain_ids = np.hstack((superchain_ids, superchain_ids))
+        return self._rhat_nested(ary, superchain_ids)
 
     def _rhat_nested_split(self, ary, superchain_ids):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
+        superchain_ids = np.hstack((superchain_ids, superchain_ids))
         return self._rhat_nested(self._split_chains(ary), superchain_ids)
 
     def _rhat_nested_identity(self, ary, superchain_ids):

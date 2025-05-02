@@ -1,10 +1,52 @@
+"""Test related helper functions."""
+
+import os
+import sys
+import warnings
+from typing import Any
+
 import numpy as np
 import pytest
-from arviz_base import from_dict
+
+
+def importorskip(modname: str, reason: str | None = None) -> Any:
+    """Import and return the requested module ``modname``.
+
+    Doesn't allow skips when ``ARVIZ_REQUIRE_ALL_DEPS`` env var is defined.
+    Borrowed and modified from ``pytest.importorskip``.
+
+    Parameters
+    ----------
+    modname : str
+        the name of the module to import
+    reason : str, optional
+        this reason is shown as skip message when the module cannot be imported.
+    """
+    __tracebackhide__ = True  # pylint: disable=unused-variable
+    compile(modname, "", "eval")  # to catch syntaxerrors
+
+    with warnings.catch_warnings():
+        # Make sure to ignore ImportWarnings that might happen because
+        # of existing directories with the same name we're trying to
+        # import but without a __init__.py file.
+        warnings.simplefilter("ignore")
+        try:
+            __import__(modname)
+        except ImportError as exc:
+            if "ARVIZ_REQUIRE_ALL_DEPS" in os.environ:
+                raise exc
+            if reason is None:
+                reason = f"could not import {modname!r}: {exc}"
+            pytest.skip(reason, allow_module_level=True)
+
+    mod = sys.modules[modname]
+    return mod
 
 
 def create_model(seed=10, transpose=False):
     """Create model with fake data."""
+    from arviz_base import from_dict
+
     rng = np.random.default_rng(seed)
     nchains = 4
     ndraws = 500
@@ -67,6 +109,8 @@ def create_model(seed=10, transpose=False):
 
 def create_multidimensional_model(seed=10, transpose=False):
     """Create model with fake data."""
+    from arviz_base import from_dict
+
     rng = np.random.default_rng(seed)
     nchains = 4
     ndraws = 500
@@ -121,6 +165,8 @@ def create_multidimensional_model(seed=10, transpose=False):
 
 def create_data_random(groups=None, seed=10):
     """Create InferenceData object using random data."""
+    from arviz_base import from_dict
+
     if groups is None:
         groups = ["posterior", "sample_stats", "observed_data", "posterior_predictive"]
     rng = np.random.default_rng(seed)

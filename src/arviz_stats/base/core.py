@@ -27,13 +27,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        ary : Numpy array
-            An array containing MCMC samples
-
-        Returns
-        -------
-        acov: Numpy array same size as the input array
+        ary : array-like
+        axis : int, default -1
         """
+        if not isinstance(axis, int):
+            raise ValueError("Only integer values are allowed for `axis` in autocov.")
         axis = axis if axis > 0 else len(ary.shape) + axis
         n = ary.shape[axis]
         m = next_fast_len(2 * n)
@@ -63,13 +61,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        ary : Numpy array
-            An array containing MCMC samples
-
-        Returns
-        -------
-        acorr: Numpy array same size as the input array
+        ary : array-like
+        axis : int, default -1
         """
+        if not isinstance(axis, int):
+            raise ValueError("Only integer values are allowed for `axis` in autocorr.")
         corr = self.autocov(ary, axis=axis)
         axis = axis = axis if axis > 0 else len(corr.shape) + axis
         norm = tuple(
@@ -90,8 +86,23 @@ class _CoreBase:
         """Standardize circular data to the interval [-pi, pi]."""
         return np.mod(ary + np.pi, 2 * np.pi) - np.pi
 
-    def quantile(self, ary, quantile, **kwargs):  # pylint: disable=no-self-use
+    def quantile(self, ary, quantile, axis=-1, method="linear", skipna=False, weights=None):  # pylint: disable=no-self-use
         """Compute the quantile of an array of samples.
+
+        Implementation wise, the version in `arviz_stats.base.array_stats`
+        calls either :func:`numpy.quantile` or :func:`numpy.nanquantile`
+        and ensures the added dimension is the last one for compatibility
+        with :func:`xarray.apply_ufunc` when using it as part of the ``DataArray`` interface.
+
+        Parameters
+        ----------
+        ary : array-like
+        quantile : float or array-like
+        axis : int or sequence of int or None, default -1
+        method : str, default "linear"
+        skipna : bool, default False
+        weights : array-like, optional
+            Array with the same shape as `a` with the weights associated to the values of `a`.
 
         Notes
         -----
@@ -101,21 +112,39 @@ class _CoreBase:
         References
         ----------
         .. [1] R. J. Hyndman and Y. Fan,
-        "Sample quantiles in statistical packages,"
-        The American Statistician, 50(4), pp. 361-365, 1996
+           "Sample quantiles in statistical packages,"
+           The American Statistician, 50(4), pp. 361-365, 1996
         """
-        skipna = kwargs.pop("skipna", False)
         if skipna:
-            result = np.nanquantile(ary, quantile, **kwargs)
+            result = np.nanquantile(ary, quantile, axis=axis, method=method, weights=weights)
         else:
-            result = np.quantile(ary, quantile, **kwargs)
+            result = np.quantile(ary, quantile, axis=axis, method=method, weights=weights)
         if np.ndim(quantile) == 0:
             return result
         return np.moveaxis(result, 0, -1)
 
-    def eti(self, ary, prob, **kwargs):
+    def eti(self, ary, prob, axis=-1, method="linear", skipna=False, weights=None):
+        """Compute the equal tail interval (ETI) of an array of samples.
+
+        Parameters
+        ----------
+        ary : array-like
+        prob : float
+            Probability to be contained within the returned interval.
+        axis : int or sequence of int or None, default -1
+        method : str, optional
+        skipna : bool, default False
+        weights : array-like, optional
+        """
         edge_prob = (1 - prob) / 2
-        return self.quantile(ary, [edge_prob, 1 - edge_prob], **kwargs)
+        return self.quantile(
+            ary,
+            [edge_prob, 1 - edge_prob],
+            axis=axis,
+            method=method,
+            skipna=skipna,
+            weights=weights,
+        )
 
     def _float_rankdata(self, ary):  # pylint: disable=no-self-use
         """Compute ranks on continuous data, assuming there are no ties.

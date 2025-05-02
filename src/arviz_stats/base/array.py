@@ -11,6 +11,15 @@ from arviz_stats.base.diagnostics import _DiagnosticsBase
 from arviz_stats.base.stats_utils import make_ufunc
 
 
+def process_chain_none(ary, chain_axis, draw_axis):
+    """Process array with chain and draw axis to cover the case ``chain_axis=None``."""
+    if chain_axis is None:
+        ary = np.expand_dims(ary, axis=0)
+        chain_axis = 0
+        draw_axis = draw_axis + 1 if draw_axis > 0 else draw_axis
+    return ary, chain_axis, draw_axis
+
+
 def process_ary_axes(ary, axes):
     """Process input array and axes to ensure input core dims are the last ones.
 
@@ -42,29 +51,48 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         self,
         ary,
         prob,
-        axes=-1,
+        axis=-1,
         method="nearest",
         circular=False,
         max_modes=10,
         skipna=False,
         **kwargs,
     ):
-        """Compute HDI function on array-like input."""
+        """Compute highest density interval (HDI) on an array of samples.
+
+        See docstring of :func:`arviz_stats.hdi` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        prob : float
+        axis : int, sequence of int or None, default -1
+        method : str, default "nearest"
+            Valid options are "nearest", "multimodal" or "multimodal_sample"
+        circular : bool, default False
+        max_modes : int, default 10
+        skipna : bool, default False
+        **kwargs
+            Only used for multimodal methods with continuous data.
+            Passed to kde computation with a ``bw`` default of "taylor" for
+            circular data, "isj" otherwise.
+        """
         if not 1 >= prob > 0:
             raise ValueError("The value of `prob` must be in the (0, 1] interval.")
-        ary, axes = process_ary_axes(ary, axes)
+        ary, axes = process_ary_axes(ary, axis)
         is_discrete = np.issubdtype(ary.dtype, np.integer) or np.issubdtype(ary.dtype, np.bool_)
         is_multimodal = method.startswith("multimodal")
         if is_multimodal and circular and is_discrete:
             raise ValueError("Multimodal hdi not supported for discrete circular data.")
+        if is_discrete and method == "multimodal_sample":
+            raise ValueError("Method multimodal_sample not supported for discrete data.")
         hdi_func = {
             "nearest": self._hdi_nearest,
             "multimodal": (
                 self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
             ),
-            "multimodal_sample": (
-                self._hdi_multimodal_discrete if is_discrete else self._hdi_multimodal_continuous
-            ),
+            "multimodal_sample": self._hdi_multimodal_continuous,
         }[method]
         hdi_array = make_ufunc(
             hdi_func,
@@ -97,7 +125,22 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return result
 
     def ess(self, ary, chain_axis=-2, draw_axis=-1, method="bulk", relative=False, prob=None):
-        """Compute of ess on array-like inputs."""
+        """Compute of ess on array-like inputs.
+
+        See docstring of :func:`arviz_stats.ess` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        method : str, default "bulk"
+        relative : bool, default False
+        prob : float or (float, float), default None
+            When using the array interface, `prob` is a required argument for
+            the "tail", "quantile" (as float) and "local" (as tuple) methods.
+        """
         method = method.lower()
         # fmt: off
         valid_methods = {
@@ -107,9 +150,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         # fmt: on
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         ess_func = getattr(self, f"_ess_{method}")
         func_kwargs = {"relative": relative}
@@ -119,42 +160,73 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return ess_array(ary, **func_kwargs)
 
     def rhat(self, ary, chain_axis=-2, draw_axis=-1, method="rank"):
-        """Compute of rhat on array-like inputs."""
+        """Compute of rhat on array-like inputs.
+
+        See docstring of :func:`arviz_stats.rhat` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        method : str, default "rank"
+        """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         rhat_func = getattr(self, f"_rhat_{method}")
         rhat_array = make_ufunc(rhat_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return rhat_array(ary)
 
     def rhat_nested(self, ary, superchain_ids, method="rank", chain_axis=-2, draw_axis=-1):
-        """Compute nested rhat on array-like inputs."""
+        """Compute nested rhat on array-like inputs.
+
+        See docstring of :func:`arviz_stats.rhat_nested` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        superchain_ids : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        method : str, default "rank"
+        """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         rhat_func = getattr(self, f"_rhat_nested_{method}")
         rhat_ufunc = make_ufunc(rhat_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return rhat_ufunc(ary, superchain_ids=superchain_ids)
 
     def mcse(self, ary, chain_axis=-2, draw_axis=-1, method="mean", prob=None):
-        """Compute of mcse on array-like inputs."""
+        """Compute of mcse on array-like inputs.
+
+        See docstring of :func:`arviz_stats.mcse` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        method : str, default "mean"
+        prob : float, default None
+            When using the array interface, `prob` is a required argument for
+            "quantile" method.
+        """
         method = method.lower()
         valid_methods = {"mean", "sd", "median", "quantile"}
         if method not in valid_methods:
             raise ValueError(f"Requested method '{method}' but it must be one of {valid_methods}")
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         mcse_func = getattr(self, f"_mcse_{method}")
         func_kwargs = {} if prob is None else {"prob": prob}
@@ -162,17 +234,39 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return mcse_array(ary, **func_kwargs)
 
     def pareto_min_ss(self, ary, chain_axis=-2, draw_axis=-1):
-        """Compute minimum effective sample size."""
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            chain_axis = 0
+        """Compute minimum effective sample size.
+
+        See docstring of :func:`arviz_stats.pareto_min_ss` for full description of computation
+        and arguments.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        """
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         pms_array = make_ufunc(self._pareto_min_ss, n_output=1, n_input=1, n_dims=2, ravel=False)
         return pms_array(ary)
 
-    def psislw(self, ary, r_eff=1, axes=-1):
-        """Compute log weights for Pareto-smoothed importance sampling (PSIS) method."""
-        ary, axes = process_ary_axes(ary, axes)
+    def psislw(self, ary, r_eff=1, axis=-1):
+        """Compute log weights for Pareto-smoothed importance sampling (PSIS) method.
+
+        Parameters
+        ----------
+        ary : array-like
+        r_eff : float, default 1
+        axis : int, sequence of int or None, default -1
+
+        Returns
+        -------
+        log_weights : array-like
+            Same shape as `ary` but `axis` dimensions moved to the end
+        khat : array-like
+            Shape of `ary` minus dimensions indicated in `axis`
+        """
+        ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
             self._psislw,
             n_output=2,
@@ -182,9 +276,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return psl_ufunc(ary, out_shape=[(ary.shape[i] for i in axes), []], r_eff=r_eff)
 
-    def power_scale_lw(self, ary, alpha=0, axes=-1):
-        """Compute log weights for power-scaling component by alpha."""
-        ary, axes = process_ary_axes(ary, axes)
+    def power_scale_lw(self, ary, alpha=0, axis=-1):
+        """Compute log weights for power-scaling component by alpha.
+
+        Parameters
+        ----------
+        ary : array-like
+        alpha : float, default 0
+        axis : int, sequence of int or None, default -1
+        """
+        ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
             self._power_scale_lw,
             n_output=1,
@@ -197,12 +298,19 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
     def power_scale_sense(
         self, ary, lower_w, upper_w, lower_alpha, upper_alpha, chain_axis=-2, draw_axis=-1
     ):
-        """Compute power-scaling sensitivity."""
-        if chain_axis is None:
-            ary = np.expand_dims(ary, axis=0)
-            lower_w = np.expand_dims(lower_w, axis=0)
-            upper_w = np.expand_dims(upper_w, axis=0)
-            chain_axis = 0
+        """Compute power-scaling sensitivity.
+
+        Parameters
+        ----------
+        ary, lower_w, upper_w : array-like
+            All 3 input arrays should have the same shape
+        lower_alpha, upper_alpha : float
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        """
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
+        lower_w, _, _ = process_chain_none(lower_w, chain_axis, draw_axis)
+        upper_w, _, _ = process_chain_none(upper_w, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         lower_w, _ = process_ary_axes(lower_w, [chain_axis, draw_axis])
         upper_w, _ = process_ary_axes(upper_w, [chain_axis, draw_axis])
@@ -211,9 +319,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return pss_array(ary, lower_w, upper_w, lower_alpha=lower_alpha, upper_alpha=upper_alpha)
 
-    def compute_ranks(self, ary, axes=-1, relative=False):
-        """Compute ranks of MCMC samples."""
-        ary, axes = process_ary_axes(ary, axes)
+    def compute_ranks(self, ary, axis=-1, relative=False):
+        """Compute ranks of MCMC samples.
+
+        Parameters
+        ----------
+        ary : array-like
+        axis : int, sequence of int or None, default -1
+        relative : bool, default False
+        """
+        ary, axes = process_ary_axes(ary, axis)
         compute_ranks_ufunc = make_ufunc(
             self._compute_ranks,
             n_output=1,
@@ -223,9 +338,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return compute_ranks_ufunc(ary, out_shape=(ary.shape[i] for i in axes), relative=relative)
 
-    def get_bins(self, ary, axes=-1, bins="arviz"):
-        """Compute default bins."""
-        ary, axes = process_ary_axes(ary, axes)
+    def get_bins(self, ary, axis=-1, bins="arviz"):
+        """Compute default bins.
+
+        Parameters
+        ----------
+        ary : array-like
+        axis : int, sequence of int or None, default -1
+        bins : str, scalar or array-like, default "arviz"
+        """
+        ary, axes = process_ary_axes(ary, axis)
         get_bininfo_ufunc = make_ufunc(
             self._get_bininfo,
             n_output=3,
@@ -240,11 +362,28 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
     # pylint: disable=redefined-builtin, too-many-return-statements
     # noqa: PLR0911
-    def histogram(self, ary, bins=None, range=None, weights=None, axes=-1, density=None):
-        """Compute histogram over provided axes."""
-        if isinstance(axes, int):
-            axes = [axes]
-        axes = [ax if ax >= 0 else ary.ndim + ax for ax in axes]
+    def histogram(self, ary, bins=None, range=None, weights=None, axis=-1, density=None):
+        """Compute histogram over provided axis.
+
+        Parameters
+        ----------
+        ary : array-like
+        bins : str, scalar or array-like, optional
+        range : (float, float), optional
+        weights : array-like, optional
+        axis : int, sequence of int or None, default -1
+        density : bool, optional
+
+        Returns
+        -------
+        hist, bin_edges : array_like
+            The shape of `hist` will be that of `ary` minus the dimensions in `axis`
+            plus an extra dimension of length ``nbins``, same for `bin_edges` with
+            the difference the extra dimension has length ``nbins+1``.
+        """
+        if isinstance(axis, int):
+            axis = [axis]
+        axes = [ax if ax >= 0 else ary.ndim + ax for ax in axis]
         reordered_axes = [i for i in np.arange(ary.ndim) if i not in axes] + list(axes)
         if weights is not None:
             assert ary.shape == weights.shape
@@ -252,7 +391,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary = np.transpose(ary, axes=reordered_axes)
         broadcased_shape = ary.shape[: -len(axes)]
         if bins is None:
-            bins = self.get_bins(ary, axes=np.arange(-len(axes), 0, dtype=int))
+            bins = self.get_bins(ary, axis=np.arange(-len(axes), 0, dtype=int))
         if isinstance(bins, int | str):
             # avoid broadcasting over bins -> can't be positional argument
             if (range is None) or (np.size(range) == 2):
@@ -341,9 +480,25 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return histogram_ufunc(ary, bins, range, shape_from_1st=True)
 
-    def kde(self, ary, axes=-1, circular=False, grid_len=512, **kwargs):
-        """Compute of kde on array-like inputs."""
-        ary, axes = process_ary_axes(ary, axes)
+    def kde(self, ary, axis=-1, circular=False, grid_len=512, **kwargs):
+        """Compute of kde on array-like inputs.
+
+        Parameters
+        ----------
+        ary : array-like
+        axis : int, sequence of int or None, default -1
+        circular : bool, default False
+        grid_len : int, default 512
+        **kwargs
+
+        Returns
+        -------
+        grid, pdf, bw : array-like
+            `grid` and `pdf` will have the same shape: the same as `ary` minus the dimensions
+            in `axis` plus an extra dimension of lenght `grid_len`. Same for `bw`
+            except it will not have the extra dimension.
+        """
+        ary, axes = process_ary_axes(ary, axis)
         kde_ufunc = make_ufunc(
             self._kde,
             n_output=3,
