@@ -460,8 +460,10 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV) for approximate
     posteriors (e.g., from variational inference). Requires log-densities of the target (log_p)
-    and proposal (log_q) distributions. The PSIS-LOO-CV method is described in [1]_ and [2]_.
-    The approximate posterior correction is computed using the method described in [3]_.
+    and proposal (log_q) distributions.
+
+    The PSIS-LOO-CV method is described in [1]_ and [2]_. The approximate posterior correction
+    is computed using the method described in [3]_.
 
     Parameters
     ----------
@@ -635,9 +637,12 @@ def loo_subsample(
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV) with sub-sampling
-    for large datasets. Uses a log predictive density (LPD) approximation and applies a
-    difference estimator based on a simple random sample without replacement. The PSIS-LOO-CV
-    method is described in [1]_, [2]_. The sub-sampling method is described in [3]_.
+    for large datasets. Uses either log predictive density (LPD) or point log predictive
+    density (PLPD) approximation and applies a difference estimator based on a simple random
+    sample without replacement.
+
+    The PSIS-LOO-CV method is described in [1]_, [2]_. The sub-sampling
+    method is described in [3]_.
 
     Parameters
     ----------
@@ -886,11 +891,12 @@ def update_subsample(
     param_names=None,
     log=True,
 ):
-    """Update a previously computed sub-sampled PSIS-LOO-CV object with new observations.
+    """Update a sub-sampled PSIS-LOO-CV object with new observations.
 
     Extends a sub-sampled PSIS-LOO-CV result by adding new observations to the sub-sample
     without recomputing values for previously sampled observations. This allows for
     incrementally improving the sub-sampled PSIS-LOO-CV estimate with additional observations
+
     The sub-sampling method is described in [1]_.
 
     Parameters
