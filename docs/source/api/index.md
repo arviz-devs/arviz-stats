@@ -29,7 +29,7 @@
    arviz_stats.mcse
    arviz_stats.psense
    arviz_stats.psense_summary
-   arviz_stats.R2
+   arviz_stats.r2_score
    arviz_stats.rhat
    arviz_stats.rhat_nested
    arviz_stats.summary

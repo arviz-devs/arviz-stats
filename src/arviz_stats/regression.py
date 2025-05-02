@@ -8,7 +8,9 @@ from xarray import DataArray
 from arviz_stats.base import array_stats
 
 
-def R2(y_true, y_pred, summary=True, point_estimate=None, ci_kind=None, ci_prob=None, round_to=2):  # pylint: disable=invalid-name
+def r2_score(
+    y_true, y_pred, summary=True, point_estimate=None, ci_kind=None, ci_prob=None, round_to=2
+):
     """R² for Bayesian regression models.
 
     The R², or coefficient of determination, is defined as the proportion of variance
@@ -50,12 +52,12 @@ def R2(y_true, y_pred, summary=True, point_estimate=None, ci_kind=None, ci_prob=
 
     .. ipython::
 
-        In [1]: from arviz_stats import R2
+        In [1]: from arviz_stats import r2_score
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data('regression1d')
            ...: y_true = data.observed_data["y"].values
            ...: y_pred = data.posterior_predictive["y"].stack(sample=("chain", "draw")).T
-           ...: R2(y_true, y_pred)
+           ...: r2_score(y_true, y_pred)
 
     References
     ----------
