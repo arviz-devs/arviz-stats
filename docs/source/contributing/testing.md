@@ -22,7 +22,7 @@ tox -e minimal  # should work for any python version
 ## How to write tests
 
 Use `importorskip` helper function from `tests/helpers` for any import outside of
-the python standard library plus NumPy and SciPy. For example:
+the Python standard library plus NumPy and SciPy. For example:
 
 ```python
 import copy
@@ -46,7 +46,7 @@ with no optional dependencies import and the rest in a second (or more) files.
 The recommended install is via `arviz-stats[xarray]` which provides functionality similar to
 the functions that used to be within `arviz/stats` module. However, it is also possible to install
 arviz-stats without the xarray or arviz-base dependencies in which case a minimal version of the
-library that depends only on numpy and scipy is installed.
+library that depends only on NumPy and SciPy is installed.
 
 To take this into account, tests use the `importorskip` helper function from `tests/helpers.py`
 when importing optional dependencies like xarray, arviz-base or pandas so that tests are skipped
