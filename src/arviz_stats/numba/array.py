@@ -125,7 +125,7 @@ class NumbaArray(BaseArray):
             self._kde_ufunc = kde_gufunc
         return self._kde_ufunc
 
-    def kde(self, ary, axes=-1, circular=False, grid_len=512, **kwargs):
+    def kde(self, ary, axis=-1, circular=False, grid_len=512, **kwargs):
         """Compute the guvectorized kde.
 
         Notes
@@ -135,8 +135,8 @@ class NumbaArray(BaseArray):
         The ufunc is cached the first time to avoid unnecessary compilation while
         ensuring the proper method of the initialized class is the one being guvectorized.
         """
-        if axes is not None:
-            ary, axes = process_ary_axes(ary, axes)
+        if axis is not None:
+            ary, axis = process_ary_axes(ary, axis)
             kwargs["axes"] = [(-1,), (0,), (), (), ()]
         else:
             ary = ary.ravel()
