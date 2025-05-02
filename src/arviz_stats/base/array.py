@@ -251,7 +251,21 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return pms_array(ary)
 
     def psislw(self, ary, r_eff=1, axis=-1):
-        """Compute log weights for Pareto-smoothed importance sampling (PSIS) method."""
+        """Compute log weights for Pareto-smoothed importance sampling (PSIS) method.
+
+        Parameters
+        ----------
+        ary : array-like
+        r_eff : float, default 1
+        axis : int, sequence of int or None, default -1
+
+        Returns
+        -------
+        log_weights : array-like
+            Same shape as `ary` but `axis` dimensions moved to the end
+        khat : array-like
+            Shape of `ary` minus dimensions indicated in `axis`
+        """
         ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
             self._psislw,
@@ -263,7 +277,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return psl_ufunc(ary, out_shape=[(ary.shape[i] for i in axes), []], r_eff=r_eff)
 
     def power_scale_lw(self, ary, alpha=0, axis=-1):
-        """Compute log weights for power-scaling component by alpha."""
+        """Compute log weights for power-scaling component by alpha.
+
+        Parameters
+        ----------
+        ary : array-like
+        alpha : float, default 0
+        axis : int, sequence of int or None, default -1
+        """
         ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
             self._power_scale_lw,
@@ -277,7 +298,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
     def power_scale_sense(
         self, ary, lower_w, upper_w, lower_alpha, upper_alpha, chain_axis=-2, draw_axis=-1
     ):
-        """Compute power-scaling sensitivity."""
+        """Compute power-scaling sensitivity.
+
+        Parameters
+        ----------
+        ary, lower_w, upper_w : array-like
+            All 3 input arrays should have the same shape
+        lower_alpha, upper_alpha : float
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         lower_w, _, _ = process_chain_none(lower_w, chain_axis, draw_axis)
         upper_w, _, _ = process_chain_none(upper_w, chain_axis, draw_axis)
@@ -289,9 +319,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return pss_array(ary, lower_w, upper_w, lower_alpha=lower_alpha, upper_alpha=upper_alpha)
 
-    def compute_ranks(self, ary, axes=-1, relative=False):
-        """Compute ranks of MCMC samples."""
-        ary, axes = process_ary_axes(ary, axes)
+    def compute_ranks(self, ary, axis=-1, relative=False):
+        """Compute ranks of MCMC samples.
+
+        Parameters
+        ----------
+        ary : array-like
+        axis : int, sequence of int or None, default -1
+        relative : bool, default False
+        """
+        ary, axes = process_ary_axes(ary, axis)
         compute_ranks_ufunc = make_ufunc(
             self._compute_ranks,
             n_output=1,
@@ -301,9 +338,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return compute_ranks_ufunc(ary, out_shape=(ary.shape[i] for i in axes), relative=relative)
 
-    def get_bins(self, ary, axes=-1, bins="arviz"):
-        """Compute default bins."""
-        ary, axes = process_ary_axes(ary, axes)
+    def get_bins(self, ary, axis=-1, bins="arviz"):
+        """Compute default bins.
+
+        Parameters
+        ----------
+        ary : array-like
+        axis : int, sequence of int or None, default -1
+        bins : str, scalar or array-like, default "arviz"
+        """
+        ary, axes = process_ary_axes(ary, axis)
         get_bininfo_ufunc = make_ufunc(
             self._get_bininfo,
             n_output=3,
@@ -318,11 +362,28 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
     # pylint: disable=redefined-builtin, too-many-return-statements
     # noqa: PLR0911
-    def histogram(self, ary, bins=None, range=None, weights=None, axes=-1, density=None):
-        """Compute histogram over provided axes."""
-        if isinstance(axes, int):
-            axes = [axes]
-        axes = [ax if ax >= 0 else ary.ndim + ax for ax in axes]
+    def histogram(self, ary, bins=None, range=None, weights=None, axis=-1, density=None):
+        """Compute histogram over provided axis.
+
+        Parameters
+        ----------
+        ary : array-like
+        bins : str, scalar or array-like, optional
+        range : (float, float), optional
+        weights : array-like, optional
+        axis : int, sequence of int or None, default -1
+        density : bool, optional
+
+        Returns
+        -------
+        hist, bin_edges : array_like
+            The shape of `hist` will be that of `ary` minus the dimensions in `axis`
+            plus an extra dimension of length ``nbins``, same for `bin_edges` with
+            the difference the extra dimension has length ``nbins+1``.
+        """
+        if isinstance(axis, int):
+            axis = [axis]
+        axes = [ax if ax >= 0 else ary.ndim + ax for ax in axis]
         reordered_axes = [i for i in np.arange(ary.ndim) if i not in axes] + list(axes)
         if weights is not None:
             assert ary.shape == weights.shape
@@ -330,7 +391,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary = np.transpose(ary, axes=reordered_axes)
         broadcased_shape = ary.shape[: -len(axes)]
         if bins is None:
-            bins = self.get_bins(ary, axes=np.arange(-len(axes), 0, dtype=int))
+            bins = self.get_bins(ary, axis=np.arange(-len(axes), 0, dtype=int))
         if isinstance(bins, int | str):
             # avoid broadcasting over bins -> can't be positional argument
             if (range is None) or (np.size(range) == 2):
@@ -419,9 +480,25 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return histogram_ufunc(ary, bins, range, shape_from_1st=True)
 
-    def kde(self, ary, axes=-1, circular=False, grid_len=512, **kwargs):
-        """Compute of kde on array-like inputs."""
-        ary, axes = process_ary_axes(ary, axes)
+    def kde(self, ary, axis=-1, circular=False, grid_len=512, **kwargs):
+        """Compute of kde on array-like inputs.
+
+        Parameters
+        ----------
+        ary : array-like
+        axis : int, sequence of int or None, default -1
+        circular : bool, default False
+        grid_len : int, default 512
+        **kwargs
+
+        Returns
+        -------
+        grid, pdf, bw : array-like
+            `grid` and `pdf` will have the same shape: the same as `ary` minus the dimensions
+            in `axis` plus an extra dimension of lenght `grid_len`. Same for `bw`
+            except it will not have the extra dimension.
+        """
+        ary, axes = process_ary_axes(ary, axis)
         kde_ufunc = make_ufunc(
             self._kde,
             n_output=3,

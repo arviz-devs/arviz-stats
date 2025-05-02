@@ -137,7 +137,7 @@ class BaseDataArray:
             output_core_dims=[["edges_dim" if da.name is None else f"edges_dim_{da.name}"]],
             kwargs={
                 "bins": bins,
-                "axes": np.arange(-len(dims), 0, 1),
+                "axis": np.arange(-len(dims), 0, 1),
             },
         )
 
@@ -192,7 +192,7 @@ class BaseDataArray:
             weights,
             kwargs={
                 "density": density,
-                "axes": np.arange(-len(dims), 0, 1),
+                "axis": np.arange(-len(dims), 0, 1),
             },
             input_core_dims=input_core_dims,
             output_core_dims=[[hist_dim], [edges_dim]],
@@ -217,7 +217,7 @@ class BaseDataArray:
             kwargs={
                 "circular": circular,
                 "grid_len": grid_len,
-                "axes": np.arange(-len(dims), 0, 1),
+                "axis": np.arange(-len(dims), 0, 1),
                 **kwargs,
             },
             input_core_dims=[dims],

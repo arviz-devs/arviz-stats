@@ -269,7 +269,7 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
             nan_error = isnan.any(axis)
 
         if (isinstance(nan_error, bool) and nan_error) or nan_error.any():
-            _log.warning("Array contains NaN-value.")
+            _log.info("Array contains NaN-value.")
 
     if check_shape:
         shape = ary.shape
@@ -288,7 +288,7 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
         )
 
         if chain_error or draw_error:
-            _log.warning(error_msg)
+            _log.info(error_msg)
 
     return nan_error | chain_error | draw_error
 
