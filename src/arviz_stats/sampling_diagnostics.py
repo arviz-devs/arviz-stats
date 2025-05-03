@@ -450,6 +450,7 @@ def mcse(
         of the data for which to perform the computation.
     method : str, default "mean"
         Valid methods are:
+
         - "mean"
         - "sd"
         - "median"
@@ -469,7 +470,7 @@ def mcse(
     --------
     arviz.ess : Compute autocovariance estimates for every lag for the input array.
     arviz.summary : Create a data frame with summary statistics.
-    plot_mcse : Plot quantile or local Monte Carlo Standard Error.
+    arviz_plots.plot_mcse : Plot quantile or local Monte Carlo Standard Error.
 
     Examples
     --------

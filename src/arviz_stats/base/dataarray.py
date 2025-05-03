@@ -49,7 +49,7 @@ class BaseDataArray:
             input_core_dims=[dims, []],
             output_core_dims=[[mode_dim, "hdi"] if method.startswith("multimodal") else ["hdi"]],
             kwargs={
-                "axes": np.arange(-len(dims), 0, 1),
+                "axis": np.arange(-len(dims), 0, 1),
                 "method": method,
                 **kwargs,
             },
@@ -58,6 +58,8 @@ class BaseDataArray:
     def ess(self, da, dims=None, method="bulk", relative=False, prob=None):
         """Compute ess on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
+        if method in ("tail", "quantile"):
+            prob = validate_ci_prob(prob)
         return apply_ufunc(
             self.array_class.ess,
             da,
@@ -135,7 +137,7 @@ class BaseDataArray:
             output_core_dims=[["edges_dim" if da.name is None else f"edges_dim_{da.name}"]],
             kwargs={
                 "bins": bins,
-                "axes": np.arange(-len(dims), 0, 1),
+                "axis": np.arange(-len(dims), 0, 1),
             },
         )
 
@@ -190,7 +192,7 @@ class BaseDataArray:
             weights,
             kwargs={
                 "density": density,
-                "axes": np.arange(-len(dims), 0, 1),
+                "axis": np.arange(-len(dims), 0, 1),
             },
             input_core_dims=input_core_dims,
             output_core_dims=[[hist_dim], [edges_dim]],
@@ -215,7 +217,7 @@ class BaseDataArray:
             kwargs={
                 "circular": circular,
                 "grid_len": grid_len,
-                "axes": np.arange(-len(dims), 0, 1),
+                "axis": np.arange(-len(dims), 0, 1),
                 **kwargs,
             },
             input_core_dims=[dims],
@@ -309,7 +311,7 @@ class BaseDataArray:
             r_eff,
             input_core_dims=[dims, []],
             output_core_dims=[dims, []],
-            kwargs={"axes": np.arange(-len(dims), 0, 1)},
+            kwargs={"axis": np.arange(-len(dims), 0, 1)},
         )
 
     def power_scale_lw(self, da, alpha=0, dims=None):
@@ -321,7 +323,7 @@ class BaseDataArray:
             alpha,
             input_core_dims=[dims, []],
             output_core_dims=[dims],
-            kwargs={"axes": np.arange(-len(dims), 0, 1)},
+            kwargs={"axis": np.arange(-len(dims), 0, 1)},
         )
 
     def power_scale_sense(self, da, lower_w, upper_w, lower_alpha, upper_alpha, dims=None):

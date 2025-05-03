@@ -2,10 +2,12 @@
 
 import numpy as np
 import pytest
-import xarray as xr
-from arviz_base import load_arviz_data
 from numpy.testing import assert_allclose, assert_almost_equal
-from xarray import DataArray
+
+from .helpers import importorskip
+
+azb = importorskip("arviz_base")
+xr = importorskip("xarray")
 
 from arviz_stats import (
     compare,
@@ -23,17 +25,17 @@ from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 @pytest.fixture(name="centered_eight", scope="session")
 def fixture_centered_eight():
-    return load_arviz_data("centered_eight")
+    return azb.load_arviz_data("centered_eight")
 
 
 @pytest.fixture(name="non_centered_eight", scope="session")
 def fixture_non_centered_eight():
-    return load_arviz_data("non_centered_eight")
+    return azb.load_arviz_data("non_centered_eight")
 
 
 @pytest.fixture(name="anes", scope="session")
 def fixture_anes():
-    return load_arviz_data("anes")
+    return azb.load_arviz_data("anes")
 
 
 @pytest.fixture(name="radon", scope="session")
@@ -44,7 +46,7 @@ def fixture_radon():
 @pytest.fixture(scope="module")
 def multivariable_log_likelihood(centered_eight):
     centered_eight = centered_eight.copy()
-    new_arr = DataArray(
+    new_arr = xr.DataArray(
         np.zeros(centered_eight.log_likelihood["obs"].values.shape),
         dims=["chain", "draw", "school"],
         coords=centered_eight.log_likelihood.coords,
