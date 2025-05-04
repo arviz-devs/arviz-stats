@@ -311,6 +311,11 @@ def test_ess_dataset(data, method, relative):
     assert np.all(ess_hat.mu.values > n_low)
 
 
+def test_ess_tail_probs(data):
+    ess_hat = data.azstats.ess(method="tail", prob=(0.2, 0.8))
+    assert np.all(ess_hat.mu.values > 100)
+
+
 @pytest.mark.parametrize("mcse_method", ("mean", "sd", "median", "quantile"))
 def test_mcse_array(mcse_method):
     rng = np.random.default_rng()
