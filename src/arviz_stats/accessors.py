@@ -166,6 +166,45 @@ class AzStatsDaAccessor(_BaseAccessor):
             func = get_function(func)
         return func(self._obj, **kwargs)
 
+    def thin(self, dims=None, factor="auto"):
+        """Perform thinning for the DataArray."""
+        if factor == "auto":
+            try:
+                from arviz_stats.base.diagnostics import thin_factor
+
+                factor = thin_factor(self._obj, dims=dims)
+            except (ImportError, ValueError):
+                factor = 5
+
+        if not isinstance(factor, int):
+            factor = int(factor)
+
+        if factor <= 1:
+            return self._obj
+
+        if isinstance(dims, str):
+            dims = [dims]
+
+        if dims is not None:
+            valid_dims = [dim for dim in dims if dim in self._obj.dims]
+            if not valid_dims:
+                return self._obj
+            dims = valid_dims
+        else:
+            return self._obj
+
+        indices = {}
+        for dim in dims:
+            if dim in self._obj.dims:
+                current_draws = self._obj.sizes[dim]
+                if factor >= current_draws:
+                    continue
+                indices[dim] = slice(None, None, factor)
+
+        if not indices:
+            return self._obj
+        return self._obj.isel(indices)
+
 
 @xr.register_dataset_accessor("azstats")
 class AzStatsDsAccessor(_BaseAccessor):

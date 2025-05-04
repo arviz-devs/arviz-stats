@@ -4,9 +4,12 @@ import warnings
 
 import numpy as np
 import pytest
-import xarray as xr
-from arviz_base import load_arviz_data
 from numpy.testing import assert_allclose, assert_almost_equal
+
+from .helpers import importorskip
+
+azb = importorskip("arviz_base")
+xr = importorskip("xarray")
 
 from arviz_stats.helper_loo import (
     _check_log_density,
@@ -25,12 +28,13 @@ from arviz_stats.helper_loo import (
     _warn_pointwise_loo,
 )
 from arviz_stats.loo import loo_subsample
+from arviz_stats.manipulation import thin
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
 @pytest.fixture(name="centered_eight", scope="session")
 def fixture_centered_eight():
-    return load_arviz_data("centered_eight")
+    return azb.load_arviz_data("centered_eight")
 
 
 @pytest.fixture(scope="module")
@@ -291,6 +295,29 @@ def test_plpd_approx_errors(centered_eight):
         _plpd_approx(
             centered_eight, var_name="obs", log_lik_fn=bad_return_fn, param_names=["theta"]
         )
+
+
+def test_thin_draws(log_likelihood_dataset):
+    log_likelihood = log_likelihood_dataset["obs"]
+    original_draws = log_likelihood.draw.size
+    original_chains = log_likelihood.chain.size
+    original_samples = original_draws * original_chains
+
+    thinned = thin(log_likelihood, factor=original_samples + 100)
+    assert thinned.draw.size == original_draws
+    assert thinned.chain.size == original_chains
+
+    thinned = thin(log_likelihood)
+    assert thinned.chain.size == original_chains
+    assert thinned.draw.size == original_draws // 5
+
+    thinned = thin(log_likelihood, factor=5)
+    assert thinned.chain.size == original_chains
+    assert thinned.draw.size == original_draws // 5
+
+    thinned = thin(log_likelihood, factor=0)
+    assert thinned.draw.size == original_draws
+    assert thinned.chain.size == original_chains
 
 
 def test_select_obs_by_indices():

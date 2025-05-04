@@ -2,16 +2,18 @@
 
 import warnings
 from collections import namedtuple
+from numbers import Number
 
 import numpy as np
 import xarray as xr
 from arviz_base import convert_to_datatree, extract
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.utils import get_log_likelihood_dataset
+from arviz_stats.utils import get_log_likelihood
 
 __all__ = [
     "_get_r_eff",
+    "_plpd_approx",
     "_diff_srs_estimator",
     "_srs_estimator",
     "_generate_subsample_indices",
@@ -20,7 +22,6 @@ __all__ = [
     "_check_log_density",
     "_warn_pareto_k",
     "_warn_pointwise_loo",
-    "_plpd_approx",
     "_prepare_subsample",
     "_prepare_update_subsample",
     "_select_obs_by_indices",
@@ -30,7 +31,7 @@ __all__ = [
 
 LooInputs = namedtuple(
     "LooInputs",
-    ["log_likelihood_ds", "var_name", "sample_dims", "obs_dims", "n_samples", "n_data_points"],
+    ["log_likelihood", "var_name", "sample_dims", "obs_dims", "n_samples", "n_data_points"],
 )
 SubsampleData = namedtuple(
     "SubsampleData",
@@ -80,10 +81,12 @@ def _plpd_approx(
     var_name : str
         Name of the variable in `observed_data` for which to compute the PLPD approximation.
     log_lik_fn : callable
-        A user-provided function that computes the log likelihood. It must accept the
-        observed data as its first argument, followed by the mean values
-        of the posterior parameters specified by `param_names` as subsequent
-        positional arguments.
+        A function that computes the log-likelihood for a single observation given the
+        mean values of posterior parameters. Required only when ``method="plpd"``.
+        The function must accept the observed data value for a single point as its
+        first argument (scalar). Subsequent arguments must correspond to the mean
+        values of the posterior parameters specified by ``param_names``, passed in the
+        same order. It should return a single scalar log-likelihood value.
     param_names : list[str], optional
         An ordered list of parameter names from the posterior group whose mean values
         will be passed as positional arguments (after the data point value) to `log_lik_fn`.
@@ -124,14 +127,18 @@ def _plpd_approx(
             if not log:
                 result = np.log(np.maximum(result, np.finfo(float).tiny))
 
-            if not isinstance(result, int | float | np.number):
+            if not isinstance(result, Number):
                 raise TypeError(
                     f"log_lik_fn must return a numeric scalar. Got type: {type(result)}"
                 )
             plpd_values[idx] = result
         except Exception as e:
+            coord_info = ", ".join(
+                [f"{dim}: {observed[idx].coords[dim].values.item()}" for dim in observed.coords]
+            )
             raise RuntimeError(
                 f"Error computing log-likelihood with log_lik_fn for data point "
+                f"with coordinates ({coord_info}) "
                 f"at index {idx} (value: {value}): {e}"
             ) from e
 
@@ -176,8 +183,8 @@ def _diff_srs_estimator(
         - se_val: The total standard error (approximation + sampling uncertainty).
     """
     pointwise_diff = elpd_loo_i_sample - lpd_approx_sample
-    lpd_approx_sum_all = lpd_approx_all.sum().values
-    scaled_mean_pointwise_diff = n_data_points * pointwise_diff.mean().values
+    lpd_approx_sum_all = lpd_approx_all.sum().values.item()
+    scaled_mean_pointwise_diff = n_data_points * pointwise_diff.mean().values.item()
     elpd_loo_estimate = lpd_approx_sum_all + scaled_mean_pointwise_diff
 
     if subsample_size > 1:
@@ -191,8 +198,8 @@ def _diff_srs_estimator(
         subsampling_se = np.sqrt(subsampling_variance) if subsampling_variance >= 0 else np.inf
 
         # Total variance (approximation + sampling)
-        lpd_approx_sq_sum_all = (lpd_approx_all**2).sum().values
-        mean_sq_diff = ((elpd_loo_i_sample**2) - (lpd_approx_sample**2)).mean().values
+        lpd_approx_sq_sum_all = (lpd_approx_all**2).sum().values.item()
+        mean_sq_diff = ((elpd_loo_i_sample**2) - (lpd_approx_sample**2)).mean().values.item()
         scaled_mean_sq_diff = n_data_points * mean_sq_diff
 
         if n_data_points > 0:
@@ -240,11 +247,11 @@ def _srs_estimator(
         - var_y_hat: The variance of the estimator (sampling uncertainty).
         - hat_var_y: The estimated variance of the statistic.
     """
-    y_sample_mean = y_sample.mean().values
+    y_sample_mean = y_sample.mean().values.item()
     y_hat = n_data_points * y_sample_mean
 
     if subsample_size > 1:
-        y_sample_var = y_sample.var(ddof=1).values
+        y_sample_var = y_sample.var(ddof=1).values.item()
         var_y_hat = (
             (n_data_points**2)
             * (1 - subsample_size / n_data_points)
@@ -288,14 +295,19 @@ def _generate_subsample_indices(n_data_points, observations, seed):
     return indices, subsample_size
 
 
-def _prepare_loo_inputs(data, var_name):
+def _prepare_loo_inputs(data, var_name, thin_factor=None):
     """Prepare inputs for PSIS-LOO-CV."""
     data = convert_to_datatree(data)
 
-    log_likelihood_ds = get_log_likelihood_dataset(data, var_names=var_name)
-    if var_name is None:
-        var_name = list(log_likelihood_ds.data_vars.keys())[0]
-    log_likelihood = log_likelihood_ds[var_name]
+    log_likelihood = get_log_likelihood(data, var_name=var_name)
+    if var_name is None and log_likelihood.name is not None:
+        var_name = log_likelihood.name
+
+    if thin_factor is not None:
+        # Avoid circular import
+        from arviz_stats.manipulation import thin
+
+        log_likelihood = thin(log_likelihood, factor=thin_factor)
 
     sample_dims = ["chain", "draw"]
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
@@ -304,7 +316,7 @@ def _prepare_loo_inputs(data, var_name):
         [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
     )
     return LooInputs(
-        log_likelihood_ds,
+        log_likelihood,
         var_name,
         sample_dims,
         obs_dims,
@@ -380,7 +392,7 @@ def _prepare_update_subsample(
     loo_inputs = _prepare_loo_inputs(data, var_name)
     old_elpd_i_da, old_pareto_k_da = _extract_loo_data(loo_orig)
 
-    log_likelihood_da = loo_inputs.log_likelihood_ds[loo_inputs.var_name]
+    log_likelihood = loo_inputs.log_likelihood
     concat_dim = old_elpd_i_da.dims[0]
     old_indices = np.where(~np.isnan(loo_orig.elpd_i.values.flatten()))[0]
 
@@ -405,7 +417,7 @@ def _prepare_update_subsample(
 
     if method == "lpd":
         lpd_approx_all = logsumexp(
-            log_likelihood_da, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
+            log_likelihood, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
         )
     else:  # method == "plpd"
         lpd_approx_all = _plpd_approx(
@@ -417,7 +429,7 @@ def _prepare_update_subsample(
         )
 
     log_likelihood_new_da = _select_obs_by_indices(
-        log_likelihood_da, new_indices, loo_inputs.obs_dims, "__obs__"
+        log_likelihood, new_indices, loo_inputs.obs_dims, "__obs__"
     )
 
     log_likelihood_new_ds = xr.Dataset({loo_inputs.var_name: log_likelihood_new_da})

@@ -108,12 +108,12 @@ def loo(data, pointwise=None, var_name=None, reff=None):
     if reff is None:
         reff = _get_r_eff(data, loo_inputs.n_samples)
 
-    log_weights, pareto_k = loo_inputs.log_likelihood_ds.azstats.psislw(
+    log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
         r_eff=reff, dims=loo_inputs.sample_dims
     )
 
     return _compute_loo_results(
-        log_likelihood=loo_inputs.log_likelihood_ds,
+        log_likelihood=loo_inputs.log_likelihood,
         var_name=loo_inputs.var_name,
         pointwise=pointwise,
         sample_dims=loo_inputs.sample_dims,
@@ -577,12 +577,12 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     loo_inputs = _prepare_loo_inputs(data, var_name)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
-    log_likelihood_da = loo_inputs.log_likelihood_ds[loo_inputs.var_name]
+    log_likelihood = loo_inputs.log_likelihood
     log_p = _check_log_density(
-        log_p, "log_p", log_likelihood_da, loo_inputs.n_samples, loo_inputs.sample_dims
+        log_p, "log_p", log_likelihood, loo_inputs.n_samples, loo_inputs.sample_dims
     )
     log_q = _check_log_density(
-        log_q, "log_q", log_likelihood_da, loo_inputs.n_samples, loo_inputs.sample_dims
+        log_q, "log_q", log_likelihood, loo_inputs.n_samples, loo_inputs.sample_dims
     )
 
     approx_correction = log_p - log_q
@@ -590,16 +590,12 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     # Handle underflow/overflow
     approx_correction = approx_correction - approx_correction.max()
 
-    corrected_log_ratios = -loo_inputs.log_likelihood_ds.copy()
-    corrected_log_ratios[loo_inputs.var_name] = (
-        corrected_log_ratios[loo_inputs.var_name] + approx_correction
-    )
+    corrected_log_ratios = -log_likelihood.copy()
+    corrected_log_ratios = corrected_log_ratios + approx_correction
 
     # Handle underflow/overflow
-    log_ratio_max = corrected_log_ratios[loo_inputs.var_name].max(dim=loo_inputs.sample_dims)
-    corrected_log_ratios[loo_inputs.var_name] = (
-        corrected_log_ratios[loo_inputs.var_name] - log_ratio_max
-    )
+    log_ratio_max = corrected_log_ratios.max(dim=loo_inputs.sample_dims)
+    corrected_log_ratios = corrected_log_ratios - log_ratio_max
 
     # ignore r_eff here, set to r_eff=1.0
     log_weights, pareto_k = corrected_log_ratios.azstats.psislw(
@@ -607,7 +603,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     )
 
     return _compute_loo_results(
-        log_likelihood=loo_inputs.log_likelihood_ds,
+        log_likelihood=loo_inputs.log_likelihood,
         var_name=loo_inputs.var_name,
         pointwise=pointwise,
         sample_dims=loo_inputs.sample_dims,
@@ -629,6 +625,7 @@ def loo_subsample(
     log_q=None,
     seed=315,
     method="lpd",
+    thin=None,
     log_lik_fn=None,
     param_names=None,
     log=True,
@@ -665,25 +662,34 @@ def loo_subsample(
         of actual samples. Computed from trace by default.
     log_p : ndarray or DataArray, optional
         The (target) log-density evaluated at samples from the target distribution (p).
-        If provided along with log_q, approximate posterior correction will be applied.
+        If provided along with ``log_q``, approximate posterior correction will be applied.
     log_q : ndarray or DataArray, optional
         The (proposal) log-density evaluated at samples from the proposal distribution (q).
-        If provided along with log_p, approximate posterior correction will be applied.
+        If provided along with ``log_p``, approximate posterior correction will be applied.
     seed: int, optional
         Seed for random sampling.
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
         - 'lpd': Use standard log predictive density approximation (default)
-        - 'plpd': Use Point Log Predictive Density approximation which requires a log_lik_fn
-    log_lik_fn: callable, optional
-        Required when method='plpd'. A user-provided function that computes the
-        log likelihood for each data point using posterior means.
-    param_names: list, optional
-        Only used when method='plpd'. List of parameter names to extract from
+        - 'plpd': Use Point Log Predictive Density approximation which requires a ``log_lik_fn``.
+    thin: int, optional
+        Thinning factor for posterior draws. If specified, the posterior will be thinned
+        by this factor to reduce computation time. For example, using thin=2 will use
+        every 2nd draw. If None (default), all posterior draws are used. This value is stored
+        in the returned ELPDData object and will be automatically used by ``update_subsample``.
+    log_lik_fn : callable, optional
+        A function that computes the log-likelihood for a single observation given the
+        mean values of posterior parameters. Required only when ``method="plpd"``.
+        The function must accept the observed data value for a single point as its
+        first argument (scalar). Subsequent arguments must correspond to the mean
+        values of the posterior parameters specified by ``param_names``, passed in the
+        same order. It should return a single scalar log-likelihood value.
+    param_names : list, optional
+        Only used when ``method="plpd"``. List of parameter names to extract from
         the posterior. If None, all parameters are used.
     log: bool, optional
-        Only used when method='plpd'. Whether the log_lik_fn returns
+        Only used when ``method="plpd"``. Whether the ``log_lik_fn`` returns
         log-likelihood (True) or likelihood (False). Default is True.
 
     Returns
@@ -709,10 +715,11 @@ def loo_subsample(
         - **subsample_size**: Number of observations in the subsample (m).
         - **log_p**: Log density of the target posterior.
         - **log_q**: Log density of the proposal posterior.
+        - **thin**: Thinning factor for posterior draws.
 
     Examples
     --------
-    Calculate sub-sampled LOO using 4 random observations:
+    Calculate sub-sampled PSIS-LOO-CV using 4 random observations:
 
     .. ipython::
 
@@ -727,6 +734,35 @@ def loo_subsample(
     .. ipython::
 
         In [2]: loo_results.elpd_i
+
+    We can also use the PLPD approximation method with a custom log-likelihood function.
+    We need to define a function that computes the log-likelihood for a single observation
+    given the mean values of posterior parameters. For the Eight Schools model, we define a
+    function that computes the likelihood for each observation using the *global mean* of the
+    parameters (e.g., the overall mean `theta`):
+
+    .. ipython::
+
+        In [1]: import numpy as np
+           ...: from arviz_stats import loo_subsample
+           ...: from arviz_base import load_arviz_data
+           ...: from scipy.stats import norm
+           ...: data = load_arviz_data("centered_eight")
+           ...:
+           ...: def log_lik_fn(y, theta):
+           ...:     sigma = 12.5  # Using a fixed sigma for simplicity
+           ...:     return norm.logpdf(y, loc=theta, scale=sigma)
+           ...:
+           ...: loo_results = loo_subsample(
+           ...:     data,
+           ...:     observations=4,
+           ...:     var_name="obs",
+           ...:     method="plpd",
+           ...:     log_lik_fn=log_lik_fn,
+           ...:     param_names=["theta"],
+           ...:     pointwise=True
+           ...: )
+           ...: loo_results
 
     See Also
     --------
@@ -752,7 +788,7 @@ def loo_subsample(
         https://proceedings.mlr.press/v97/magnusson19a.html
         arXiv preprint https://arxiv.org/abs/1904.10679
     """
-    loo_inputs = _prepare_loo_inputs(data, var_name)
+    loo_inputs = _prepare_loo_inputs(data, var_name, thin)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     if method not in ["lpd", "plpd"]:
@@ -760,13 +796,13 @@ def loo_subsample(
     if method == "plpd" and log_lik_fn is None:
         raise ValueError("log_lik_fn must be provided when method='plpd'")
 
-    log_likelihood_da = loo_inputs.log_likelihood_ds[loo_inputs.var_name]
+    log_likelihood = loo_inputs.log_likelihood
     if reff is None:
         reff = _get_r_eff(data, loo_inputs.n_samples)
 
     subsample_data = _prepare_subsample(
         data,
-        log_likelihood_da,
+        log_likelihood,
         loo_inputs.var_name,
         observations,
         seed,
@@ -876,6 +912,7 @@ def loo_subsample(
         subsample_data.subsample_size,
         log_p,
         log_q,
+        thin,
     )
 
 
@@ -895,7 +932,7 @@ def update_subsample(
 
     Extends a sub-sampled PSIS-LOO-CV result by adding new observations to the sub-sample
     without recomputing values for previously sampled observations. This allows for
-    incrementally improving the sub-sampled PSIS-LOO-CV estimate with additional observations
+    incrementally improving the sub-sampled PSIS-LOO-CV estimate with additional observations.
 
     The sub-sampling method is described in [1]_.
 
@@ -924,17 +961,19 @@ def update_subsample(
         Method used for approximating the pointwise log predictive density:
 
         - 'lpd': Use standard log predictive density approximation (default)
-        - 'plpd': Use Point Log Predictive Density approximation which requires a log_lik_fn
-    log_lik_fn: callable, optional
-        A user-provided function that computes the log likelihood. It must accept the
-        observed data as its first argument, followed by the mean values
-        of the posterior parameters specified by `param_names` as subsequent
-        positional arguments.
+        - 'plpd': Use Point Log Predictive Density approximation which requires a ``log_lik_fn``.
+    log_lik_fn : callable, optional
+        A function that computes the log-likelihood for a single observation given the
+        mean values of posterior parameters. Required only when ``method="plpd"``.
+        The function must accept the observed data value for a single point as its
+        first argument (scalar). Subsequent arguments must correspond to the mean
+        values of the posterior parameters specified by ``param_names``, passed in the
+        same order. It should return a single scalar log-likelihood value.
     param_names: list, optional
-        Only used when method='plpd'. List of parameter names to extract from
+        Only used when ``method="plpd"``. List of parameter names to extract from
         the posterior. If None, all parameters are used.
     log: bool, optional
-        Only used when method='plpd'. Whether the log_lik_fn returns
+        Only used when ``method="plpd"``. Whether the ``log_lik_fn`` returns
         log-likelihood (True) or likelihood (False). Default is True.
 
     Returns
@@ -960,10 +999,11 @@ def update_subsample(
         - **subsample_size**: Number of observations in the subsample (original + new).
         - **log_p**: Log density of the target posterior.
         - **log_q**: Log density of the proposal posterior.
+        - **thin**: Thinning factor for posterior draws.
 
     Examples
     --------
-    Calculate initial sub-sampled LOO using 4 observations, then update with 4 more:
+    Calculate initial sub-sampled PSIS-LOO-CV using 4 observations, then update with 4 more:
 
     .. ipython::
         :okwarning:
@@ -972,7 +1012,7 @@ def update_subsample(
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data("non_centered_eight")
            ...: initial_loo = loo_subsample(data, observations=4, var_name="obs", pointwise=True)
-           ...: updated_loo = update_subsample(initial_loo, data, observations=4)
+           ...: updated_loo = update_subsample(initial_loo, data, observations=2)
            ...: updated_loo
 
     See Also
@@ -999,7 +1039,8 @@ def update_subsample(
     if method == "plpd" and log_lik_fn is None:
         raise ValueError("log_lik_fn must be provided when method='plpd'")
 
-    loo_inputs = _prepare_loo_inputs(data, var_name)
+    thin = getattr(loo_orig, "thin_factor", None)
+    loo_inputs = _prepare_loo_inputs(data, var_name, thin)
     update_data = _prepare_update_subsample(
         loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log
     )
@@ -1085,6 +1126,7 @@ def update_subsample(
         update_data.combined_size,
         log_p,
         log_q,
+        thin,
     )
 
 
@@ -1382,17 +1424,21 @@ def _compute_loo_results(
     if log_weights is None or pareto_k is None:
         log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dims=sample_dims)
 
-    log_weights[var_name] += log_likelihood[var_name]
-    pareto_k_da = pareto_k[var_name]
+    log_weights += log_likelihood
+    pareto_k_da = pareto_k
 
     warn_mg, good_k = _warn_pareto_k(pareto_k_da, n_samples)
-    elpd_i = logsumexp(log_weights, dims=sample_dims)[var_name]
+    elpd_i = logsumexp(log_weights, dims=sample_dims)
 
     if return_pointwise:
+        if isinstance(elpd_i, xr.Dataset) and var_name in elpd_i:
+            elpd_i = elpd_i[var_name]
+        if isinstance(pareto_k_da, xr.Dataset) and var_name in pareto_k_da:
+            pareto_k_da = pareto_k_da[var_name]
         return elpd_i, pareto_k_da, approx_posterior
 
     elpd_i_values = elpd_i.values if hasattr(elpd_i, "values") else np.asarray(elpd_i)
-    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum()[var_name].values
+    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum().values
     elpd = np.sum(elpd_i_values)
     elpd_se = (n_data_points * np.var(elpd_i_values)) ** 0.5
     p_loo = elpd_raw - elpd

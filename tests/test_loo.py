@@ -40,7 +40,7 @@ def fixture_anes():
 
 @pytest.fixture(name="radon", scope="session")
 def fixture_radon():
-    return load_arviz_data("radon")
+    return azb.load_arviz_data("radon")
 
 
 @pytest.fixture(scope="module")
@@ -149,7 +149,7 @@ def test_compare_multiple_obs(multivariable_log_likelihood, centered_eight, non_
         "non_centered_eight": non_centered_eight,
         "problematic": multivariable_log_likelihood,
     }
-    with pytest.raises(ValueError, match="Encountered error trying to compute"):
+    with pytest.raises(TypeError, match="Encountered error trying to compute"):
         compare(
             compare_dict,
         )
@@ -447,3 +447,16 @@ def test_update_loo_subsample_errors(centered_eight):
     existing_indices = np.where(~np.isnan(initial_loo.elpd_i.values.flatten()))[0]
     with pytest.raises(ValueError, match="New indices .* overlap with existing indices"):
         update_subsample(initial_loo, centered_eight, observations=existing_indices[:5])
+
+
+def test_update_subsample_preserves_thin_factor(centered_eight):
+    initial_observations = 2
+    thin_factor = 2
+    initial_loo = loo_subsample(
+        centered_eight, observations=initial_observations, var_name="obs", thin=thin_factor
+    )
+    assert initial_loo.thin_factor == thin_factor
+
+    updated_loo = update_subsample(initial_loo, centered_eight, observations=2)
+
+    assert updated_loo.thin_factor == thin_factor
