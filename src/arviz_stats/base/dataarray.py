@@ -12,7 +12,12 @@ from xarray import DataArray, apply_ufunc, broadcast, concat
 from xarray_einstats.stats import _apply_nonreduce_func
 
 from arviz_stats.base.array import array_stats
-from arviz_stats.validate import validate_ci_prob, validate_dims, validate_dims_chain_draw_axis
+from arviz_stats.validate import (
+    validate_ci_prob,
+    validate_dims,
+    validate_dims_chain_draw_axis,
+    validate_prob,
+)
 
 
 class BaseDataArray:
@@ -60,7 +65,7 @@ class BaseDataArray:
         """Compute ess on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
         if method in ("tail", "local") and isinstance(prob, Sequence):
-            prob = [validate_ci_prob(p) for p in prob]
+            prob = (validate_prob(prob[0], allow_0=True), validate_prob(prob[1]))
         elif method in ("tail", "quantile"):
             prob = validate_ci_prob(prob)
         return apply_ufunc(
