@@ -45,6 +45,7 @@ UpdateSubsampleData = namedtuple(
         "old_elpd_i",
         "old_pareto_k",
         "new_indices",
+        "old_indices",
         "concat_dim",
         "combined_size",
     ],
@@ -441,6 +442,7 @@ def _prepare_update_subsample(
         old_elpd_i_da,
         old_pareto_k_da,
         new_indices,
+        old_indices,
         concat_dim,
         combined_size,
     )
@@ -487,6 +489,9 @@ def _extract_loo_data(loo_orig):
 
 def _select_obs_by_indices(data_array, indices, dims, dim_name):
     """Select a sub-sample from a DataArray based on indices."""
+    if not dims:
+        return data_array
+
     if len(dims) > 1:
         stacked_data = data_array.stack({dim_name: dims})
         coord = stacked_data[dim_name]
@@ -496,10 +501,9 @@ def _select_obs_by_indices(data_array, indices, dims, dim_name):
 
     valid_indices_mask = (indices >= 0) & (indices < coord.size)
     valid_indices = indices[valid_indices_mask]
-    subsample_coord_values = coord.values[valid_indices]
 
     dim = dim_name if len(dims) > 1 else dims[0]
-    return stacked_data.sel({dim: subsample_coord_values})
+    return stacked_data.isel({dim: valid_indices})
 
 
 def _select_obs_by_coords(data_array, coord_array, dims, dim_name):

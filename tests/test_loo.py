@@ -38,11 +38,6 @@ def fixture_anes():
     return azb.load_arviz_data("anes")
 
 
-@pytest.fixture(name="radon", scope="session")
-def fixture_radon():
-    return azb.load_arviz_data("radon")
-
-
 @pytest.fixture(scope="module")
 def multivariable_log_likelihood(centered_eight):
     centered_eight = centered_eight.copy()
