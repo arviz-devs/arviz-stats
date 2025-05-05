@@ -26,6 +26,7 @@ __all__ = [
     "_prepare_update_subsample",
     "_select_obs_by_indices",
     "_select_obs_by_coords",
+    "_prepare_full_arrays",
 ]
 
 
@@ -446,6 +447,34 @@ def _prepare_update_subsample(
         concat_dim,
         combined_size,
     )
+
+
+def _prepare_full_arrays(
+    pointwise_values,
+    pareto_k_values,
+    ref_array,
+    indices,
+    obs_dims,
+    elpd_loo_hat=None,
+):
+    """Prepare full arrays for pointwise ELPD and Pareto k values."""
+    if not obs_dims:
+        # If no obs dim, the pointwise results are already the full results
+        return pointwise_values, pareto_k_values
+
+    # Only create full arrays and assign if there are obs dims
+    elpd_i_full, pareto_k_full = (
+        xr.full_like(ref_array, fill_value=np.nan, dtype=np.float64).rename("elpd_i"),
+        xr.full_like(ref_array, fill_value=np.nan, dtype=np.float64).rename("pareto_k"),
+    )
+
+    target_dim = "__obs__" if len(obs_dims) > 1 else obs_dims[0]
+    elpd_i_full[{target_dim: indices}] = pointwise_values.values
+    pareto_k_full[{target_dim: indices}] = pareto_k_values.values
+
+    if elpd_loo_hat is not None:
+        _warn_pointwise_loo(elpd_loo_hat, elpd_i_full.values)
+    return elpd_i_full, pareto_k_full
 
 
 def _extract_loo_data(loo_orig):

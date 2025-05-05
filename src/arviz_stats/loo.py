@@ -16,6 +16,7 @@ from arviz_stats.helper_loo import (
     _check_log_density,
     _diff_srs_estimator,
     _get_r_eff,
+    _prepare_full_arrays,
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
@@ -882,29 +883,14 @@ def loo_subsample(
             thin,
         )
 
-    elpd_i_full = None
-    pareto_k_full = None
-
-    if loo_inputs.obs_dims:
-        # Only create full arrays and assign if there are obs dims
-        elpd_i_full, pareto_k_full = (
-            xr.full_like(subsample_data.lpd_approx_all, fill_value=np.nan, dtype=np.float64).rename(
-                "elpd_i"
-            ),
-            xr.full_like(subsample_data.lpd_approx_all, fill_value=np.nan, dtype=np.float64).rename(
-                "pareto_k"
-            ),
-        )
-
-        target_dim = "__obs__" if len(loo_inputs.obs_dims) > 1 else loo_inputs.obs_dims[0]
-        elpd_i_full[{target_dim: subsample_data.indices}] = elpd_loo_i.values
-        pareto_k_full[{target_dim: subsample_data.indices}] = pareto_k_sample_da.values
-
-        _warn_pointwise_loo(elpd_loo_hat, elpd_i_full.values)
-    else:
-        # If no obs dim, the pointwise results are already the full results
-        elpd_i_full = elpd_loo_i
-        pareto_k_full = pareto_k_sample_da
+    elpd_i_full, pareto_k_full = _prepare_full_arrays(
+        elpd_loo_i,
+        pareto_k_sample_da,
+        subsample_data.lpd_approx_all,
+        subsample_data.indices,
+        loo_inputs.obs_dims,
+        elpd_loo_hat,
+    )
 
     return ELPDData(
         "loo",
@@ -1106,30 +1092,15 @@ def update_subsample(
         update_data.combined_size,
     )
 
-    elpd_i_full = None
-    pareto_k_full = None
-
-    if loo_inputs.obs_dims:
-        # Only create full arrays and assign if there are obs dims
-        elpd_i_full, pareto_k_full = (
-            xr.full_like(update_data.lpd_approx_all, fill_value=np.nan, dtype=np.float64).rename(
-                "elpd_i"
-            ),
-            xr.full_like(update_data.lpd_approx_all, fill_value=np.nan, dtype=np.float64).rename(
-                "pareto_k"
-            ),
-        )
-
-        target_dim = "__obs__" if len(loo_inputs.obs_dims) > 1 else loo_inputs.obs_dims[0]
-        combined_indices = np.concatenate((update_data.old_indices, update_data.new_indices))
-        elpd_i_full[{target_dim: combined_indices}] = combined_elpd_i_da.values
-        pareto_k_full[{target_dim: combined_indices}] = combined_pareto_k_da.values
-
-        _warn_pointwise_loo(elpd_loo_hat, elpd_i_full.values)
-    else:
-        # If no obs dim, the pointwise results are already the full results
-        elpd_i_full = combined_elpd_i_da
-        pareto_k_full = combined_pareto_k_da
+    combined_indices = np.concatenate((update_data.old_indices, update_data.new_indices))
+    elpd_i_full, pareto_k_full = _prepare_full_arrays(
+        combined_elpd_i_da,
+        combined_pareto_k_da,
+        update_data.lpd_approx_all,
+        combined_indices,
+        loo_inputs.obs_dims,
+        elpd_loo_hat,
+    )
 
     return ELPDData(
         "loo",
