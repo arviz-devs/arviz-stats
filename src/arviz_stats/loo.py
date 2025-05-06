@@ -1,7 +1,6 @@
 """Pareto-smoothed importance sampling LOO (PSIS-LOO-CV) related functions."""
 
 import itertools
-import warnings
 from collections import namedtuple
 from copy import deepcopy
 
@@ -13,6 +12,19 @@ from scipy.optimize import minimize
 from scipy.stats import dirichlet
 from xarray_einstats.stats import logsumexp
 
+from arviz_stats.helper_loo import (
+    _check_log_density,
+    _diff_srs_estimator,
+    _get_r_eff,
+    _prepare_full_arrays,
+    _prepare_loo_inputs,
+    _prepare_subsample,
+    _prepare_update_subsample,
+    _select_obs_by_coords,
+    _srs_estimator,
+    _warn_pareto_k,
+    _warn_pointwise_loo,
+)
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset, round_num
 
 
@@ -91,30 +103,23 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    data = convert_to_datatree(data)
-
-    log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
-    var_name = list(log_likelihood.data_vars.keys())[0]
+    loo_inputs = _prepare_loo_inputs(data, var_name)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
-    sample_dims = ["chain", "draw"]
-
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = np.prod(
-        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
-    )
 
     if reff is None:
-        reff = _get_r_eff(data, n_samples)
+        reff = _get_r_eff(data, loo_inputs.n_samples)
 
-    log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dims=sample_dims)
+    log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
+        r_eff=reff, dims=loo_inputs.sample_dims
+    )
 
     return _compute_loo_results(
-        log_likelihood=log_likelihood,
-        var_name=var_name,
+        log_likelihood=loo_inputs.log_likelihood,
+        var_name=loo_inputs.var_name,
         pointwise=pointwise,
-        sample_dims=sample_dims,
-        n_samples=n_samples,
-        n_data_points=n_data_points,
+        sample_dims=loo_inputs.sample_dims,
+        n_samples=loo_inputs.n_samples,
+        n_data_points=loo_inputs.n_data_points,
         log_weights=log_weights,
         pareto_k=pareto_k,
         approx_posterior=False,
@@ -456,7 +461,10 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV) for approximate
     posteriors (e.g., from variational inference). Requires log-densities of the target (log_p)
-    and proposal (log_q) distributions. The PSIS-LOO-CV method is described in [1]_ and [2]_.
+    and proposal (log_q) distributions.
+
+    The PSIS-LOO-CV method is described in [1]_ and [2]_. The approximate posterior correction
+    is computed using the method described in [3]_.
 
     Parameters
     ----------
@@ -546,7 +554,8 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
 
     See Also
     --------
-    loo : Standard PSIS-LOO cross-validation for MCMC samples.
+    loo : Standard PSIS-LOO-CV.
+    loo_subsample : Sub-sampled PSIS-LOO-CV.
     compare : Compare models based on their ELPD.
 
     References
@@ -559,22 +568,23 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
+
+    .. [3] Magnusson, M., Riis Andersen, M., Jonasson, J., & Vehtari, A. *Bayesian Leave-One-Out
+        Cross-Validation for Large Data.* Proceedings of the 36th International Conference on
+        Machine Learning, PMLR 97:4244–4253 (2019)
+        https://proceedings.mlr.press/v97/magnusson19a.html
+        arXiv preprint https://arxiv.org/abs/1904.10679
     """
-    data = convert_to_datatree(data)
-
-    log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
-    if var_name is None:
-        var_name = list(log_likelihood.data_vars.keys())[0]
+    loo_inputs = _prepare_loo_inputs(data, var_name)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
-    sample_dims = ["chain", "draw"]
 
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = np.prod(
-        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
+    log_likelihood = loo_inputs.log_likelihood
+    log_p = _check_log_density(
+        log_p, "log_p", log_likelihood, loo_inputs.n_samples, loo_inputs.sample_dims
     )
-
-    log_p = _check_log_density(log_p, "log_p", log_likelihood, n_samples, sample_dims)
-    log_q = _check_log_density(log_q, "log_q", log_likelihood, n_samples, sample_dims)
+    log_q = _check_log_density(
+        log_q, "log_q", log_likelihood, loo_inputs.n_samples, loo_inputs.sample_dims
+    )
 
     approx_correction = log_p - log_q
 
@@ -582,25 +592,534 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     approx_correction = approx_correction - approx_correction.max()
 
     corrected_log_ratios = -log_likelihood.copy()
-    corrected_log_ratios[var_name] = corrected_log_ratios[var_name] + approx_correction
+    corrected_log_ratios = corrected_log_ratios + approx_correction
 
     # Handle underflow/overflow
-    log_ratio_max = corrected_log_ratios[var_name].max(dim=sample_dims)
-    corrected_log_ratios[var_name] = corrected_log_ratios[var_name] - log_ratio_max
+    log_ratio_max = corrected_log_ratios.max(dim=loo_inputs.sample_dims)
+    corrected_log_ratios = corrected_log_ratios - log_ratio_max
 
     # ignore r_eff here, set to r_eff=1.0
-    log_weights, pareto_k = corrected_log_ratios.azstats.psislw(r_eff=1.0, dims=sample_dims)
+    log_weights, pareto_k = corrected_log_ratios.azstats.psislw(
+        r_eff=1.0, dims=loo_inputs.sample_dims
+    )
 
     return _compute_loo_results(
-        log_likelihood=log_likelihood,
-        var_name=var_name,
+        log_likelihood=loo_inputs.log_likelihood,
+        var_name=loo_inputs.var_name,
         pointwise=pointwise,
-        sample_dims=sample_dims,
-        n_samples=n_samples,
-        n_data_points=n_data_points,
+        sample_dims=loo_inputs.sample_dims,
+        n_samples=loo_inputs.n_samples,
+        n_data_points=loo_inputs.n_data_points,
         log_weights=log_weights,
         pareto_k=pareto_k,
         approx_posterior=True,
+    )
+
+
+def loo_subsample(
+    data,
+    observations,
+    pointwise=None,
+    var_name=None,
+    reff=None,
+    log_p=None,
+    log_q=None,
+    seed=315,
+    method="lpd",
+    thin=None,
+    log_lik_fn=None,
+    param_names=None,
+    log=True,
+):
+    """Compute PSIS-LOO-CV using sub-sampling.
+
+    Estimates the expected log pointwise predictive density (elpd) using Pareto smoothed
+    importance sampling leave-one-out cross-validation (PSIS-LOO-CV) with sub-sampling
+    for large datasets. Uses either log predictive density (LPD) or point log predictive
+    density (PLPD) approximation and applies a difference estimator based on a simple random
+    sample without replacement.
+
+    The PSIS-LOO-CV method is described in [1]_, [2]_. The sub-sampling
+    method is described in [3]_.
+
+    Parameters
+    ----------
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior and the log_likelihood groups.
+    observations : int or ndarray
+        The sub-sample observations to use:
+
+        - An integer specifying the number of observations to randomly sub-sample without
+          replacement.
+        - An array of integer indices specifying the exact observations to use.
+    pointwise: bool, optional
+        If True the pointwise predictive accuracy will be returned. Defaults to
+        ``rcParams["stats.ic_pointwise"]``.
+    var_name : str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation.
+    reff: float, optional
+        Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
+        of actual samples. Computed from trace by default.
+    log_p : ndarray or DataArray, optional
+        The (target) log-density evaluated at samples from the target distribution (p).
+        If provided along with ``log_q``, approximate posterior correction will be applied.
+    log_q : ndarray or DataArray, optional
+        The (proposal) log-density evaluated at samples from the proposal distribution (q).
+        If provided along with ``log_p``, approximate posterior correction will be applied.
+    seed: int, optional
+        Seed for random sampling.
+    method: str, optional
+        Method used for approximating the pointwise log predictive density:
+
+        - 'lpd': Use standard log predictive density approximation (default)
+        - 'plpd': Use Point Log Predictive Density approximation which requires a ``log_lik_fn``.
+    thin: int, optional
+        Thinning factor for posterior draws. If specified, the posterior will be thinned
+        by this factor to reduce computation time. For example, using thin=2 will use
+        every 2nd draw. If None (default), all posterior draws are used. This value is stored
+        in the returned ELPDData object and will be automatically used by ``update_subsample``.
+    log_lik_fn : callable, optional
+        A function that computes the log-likelihood for a single observation given the
+        mean values of posterior parameters. Required only when ``method="plpd"``.
+        The function must accept the observed data value for a single point as its
+        first argument (scalar). Subsequent arguments must correspond to the mean
+        values of the posterior parameters specified by ``param_names``, passed in the
+        same order. It should return a single scalar log-likelihood value.
+    param_names : list, optional
+        Only used when ``method="plpd"``. List of parameter names to extract from
+        the posterior. If None, all parameters are used.
+    log: bool, optional
+        Only used when ``method="plpd"``. Whether the ``log_lik_fn`` returns
+        log-likelihood (True) or likelihood (False). Default is True.
+
+    Returns
+    -------
+    ELPDData
+        Object with the following attributes:
+
+        - **elpd**: approximated expected log pointwise predictive density (elpd)
+        - **se**: standard error of the elpd (includes approximation and sampling uncertainty)
+        - **p**: effective number of parameters
+        - **n_samples**: number of samples in the posterior
+        - **n_data_points**: total number of data points (N)
+        - **warning**: True if the estimated shape parameter k of the Pareto distribution
+          is > ``good_k`` for any observation in the subsample.
+        - **elpd_i**: :class:`~xarray.DataArray` with pointwise elpd values (filled with NaNs
+          for non-subsampled points), only if ``pointwise=True``.
+        - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values for the subsample
+          (filled with NaNs for non-subsampled points), only if ``pointwise=True``.
+        - **scale**: scale of the elpd results ("log", "negative_log", or "deviance").
+        - **good_k**: Threshold for Pareto k warnings.
+        - **approx_posterior**: True if approximate posterior was used.
+        - **subsampling_se**: Standard error estimate from subsampling uncertainty only.
+        - **subsample_size**: Number of observations in the subsample (m).
+        - **log_p**: Log density of the target posterior.
+        - **log_q**: Log density of the proposal posterior.
+        - **thin**: Thinning factor for posterior draws.
+
+    Examples
+    --------
+    Calculate sub-sampled PSIS-LOO-CV using 4 random observations:
+
+    .. ipython::
+
+        In [1]: from arviz_stats import loo_subsample
+           ...: from arviz_base import load_arviz_data
+           ...: data = load_arviz_data("centered_eight")
+           ...: loo_results = loo_subsample(data, observations=4, var_name="obs", pointwise=True)
+           ...: loo_results
+
+    Return the pointwise values for the sub-sample:
+
+    .. ipython::
+
+        In [2]: loo_results.elpd_i
+
+    We can also use the PLPD approximation method with a custom log-likelihood function.
+    We need to define a function that computes the log-likelihood for a single observation
+    given the mean values of posterior parameters. For the Eight Schools model, we define a
+    function that computes the likelihood for each observation using the *global mean* of the
+    parameters (e.g., the overall mean `theta`):
+
+    .. ipython::
+
+        In [1]: import numpy as np
+           ...: from arviz_stats import loo_subsample
+           ...: from arviz_base import load_arviz_data
+           ...: from scipy.stats import norm
+           ...: data = load_arviz_data("centered_eight")
+           ...:
+           ...: def log_lik_fn(y, theta):
+           ...:     sigma = 12.5  # Using a fixed sigma for simplicity
+           ...:     return norm.logpdf(y, loc=theta, scale=sigma)
+           ...:
+           ...: loo_results = loo_subsample(
+           ...:     data,
+           ...:     observations=4,
+           ...:     var_name="obs",
+           ...:     method="plpd",
+           ...:     log_lik_fn=log_lik_fn,
+           ...:     param_names=["theta"],
+           ...:     pointwise=True
+           ...: )
+           ...: loo_results
+
+    See Also
+    --------
+    loo : Standard PSIS-LOO-CV.
+    loo_approximate_posterior : PSIS-LOO-CV for approximate posteriors.
+    compare : Compare models based on ELPD.
+    update_subsample : Update a previously computed sub-sampled LOO-CV.
+
+    References
+    ----------
+
+    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+        arXiv preprint https://arxiv.org/abs/1507.04544.
+
+    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+        arXiv preprint https://arxiv.org/abs/1507.02646
+
+    .. [3] Magnusson, M., Riis Andersen, M., Jonasson, J., & Vehtari, A. *Bayesian Leave-One-Out
+        Cross-Validation for Large Data.* Proceedings of the 36th International Conference on
+        Machine Learning, PMLR 97:4244–4253 (2019)
+        https://proceedings.mlr.press/v97/magnusson19a.html
+        arXiv preprint https://arxiv.org/abs/1904.10679
+    """
+    loo_inputs = _prepare_loo_inputs(data, var_name, thin)
+    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
+
+    if method not in ["lpd", "plpd"]:
+        raise ValueError("Method must be either 'lpd' or 'plpd'")
+    if method == "plpd" and log_lik_fn is None:
+        raise ValueError("log_lik_fn must be provided when method='plpd'")
+
+    log_likelihood = loo_inputs.log_likelihood
+    if reff is None:
+        reff = _get_r_eff(data, loo_inputs.n_samples)
+
+    subsample_data = _prepare_subsample(
+        data,
+        log_likelihood,
+        loo_inputs.var_name,
+        observations,
+        seed,
+        method,
+        log_lik_fn,
+        param_names,
+        log,
+        loo_inputs.obs_dims,
+        loo_inputs.sample_dims,
+        loo_inputs.n_data_points,
+        loo_inputs.n_samples,
+    )
+
+    sample_ds = xr.Dataset({loo_inputs.var_name: subsample_data.log_likelihood_sample})
+
+    if log_p is not None and log_q is not None:
+        sample_data = xr.DataTree()
+        sample_data["log_likelihood"] = sample_ds
+
+        loo_approx = loo_approximate_posterior(
+            sample_data,
+            log_p,
+            log_q,
+            True,
+            loo_inputs.var_name,
+        )
+        elpd_loo_i = loo_approx.elpd_i
+        pareto_k_sample_da = loo_approx.pareto_k
+        approx_posterior = True
+    else:
+        log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(
+            r_eff=reff, dims=loo_inputs.sample_dims
+        )
+        log_weights_ds += sample_ds
+
+        elpd_loo_i = logsumexp(log_weights_ds, dims=loo_inputs.sample_dims)[loo_inputs.var_name]
+        pareto_k_sample_da = pareto_k_ds[loo_inputs.var_name]
+        approx_posterior = False
+
+    warn_mg, good_k = _warn_pareto_k(pareto_k_sample_da, loo_inputs.n_samples)
+
+    elpd_loo_hat, subsampling_se, se = _diff_srs_estimator(
+        elpd_loo_i,
+        subsample_data.lpd_approx_sample,
+        subsample_data.lpd_approx_all,
+        loo_inputs.n_data_points,
+        subsample_data.subsample_size,
+    )
+
+    # Calculate p_loo using SRS estimation directly on the p_loo values
+    # from the subsample
+    p_loo_sample = subsample_data.lpd_approx_sample - elpd_loo_i
+    p_loo, _, _ = _srs_estimator(
+        p_loo_sample,
+        loo_inputs.n_data_points,
+        subsample_data.subsample_size,
+    )
+
+    if not pointwise:
+        return ELPDData(
+            "loo",
+            elpd_loo_hat,
+            se,
+            p_loo,
+            loo_inputs.n_samples,
+            loo_inputs.n_data_points,
+            "log",
+            warn_mg,
+            good_k,
+            None,
+            None,
+            approx_posterior,
+            subsampling_se,
+            subsample_data.subsample_size,
+            log_p,
+            log_q,
+            thin,
+        )
+
+    elpd_i_full, pareto_k_full = _prepare_full_arrays(
+        elpd_loo_i,
+        pareto_k_sample_da,
+        subsample_data.lpd_approx_all,
+        subsample_data.indices,
+        loo_inputs.obs_dims,
+        elpd_loo_hat,
+    )
+
+    return ELPDData(
+        "loo",
+        elpd_loo_hat,
+        se,
+        p_loo,
+        loo_inputs.n_samples,
+        loo_inputs.n_data_points,
+        "log",
+        warn_mg,
+        good_k,
+        elpd_i_full,
+        pareto_k_full,
+        approx_posterior,
+        subsampling_se,
+        subsample_data.subsample_size,
+        log_p,
+        log_q,
+        thin,
+    )
+
+
+def update_subsample(
+    loo_orig,
+    data,
+    observations=None,
+    var_name=None,
+    reff=None,
+    seed=315,
+    method="lpd",
+    log_lik_fn=None,
+    param_names=None,
+    log=True,
+):
+    """Update a sub-sampled PSIS-LOO-CV object with new observations.
+
+    Extends a sub-sampled PSIS-LOO-CV result by adding new observations to the sub-sample
+    without recomputing values for previously sampled observations. This allows for
+    incrementally improving the sub-sampled PSIS-LOO-CV estimate with additional observations.
+
+    The sub-sampling method is described in [1]_.
+
+    Parameters
+    ----------
+    loo_orig : ELPDData
+        Original PSIS-LOO-CV result created with ``loo_subsample`` with ``pointwise=True``.
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior and the log_likelihood groups.
+    observations : int or ndarray, optional
+        The additional observations to use:
+
+        - An integer specifying the number of new observations to randomly sub-sample
+          without replacement.
+        - An array of integer indices specifying the exact new observations to use.
+        - If None or 0, returns the original PSIS-LOO-CV result unchanged.
+    var_name : str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation.
+    reff : float, optional
+        Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
+        of actual samples. Computed from trace by default.
+    seed : int, optional
+        Seed for random sampling.
+    method: str, optional
+        Method used for approximating the pointwise log predictive density:
+
+        - 'lpd': Use standard log predictive density approximation (default)
+        - 'plpd': Use Point Log Predictive Density approximation which requires a ``log_lik_fn``.
+    log_lik_fn : callable, optional
+        A function that computes the log-likelihood for a single observation given the
+        mean values of posterior parameters. Required only when ``method="plpd"``.
+        The function must accept the observed data value for a single point as its
+        first argument (scalar). Subsequent arguments must correspond to the mean
+        values of the posterior parameters specified by ``param_names``, passed in the
+        same order. It should return a single scalar log-likelihood value.
+    param_names: list, optional
+        Only used when ``method="plpd"``. List of parameter names to extract from
+        the posterior. If None, all parameters are used.
+    log: bool, optional
+        Only used when ``method="plpd"``. Whether the ``log_lik_fn`` returns
+        log-likelihood (True) or likelihood (False). Default is True.
+
+    Returns
+    -------
+    ELPDData
+        Object with the following attributes:
+
+        - **elpd**: updated approximated expected log pointwise predictive density (elpd)
+        - **se**: standard error of the elpd (includes approximation and sampling uncertainty)
+        - **p**: effective number of parameters
+        - **n_samples**: number of samples in the posterior
+        - **n_data_points**: total number of data points (N)
+        - **warning**: True if the estimated shape parameter k of the Pareto distribution
+          is > ``good_k`` for any observation in the subsample.
+        - **elpd_i**: :class:`~xarray.DataArray` with pointwise elpd values (filled with NaNs
+          for non-subsampled points), only if ``pointwise=True``.
+        - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values for the subsample
+          (filled with NaNs for non-subsampled points), only if ``pointwise=True``.
+        - **scale**: scale of the elpd results ("log", "negative_log", or "deviance").
+        - **good_k**: Threshold for Pareto k warnings.
+        - **approx_posterior**: True if approximate posterior was used.
+        - **subsampling_se**: Standard error estimate from subsampling uncertainty only.
+        - **subsample_size**: Number of observations in the subsample (original + new).
+        - **log_p**: Log density of the target posterior.
+        - **log_q**: Log density of the proposal posterior.
+        - **thin**: Thinning factor for posterior draws.
+
+    Examples
+    --------
+    Calculate initial sub-sampled PSIS-LOO-CV using 4 observations, then update with 4 more:
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: from arviz_stats import loo_subsample, update_subsample
+           ...: from arviz_base import load_arviz_data
+           ...: data = load_arviz_data("non_centered_eight")
+           ...: initial_loo = loo_subsample(data, observations=4, var_name="obs", pointwise=True)
+           ...: updated_loo = update_subsample(initial_loo, data, observations=2)
+           ...: updated_loo
+
+    See Also
+    --------
+    loo : Exact PSIS-LOO cross-validation.
+    loo_subsample : PSIS-LOO-CV with subsampling.
+    compare : Compare models based on ELPD.
+
+    References
+    ----------
+
+    .. [1] Magnusson, M., Riis Andersen, M., Jonasson, J., & Vehtari, A. *Bayesian Leave-One-Out
+        Cross-Validation for Large Data.* Proceedings of the 36th International Conference on
+        Machine Learning, PMLR 97:4244–4253 (2019)
+        https://proceedings.mlr.press/v97/magnusson19a.html
+        arXiv preprint https://arxiv.org/abs/1904.10679
+    """
+    if observations is None or (isinstance(observations, int) and observations == 0):
+        return loo_orig
+    if loo_orig.elpd_i is None:
+        raise ValueError("Original loo_subsample result must have pointwise=True")
+    if method not in ["lpd", "plpd"]:
+        raise ValueError("Method must be either 'lpd' or 'plpd'")
+    if method == "plpd" and log_lik_fn is None:
+        raise ValueError("log_lik_fn must be provided when method='plpd'")
+
+    thin = getattr(loo_orig, "thin_factor", None)
+    loo_inputs = _prepare_loo_inputs(data, var_name, thin)
+    update_data = _prepare_update_subsample(
+        loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log
+    )
+
+    if reff is None:
+        reff = _get_r_eff(data, loo_inputs.n_samples)
+
+    # Get log densities from original ELPD data if they exist
+    log_p = getattr(loo_orig, "log_p", None)
+    log_q = getattr(loo_orig, "log_q", None)
+
+    elpd_loo_i_new_da, pareto_k_new_da, approx_posterior = _compute_loo_results(
+        log_likelihood=update_data.log_likelihood_new,
+        var_name=loo_inputs.var_name,
+        sample_dims=loo_inputs.sample_dims,
+        n_samples=loo_inputs.n_samples,
+        n_data_points=len(update_data.new_indices),
+        reff=reff,
+        log_p=log_p,
+        log_q=log_q,
+        return_pointwise=True,
+    )
+
+    combined_elpd_i_da = xr.concat(
+        [update_data.old_elpd_i, elpd_loo_i_new_da], dim=update_data.concat_dim
+    )
+    combined_pareto_k_da = xr.concat(
+        [update_data.old_pareto_k, pareto_k_new_da], dim=update_data.concat_dim
+    )
+
+    good_k = loo_orig.good_k
+    warn_mg, _ = _warn_pareto_k(combined_pareto_k_da, loo_inputs.n_samples)
+
+    lpd_approx_sample_da = _select_obs_by_coords(
+        update_data.lpd_approx_all, combined_elpd_i_da, loo_inputs.obs_dims, "__obs__"
+    )
+
+    elpd_loo_hat, subsampling_se, se = _diff_srs_estimator(
+        combined_elpd_i_da,
+        lpd_approx_sample_da,
+        update_data.lpd_approx_all,
+        loo_inputs.n_data_points,
+        update_data.combined_size,
+    )
+
+    # Calculate p_loo using SRS estimation directly on the p_loo values
+    # from the subsample
+    p_loo_sample = lpd_approx_sample_da - combined_elpd_i_da
+    p_loo, _, _ = _srs_estimator(
+        p_loo_sample,
+        loo_inputs.n_data_points,
+        update_data.combined_size,
+    )
+
+    combined_indices = np.concatenate((update_data.old_indices, update_data.new_indices))
+    elpd_i_full, pareto_k_full = _prepare_full_arrays(
+        combined_elpd_i_da,
+        combined_pareto_k_da,
+        update_data.lpd_approx_all,
+        combined_indices,
+        loo_inputs.obs_dims,
+        elpd_loo_hat,
+    )
+
+    return ELPDData(
+        "loo",
+        elpd_loo_hat,
+        se,
+        p_loo,
+        loo_inputs.n_samples,
+        loo_inputs.n_data_points,
+        "log",
+        warn_mg,
+        good_k,
+        elpd_i_full,
+        pareto_k_full,
+        approx_posterior,
+        subsampling_se,
+        update_data.combined_size,
+        log_p,
+        log_q,
+        thin,
     )
 
 
@@ -714,7 +1233,7 @@ def compare(
 
     ics = pd.DataFrame.from_dict(ics_dict, orient="index")
     ics.sort_values(by="elpd", inplace=True, ascending=False)
-    ics["elpd_i"] = ics["elpd_i"].apply(lambda x: x.flatten())
+    ics["elpd_i"] = ics["elpd_i"].apply(lambda x: x.values.flatten())
     ses = ics["se"]
 
     if method.lower() == "stacking":
@@ -799,20 +1318,6 @@ def compare(
     return df_comp.sort_values(by="elpd", ascending=False)
 
 
-def _get_r_eff(data, n_samples):
-    if not hasattr(data, "posterior"):
-        raise TypeError("Must be able to extract a posterior group from data.")
-    posterior = data.posterior
-    n_chains = len(posterior.chain)
-    if n_chains == 1:
-        reff = 1.0
-    else:
-        ess_p = posterior.azstats.ess(method="mean")
-        # this mean is over all data variables
-        reff = np.hstack([ess_p[v].values.flatten() for v in ess_p.data_vars]).mean() / n_samples
-    return reff
-
-
 def _ic_matrix(ics):
     """Store the previously computed pointwise predictive accuracy values (ics) in a 2D matrix."""
     cols, _ = ics.shape
@@ -884,36 +1389,54 @@ def _calculate_ics(
 def _compute_loo_results(
     log_likelihood,
     var_name,
-    pointwise,
     sample_dims,
     n_samples,
     n_data_points,
-    log_weights,
-    pareto_k,
+    pointwise=None,
+    log_weights=None,
+    pareto_k=None,
+    reff=None,
+    log_p=None,
+    log_q=None,
     approx_posterior=False,
+    return_pointwise=False,
 ):
-    """Compute PSIS-LOO-CV results from log-likelihood and weights."""
-    pareto_k_da = pareto_k[var_name]
-    log_weights += log_likelihood
-    warn_mg = False
-    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
+    """Compute PSIS-LOO-CV results."""
+    if log_p is not None and log_q is not None:
+        data = xr.DataTree()
+        data["log_likelihood"] = log_likelihood
 
-    if np.any(pareto_k_da > good_k):
-        warnings.warn(
-            f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-            "for one or more samples. You should consider using a more robust model, this is "
-            "because importance sampling is less likely to work well if the marginal posterior "
-            "and LOO posterior are very different. This is more likely to happen with a "
-            "non-robust model and highly influential observations."
+        loo_results = loo_approximate_posterior(
+            data=data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
         )
-        warn_mg = True
 
-    elpd_i = logsumexp(log_weights, dims=sample_dims)[var_name].values
-    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum()[var_name].values
-    elpd = elpd_i.sum()
-    elpd_se = (n_data_points * np.var(elpd_i)) ** 0.5
+        if return_pointwise:
+            return loo_results.elpd_i, loo_results.pareto_k, True
+        return loo_results
+
+    if log_weights is None or pareto_k is None:
+        log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dims=sample_dims)
+
+    log_weights += log_likelihood
+    pareto_k_da = pareto_k
+
+    warn_mg, good_k = _warn_pareto_k(pareto_k_da, n_samples)
+    elpd_i = logsumexp(log_weights, dims=sample_dims)
+
+    if return_pointwise:
+        if isinstance(elpd_i, xr.Dataset) and var_name in elpd_i:
+            elpd_i = elpd_i[var_name]
+        if isinstance(pareto_k_da, xr.Dataset) and var_name in pareto_k_da:
+            pareto_k_da = pareto_k_da[var_name]
+        return elpd_i, pareto_k_da, approx_posterior
+
+    elpd_i_values = elpd_i.values if hasattr(elpd_i, "values") else np.asarray(elpd_i)
+    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum().values
+    elpd = np.sum(elpd_i_values)
+    elpd_se = (n_data_points * np.var(elpd_i_values)) ** 0.5
     p_loo = elpd_raw - elpd
 
+    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
     if not pointwise:
         return ELPDData(
             "loo",
@@ -928,11 +1451,7 @@ def _compute_loo_results(
             approx_posterior=approx_posterior,
         )
 
-    if np.equal(elpd, elpd_i).all():  # pylint: disable=no-member
-        warnings.warn(
-            "The point-wise LOO is the same with the sum LOO, please double check "
-            "the Observed RV in your model to make sure it returns element-wise logp."
-        )
+    _warn_pointwise_loo(elpd, elpd_i_values)
 
     return ELPDData(
         "loo",
@@ -948,41 +1467,3 @@ def _compute_loo_results(
         pareto_k_da,
         approx_posterior=approx_posterior,
     )
-
-
-def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
-    """Validate log_p or log_q input for loo_approximate_posterior."""
-    if isinstance(log_dens, np.ndarray):
-        if log_dens.size != n_samples:
-            raise ValueError(
-                f"Size of {name} ({log_dens.size}) must match "
-                f"the total number of samples in log_likelihood ({n_samples})."
-            )
-        sample_shape = tuple(log_likelihood[dim].size for dim in sample_dims)
-        log_dens_values = log_dens.reshape(sample_shape)
-        coords = {dim: log_likelihood[dim] for dim in sample_dims}
-        validated_log_dens = xr.DataArray(log_dens_values, dims=sample_dims, coords=coords)
-
-    elif isinstance(log_dens, xr.DataArray):
-        validated_log_dens = log_dens
-        for dim in sample_dims:
-            if dim not in validated_log_dens.dims:
-                raise ValueError(f"{name} must have dimension '{dim}'")
-            if validated_log_dens[dim].size != log_likelihood[dim].size:
-                raise ValueError(
-                    f"Size of dimension '{dim}' in {name} ({validated_log_dens[dim].size}) "
-                    f"must match the size in log_likelihood ({log_likelihood[dim].size})."
-                )
-        for dim in sample_dims:
-            if dim in validated_log_dens.coords and not np.array_equal(
-                validated_log_dens[dim].values, log_likelihood[dim].values
-            ):
-                warnings.warn(
-                    f"Coordinates for dimension '{dim}' in {name} do not match "
-                    f"those in log_likelihood. Ensure they correspond to the same samples.",
-                    UserWarning,
-                )
-    else:
-        raise TypeError(f"{name} must be a numpy ndarray or xarray DataArray")
-
-    return validated_log_dens
