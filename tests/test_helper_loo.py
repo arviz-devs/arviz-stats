@@ -304,20 +304,25 @@ def test_thin_draws(log_likelihood_dataset):
     original_samples = original_draws * original_chains
 
     thinned = thin(log_likelihood, factor=original_samples + 100)
-    assert thinned.draw.size == original_draws
+    assert thinned.draw.size == 1
     assert thinned.chain.size == original_chains
 
     thinned = thin(log_likelihood)
     assert thinned.chain.size == original_chains
-    assert thinned.draw.size == original_draws // 5
+    assert thinned.draw.size < original_draws
+    assert thinned.draw.size > 0
+
+    if len(thinned.draw) > 1:
+        observed_factor = int(thinned.draw.values[1] - thinned.draw.values[0])
+        for i in range(1, len(thinned.draw) - 1):
+            assert thinned.draw.values[i + 1] - thinned.draw.values[i] == observed_factor
 
     thinned = thin(log_likelihood, factor=5)
     assert thinned.chain.size == original_chains
     assert thinned.draw.size == original_draws // 5
 
-    thinned = thin(log_likelihood, factor=0)
-    assert thinned.draw.size == original_draws
-    assert thinned.chain.size == original_chains
+    with pytest.raises(ValueError, match="factor must be greater than 1"):
+        thin(log_likelihood, factor=0)
 
 
 def test_select_obs_by_indices():
