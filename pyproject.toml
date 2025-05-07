@@ -40,7 +40,7 @@ funding = "https://opencollective.com/arviz"
 
 [project.optional-dependencies]
 xarray = [
-  "arviz-base @ git+https://github.com/arviz-devs/arviz-base@eager_load",
+  "arviz-base @ git+https://github.com/arviz-devs/arviz-base",
   "xarray-einstats",
   "numba",
 ]
@@ -62,7 +62,7 @@ doc = [
     "sphinx",
     "sphinx-design",
     "jupyter-sphinx",
-    "netcdf4",
+    "h5netcdf",
     "sphinx_autosummary_accessors",
 ]
 numba = [
