@@ -62,7 +62,7 @@ doc = [
     "sphinx",
     "sphinx-design",
     "jupyter-sphinx",
-    "netcdf4",
+    "h5netcdf",
     "sphinx_autosummary_accessors",
 ]
 numba = [
