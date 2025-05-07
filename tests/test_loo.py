@@ -230,17 +230,53 @@ def test_loo_metrics_invalid_kind(centered_eight):
         {},
         {"var_names": ["obs"]},
         {"log_weights": "arr"},
+        {"var_names": ["obs"], "observed_var_names": ["obs"], "pp_var_names": ["obs"]},
+        {"var_names": "obs", "observed_var_names": "obs", "pp_var_names": "obs"},
     ],
 )
 def test_loo_pit(centered_eight, args):
     var_names = args.get("var_names", None)
     log_weights = args.get("log_weights", None)
+    observed_var_names = args.get("observed_var_names", None)
+    pp_var_names = args.get("pp_var_names", None)
+
     if log_weights == "arr":
         log_weights = get_log_likelihood_dataset(centered_eight, var_names=var_names)
 
-    loo_pit_values = loo_pit(centered_eight, var_names=var_names, log_weights=log_weights)
+    loo_pit_values = loo_pit(
+        centered_eight,
+        var_names=var_names,
+        log_weights=log_weights,
+        observed_var_names=observed_var_names,
+        pp_var_names=pp_var_names,
+    )
     assert np.all(loo_pit_values >= 0)
     assert np.all(loo_pit_values <= 1)
+
+
+def test_loo_pit_different_names(centered_eight):
+    new_dt = azb.from_dict(
+        {
+            "posterior": centered_eight.posterior,
+            "log_likelihood": centered_eight.log_likelihood,
+            "observed_data": {"y_obs": centered_eight.observed_data.obs},
+            "posterior_predictive": {"y_pred": centered_eight.posterior_predictive.obs},
+        }
+    )
+
+    loo_pit_values1 = loo_pit(
+        new_dt, var_names="obs", observed_var_names="y_obs", pp_var_names="y_pred"
+    )
+    assert np.all(loo_pit_values1 >= 0)
+    assert np.all(loo_pit_values1 <= 1)
+
+    loo_pit_values2 = loo_pit(
+        new_dt, var_names=["obs"], observed_var_names=["y_obs"], pp_var_names=["y_pred"]
+    )
+    assert np.all(loo_pit_values2 >= 0)
+    assert np.all(loo_pit_values2 <= 1)
+
+    assert_allclose(loo_pit_values1["obs"].values, loo_pit_values2["obs"].values)
 
 
 def test_loo_pit_discrete(centered_eight):
