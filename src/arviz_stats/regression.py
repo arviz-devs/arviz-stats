@@ -51,9 +51,7 @@ def r2_score(data, summary=True, point_estimate=None, ci_kind=None, ci_prob=None
         In [1]: from arviz_stats import r2_score
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data('regression1d')
-           ...: y_true = data.observed_data["y"].values
-           ...: y_pred = data.posterior_predictive["y"].stack(sample=("chain", "draw")).T
-           ...: r2_score(y_true, y_pred)
+           ...: r2_score(data)
 
     References
     ----------

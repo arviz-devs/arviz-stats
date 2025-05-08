@@ -71,7 +71,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_output=1,
             n_input=1,
             n_dims=len(axes),
-            ravel=False,
         )
         func_kwargs = {
             "prob": prob,
