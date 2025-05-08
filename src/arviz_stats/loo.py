@@ -20,6 +20,7 @@ from arviz_stats.helper_loo import (
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
+    _process_var_name,
     _select_obs_by_coords,
     _srs_estimator,
     _warn_pareto_k,
@@ -350,11 +351,11 @@ def loo_pit(
 ):
     r"""Compute leave one out (PSIS-LOO) probability integral transform (PIT) values.
 
-    The LOO-PIT values are $p(\tilde{y}_i \\le y_i \\mid y_{-i})$.
-    Where $y_i$ represents the observed data for index $i$ and $\tilde y_i$ represents
-    the posterior predictive sample at index $i$. $y_{-i}$ indicates we have left out the
-    $i$-th observation. LOO-PIT values are computed using the PSIS-LOO-CV method described
-    in [1]_ and [2]_.
+    The LOO-PIT values are :math:`p(\tilde{y}_i \le y_i \mid y_{-i})`, where :math:`y_i`
+    represents the observed data for index :math:`i` and :math:`\tilde y_i` represents the
+    posterior predictive sample at index :math:`i`. Note that :math:`y_{-i}` indicates we have
+    left out the :math:`i`-th observation. LOO-PIT values are computed using the PSIS-LOO-CV
+    method described in [1]_ and [2]_.
 
     Parameters
     ----------
@@ -428,31 +429,8 @@ def loo_pit(
     elif isinstance(var_names, str):
         var_names = [var_names]
 
-    if observed_var_names is None:
-        observed_var_names_list = var_names
-    elif isinstance(observed_var_names, str):
-        observed_var_names_list = [observed_var_names]
-    elif isinstance(observed_var_names, list):
-        if len(observed_var_names) != len(var_names):
-            raise ValueError(
-                "If provided as a list, observed_var_names must have the same length as var_names"
-            )
-        observed_var_names_list = observed_var_names
-    else:
-        raise TypeError("observed_var_names must be None, a string, or list")
-
-    if pp_var_names is None:
-        pp_var_names_list = var_names
-    elif isinstance(pp_var_names, str):
-        pp_var_names_list = [pp_var_names]
-    elif isinstance(pp_var_names, list):
-        if len(pp_var_names) != len(var_names):
-            raise ValueError(
-                "If provided as a list, pp_var_names must have the same length as var_names"
-            )
-        pp_var_names_list = pp_var_names
-    else:
-        raise TypeError("pp_var_names must be None, a string, or list")
+    observed_var_names = _process_var_name(observed_var_names, var_names, "observed variable names")
+    pp_var_names = _process_var_name(pp_var_names, var_names, "posterior predictive variable names")
 
     log_likelihood = get_log_likelihood_dataset(data, var_names=var_names)
 
@@ -460,28 +438,26 @@ def loo_pit(
         n_samples = log_likelihood.chain.size * log_likelihood.draw.size
         reff = _get_r_eff(data, n_samples)
         log_weights, _ = log_likelihood.azstats.psislw(r_eff=reff)
-        # This should not be necessary
-        log_weights = log_weights.transpose(*list(log_likelihood.dims))
 
     posterior_predictive = extract(
         data,
         group="posterior_predictive",
         combined=False,
-        var_names=pp_var_names_list,
+        var_names=pp_var_names,
         keep_dataset=True,
     )
     observed_data = extract(
         data,
         group="observed_data",
         combined=False,
-        var_names=observed_var_names_list,
+        var_names=observed_var_names,
         keep_dataset=True,
     )
 
     type_vars = {}
     for i, var in enumerate(var_names):
-        obs_var = observed_var_names_list[i]
-        pp_var = pp_var_names_list[i]
+        obs_var = observed_var_names[i]
+        pp_var = pp_var_names[i]
 
         is_discrete = (posterior_predictive[pp_var].values.dtype.kind == "i") or (
             observed_data[obs_var].values.dtype.kind == "i"
@@ -492,8 +468,8 @@ def loo_pit(
     if randomize and "discrete" in type_vars.values():
         rng = np.random.default_rng(214)
         for i, var in enumerate(var_names):
-            obs_var = observed_var_names_list[i]
-            pp_var = pp_var_names_list[i]
+            obs_var = observed_var_names[i]
+            pp_var = pp_var_names[i]
 
             if type_vars[var] == "discrete":
                 vals = posterior_predictive[pp_var] < observed_data[obs_var]
@@ -503,8 +479,8 @@ def loo_pit(
                 pit_vals_dict[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
     else:
         for i, var in enumerate(var_names):
-            obs_var = observed_var_names_list[i]
-            pp_var = pp_var_names_list[i]
+            obs_var = observed_var_names[i]
+            pp_var = pp_var_names[i]
             pit_vals_dict[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
 
     pit_vals = xr.Dataset(pit_vals_dict)

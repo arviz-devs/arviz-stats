@@ -22,6 +22,7 @@ __all__ = [
     "_check_log_density",
     "_warn_pareto_k",
     "_warn_pointwise_loo",
+    "_process_var_name",
     "_prepare_subsample",
     "_prepare_update_subsample",
     "_select_obs_by_indices",
@@ -567,6 +568,23 @@ def _warn_pointwise_loo(elpd, elpd_i_values):
             "The point-wise LOO is the same with the sum LOO, please double check "
             "the Observed RV in your model to make sure it returns element-wise logp."
         )
+
+
+def _process_var_name(input_names, default_names, arg_name):
+    """Process variable name arguments."""
+    if input_names is None:
+        return default_names
+    if isinstance(input_names, str):
+        return [input_names]
+    if isinstance(input_names, list):
+        if len(input_names) != len(default_names):
+            raise ValueError(
+                f"{arg_name} has length {len(input_names)}, "
+                f"but expected length {len(default_names)} "
+                "to match the number of variables in var_names"
+            )
+        return input_names
+    raise TypeError(f"{arg_name} must be None, a string, or a list of strings")
 
 
 def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
