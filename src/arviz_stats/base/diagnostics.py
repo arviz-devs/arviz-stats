@@ -732,3 +732,23 @@ class _DiagnosticsBase(_CoreBase):
 
         # nested Rhat (Rhat_nu in equation 8 in Margossian et al. 2024)
         return np.sqrt(1 + var_between_superchain / var_within_superchain)
+
+    @staticmethod
+    def _r2_score(y_true, y_pred):
+        """Compute the R^2 score.
+
+        Parameters
+        ----------
+        y_true: array-like of shape = (n_outputs,)
+            Ground truth (correct) target values.
+        y_pred: array-like of shape = (n_posterior_samples, n_outputs)
+            Estimated target values.
+
+        Returns
+        -------
+        array-like  (sample, dims)
+        """
+        var_y_est = np.var(y_pred, axis=1)
+        var_e = np.var(y_true - y_pred, axis=1)
+        r_squared = var_y_est / (var_y_est + var_e)
+        return r_squared

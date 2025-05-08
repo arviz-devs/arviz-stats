@@ -1,30 +1,31 @@
 # pylint: disable=redefined-outer-name
 import numpy as np
-import pandas as pd
 import pytest
+from arviz_base import extract, from_dict
 
+from arviz_stats.base import array_stats
 from arviz_stats.regression import r2_score
 
 
 @pytest.fixture
 def sample_data():
     y_true = np.array([3, -0.5, 2, 7])
-    y_pred = np.array([[2.5, 0.0, 2, 8], [3.0, -0.5, 2, 7], [2.8, -0.3, 2.1, 7.2]])
-    return y_true, y_pred
+    y_pred = np.array([[[2.5, 0.0, 2, 8], [3.0, -0.5, 2, 7], [2.8, -0.3, 2.1, 7.2]]])
+    return from_dict({"observed_data": {"y": y_true}, "posterior_predictive": {"y": y_pred}})
 
 
 def test_r2_score_summary(sample_data):
-    y_true, y_pred = sample_data
-    result = r2_score(y_true, y_pred, summary=True, ci_kind="hdi")
-    assert isinstance(result, pd.Series)
-    assert "mean" in result.index
-    assert "hdi_" in result.index
-    assert "hdi^" in result.index
+    result = r2_score(sample_data, summary=True, ci_kind="hdi")
+    assert isinstance(result, tuple)
+    assert hasattr(result, "_fields")
+    assert "mean" in result._fields
+    assert "hdi_lb" in result._fields
+    assert "hdi_ub" in result._fields
 
 
 def test_r2_score_array(sample_data):
-    y_true, y_pred = sample_data
-    result = r2_score(y_true, y_pred, summary=False)
+    y_pred = extract(sample_data, group="posterior_predictive").values.T
+    result = r2_score(sample_data, summary=False)
     assert isinstance(result, np.ndarray)
     assert result.shape == (y_pred.shape[0],)
 
@@ -33,4 +34,4 @@ def test_r2_score_invalid_shapes():
     y_true = np.array([3, -0.5, 2, 7])
     y_pred = np.array([[2.5, 0.0, 2]])
     with pytest.raises(ValueError):
-        r2_score(y_true, y_pred)
+        array_stats.r2_score(y_true, y_pred)

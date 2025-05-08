@@ -1,16 +1,14 @@
 """Regression metrics for Bayesian models."""
 
+from collections import namedtuple
+
 import numpy as np
-import pandas as pd
-from arviz_base import rcParams
-from xarray import DataArray
+from arviz_base import extract, rcParams
 
 from arviz_stats.base import array_stats
 
 
-def r2_score(
-    y_true, y_pred, summary=True, point_estimate=None, ci_kind=None, ci_prob=None, round_to=2
-):
+def r2_score(data, summary=True, point_estimate=None, ci_kind=None, ci_prob=None, round_to=2):
     """R² for Bayesian regression models.
 
     The R², or coefficient of determination, is defined as the proportion of variance
@@ -20,10 +18,8 @@ def r2_score(
 
     Parameters
     ----------
-    y_true: array-like of shape = (n_outputs,)
-        Ground truth (correct) target values.
-    y_pred: array-like of shape = (n_posterior_samples, n_outputs)
-        Estimated target values.
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior and the log_likelihood groups.
     summary: bool
         Whether to return a summary (default) or an array of R² samples.
         The summary is a Pandas' series with a point estimate and a credible interval
@@ -73,30 +69,20 @@ def r2_score(
     if ci_prob is None:
         ci_prob = rcParams["stats.ci_prob"]
 
-    if y_pred.ndim == 1:
-        var_y_est = np.var(y_pred)
-        var_e = np.var(y_true - y_pred)
-    else:
-        var_y_est = np.var(y_pred, axis=1)
-        var_e = np.var(y_true - y_pred, axis=1)
-    r_squared = var_y_est / (var_y_est + var_e)
+    y_true = extract(data, group="observed_data", combined=False).values
+    y_pred = extract(data, group="posterior_predictive").values.T
 
-    if isinstance(r_squared, DataArray):
-        r_squared = r_squared.values
+    r_squared = array_stats.r2_score(y_true, y_pred)
 
     if summary:
-        estimate = getattr(np, point_estimate)(r_squared)
+        estimate = getattr(np, point_estimate)(r_squared).item()
         c_i = getattr(array_stats, ci_kind)(r_squared, ci_prob)
 
-        summary_s = pd.Series(
-            [estimate, c_i[0], c_i[1]],
-            index=[point_estimate, f"{ci_kind}_", f"{ci_kind}^"],
-            name="R2",
-        )
-
+        r2_summary = namedtuple("R²", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
         if (round_to is not None) and (round_to not in ("None", "none")):
-            summary_s = summary_s.round(round_to)
+            estimate = round(estimate, round_to)
+            c_i = (round(c_i[0].item(), round_to), round(c_i[1].item(), round_to))
 
-        return summary_s
+        return r2_summary(estimate, c_i[0], c_i[1])
 
     return r_squared

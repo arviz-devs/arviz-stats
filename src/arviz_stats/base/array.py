@@ -71,6 +71,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_output=1,
             n_input=1,
             n_dims=len(axes),
+            ravel=False,
         )
         func_kwargs = {
             "prob": prob,
@@ -357,6 +358,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             circular=circular,
             **kwargs,
         )
+
+    def r2_score(self, y_true, y_pred):
+        """Compute R² for Bayesian regression models."""
+        r2_ufunc = make_ufunc(
+            self._r2_score,
+            n_output=1,
+            n_input=2,
+            n_dims=1,
+            ravel=False,
+        )
+
+        return r2_ufunc(y_true, y_pred, out_shape=(y_pred.shape[0],))
 
 
 array_stats = BaseArray()
