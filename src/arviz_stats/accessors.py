@@ -166,6 +166,10 @@ class AzStatsDaAccessor(_BaseAccessor):
             func = get_function(func)
         return func(self._obj, **kwargs)
 
+    def thin(self, dims=None, factor="auto"):
+        """Apply thinning to DataArray input."""
+        return self._apply("thin", dims=dims, factor=factor)
+
 
 @xr.register_dataset_accessor("azstats")
 class AzStatsDsAccessor(_BaseAccessor):

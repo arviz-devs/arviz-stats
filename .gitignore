@@ -8,6 +8,7 @@
 
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
+.virtual_documents
 
 # IPython
 profile_default/
@@ -90,6 +91,7 @@ instance/
 # Sphinx documentation
 docs/_build/
 docs/build
+docs/jupyter_execute
 docs/source/api/generated
 
 # PyBuilder

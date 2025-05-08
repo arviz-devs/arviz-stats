@@ -178,33 +178,55 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     elpd_i: DataArray = None
     pareto_k: DataArray = None
     approx_posterior: bool = False
+    subsampling_se: float = None
+    subsample_size: int = None
+    log_p: object = None
+    log_q: object = None
+    thin_factor: object = None
 
     def __str__(self):
         """Print elpd data in a user friendly way."""
         kind = self.kind
         scale_str = SCALE_DICT[self["scale"]]
         padding = len(scale_str) + len(kind) + 1
-        base = BASE_FMT.format(padding, padding - 2)
-        base = base.format(
-            "",
-            kind=kind,
-            scale=scale_str,
-            n_samples=self.n_samples,
-            n_points=self.n_data_points,
-            ic_value=self.elpd,
-            ic_se=self.se,
-            p_value=self.p,
-        )
 
-        if self.approx_posterior:
-            header, table = base.split("\n\n", 1)
-            base = header + "\nPosterior approximation correction used.\n\n" + table
+        if self.subsample_size:
+            base = (
+                f"Computed from {self.n_samples} by {self.subsample_size} "
+                f"subsampled log-likelihood\n"
+            )
+            base += f"values from {self.n_data_points} total observations.\n\n"
+            base += "         Estimate   SE subsampling SE\n"
+            base += (
+                f"{scale_str}_{kind}  {self.elpd:8.1f} {self.se:4.1f} "
+                f"           {self.subsampling_se:0.1f}\n"
+            )
+            base += f"p_{kind}         {self.p:4.1f}\n"
+            if self.approx_posterior:
+                header, table = base.split("\n\n", 1)
+                base = header + " Posterior approximation correction used.\n\n" + table
+        else:
+            base = BASE_FMT.format(padding, padding - 2)
+            base = base.format(
+                "",
+                kind=kind,
+                scale=scale_str,
+                n_samples=self.n_samples,
+                n_points=self.n_data_points,
+                ic_value=self.elpd,
+                ic_se=self.se,
+                p_value=self.p,
+            )
+
+            if self.approx_posterior:
+                header, table = base.split("\n\n", 1)
+                base = header + "\nPosterior approximation correction used.\n\n" + table
 
         if self.warning:
             base += "\n\nThere has been a warning during the calculation. Please check the results."
 
         if kind == "loo" and self.pareto_k is not None:
-            bins = bins = np.asarray([-np.inf, self.good_k, 1, np.inf])
+            bins = np.asarray([-np.inf, self.good_k, 1, np.inf])
             counts, *_ = np.histogram(self.pareto_k, bins=bins, density=False)
             extended = POINTWISE_LOO_FMT.format(max(4, len(str(np.max(counts)))))
             extended = extended.format(

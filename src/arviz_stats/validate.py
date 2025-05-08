@@ -57,6 +57,13 @@ def validate_ci_prob(prob):
     """
     if prob is None:
         prob = rcParams["stats.ci_prob"]
-    elif not 1 >= prob > 0:
-        raise ValueError("The value of prob should be in the interval (0, 1]")
+    return validate_prob(prob)
+
+
+def validate_prob(prob, allow_0=False):
+    """Validate required `prob` argument."""
+    if allow_0 and not 1 >= prob >= 0:
+        raise ValueError(f"The value of prob should be in the interval [0, 1] but got {prob}")
+    if not allow_0 and not 1 >= prob > 0:
+        raise ValueError(f"The value of prob should be in the interval (0, 1] but got {prob}")
     return prob

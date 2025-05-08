@@ -2,10 +2,12 @@
 
 import numpy as np
 import pytest
-import xarray as xr
-from arviz_base import load_arviz_data
 from numpy.testing import assert_allclose, assert_almost_equal
-from xarray import DataArray
+
+from .helpers import importorskip
+
+azb = importorskip("arviz_base")
+xr = importorskip("xarray")
 
 from arviz_stats import (
     compare,
@@ -14,30 +16,32 @@ from arviz_stats import (
     loo_expectations,
     loo_metrics,
     loo_pit,
+    loo_subsample,
+    update_subsample,
 )
 from arviz_stats.loo import _calculate_ics
-from arviz_stats.utils import get_log_likelihood_dataset
+from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
 @pytest.fixture(name="centered_eight", scope="session")
 def fixture_centered_eight():
-    return load_arviz_data("centered_eight")
+    return azb.load_arviz_data("centered_eight")
 
 
 @pytest.fixture(name="non_centered_eight", scope="session")
 def fixture_non_centered_eight():
-    return load_arviz_data("non_centered_eight")
+    return azb.load_arviz_data("non_centered_eight")
 
 
 @pytest.fixture(name="anes", scope="session")
 def fixture_anes():
-    return load_arviz_data("anes")
+    return azb.load_arviz_data("anes")
 
 
 @pytest.fixture(scope="module")
 def multivariable_log_likelihood(centered_eight):
     centered_eight = centered_eight.copy()
-    new_arr = DataArray(
+    new_arr = xr.DataArray(
         np.zeros(centered_eight.log_likelihood["obs"].values.shape),
         dims=["chain", "draw", "school"],
         coords=centered_eight.log_likelihood.coords,
@@ -73,6 +77,16 @@ def log_densities(centered_eight):
         "dataarray": (log_p_da, log_q_da),
         "numpy": (log_p_np, log_q_np),
     }
+
+
+@pytest.fixture(scope="module")
+def log_lik_fn():
+    def _log_likelihood_eight_schools(data, theta):
+        sigma = 12.5
+        log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((data - theta) / sigma) ** 2
+        return log_lik
+
+    return _log_likelihood_eight_schools
 
 
 @pytest.mark.parametrize("pointwise", [True, False])
@@ -130,7 +144,7 @@ def test_compare_multiple_obs(multivariable_log_likelihood, centered_eight, non_
         "non_centered_eight": non_centered_eight,
         "problematic": multivariable_log_likelihood,
     }
-    with pytest.raises(ValueError, match="Encountered error trying to compute"):
+    with pytest.raises(TypeError, match="Encountered error trying to compute"):
         compare(
             compare_dict,
         )
@@ -324,3 +338,120 @@ def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type
 
     with pytest.raises(error_type, match=error_match):
         loo_approximate_posterior(centered_eight, var_name="obs", **kwargs)
+
+
+@pytest.mark.parametrize("pointwise", [True, False])
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_loo_subsample(centered_eight, pointwise, method, log_lik_fn):
+    observations = 4
+    loo_sub = loo_subsample(
+        centered_eight,
+        observations=observations,
+        pointwise=pointwise,
+        var_name="obs",
+        method=method,
+        log_lik_fn=log_lik_fn,
+        param_names=["theta"],
+    )
+
+    assert isinstance(loo_sub, ELPDData)
+    assert loo_sub.kind == "loo"
+    assert loo_sub.subsample_size == observations
+    assert isinstance(loo_sub.elpd, float)
+    assert isinstance(loo_sub.se, float) and loo_sub.se >= 0
+    assert isinstance(loo_sub.p, float)
+    assert isinstance(loo_sub.subsampling_se, float) and loo_sub.subsampling_se >= 0
+    assert loo_sub.n_data_points == centered_eight.observed_data.obs.size
+
+    if pointwise:
+        assert hasattr(loo_sub, "elpd_i")
+        assert hasattr(loo_sub, "pareto_k")
+        assert loo_sub.elpd_i is not None
+        assert loo_sub.pareto_k is not None
+        assert loo_sub.elpd_i.dims == ("school",)
+        assert loo_sub.elpd_i.shape == (loo_sub.n_data_points,)
+        assert loo_sub.pareto_k.shape == (loo_sub.n_data_points,)
+        assert np.sum(~np.isnan(loo_sub.pareto_k.values)) == observations
+        assert np.isnan(loo_sub.elpd_i).sum() == loo_sub.n_data_points - observations
+        assert not np.isnan(loo_sub.elpd_i).all()
+    else:
+        assert not hasattr(loo_sub, "elpd_i") or loo_sub.elpd_i is None
+        assert not hasattr(loo_sub, "pareto_k") or loo_sub.pareto_k is None
+
+
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_update_loo_subsample(centered_eight, method, log_lik_fn):
+    initial_observations = 3
+    initial_loo = loo_subsample(
+        centered_eight,
+        observations=initial_observations,
+        var_name="obs",
+        method=method,
+        log_lik_fn=log_lik_fn,
+        param_names=["theta"],
+    )
+
+    additional_observations = 5
+    updated_loo = update_subsample(
+        initial_loo,
+        centered_eight,
+        observations=additional_observations,
+        var_name="obs",
+        method=method,
+        log_lik_fn=log_lik_fn,
+        param_names=["theta"],
+    )
+
+    assert isinstance(updated_loo, ELPDData)
+    assert updated_loo.kind == "loo"
+    assert updated_loo.subsample_size == initial_observations + additional_observations
+    assert isinstance(updated_loo.elpd, float)
+    assert isinstance(updated_loo.se, float) and updated_loo.se >= 0
+    assert isinstance(updated_loo.p, float)
+    assert isinstance(updated_loo.subsampling_se, float) and updated_loo.subsampling_se >= 0
+    assert np.isfinite(updated_loo.se)
+    assert updated_loo.subsampling_se <= initial_loo.subsampling_se
+    assert updated_loo.elpd_i is not None
+    assert updated_loo.pareto_k is not None
+    assert updated_loo.elpd_i.dims == ("school",)
+    assert updated_loo.elpd_i.shape == (updated_loo.n_data_points,)
+    assert updated_loo.pareto_k.dims == updated_loo.elpd_i.dims
+    assert updated_loo.pareto_k.shape == (updated_loo.n_data_points,)
+    assert np.sum(~np.isnan(updated_loo.elpd_i.values)) == updated_loo.subsample_size
+    assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == updated_loo.subsample_size
+
+
+def test_loo_subsample_errors(centered_eight):
+    n_total = centered_eight.observed_data.obs.size
+    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
+        loo_subsample(centered_eight, observations=0, var_name="obs")
+    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
+        loo_subsample(centered_eight, observations=n_total + 1, var_name="obs")
+    with pytest.raises(TypeError, match="observations must be an integer"):
+        loo_subsample(centered_eight, observations=4.2, var_name="obs")
+
+
+def test_update_loo_subsample_errors(centered_eight):
+    initial_observations = 3
+    initial_loo = loo_subsample(centered_eight, observations=initial_observations, var_name="obs")
+
+    n_total = centered_eight.observed_data.obs.size
+    with pytest.raises(ValueError, match="Cannot add .* observations when only .* are available"):
+        update_subsample(initial_loo, centered_eight, observations=n_total)
+
+    existing_indices = np.where(~np.isnan(initial_loo.elpd_i.values.flatten()))[0]
+    with pytest.raises(ValueError, match="New indices .* overlap with existing indices"):
+        update_subsample(initial_loo, centered_eight, observations=existing_indices[:5])
+
+
+def test_update_subsample_preserves_thin_factor(centered_eight):
+    initial_observations = 2
+    thin_factor = 2
+    initial_loo = loo_subsample(
+        centered_eight, observations=initial_observations, var_name="obs", thin=thin_factor
+    )
+    assert initial_loo.thin_factor == thin_factor
+
+    updated_loo = update_subsample(initial_loo, centered_eight, observations=2)
+
+    assert updated_loo.thin_factor == thin_factor
