@@ -8,7 +8,16 @@ from arviz_base import extract, rcParams
 from arviz_stats.base import array_stats
 
 
-def r2_score(data, summary=True, point_estimate=None, ci_kind=None, ci_prob=None, round_to=2):
+def r2_score(
+    data,
+    var_name=None,
+    data_pair=None,
+    summary=True,
+    point_estimate=None,
+    ci_kind=None,
+    ci_prob=None,
+    round_to=2,
+):
     """R² for Bayesian regression models.
 
     The R², or coefficient of determination, is defined as the proportion of variance
@@ -20,6 +29,11 @@ def r2_score(data, summary=True, point_estimate=None, ci_kind=None, ci_prob=None
     ----------
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
+    var_name : str
+        Name of the variable to compute the R² for.
+    data_pair : dict
+        Dictionary with the first element containing the posterior predictive name
+        and the second element containing the observed data variable name.
     summary: bool
         Whether to return a summary (default) or an array of R² samples.
         The summary is a Pandas' series with a point estimate and a credible interval
@@ -40,7 +54,7 @@ def r2_score(data, summary=True, point_estimate=None, ci_kind=None, ci_prob=None
 
     Returns
     -------
-    Pandas Series or array
+    Namedtuple or array
 
     Examples
     --------
@@ -67,8 +81,15 @@ def r2_score(data, summary=True, point_estimate=None, ci_kind=None, ci_prob=None
     if ci_prob is None:
         ci_prob = rcParams["stats.ci_prob"]
 
-    y_true = extract(data, group="observed_data", combined=False).values
-    y_pred = extract(data, group="posterior_predictive").values.T
+    if data_pair is None:
+        obs_var_name = var_name
+        pred_var_name = var_name
+    else:
+        obs_var_name = list(data_pair.keys())[0]
+        pred_var_name = list(data_pair.values())[0]
+
+    y_true = extract(data, group="observed_data", var_names=obs_var_name, combined=False).values
+    y_pred = extract(data, group="posterior_predictive", var_names=pred_var_name).values.T
 
     r_squared = array_stats.r2_score(y_true, y_pred)
 
