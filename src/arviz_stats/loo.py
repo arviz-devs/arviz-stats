@@ -464,7 +464,7 @@ def loo_pit(
         )
         type_vars[var] = "discrete" if is_discrete else "continuous"
 
-    pit_vals_dict = {}
+    pit_vals = {}
     if randomize and "discrete" in type_vars.values():
         rng = np.random.default_rng(214)
         for i, var in enumerate(var_names):
@@ -474,16 +474,16 @@ def loo_pit(
             if type_vars[var] == "discrete":
                 vals = posterior_predictive[pp_var] < observed_data[obs_var]
                 urvs = rng.uniform(size=vals.values.shape)
-                pit_vals_dict[var] = urvs * vals + (1 - urvs) * vals
+                pit_vals[var] = urvs * vals + (1 - urvs) * vals
             else:
-                pit_vals_dict[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
+                pit_vals[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
     else:
         for i, var in enumerate(var_names):
             obs_var = observed_var_names[i]
             pp_var = pp_var_names[i]
-            pit_vals_dict[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
+            pit_vals[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
 
-    pit_vals = xr.Dataset(pit_vals_dict)
+    pit_vals = xr.Dataset(pit_vals)
     loo_pit_values = np.exp(logsumexp(log_weights.where(pit_vals, 0), dims=["chain", "draw"]))
     return loo_pit_values
 
