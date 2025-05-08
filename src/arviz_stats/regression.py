@@ -76,7 +76,7 @@ def r2_score(data, summary=True, point_estimate=None, ci_kind=None, ci_prob=None
         estimate = getattr(np, point_estimate)(r_squared).item()
         c_i = getattr(array_stats, ci_kind)(r_squared, ci_prob)
 
-        r2_summary = namedtuple("R²", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
+        r2_summary = namedtuple("R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
         if (round_to is not None) and (round_to not in ("None", "none")):
             estimate = round(estimate, round_to)
             c_i = (round(c_i[0].item(), round_to), round(c_i[1].item(), round_to))
