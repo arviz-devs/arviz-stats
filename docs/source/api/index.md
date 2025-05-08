@@ -31,6 +31,7 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.mcse
    arviz_stats.psense
    arviz_stats.psense_summary
+   arviz_stats.r2_score
    arviz_stats.rhat
    arviz_stats.rhat_nested
 ```
