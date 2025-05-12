@@ -340,14 +340,20 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to="2g"):
     return estimate(round_num(mean, round_to), round_num(std_error, round_to))
 
 
-def loo_pit(data, var_names=None, log_weights=None, randomize=False):
+def loo_pit(
+    data,
+    var_names=None,
+    data_pairs=None,
+    log_weights=None,
+    randomize=False,
+):
     r"""Compute leave one out (PSIS-LOO) probability integral transform (PIT) values.
 
-    The LOO-PIT values are $p(\tilde{y}_i \\le y_i \\mid y_{-i})$.
-    Where $y_i$ represents the observed data for index $i$ and $\tilde y_i$ represents
-    the posterior predictive sample at index $i$. $y_{-i}$ indicates we have left out the
-    $i$-th observation. LOO-PIT values are computed using the PSIS-LOO-CV method described
-    in [1]_ and [2]_.
+    The LOO-PIT values are :math:`p(\tilde{y}_i \le y_i \mid y_{-i})`, where :math:`y_i`
+    represents the observed data for index :math:`i` and :math:`\tilde y_i` represents the
+    posterior predictive sample at index :math:`i`. Note that :math:`y_{-i}` indicates we have
+    left out the :math:`i`-th observation. LOO-PIT values are computed using the PSIS-LOO-CV
+    method described in [1]_ and [2]_.
 
     Parameters
     ----------
@@ -355,15 +361,21 @@ def loo_pit(data, var_names=None, log_weights=None, randomize=False):
         It should contain posterior, posterior_predictive and log_likelihood groups.
     var_names : str or list of str, optional
         Names of the variables to be used to compute the LOO-PIT values. If None, all
-        variables are used. The function assumes that the observed and predicted variables
-        share the same names.
+        variables are used. The function assumes that the observed and log_likelihood
+        variables share the same names.
+    data_pairs : dict, optional
+        Dictionary mapping log_likelihood and observed variable names (keys) to posterior
+        predictive variable names (values). This allows different naming between groups.
+        If None, or if a variable from `var_names` is not a key in `data_pairs`,
+        it's assumed that the corresponding posterior predictive and observed data variables
+        share the same name as the log_likelihood variable.
     log_weights: DataArray
         Smoothed log_weights. It must have the same shape as ``y_pred``
         Defaults to None, it will be computed using the PSIS-LOO method.
     randomize: bool
         Whether to randomize the PIT values for discrete variables. Randomization is needed for
         discrete data. This function assumes discrete variables if the observed or predicted
-        are stored as integers.
+        data are stored as integers.
 
     Returns
     -------
@@ -377,9 +389,23 @@ def loo_pit(data, var_names=None, log_weights=None, randomize=False):
     .. ipython::
 
         In [1]: from arviz_stats import loo_pit
-           ...: from arviz_base import load_arviz_data, from_dict
+           ...: from arviz_base import load_arviz_data
            ...: dt = load_arviz_data("centered_eight")
            ...: loo_pit(dt)
+
+    Calculate LOO-PIT values with different variable names between observed and
+    posterior predictive groups.
+
+    .. ipython::
+
+        In [1]: from arviz_base import from_dict
+           ...: new_dt = from_dict({
+           ...:     "posterior": dt.posterior,
+           ...:     "log_likelihood": dt.log_likelihood,
+           ...:     "observed_data": dt.observed_data,
+           ...:     "posterior_predictive": {"y_pred": dt.posterior_predictive.obs}
+           ...: })
+           ...: loo_pit(new_dt, var_names="obs", data_pairs={"obs": "y_pred"})
 
     Calculate LOO-PIT values using as test quantity the square of the difference between
     each observation and `mu`. For this we create a new DataTree, copying the posterior and
@@ -396,7 +422,6 @@ def loo_pit(data, var_names=None, log_weights=None, randomize=False):
            ...:                     "obs": (dt.posterior_predictive.obs - dt.posterior.mu)**2}})
            ...: loo_pit(new_dt)
 
-
     References
     ----------
 
@@ -412,46 +437,69 @@ def loo_pit(data, var_names=None, log_weights=None, randomize=False):
 
     if var_names is None:
         var_names = list(data.observed_data.data_vars.keys())
+    elif isinstance(var_names, str):
+        var_names = [var_names]
 
+    if data_pairs is None:
+        data_pairs = {}
+
+    pp_var_names = [data_pairs.get(vn, vn) for vn in var_names]
     log_likelihood = get_log_likelihood_dataset(data, var_names=var_names)
 
     if log_weights is None:
         n_samples = log_likelihood.chain.size * log_likelihood.draw.size
         reff = _get_r_eff(data, n_samples)
         log_weights, _ = log_likelihood.azstats.psislw(r_eff=reff)
-        # This should not be necessary
-        log_weights = log_weights.transpose(*list(log_likelihood.dims))
 
     posterior_predictive = extract(
-        data, group="posterior_predictive", combined=False, var_names=var_names, keep_dataset=True
+        data,
+        group="posterior_predictive",
+        combined=False,
+        var_names=pp_var_names,
+        keep_dataset=True,
     )
     observed_data = extract(
-        data, group="observed_data", combined=False, var_names=var_names, keep_dataset=True
+        data,
+        group="observed_data",
+        combined=False,
+        var_names=var_names,
+        keep_dataset=True,
     )
 
-    type_vars = {
-        var: "discrete"
-        if (posterior_predictive[var].values.dtype.kind == "i")
-        or (observed_data[var].values.dtype.kind == "i")
-        else "continuous"
-        for var in var_names
-    }
+    type_vars = {}
+    for i, var in enumerate(var_names):
+        obs_var = var
+        pp_var = pp_var_names[i]
 
+        is_discrete = (posterior_predictive[pp_var].values.dtype.kind == "i") or (
+            observed_data[obs_var].values.dtype.kind == "i"
+        )
+        type_vars[var] = "discrete" if is_discrete else "continuous"
+
+    pit_vals = {}
     if randomize and "discrete" in type_vars.values():
         rng = np.random.default_rng(214)
-        pit_vals = posterior_predictive.copy()
-        for var_name, var_type in type_vars.items():
-            if var_type == "discrete":
-                vals = posterior_predictive[var_name] < observed_data[var_name]
+        for i, var in enumerate(var_names):
+            obs_var = var
+            pp_var = pp_var_names[i]
+
+            if type_vars[var] == "discrete":
+                vals = posterior_predictive[pp_var] < observed_data[obs_var]
                 urvs = rng.uniform(size=vals.values.shape)
-                pit_vals[var_name] = urvs * vals + (1 - urvs) * vals
+                pit_vals[var] = urvs * vals + (1 - urvs) * vals
             else:
-                pit_vals[var_name] = posterior_predictive[var_name] <= observed_data[var_name]
+                pit_vals[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
     else:
-        pit_vals = posterior_predictive <= observed_data
+        for i, var in enumerate(var_names):
+            obs_var = var
+            pp_var = pp_var_names[i]
+            pit_vals[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
 
-    loo_pit_values = np.exp(logsumexp(log_weights.where(pit_vals, 0), dims=["chain", "draw"]))
-
+    pit_vals = xr.Dataset(pit_vals)
+    loo_pit_values = np.exp(
+        logsumexp(log_weights.where(pit_vals, -np.inf), dims=["chain", "draw"])
+        - logsumexp(log_weights, dims=["chain", "draw"])
+    )
     return loo_pit_values
 
 
