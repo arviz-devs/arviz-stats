@@ -1,9 +1,10 @@
-"""Regression metrics for Bayesian models."""
+"""Collection of metrics for evaluating the performance of probabilistic models."""
 
 from collections import namedtuple
 
 import numpy as np
-from arviz_base import extract, rcParams
+from arviz_base import convert_to_datatree, dataset_to_dataframe, extract, rcParams
+from scipy.stats import wasserstein_distance, wasserstein_distance_nd
 
 from arviz_stats.base import array_stats
 
@@ -105,3 +106,128 @@ def r2_score(
         return r2_summary(estimate, c_i[0], c_i[1])
 
     return r_squared
+
+
+def wasserstein(
+    data1,
+    data2,
+    group="posterior",
+    var_names=None,
+    sample_dims=None,
+    joint=True,
+    num_samples=500,
+    random_seed=212480,
+):
+    """
+    Compute the Wasserstein-1 distance.
+
+    The Wasserstein distance, also called the Earth mover’s distance or the optimal transport
+    distance, is a similarity metric between two probability distributions [1]_.
+
+    Parameters
+    ----------
+    data1 : DataArray, Dataset, DataTree, or InferenceData
+    data2 : DataArray, Dataset, DataTree, or InferenceData
+    group : hashable, default "posterior"
+        Group on which to compute the Wasserstein distance.
+    var_names : str or list of str, optional
+        Names of the variables for which the Wasserstein distance should be computed.
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions and are to be reduced.
+        Default ``rcParams["data.sample_dims"]``.
+    joint : bool, default True
+        Whether to compute Wasserstein distance for the joint distribution (True)
+        or over the marginals (False)
+        The computation is faster for the marginals, but it is equivalent to assume the
+        marginals are independent, which usually is not the case.
+    num_samples : int
+        Number of samples to use for the distance calculation. Default is 500.
+    random_seed : int
+        Random seed for reproducibility. Use None for no seed.
+
+    Returns
+    -------
+    wasserstein_distance : float
+
+
+    Examples
+    --------
+    Calculate the Wasserstein distance between the posterior distributions
+    for the variable mu in the centered and non-centered eight schools models
+
+    .. ipython::
+
+        In [1]: from arviz_stats import wasserstein
+           ...: from arviz_base import load_arviz_data
+           ...: data1 = load_arviz_data('centered_eight')
+           ...: data2 = load_arviz_data('non_centered_eight')
+           ...: r2_score(data1, data2, var_names="mu")
+
+    References
+    ----------
+
+    .. [1] "Wasserstein metric",
+           https://en.wikipedia.org/wiki/Wasserstein_metric
+    """
+    data1 = convert_to_datatree(data1)
+    data2 = convert_to_datatree(data2)
+    if sample_dims is None:
+        sample_dims = rcParams["data.sample_dims"]
+
+    dist1 = _extract_and_reindex(
+        data1,
+        group=group,
+        var_names=var_names,
+        sample_dims=sample_dims,
+        num_samples=num_samples,
+        random_seed=random_seed,
+    )
+
+    dist2 = _extract_and_reindex(
+        data2,
+        group=group,
+        var_names=var_names,
+        sample_dims=sample_dims,
+        num_samples=num_samples,
+        random_seed=random_seed,
+    )
+
+    shared_var_names = set(dist1.data_vars) & set(dist2.data_vars)
+    if not shared_var_names:
+        raise ValueError(
+            "No shared variable names found between the two datasets. "
+            "Ensure that both datasets contain variables with matching names."
+        )
+
+    if var_names is None:
+        var_names = list(shared_var_names)
+        dist1, dist2 = dist1[var_names], dist2[var_names]
+
+    dist1 = dataset_to_dataframe(dist1, sample_dims=["sample"]).values
+    dist2 = dataset_to_dataframe(dist2, sample_dims=["sample"]).values
+
+    if joint:
+        distance = wasserstein_distance_nd(dist1, dist2)
+
+    else:
+        distance = 0
+        for var1, var2 in zip(dist1.T, dist2.T):
+            distance += wasserstein_distance(var1, var2)
+
+    return distance
+
+
+def _extract_and_reindex(data, group, var_names, sample_dims, num_samples, random_seed):
+    return (
+        extract(
+            data,
+            group=group,
+            var_names=var_names,
+            num_samples=num_samples,
+            random_seed=random_seed,
+            keep_dataset=True,
+        )
+        .reset_index("sample")
+        .drop_vars(sample_dims)
+        .assign_coords(sample=range(num_samples))
+    )
