@@ -2,81 +2,115 @@
 
 import warnings
 
-import numpy as np
+from arviz_base import convert_to_datatree
+from numpy import finfo
+from scipy.interpolate import interp1d
 
 
-def bayes_factor(idata, var_name, ref_val=0, return_ref_vals=False, prior=None):
+def bayes_factor(data, var_names, ref_vals=0, return_ref_vals=False, prior=None):
     """
     Compute Bayes factor using Savage–Dickey ratio.
 
-    We can apply this method when the null (`ref_val`) is a particular valueof the model
-    we are building. See [1]_ for details.
-
     Parameters
     ----------
-    idata : InferenceData
-        Object containing posterior and prior data.
-    var_name : str
-        Name of the variable to test.
-    ref_val : int or float, default 0
-        Reference (point-null) value for Bayes factor estimation.
+    data : DataTree, or InferenceData
+        The data object containing the posterior and optionally the prior distributions.
+    var_names : str or list of str
+        Names of the variables for which the bayes factor should be computed.
+    ref_vals : float or list of float, default 0
+        Reference value for each variable. Must match var_names in length if list.
     return_ref_vals : bool, default False
-        If True, also return the values of prior and posterior densities at the reference value.
+        If True, return the reference density values for the posterior and prior.
+    prior : dict, optional
+        Dictionary with prior distributions for each variable. If not provided,
+        the prior will be taken from the `prior` group in the data object.
 
     Returns
     -------
     dict
-        A dictionary with Bayes Factor values: BF10 (H1/H0 ratio) and BF01 (H0/H1 ratio).
+        Dictionary with Bayes Factor values: BF10 and BF01 per variable.
 
     References
     ----------
-    .. [1] Heck, D., 2019. A caveat on the Savage-Dickey density ratio:
-       The case of computing Bayes factors for regression parameters.
+    .. [1] Heck DW. *A caveat on the Savage-Dickey density ratio:
+       The case of computing Bayes factors for regression parameters.*
+       Br J Math Stat Psychol, 72. (2019) https://doi.org/10.1111/bmsp.12150
 
     Examples
     --------
-    Moderate evidence indicating that the parameter "a" is different from zero.
+    Compute Bayes factor for a home and intercept variable in a rugby dataset
+    using a reference value of 0.15 for home and 3 for intercept.
 
     .. ipython::
 
-        In [1]: import numpy as np
-           ...: from arviz_base import from_dict
-           ...: import arviz_stats as azs
-           ...: dt = from_dict({"posterior":{"a":np.random.normal(1, 0.5, (2, 1000))},
-           ...:                    "prior":{"a":np.random.normal(0, 1, (2, 1000))}})
-           ...: azs.bayes_factor(dt, var_name="a", ref_val=0)
+        In [1]: from arviz_base import load_arviz_data
+           ...: from arviz_stats import bayes_factor
+           ...: dt = load_arviz_data("rugby")
+           ...: bayes_factor(dt, var_names=["home", "intercept"], ref_vals=[0.15, 3])
     """
-    posterior = idata.posterior[var_name]
-    prior = idata.prior[var_name]
+    data = convert_to_datatree(data)
 
-    if not isinstance(ref_val, int | float):
-        raise ValueError("The reference value (ref_val) must be a numerical value (int or float).")
+    if isinstance(var_names, str):
+        var_names = [var_names]
 
-    if ref_val > posterior.max() or ref_val < posterior.min():
-        warnings.warn(
-            "The reference value is outside the posterior range. "
-            "This results in infinite support for H1, which may overstate evidence."
-        )
+    if isinstance(ref_vals, int | float):
+        ref_vals = [ref_vals] * len(var_names)
 
-    prior_at_ref_val = 0
-    posterior_at_ref_val = 0
+    if len(var_names) != len(ref_vals):
+        raise ValueError("Length of var_names and ref_vals must match.")
 
-    if posterior.dtype.kind == "f":
-        posterior_grid, posterior_pdf = posterior.azstats.kde(
-            grid_len=512, circular=False, return_grid=True
-        )
-        prior_grid, prior_pdf = prior.azstats.kde(grid_len=512, circular=False, return_grid=True)
+    results = {}
+    ref_density_vals = {}
 
-        posterior_at_ref_val = np.interp(ref_val, posterior_grid, posterior_pdf)
-        prior_at_ref_val = np.interp(ref_val, prior_grid, prior_pdf)
+    for var, ref_val in zip(var_names, ref_vals):
+        posterior = data.posterior[var]
+        prior = data.prior[var]
 
-    elif posterior.dtype.kind == "i":
-        posterior_at_ref_val = (posterior == ref_val).mean()
-        prior_at_ref_val = (prior == ref_val).mean()
+        if not isinstance(ref_val, int | float):
+            raise ValueError(f"Reference value for variable '{var}' must be numerical")
 
-    bf_10 = prior_at_ref_val / posterior_at_ref_val
-    bf = {"BF10": bf_10, "BF01": 1 / bf_10}
+        if ref_val > posterior.max() or ref_val < posterior.min():
+            warnings.warn(
+                f"Reference value {ref_val} for '{var}' is outside the posterior range. "
+                "This may overstate evidence in favor of H1."
+            )
+
+        if ref_val > prior.max() or ref_val < prior.min():
+            warnings.warn(
+                f"Reference value {ref_val} for '{var}' is outside the prior range. "
+                "Bayes factor computation is not reliable."
+            )
+
+        posterior_kde = posterior.azstats.kde(grid_len=512, circular=False)
+        prior_kde = prior.azstats.kde(grid_len=512, circular=False)
+
+        posterior_val = interp1d(
+            posterior_kde.values[0],
+            posterior_kde.values[1],
+            bounds_error=False,
+            fill_value=finfo("float").eps,
+        )(ref_val).item()
+        prior_val = interp1d(
+            prior_kde.values[0],
+            prior_kde.values[1],
+            bounds_error=False,
+            fill_value=finfo("float").eps,
+        )(ref_val).item()
+
+        if prior_val <= 0 or posterior_val <= 0:
+            raise ValueError(
+                f"Invalid KDE values at ref_val={ref_val}: "
+                f"prior={prior_val}, posterior={posterior_val}"
+            )
+
+        bf_10 = prior_val / posterior_val
+        bf_01 = 1 / bf_10
+        results[var] = {"BF10": bf_10, "BF01": bf_01}
+
+        if return_ref_vals:
+            ref_density_vals[var] = {"prior": prior_val, "posterior": posterior_val}
 
     if return_ref_vals:
-        return (bf, {"prior": prior_at_ref_val, "posterior": posterior_at_ref_val})
-    return bf
+        return results, ref_density_vals
+
+    return results
