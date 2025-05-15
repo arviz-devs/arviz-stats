@@ -1,7 +1,10 @@
 # pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
-from arviz_base import extract, from_dict
+
+from .helpers import importorskip
+
+azb = importorskip("arviz_base")
 
 from arviz_stats.base import array_stats
 from arviz_stats.metrics import r2_score
@@ -11,7 +14,7 @@ from arviz_stats.metrics import r2_score
 def sample_data():
     y_true = np.array([3, -0.5, 2, 7])
     y_pred = np.array([[[2.5, 0.0, 2, 8], [3.0, -0.5, 2, 7], [2.8, -0.3, 2.1, 7.2]]])
-    return from_dict({"observed_data": {"y": y_true}, "posterior_predictive": {"y": y_pred}})
+    return azb.from_dict({"observed_data": {"y": y_true}, "posterior_predictive": {"y": y_pred}})
 
 
 def test_r2_score_summary(sample_data):
@@ -24,7 +27,7 @@ def test_r2_score_summary(sample_data):
 
 
 def test_r2_score_array(sample_data):
-    y_pred = extract(sample_data, group="posterior_predictive").values.T
+    y_pred = azb.extract(sample_data, group="posterior_predictive").values.T
     result = r2_score(sample_data, summary=False)
     assert isinstance(result, np.ndarray)
     assert result.shape == (y_pred.shape[0],)
