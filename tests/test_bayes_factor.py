@@ -8,69 +8,117 @@ azb = importorskip("arviz_base")
 from arviz_stats.bayes_factor import bayes_factor
 
 
-def test_bayes_factor_comparison():
+def test_bayes_factor_default_prior():
     idata = azb.from_dict(
         {
-            "posterior": {"a": np.random.normal(1, 0.5, (2, 1000))},
-            "prior": {"a": np.random.normal(0, 1, (2, 1000))},
+            "posterior": {
+                "a": np.random.normal(1, 0.5, (2, 1000)),
+                "b": np.random.normal(2, 0.5, (2, 1000)),
+            },
+            "prior": {
+                "a": np.random.normal(0, 1, (2, 1000)),
+                "b": np.random.normal(0, 1, (2, 1000)),
+            },
         }
     )
-    bf_dict0 = bayes_factor(idata=idata, var_name="a", ref_val=0)
-    custom_prior = np.random.normal(1, 2, 5000)
-    bf_dict1 = bayes_factor(idata=idata, var_name="a", prior={"a": custom_prior}, ref_val=1)
-    assert "BF10" in bf_dict0
-    assert "BF01" in bf_dict0
-    assert bf_dict0["BF10"] > bf_dict0["BF01"]
-    assert "BF10" in bf_dict1
-    assert "BF01" in bf_dict1
-    assert bf_dict1["BF10"] < bf_dict1["BF01"]
+
+    result = bayes_factor(data=idata, var_names=["a", "b"], ref_vals=[0, 0])
+
+    for var in ["a", "b"]:
+        assert "BF10" in result[var]
+        assert "BF01" in result[var]
+        assert isinstance(result[var]["BF10"], float)
+        assert isinstance(result[var]["BF01"], float)
+        assert result[var]["BF10"] > 0
+        assert result[var]["BF01"] > 0
 
 
-def test_bayes_factor_invalid_ref_val():
+def test_bayes_factor_with_custom_prior():
     idata = azb.from_dict(
         {
-            "posterior": {"a": np.random.normal(1, 0.5, (2, 1000))},
-            "prior": {"a": np.random.normal(0, 1, (2, 1000))},
+            "posterior": {
+                "a": np.random.normal(1, 0.5, (2, 1000)),
+                "b": np.random.normal(2, 0.5, (2, 1000)),
+            },
+            "prior": {
+                "a": np.random.normal(0, 1, (2, 1000)),
+                "b": np.random.normal(0, 1, (2, 1000)),
+            },
         }
     )
-    with pytest.raises(ValueError, match="The reference value.*must be a numerical value.*"):
-        bayes_factor(idata=idata, var_name="a", ref_val="invalid")
+
+    custom_prior = {"a": np.random.normal(1, 2, 5000), "b": np.random.normal(2, 1, 5000)}
+
+    result = bayes_factor(data=idata, var_names=["a", "b"], ref_vals=[1, 2], prior=custom_prior)
+
+    for var in ["a", "b"]:
+        assert "BF10" in result[var]
+        assert "BF01" in result[var]
+        assert isinstance(result[var]["BF10"], float)
+        assert isinstance(result[var]["BF01"], float)
+        assert result[var]["BF10"] > 0
+        assert result[var]["BF01"] > 0
 
 
-def test_bayes_factor_custom_prior():
-    posterior_data = np.random.normal(1, 0.5, (2, 1000))
-    prior_data = np.random.normal(0, 1, (2, 1000))
-    custom_prior = np.random.normal(0, 10, (2, 1000))
-    idata = azb.from_dict({"posterior": {"a": posterior_data}, "prior": {"a": prior_data}})
-    result = bayes_factor(idata=idata, var_name="a", prior={"a": custom_prior}, ref_val=0)
-    assert "BF10" in result
-    assert "BF01" in result
-    assert result["BF10"] > 0
-    assert result["BF01"] > 0
-
-
-def test_bayes_factor_different_ref_vals():
+def test_bayes_factor_invalid_ref_vals():
     idata = azb.from_dict(
         {
-            "posterior": {"a": np.random.normal(1, 0.5, (2, 1000))},
-            "prior": {"a": np.random.normal(0, 1, (2, 1000))},
+            "posterior": {
+                "a": np.random.normal(1, 0.5, (2, 1000)),
+                "b": np.random.normal(2, 0.5, (2, 1000)),
+            },
+            "prior": {
+                "a": np.random.normal(0, 1, (2, 1000)),
+                "b": np.random.normal(1, 1, (2, 1000)),
+            },
         }
     )
-    ref_vals = [-1, 0, 1]
-    for ref_val in ref_vals:
-        result = bayes_factor(idata=idata, var_name="a", ref_val=ref_val)
-        assert "BF10" in result
-        assert "BF01" in result
-        assert result["BF10"] > 0
-        assert result["BF01"] > 0
+
+    with pytest.raises(ValueError, match="Reference value for .* must be numerical"):
+        bayes_factor(data=idata, var_names=["a", "b"], ref_vals=["invalid", "invalid"])
 
 
-def test_bayes_factor_large_data():
-    posterior_data = np.random.normal(1, 0.5, (2, 1000))
-    prior_data = np.random.normal(0, 1, (2, 1000))
-    idata = azb.from_dict({"posterior": {"a": posterior_data}, "prior": {"a": prior_data}})
-    result = bayes_factor(idata=idata, var_name="a", ref_val=0)
-    assert "BF10" in result
-    assert "BF01" in result
-    assert result["BF10"] > 0
-    assert result["BF01"] > 0
+def test_bayes_factor_multiple_ref_vals():
+    idata = azb.from_dict(
+        {
+            "posterior": {
+                "a": np.random.normal(1, 0.5, (2, 1000)),
+                "b": np.random.normal(2, 0.5, (2, 1000)),
+            },
+            "prior": {
+                "a": np.random.normal(0, 1, (2, 1000)),
+                "b": np.random.normal(1, 1, (2, 1000)),
+            },
+        }
+    )
+
+    ref_vals_list = [[0.5, 1.5], [1, 2], [1.5, 2.5]]
+
+    for ref_vals in ref_vals_list:
+        result = bayes_factor(data=idata, var_names=["a", "b"], ref_vals=ref_vals)
+        for var in ["a", "b"]:
+            assert "BF10" in result[var]
+            assert "BF01" in result[var]
+            assert result[var]["BF10"] > 0
+            assert result[var]["BF01"] > 0
+
+
+def test_bayes_factor_large_sample():
+    posterior_data = {
+        "a": np.random.normal(1, 0.5, (4, 100_000)),
+        "b": np.random.normal(2, 0.5, (4, 100_000)),
+    }
+    prior_data = {
+        "a": np.random.normal(0, 1, (4, 100_000)),
+        "b": np.random.normal(1, 1, (4, 100_000)),
+    }
+
+    idata = azb.from_dict({"posterior": posterior_data, "prior": prior_data})
+
+    result = bayes_factor(data=idata, var_names=["a", "b"], ref_vals=[0, 0])
+
+    for var in ["a", "b"]:
+        assert "BF10" in result[var]
+        assert "BF01" in result[var]
+        assert isinstance(result[var]["BF10"], float)
+        assert isinstance(result[var]["BF01"], float)
