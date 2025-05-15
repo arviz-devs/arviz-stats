@@ -4,7 +4,7 @@ import pytest
 from arviz_base import extract, from_dict
 
 from arviz_stats.base import array_stats
-from arviz_stats.regression import r2_score
+from arviz_stats.metrics import r2_score
 
 
 @pytest.fixture
