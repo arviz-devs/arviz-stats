@@ -1,12 +1,15 @@
 import numpy as np
 import pytest
-from arviz_base import from_dict
+
+from .helpers import importorskip
+
+azb = importorskip("arviz_base")
 
 from arviz_stats.bayes_factor import bayes_factor
 
 
 def test_bayes_factor_default_prior():
-    idata = from_dict(
+    idata = azb.from_dict(
         {
             "posterior": {
                 "a": np.random.normal(1, 0.5, (2, 1000)),
@@ -31,7 +34,7 @@ def test_bayes_factor_default_prior():
 
 
 def test_bayes_factor_with_custom_prior():
-    idata = from_dict(
+    idata = azb.from_dict(
         {
             "posterior": {
                 "a": np.random.normal(1, 0.5, (2, 1000)),
@@ -58,7 +61,7 @@ def test_bayes_factor_with_custom_prior():
 
 
 def test_bayes_factor_invalid_ref_vals():
-    idata = from_dict(
+    idata = azb.from_dict(
         {
             "posterior": {
                 "a": np.random.normal(1, 0.5, (2, 1000)),
@@ -76,7 +79,7 @@ def test_bayes_factor_invalid_ref_vals():
 
 
 def test_bayes_factor_multiple_ref_vals():
-    idata = from_dict(
+    idata = azb.from_dict(
         {
             "posterior": {
                 "a": np.random.normal(1, 0.5, (2, 1000)),
@@ -110,7 +113,7 @@ def test_bayes_factor_large_sample():
         "b": np.random.normal(1, 1, (4, 100_000)),
     }
 
-    idata = from_dict({"posterior": posterior_data, "prior": prior_data})
+    idata = azb.from_dict({"posterior": posterior_data, "prior": prior_data})
 
     result = bayes_factor(data=idata, var_names=["a", "b"], ref_vals=[0, 0])
 
