@@ -42,6 +42,7 @@ you should jump to {ref}`array_stats_api` and read forward.
    :toctree: generated/
 
    arviz_stats.bayes_factor
+   arviz_stats.kl_divergence
    arviz_stats.loo_expectations
    arviz_stats.loo_metrics
    arviz_stats.r2_score
