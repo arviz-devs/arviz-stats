@@ -161,7 +161,7 @@ def wasserstein(
            ...: from arviz_base import load_arviz_data
            ...: data1 = load_arviz_data('centered_eight')
            ...: data2 = load_arviz_data('non_centered_eight')
-           ...: r2_score(data1, data2, var_names="mu")
+           ...: wasserstein(data1, data2, var_names="mu")
 
     References
     ----------
