@@ -487,6 +487,12 @@ def loo_pit(
                 vals = posterior_predictive[pp_var] < observed_data[obs_var]
                 urvs = rng.uniform(size=vals.values.shape)
                 pit_vals[var] = urvs * vals + (1 - urvs) * vals
+
+                # val_less_eq = posterior_predictive[pp_var] <= observed_data[obs_var]
+                # vals_less = posterior_predictive[pp_var] < observed_data[obs_var]
+                # urvs = rng.uniform(size=vals.values.shape)
+                # pit_vals[var] = urvs * vals_less + (1 - urvs) * val_less_eq
+
             else:
                 pit_vals[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
     else:

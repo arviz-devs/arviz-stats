@@ -8,7 +8,7 @@ from .helpers import importorskip
 azb = importorskip("arviz_base")
 
 from arviz_stats.base import array_stats
-from arviz_stats.metrics import r2_score, wasserstein
+from arviz_stats.metrics import kl_divergence, r2_score, wasserstein
 
 
 @pytest.fixture
@@ -62,3 +62,13 @@ def test_wasserstein(fake_post, joint):
 def test_wasserstein_not_shared_vars(fake_post):
     with pytest.raises(ValueError, match="No shared variable names found"):
         wasserstein(fake_post.posterior["a"], fake_post.posterior["b"], num_samples=100)
+
+
+def test_kl_divergence(fake_post):
+    result = kl_divergence(fake_post, fake_post, num_samples=100)
+    assert_array_almost_equal(result, 0.0, decimal=5)
+
+
+def test_kl_divergence_not_shared_vars(fake_post):
+    with pytest.raises(ValueError, match="No shared variable names found"):
+        kl_divergence(fake_post.posterior["a"], fake_post.posterior["b"], num_samples=100)
