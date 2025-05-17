@@ -272,6 +272,8 @@ def round_num(value, precision):
 
         if isinstance(precision, str) and precision.endswith("g"):
             sig_digits = int(precision[:-1])
+            if value == 0:
+                return 0
             return round(value, sig_digits - int(np.floor(np.log10(abs(value)))) - 1)
 
     return value

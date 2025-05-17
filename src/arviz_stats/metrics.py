@@ -8,6 +8,7 @@ from scipy.spatial import cKDTree
 from scipy.stats import wasserstein_distance, wasserstein_distance_nd
 
 from arviz_stats.base import array_stats
+from arviz_stats.utils import round_num
 
 
 def r2_score(
@@ -18,7 +19,7 @@ def r2_score(
     point_estimate=None,
     ci_kind=None,
     ci_prob=None,
-    round_to=2,
+    round_to="2g",
 ):
     """R² for Bayesian regression models.
 
@@ -51,8 +52,10 @@ def r2_score(
         The probability for the credible interval. If None, the default value is used.
         Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
         summary is False.
-    round_to : int
-        Number of decimals used to round results. Defaults to 2. Use "none" to return raw numbers.
+    round_to: int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
 
     Returns
     -------
@@ -101,12 +104,84 @@ def r2_score(
 
         r2_summary = namedtuple("R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
         if (round_to is not None) and (round_to not in ("None", "none")):
-            estimate = round(estimate, round_to)
-            c_i = (round(c_i[0].item(), round_to), round(c_i[1].item(), round_to))
+            estimate = round_num(estimate, round_to)
+            c_i = (round_num(c_i[0].item(), round_to), round_num(c_i[1].item(), round_to))
 
         return r2_summary(estimate, c_i[0], c_i[1])
 
     return r_squared
+
+
+def metrics(data, kind="rmse", var_name=None, sample_dims=None, round_to="2g"):
+    """
+    Compute performace metrics.
+
+    Currently supported metrics are mean absolute error, mean squared error and
+    root mean squared error.
+    For classification problems, accuracy and balanced accuracy are also supported.
+
+    Parameters
+    ----------
+    data: DataTree or InferenceData
+        It should contain groups `observed_data` and `posterior_predictive`.
+    kind: str
+        The kind of metric to compute. Available options are:
+
+        - 'mae': mean absolute error.
+        - 'mse': mean squared error.
+        - 'rmse': root mean squared error. Default.
+        - 'acc': classification accuracy.
+        - 'acc_balanced': balanced classification accuracy.
+
+    var_name: str, optional
+        The name of the observed and predicted variable.
+    sample_dims: iterable of hashable, optional
+        Dimensions to be considered sample dimensions and are to be reduced.
+        Default ``rcParams["data.sample_dims"]``.
+    round_to: int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
+
+    Returns
+    -------
+    estimate: namedtuple
+        A namedtuple with the mean of the computed metric and its standard error.
+
+    Examples
+    --------
+    Calculate root mean squared error
+
+    .. ipython::
+
+        In [1]: from arviz_stats import metrics
+           ...: from arviz_base import load_arviz_data
+           ...: dt = load_arviz_data("radon")
+           ...: metrics(dt, kind="rmse")
+
+    Calculate accuracy of a logistic regression model
+
+    .. ipython::
+
+        In [1]: dt = load_arviz_data("anes")
+           ...: metrics(dt, kind="acc")
+
+    Notes
+    -----
+    The computation of the metrics is done by first reducing the posterior predictive
+    samples, this is done to mirror the computation of the metrics by the
+    :func:`arviz_stats.loo_metrics` function, and hence make comparison easier to perform.
+    """
+    if sample_dims is None:
+        sample_dims = rcParams["data.sample_dims"]
+
+    if var_name is None:
+        var_name = list(data.observed_data.data_vars.keys())[0]
+
+    observed = data.observed_data[var_name]
+    predicted = data.posterior_predictive[var_name].mean(dim=sample_dims)
+
+    return _metrics(observed, predicted, kind, round_to)
 
 
 def kl_divergence(
@@ -116,7 +191,7 @@ def kl_divergence(
     var_names=None,
     sample_dims=None,
     num_samples=500,
-    round_to=2,
+    round_to="2g",
     random_seed=212480,
 ):
     """Compute the Kullback-Leibler (KL) divergence.
@@ -140,8 +215,10 @@ def kl_divergence(
         Default ``rcParams["data.sample_dims"]``.
     num_samples : int
         Number of samples to use for the distance calculation. Default is 500.
-    round_to : int
-        Number of decimals used to round results. Defaults to 2. Use "none" to return raw numbers.
+    round_to: int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
     random_seed : int
         Random seed for reproducibility. Use None for no seed.
 
@@ -183,7 +260,7 @@ def kl_divergence(
     kl_d = _kld(dist1, dist2)
 
     if round_to is not None and round_to not in ("None", "none"):
-        kl_d = round(kl_d, round_to)
+        kl_d = round_num(kl_d, round_to)
 
     return kl_d
 
@@ -196,7 +273,7 @@ def wasserstein(
     sample_dims=None,
     joint=True,
     num_samples=500,
-    round_to=2,
+    round_to="2g",
     random_seed=212480,
 ):
     """Compute the Wasserstein-1 distance.
@@ -219,8 +296,10 @@ def wasserstein(
         or over the marginals (False)
     num_samples : int
         Number of samples to use for the distance calculation. Default is 500.
-    round_to : int
-        Number of decimals used to round results. Defaults to 2. Use "none" to return raw numbers.
+    round_to: int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
     random_seed : int
         Random seed for reproducibility. Use None for no seed.
 
@@ -274,7 +353,7 @@ def wasserstein(
         distance = distance.item()
 
     if round_to is not None and round_to not in ("None", "none"):
-        distance = round(distance, round_to)
+        distance = round_num(distance, round_to)
 
     return distance
 
@@ -391,3 +470,74 @@ def _kld(ary0, ary1):
     kl_div = max(0.0, kl_div.item())
 
     return kl_div
+
+
+def _metrics(observed, predicted, kind, round_to):
+    """Compute performance metrics.
+
+    Parameters
+    ----------
+    observed: DataArray
+        Observed data.
+    predicted: DataArray
+        Predicted data.
+    kind: str
+        The kind of metric to compute. Available options are:
+
+        - 'mae': mean absolute error.
+        - 'mse': mean squared error.
+        - 'rmse': root mean squared error. Default.
+        - 'acc': classification accuracy.
+        - 'acc_balanced': balanced classification accuracy.
+    round_to: int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
+
+    Returns
+    -------
+    estimate: namedtuple
+        A namedtuple with the mean of the computed metric and its standard error.
+    """
+    valid_kind = ["mae", "rmse", "mse", "acc", "acc_balanced"]
+    if kind not in valid_kind:
+        raise ValueError(f"kind must be one of {valid_kind}")
+
+    estimate = namedtuple(kind, ["mean", "se"])
+    n_obs = len(observed)
+
+    if kind == "mae":
+        abs_e = np.abs(observed - predicted)
+        mean = np.mean(abs_e)
+        std_error = np.std(abs_e) / n_obs**0.5
+
+    elif kind == "mse":
+        sq_e = (observed - predicted) ** 2
+        mean = np.mean(sq_e)
+        std_error = np.std(sq_e) / n_obs**0.5
+
+    elif kind == "rmse":
+        sq_e = (observed - predicted) ** 2
+        mean_mse = np.mean(sq_e)
+        var_mse = np.var(sq_e) / n_obs
+        var_rmse = var_mse / mean_mse / 4  # Comes from the first order Taylor approx.
+        mean = mean_mse**0.5
+        std_error = var_rmse**0.5
+
+    elif kind == "acc":
+        yhat = predicted > 0.5
+        acc = yhat == observed
+        mean = np.mean(acc)
+        std_error = (mean * (1 - mean) / n_obs) ** 0.5
+
+    else:
+        yhat = predicted > 0.5
+        mask = observed == 0
+        true_neg = np.mean(yhat[mask] == observed[mask])
+        true_pos = np.mean(yhat[~mask] == observed[~mask])
+        mean = (true_pos + true_neg) / 2
+        # This approximation has quite large bias for small samples
+        bls_acc_var = (true_pos * (1 - true_pos) + true_neg * (1 - true_neg)) / 4
+        std_error = bls_acc_var / n_obs**0.5
+
+    return estimate(round_num(mean, round_to), round_num(std_error, round_to))
