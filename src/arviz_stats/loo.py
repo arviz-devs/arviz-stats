@@ -483,9 +483,16 @@ def loo_pit(
             )
 
             pit_upper = pit_lower + pit_sup_addition[var].values
+
+            if pit_lower.ndim > 1:
+                pit_lower = np.diag(pit_lower)
+                pit_upper = np.diag(pit_upper)
+
             random_value = rng.uniform(pit_lower, pit_upper)
             loo_pit_values[var] = observed_data[var].copy(data=random_value)
         else:
+            if pit_lower.ndim > 1:
+                pit_lower = np.diag(pit_lower)
             loo_pit_values[var] = observed_data[var].copy(data=pit_lower)
 
     return loo_pit_values
