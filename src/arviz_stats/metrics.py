@@ -3,7 +3,7 @@
 from collections import namedtuple
 
 import numpy as np
-from arviz_base import convert_to_datatree, dataset_to_dataframe, extract, rcParams
+from arviz_base import convert_to_datatree, dataset_to_dataarray, extract, rcParams
 from scipy.spatial import cKDTree
 from scipy.stats import wasserstein_distance, wasserstein_distance_nd
 
@@ -116,6 +116,7 @@ def kl_divergence(
     var_names=None,
     sample_dims=None,
     num_samples=500,
+    round_to=2,
     random_seed=212480,
 ):
     """Compute the Kullback-Leibler (KL) divergence.
@@ -129,8 +130,7 @@ def kl_divergence(
 
     Parameters
     ----------
-    data1 : DataArray, Dataset, DataTree, or InferenceData
-    data2 : DataArray, Dataset, DataTree, or InferenceData
+    data1, data2 : DataArray, Dataset, DataTree, or InferenceData
     group : hashable, default "posterior"
         Group on which to compute the kl-divergence.
     var_names : str or list of str, optional
@@ -140,6 +140,8 @@ def kl_divergence(
         Default ``rcParams["data.sample_dims"]``.
     num_samples : int
         Number of samples to use for the distance calculation. Default is 500.
+    round_to : int
+        Number of decimals used to round results. Defaults to 2. Use "none" to return raw numbers.
     random_seed : int
         Random seed for reproducibility. Use None for no seed.
 
@@ -178,7 +180,12 @@ def kl_divergence(
         random_seed=random_seed,
     )
 
-    return _kld(dist1, dist2)
+    kl_d = _kld(dist1, dist2)
+
+    if round_to is not None and round_to not in ("None", "none"):
+        kl_d = round(kl_d, round_to)
+
+    return kl_d
 
 
 def wasserstein(
@@ -189,6 +196,7 @@ def wasserstein(
     sample_dims=None,
     joint=True,
     num_samples=500,
+    round_to=2,
     random_seed=212480,
 ):
     """Compute the Wasserstein-1 distance.
@@ -198,8 +206,7 @@ def wasserstein(
 
     Parameters
     ----------
-    data1 : DataArray, Dataset, DataTree, or InferenceData
-    data2 : DataArray, Dataset, DataTree, or InferenceData
+    data1, data2 : DataArray, Dataset, DataTree, or InferenceData
     group : hashable, default "posterior"
         Group on which to compute the Wasserstein distance.
     var_names : str or list of str, optional
@@ -210,10 +217,10 @@ def wasserstein(
     joint : bool, default True
         Whether to compute Wasserstein distance for the joint distribution (True)
         or over the marginals (False)
-        The computation is faster for the marginals, but it is equivalent to assume the
-        marginals are independent, which usually is not the case.
     num_samples : int
         Number of samples to use for the distance calculation. Default is 500.
+    round_to : int
+        Number of decimals used to round results. Defaults to 2. Use "none" to return raw numbers.
     random_seed : int
         Random seed for reproducibility. Use None for no seed.
 
@@ -221,6 +228,12 @@ def wasserstein(
     -------
     wasserstein_distance : float
 
+    Notes
+    -----
+    The computation is faster for the marginals (`joint=False`). This is equivalent to
+    assume the marginals are independent, which usually is not the case.
+    This function uses the :func:`scipy.stats.wasserstein_distance` for the computation of the
+    marginals and :func:`scipy.stats.wasserstein_distance_nd` for the joint distribution.
 
     Examples
     --------
@@ -258,6 +271,10 @@ def wasserstein(
         distance = 0
         for var1, var2 in zip(dist1.T, dist2.T):
             distance += wasserstein_distance(var1, var2)
+        distance = distance.item()
+
+    if round_to is not None and round_to not in ("None", "none"):
+        distance = round(distance, round_to)
 
     return distance
 
@@ -300,8 +317,8 @@ def _prepare_distribution_pair(
         var_names = list(shared_var_names)
         dist1, dist2 = dist1[var_names], dist2[var_names]
 
-    dist1 = dataset_to_dataframe(dist1, sample_dims=["sample"]).values
-    dist2 = dataset_to_dataframe(dist2, sample_dims=["sample"]).values
+    dist1 = dataset_to_dataarray(dist1, sample_dims=["sample"])
+    dist2 = dataset_to_dataarray(dist2, sample_dims=["sample"])
 
     return dist1, dist2
 
@@ -311,6 +328,7 @@ def _extract_and_reindex(data, group, var_names, sample_dims, num_samples, rando
         extract(
             data,
             group=group,
+            sample_dims=sample_dims,
             var_names=var_names,
             num_samples=num_samples,
             random_seed=random_seed,
@@ -330,10 +348,9 @@ def _kld(ary0, ary1):
 
     Parameters
     ----------
-    ary0 : array-like
-        First sample of shape (n_posterior_samples, n_outputs).
-    ary1 : array-like
-        Second sample of shape (n_posterior_samples, n_outputs).
+    ary0, ary1 : (N, M) array-like
+        Samples of the input distributions. ``N`` represents the number of samples (e.g. posterior
+        samples) and ``M`` the number of outputs (e.g. number of variables in the posterior)
 
     Returns
     -------
