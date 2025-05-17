@@ -345,7 +345,6 @@ def loo_pit(
     var_names=None,
     data_pairs=None,
     log_weights=None,
-    randomize=False,
 ):
     r"""Compute leave one out (PSIS-LOO) probability integral transform (PIT) values.
 
@@ -372,10 +371,6 @@ def loo_pit(
     log_weights: DataArray
         Smoothed log_weights. It must have the same shape as ``y_pred``
         Defaults to None, it will be computed using the PSIS-LOO method.
-    randomize: bool
-        Whether to randomize the PIT values for discrete variables. Randomization is needed for
-        discrete data. This function assumes discrete variables if the observed or predicted
-        data are stored as integers.
 
     Returns
     -------
@@ -434,6 +429,7 @@ def loo_pit(
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
     data = convert_to_datatree(data)
+    rng = np.random.default_rng(214)
 
     if var_names is None:
         var_names = list(data.observed_data.data_vars.keys())
@@ -466,40 +462,32 @@ def loo_pit(
         keep_dataset=True,
     )
 
-    type_vars = {}
+    sel_min = {}
+    sel_sup = {}
     for i, var in enumerate(var_names):
-        obs_var = var
-        pp_var = pp_var_names[i]
+        sel_min[var] = posterior_predictive[pp_var_names[i]] < observed_data[var]
+        sel_sup[var] = posterior_predictive[pp_var_names[i]] == observed_data[var]
 
-        is_discrete = (posterior_predictive[pp_var].values.dtype.kind == "i") or (
-            observed_data[obs_var].values.dtype.kind == "i"
-        )
-        type_vars[var] = "discrete" if is_discrete else "continuous"
+    sel_min = xr.Dataset(sel_min)
+    sel_sup = xr.Dataset(sel_sup)
 
-    pit_vals = {}
-    if randomize and "discrete" in type_vars.values():
-        rng = np.random.default_rng(214)
-        for i, var in enumerate(var_names):
-            obs_var = var
-            pp_var = pp_var_names[i]
+    pit = np.exp(logsumexp(log_weights.where(sel_min, -np.inf), dims=["chain", "draw"]))
 
-            if type_vars[var] == "discrete":
-                vals = posterior_predictive[pp_var] < observed_data[obs_var]
-                urvs = rng.uniform(size=vals.values.shape)
-                pit_vals[var] = urvs * vals + (1 - urvs) * vals
-            else:
-                pit_vals[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
-    else:
-        for i, var in enumerate(var_names):
-            obs_var = var
-            pp_var = pp_var_names[i]
-            pit_vals[var] = posterior_predictive[pp_var] <= observed_data[obs_var]
+    loo_pit_values = xr.Dataset(coords=observed_data.coords)
+    for i, var in enumerate(var_names):
+        pit_lower = pit[var].values
 
-    pit_vals = xr.Dataset(pit_vals)
-    loo_pit_values = np.exp(
-        logsumexp(log_weights.where(pit_vals, -np.inf), dims=["chain", "draw"])
-        - logsumexp(log_weights, dims=["chain", "draw"])
-    )
+        if sel_sup[var].any():
+            pit_sup_addition = np.exp(
+                logsumexp(log_weights.where(sel_sup[var], -np.inf), dims=["chain", "draw"])
+            )
+
+            pit_upper = pit_lower + pit_sup_addition[var].values
+            random_value = rng.uniform(pit_lower, pit_upper)
+            loo_pit_values[var] = observed_data[var].copy(data=random_value)
+        else:
+            loo_pit_values[var] = observed_data[var].copy(data=pit_lower)
+
     return loo_pit_values
 
 
