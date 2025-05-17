@@ -1,13 +1,14 @@
 # pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
+from numpy.testing import assert_array_almost_equal
 
 from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 
 from arviz_stats.base import array_stats
-from arviz_stats.metrics import r2_score
+from arviz_stats.metrics import kl_divergence, r2_score, wasserstein
 
 
 @pytest.fixture
@@ -15,6 +16,18 @@ def sample_data():
     y_true = np.array([3, -0.5, 2, 7])
     y_pred = np.array([[[2.5, 0.0, 2, 8], [3.0, -0.5, 2, 7], [2.8, -0.3, 2.1, 7.2]]])
     return azb.from_dict({"observed_data": {"y": y_true}, "posterior_predictive": {"y": y_pred}})
+
+
+@pytest.fixture
+def fake_post():
+    return azb.from_dict(
+        {
+            "posterior": {
+                "a": np.random.normal(size=(4, 100)),
+                "b": np.random.normal(size=(4, 100)),
+            },
+        }
+    )
 
 
 def test_r2_score_summary(sample_data):
@@ -38,3 +51,24 @@ def test_r2_score_invalid_shapes():
     y_pred = np.array([[2.5, 0.0, 2]])
     with pytest.raises(ValueError):
         array_stats.r2_score(y_true, y_pred)
+
+
+@pytest.mark.parametrize("joint", [True, False])
+def test_wasserstein(fake_post, joint):
+    result = wasserstein(fake_post, fake_post, num_samples=100, joint=joint)
+    assert_array_almost_equal(result, 0.0, decimal=5)
+
+
+def test_wasserstein_not_shared_vars(fake_post):
+    with pytest.raises(ValueError, match="No shared variable names found"):
+        wasserstein(fake_post.posterior["a"], fake_post.posterior["b"], num_samples=100)
+
+
+def test_kl_divergence(fake_post):
+    result = kl_divergence(fake_post, fake_post, num_samples=100)
+    assert_array_almost_equal(result, 0.0, decimal=5)
+
+
+def test_kl_divergence_not_shared_vars(fake_post):
+    with pytest.raises(ValueError, match="No shared variable names found"):
+        kl_divergence(fake_post.posterior["a"], fake_post.posterior["b"], num_samples=100)

@@ -1,9 +1,11 @@
-"""Regression metrics for Bayesian models."""
+"""Collection of metrics for evaluating the performance of probabilistic models."""
 
 from collections import namedtuple
 
 import numpy as np
-from arviz_base import extract, rcParams
+from arviz_base import convert_to_datatree, dataset_to_dataarray, extract, rcParams
+from scipy.spatial import cKDTree
+from scipy.stats import wasserstein_distance, wasserstein_distance_nd
 
 from arviz_stats.base import array_stats
 
@@ -105,3 +107,287 @@ def r2_score(
         return r2_summary(estimate, c_i[0], c_i[1])
 
     return r_squared
+
+
+def kl_divergence(
+    data1,
+    data2,
+    group="posterior",
+    var_names=None,
+    sample_dims=None,
+    num_samples=500,
+    round_to=2,
+    random_seed=212480,
+):
+    """Compute the Kullback-Leibler (KL) divergence.
+
+    The KL-divergence is a measure of how different two probability distributions are.
+    It represents how much extra uncertainty are we introducing when we use one
+    distribution to approximate another. The KL-divergence is not symmetric, thus
+    changing the order of the `data1` and `data2` arguments will change the result.
+
+    For details of the approximation used to the compute the KL-divergence see [1]_.
+
+    Parameters
+    ----------
+    data1, data2 : DataArray, Dataset, DataTree, or InferenceData
+    group : hashable, default "posterior"
+        Group on which to compute the kl-divergence.
+    var_names : str or list of str, optional
+        Names of the variables for which the KL-divergence should be computed.
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions and are to be reduced.
+        Default ``rcParams["data.sample_dims"]``.
+    num_samples : int
+        Number of samples to use for the distance calculation. Default is 500.
+    round_to : int
+        Number of decimals used to round results. Defaults to 2. Use "none" to return raw numbers.
+    random_seed : int
+        Random seed for reproducibility. Use None for no seed.
+
+    Returns
+    -------
+    KL-divergence : float
+
+
+    Examples
+    --------
+    Calculate the KL-divergence between the posterior distributions
+    for the variable mu in the centered and non-centered eight schools models
+
+    .. ipython::
+
+        In [1]: from arviz_stats import kl_divergence
+           ...: from arviz_base import load_arviz_data
+           ...: data1 = load_arviz_data('centered_eight')
+           ...: data2 = load_arviz_data('non_centered_eight')
+           ...: kl_divergence(data1, data2, var_names="mu")
+
+    References
+    ----------
+    .. [1] F. Perez-Cruz, *Kullback-Leibler divergence estimation of continuous distributions*
+        IEEE International Symposium on Information Theory. (2008)
+        https://doi.org/10.1109/ISIT.2008.4595271.
+        preprint https://www.tsc.uc3m.es/~fernando/bare_conf3.pdf
+    """
+    dist1, dist2 = _prepare_distribution_pair(
+        data1,
+        data2,
+        group=group,
+        var_names=var_names,
+        sample_dims=sample_dims,
+        num_samples=num_samples,
+        random_seed=random_seed,
+    )
+
+    kl_d = _kld(dist1, dist2)
+
+    if round_to is not None and round_to not in ("None", "none"):
+        kl_d = round(kl_d, round_to)
+
+    return kl_d
+
+
+def wasserstein(
+    data1,
+    data2,
+    group="posterior",
+    var_names=None,
+    sample_dims=None,
+    joint=True,
+    num_samples=500,
+    round_to=2,
+    random_seed=212480,
+):
+    """Compute the Wasserstein-1 distance.
+
+    The Wasserstein distance, also called the Earth mover’s distance or the optimal transport
+    distance, is a similarity metric between two probability distributions [1]_.
+
+    Parameters
+    ----------
+    data1, data2 : DataArray, Dataset, DataTree, or InferenceData
+    group : hashable, default "posterior"
+        Group on which to compute the Wasserstein distance.
+    var_names : str or list of str, optional
+        Names of the variables for which the Wasserstein distance should be computed.
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions and are to be reduced.
+        Default ``rcParams["data.sample_dims"]``.
+    joint : bool, default True
+        Whether to compute Wasserstein distance for the joint distribution (True)
+        or over the marginals (False)
+    num_samples : int
+        Number of samples to use for the distance calculation. Default is 500.
+    round_to : int
+        Number of decimals used to round results. Defaults to 2. Use "none" to return raw numbers.
+    random_seed : int
+        Random seed for reproducibility. Use None for no seed.
+
+    Returns
+    -------
+    wasserstein_distance : float
+
+    Notes
+    -----
+    The computation is faster for the marginals (`joint=False`). This is equivalent to
+    assume the marginals are independent, which usually is not the case.
+    This function uses the :func:`scipy.stats.wasserstein_distance` for the computation of the
+    marginals and :func:`scipy.stats.wasserstein_distance_nd` for the joint distribution.
+
+    Examples
+    --------
+    Calculate the Wasserstein distance between the posterior distributions
+    for the variable mu in the centered and non-centered eight schools models
+
+    .. ipython::
+
+        In [1]: from arviz_stats import wasserstein
+           ...: from arviz_base import load_arviz_data
+           ...: data1 = load_arviz_data('centered_eight')
+           ...: data2 = load_arviz_data('non_centered_eight')
+           ...: wasserstein(data1, data2, var_names="mu")
+
+    References
+    ----------
+
+    .. [1] "Wasserstein metric",
+           https://en.wikipedia.org/wiki/Wasserstein_metric
+    """
+    dist1, dist2 = _prepare_distribution_pair(
+        data1,
+        data2,
+        group=group,
+        var_names=var_names,
+        sample_dims=sample_dims,
+        num_samples=num_samples,
+        random_seed=random_seed,
+    )
+
+    if joint:
+        distance = wasserstein_distance_nd(dist1, dist2)
+
+    else:
+        distance = 0
+        for var1, var2 in zip(dist1.T, dist2.T):
+            distance += wasserstein_distance(var1, var2)
+        distance = distance.item()
+
+    if round_to is not None and round_to not in ("None", "none"):
+        distance = round(distance, round_to)
+
+    return distance
+
+
+def _prepare_distribution_pair(
+    data1, data2, group, var_names, sample_dims, num_samples, random_seed
+):
+    """Prepare the distribution pair for metric calculations."""
+    data1 = convert_to_datatree(data1)
+    data2 = convert_to_datatree(data2)
+    if sample_dims is None:
+        sample_dims = rcParams["data.sample_dims"]
+
+    dist1 = _extract_and_reindex(
+        data1,
+        group=group,
+        var_names=var_names,
+        sample_dims=sample_dims,
+        num_samples=num_samples,
+        random_seed=random_seed,
+    )
+
+    dist2 = _extract_and_reindex(
+        data2,
+        group=group,
+        var_names=var_names,
+        sample_dims=sample_dims,
+        num_samples=num_samples,
+        random_seed=random_seed,
+    )
+
+    shared_var_names = set(dist1.data_vars) & set(dist2.data_vars)
+    if not shared_var_names:
+        raise ValueError(
+            "No shared variable names found between the two datasets. "
+            "Ensure that both datasets contain variables with matching names."
+        )
+
+    if var_names is None:
+        var_names = list(shared_var_names)
+        dist1, dist2 = dist1[var_names], dist2[var_names]
+
+    dist1 = dataset_to_dataarray(dist1, sample_dims=["sample"])
+    dist2 = dataset_to_dataarray(dist2, sample_dims=["sample"])
+
+    return dist1, dist2
+
+
+def _extract_and_reindex(data, group, var_names, sample_dims, num_samples, random_seed):
+    return (
+        extract(
+            data,
+            group=group,
+            sample_dims=sample_dims,
+            var_names=var_names,
+            num_samples=num_samples,
+            random_seed=random_seed,
+            keep_dataset=True,
+        )
+        .reset_index("sample")
+        .drop_vars(sample_dims)
+        .assign_coords(sample=range(num_samples))
+    )
+
+
+def _kld(ary0, ary1):
+    """Kullback-Leibler divergence approximation.
+
+    Compute KL-divergence using equation 14 from [1]_. Assumes both arrays
+    are of the same shape.
+
+    Parameters
+    ----------
+    ary0, ary1 : (N, M) array-like
+        Samples of the input distributions. ``N`` represents the number of samples (e.g. posterior
+        samples) and ``M`` the number of outputs (e.g. number of variables in the posterior)
+
+    Returns
+    -------
+    float
+        The Kullback-Leibler divergence between the two
+        distributions.
+
+    References
+    ----------
+    .. [1] F. Perez-Cruz, *Kullback-Leibler divergence estimation of continuous distributions*
+        IEEE International Symposium on Information Theory. (2008)
+        https://doi.org/10.1109/ISIT.2008.4595271.
+        preprint https://www.tsc.uc3m.es/~fernando/bare_conf3.pdf
+
+    """
+    # for discrete data we need to smooth the samples to avoid numerical errors
+    # here we are adding a small noise to all samples, differences should be negligible
+    # but we may want to do something more sophisticated in the future
+    rng = np.random.default_rng(0)
+    ary0 = ary0 + rng.normal(0, ary0.std(axis=0) / 1e6, size=ary0.shape)
+    ary1 = ary1 + rng.normal(0, ary1.std(axis=0) / 1e6, size=ary1.shape)
+
+    samples, dim = ary0.shape
+
+    # Build KD-trees for X and Y
+    kd_tree_ary0 = cKDTree(ary0)
+    kd_tree_ary1 = cKDTree(ary1)
+
+    # first nearest neighbour distances of X to Y
+    r_k, _ = kd_tree_ary1.query(ary0)
+
+    # second nearest neighbour distances of X to X
+    # we skip the trivial first nearest neighbour distance
+    s_k = kd_tree_ary0.query(ary0, k=2)[0][:, 1]
+
+    kl_div = (dim / samples) * np.sum(np.log(r_k / s_k)) + np.log(samples / (samples - 1))
+    # Due to numerical errors and for very similar samples we can get negative values
+    kl_div = max(0.0, kl_div.item())
+
+    return kl_div
