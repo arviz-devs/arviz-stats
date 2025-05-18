@@ -462,38 +462,34 @@ def loo_pit(
         keep_dataset=True,
     )
 
-    sel_min = {}
-    sel_sup = {}
-    for i, var in enumerate(var_names):
-        sel_min[var] = posterior_predictive[pp_var_names[i]] < observed_data[var]
-        sel_sup[var] = posterior_predictive[pp_var_names[i]] == observed_data[var]
+    rename_dict = {
+        pp_name: obs_name
+        for obs_name, pp_name in zip(data_pairs.keys(), data_pairs.values())
+        if obs_name != pp_name
+    }
 
-    sel_min = xr.Dataset(sel_min)
-    sel_sup = xr.Dataset(sel_sup)
+    posterior_predictive = posterior_predictive.rename(rename_dict)
+    sel_min = posterior_predictive < observed_data
+    sel_sup = posterior_predictive == observed_data
 
-    pit = np.exp(logsumexp(log_weights.where(sel_min, -np.inf), dims=["chain", "draw"]))
+    logsumexp_lower = logsumexp(log_weights.where(sel_min, -np.inf), dims=["chain", "draw"])
 
-    loo_pit_values = xr.Dataset(coords=observed_data.coords)
-    for i, var in enumerate(var_names):
-        pit_lower = pit[var].values
+    pit_lower = np.exp(logsumexp_lower)
+    loo_pit_values = pit_lower.copy(deep=True)
 
-        if sel_sup[var].any():
-            pit_sup_addition = np.exp(
-                logsumexp(log_weights.where(sel_sup[var], -np.inf), dims=["chain", "draw"])
+    for var_name in loo_pit_values.data_vars:
+        sel_sup_var = sel_sup[var_name]
+
+        if sel_sup_var.any():
+            logsumexp_sup = logsumexp(
+                log_weights.where(sel_sup_var, -np.inf),
+                dims=["chain", "draw"],
             )
+            pit_sup_addition = np.exp(logsumexp_sup)
+            pit_upper = pit_lower[var_name] + pit_sup_addition
 
-            pit_upper = pit_lower + pit_sup_addition[var].values
-
-            if pit_lower.ndim > 1:
-                pit_lower = np.diag(pit_lower)
-                pit_upper = np.diag(pit_upper)
-
-            random_value = rng.uniform(pit_lower, pit_upper)
-            loo_pit_values[var] = observed_data[var].copy(data=random_value)
-        else:
-            if pit_lower.ndim > 1:
-                pit_lower = np.diag(pit_lower)
-            loo_pit_values[var] = observed_data[var].copy(data=pit_lower)
+            random_values = rng.uniform(pit_lower[var_name].data, pit_upper.data)
+            loo_pit_values[var_name] = observed_data[var_name].copy(data=random_values)
 
     return loo_pit_values
 
