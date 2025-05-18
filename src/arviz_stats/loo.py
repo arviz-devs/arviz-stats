@@ -465,8 +465,12 @@ def loo_pit(
     sel_min = {}
     sel_sup = {}
     for i, var in enumerate(var_names):
-        sel_min[var] = posterior_predictive[pp_var_names[i]] < observed_data[var]
-        sel_sup[var] = posterior_predictive[pp_var_names[i]] == observed_data[var]
+        pred = posterior_predictive[pp_var_names[i]]
+        obs = observed_data[var]
+        pred = pred.rename({pred.dims[-1]: obs.dims[-1]})
+
+        sel_min[var] = pred < obs
+        sel_sup[var] = pred == obs
 
     sel_min = xr.Dataset(sel_min)
     sel_sup = xr.Dataset(sel_sup)
