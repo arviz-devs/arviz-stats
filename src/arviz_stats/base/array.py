@@ -525,5 +525,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         return r2_ufunc(y_true, y_pred, out_shape=(y_pred.shape[0],))
 
+    def metrics(self, observed, predicted, kind):
+        """Compute metrics for Bayesian regression models."""
+        func = getattr(self, f"_{kind}", None)
+
+        metrics_ufunc = make_ufunc(
+            func,
+            n_output=2,
+            n_input=2,
+            n_dims=1,
+            ravel=False,
+        )
+        return metrics_ufunc(observed, predicted)
+
 
 array_stats = BaseArray()

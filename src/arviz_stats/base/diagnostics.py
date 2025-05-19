@@ -760,3 +760,133 @@ class _DiagnosticsBase(_CoreBase):
         var_e = np.var(y_true - y_pred, axis=1)
         r_squared = var_y_est / (var_y_est + var_e)
         return r_squared
+
+    @staticmethod
+    def _mae(observed, predicted):
+        """Compute the Mean Absolute Error (MAE).
+
+        Parameters
+        ----------
+        observed: array-like of shape = (n_outputs,)
+            Ground truth (correct) target values.
+        predicted: array-like of shape = (n_outputs)
+            Estimated target values.
+
+        Returns
+        -------
+        mean: float
+            Mean absolute error.
+        std_error: float
+            Standard error of the mean absolute error.
+        """
+        n_obs = len(observed)
+        abs_e = np.abs(observed - predicted)
+        mean = np.mean(abs_e)
+        std_error = np.std(abs_e) / n_obs**0.5
+        return mean, std_error
+
+    @staticmethod
+    def _mse(observed, predicted):
+        """Compute the Mean Squared Error (MSE).
+
+        Parameters
+        ----------
+        observed: array-like of shape = (n_outputs,)
+            Ground truth (correct) target values.
+        predicted: array-like of shape = (n_outputs)
+            Estimated target values.
+
+        Returns
+        -------
+        mean: float
+            Mean squared error.
+        std_error: float
+            Standard error of the mean squared error.
+        """
+        n_obs = len(observed)
+        sq_e = (observed - predicted) ** 2
+        mean = np.mean(sq_e)
+        std_error = np.std(sq_e) / n_obs**0.5
+        return mean, std_error
+
+    @staticmethod
+    def _rmse(observed, predicted):
+        """Compute the Root Mean Squared Error (RMSE).
+
+        Parameters
+        ----------
+        observed: array-like of shape = (n_outputs,)
+            Ground truth (correct) target values.
+        predicted: array-like of shape = (n_outputs)
+            Estimated target values.
+
+        Returns
+        -------
+        mean: float
+            Root mean squared error.
+        std_error: float
+            Standard error of the root mean squared error.
+        """
+        n_obs = len(observed)
+        sq_e = (observed - predicted) ** 2
+        mean_mse = np.mean(sq_e)
+        var_mse = np.var(sq_e) / n_obs
+        var_rmse = var_mse / mean_mse / 4  # Comes from the first order Taylor approx.
+        mean = mean_mse**0.5
+        std_error = var_rmse**0.5
+
+        return mean, std_error
+
+    @staticmethod
+    def _acc(observed, predicted):
+        """Compute the Accuracy.
+
+        Parameters
+        ----------
+        observed: array-like of shape = (n_outputs,)
+            Ground truth (correct) target values.
+        predicted: array-like of shape = (n_outputs)
+            Estimated target values.
+
+        Returns
+        -------
+        mean: float
+            Accuracy.
+        std_error: float
+            Standard error of the accuracy.
+        """
+        n_obs = len(observed)
+        yhat = predicted > 0.5
+        acc = yhat == observed
+        mean = np.mean(acc)
+        std_error = (mean * (1 - mean) / n_obs) ** 0.5
+        return mean, std_error
+
+    @staticmethod
+    def _acc_balanced(observed, predicted):
+        """Compute the Balanced Accuracy.
+
+        Parameters
+        ----------
+        observed: array-like of shape = (n_outputs,)
+            Ground truth (correct) target values.
+        predicted: array-like of shape = (n_outputs)
+            Estimated target values.
+
+        Returns
+        -------
+        mean: float
+            Balanced accuracy.
+        std_error: float
+            Standard error of the balanced accuracy.
+        """
+        n_obs = len(observed)
+        yhat = predicted > 0.5
+        mask = observed == 0
+        true_neg = np.mean(yhat[mask] == observed[mask])
+        true_pos = np.mean(yhat[~mask] == observed[~mask])
+        mean = (true_pos + true_neg) / 2
+        # This approximation has quite large bias for small samples
+        bls_acc_var = (true_pos * (1 - true_pos) + true_neg * (1 - true_neg)) / 4
+        std_error = bls_acc_var / n_obs**0.5
+        return mean, std_error

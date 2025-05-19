@@ -1,7 +1,6 @@
 """Pareto-smoothed importance sampling LOO (PSIS-LOO-CV) related functions."""
 
 import itertools
-from collections import namedtuple
 from copy import deepcopy
 
 import numpy as np
@@ -25,7 +24,8 @@ from arviz_stats.helper_loo import (
     _warn_pareto_k,
     _warn_pointwise_loo,
 )
-from arviz_stats.utils import ELPDData, get_log_likelihood_dataset, round_num
+from arviz_stats.metrics import _metrics
+from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
 def loo(data, pointwise=None, var_name=None, reff=None):
@@ -290,54 +290,13 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to="2g"):
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    valid_kind = ["mae", "rmse", "mse", "acc", "acc_balanced"]
-    if kind not in valid_kind:
-        raise ValueError(f"kind must be one of {valid_kind}")
-
     if var_name is None:
         var_name = list(data.observed_data.data_vars.keys())[0]
 
-    estimate = namedtuple(kind, ["mean", "se"])
     observed = data.observed_data[var_name]
-    elpd_pred = loo_expectations(data, kind="mean", var_name=var_name)
+    predicted = loo_expectations(data, kind="mean", var_name=var_name)
 
-    n_obs = len(observed)
-
-    if kind == "mae":
-        abs_e = np.abs(observed - elpd_pred)
-        mean = np.mean(abs_e)
-        std_error = np.std(abs_e) / n_obs**0.5
-
-    elif kind == "mse":
-        sq_e = (observed - elpd_pred) ** 2
-        mean = np.mean(sq_e)
-        std_error = np.std(sq_e) / n_obs**0.5
-
-    elif kind == "rmse":
-        sq_e = (observed - elpd_pred) ** 2
-        mean_mse = np.mean(sq_e)
-        var_mse = np.var(sq_e) / n_obs
-        var_rmse = var_mse / mean_mse / 4  # Comes from the first order Taylor approx.
-        mean = mean_mse**0.5
-        std_error = var_rmse**0.5
-
-    elif kind == "acc":
-        yhat = elpd_pred > 0.5
-        acc = yhat == observed
-        mean = np.mean(acc)
-        std_error = (mean * (1 - mean) / n_obs) ** 0.5
-
-    else:
-        yhat = elpd_pred > 0.5
-        mask = observed == 0
-        true_neg = np.mean(yhat[mask] == observed[mask])
-        true_pos = np.mean(yhat[~mask] == observed[~mask])
-        mean = (true_pos + true_neg) / 2
-        # This approximation has quite large bias for small samples
-        bls_acc_var = (true_pos * (1 - true_pos) + true_neg * (1 - true_neg)) / 4
-        std_error = bls_acc_var / n_obs**0.5
-
-    return estimate(round_num(mean, round_to), round_num(std_error, round_to))
+    return _metrics(observed, predicted, kind, round_to)
 
 
 def loo_pit(
