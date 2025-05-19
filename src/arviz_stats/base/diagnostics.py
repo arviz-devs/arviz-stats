@@ -774,11 +774,10 @@ class _DiagnosticsBase(_CoreBase):
 
         Returns
         -------
-        tuple (mean, std_error)
-            mean: float
-                Mean absolute error.
-            std_error: float
-                Standard error of the mean absolute error.
+        mean: float
+            Mean absolute error.
+        std_error: float
+            Standard error of the mean absolute error.
         """
         n_obs = len(observed)
         abs_e = np.abs(observed - predicted)
@@ -799,11 +798,10 @@ class _DiagnosticsBase(_CoreBase):
 
         Returns
         -------
-        tuple (mean, std_error)
-            mean: float
-                Mean squared error.
-            std_error: float
-                Standard error of the mean squared error.
+        mean: float
+            Mean squared error.
+        std_error: float
+            Standard error of the mean squared error.
         """
         n_obs = len(observed)
         sq_e = (observed - predicted) ** 2
@@ -824,11 +822,10 @@ class _DiagnosticsBase(_CoreBase):
 
         Returns
         -------
-        tuple (mean, std_error)
-            mean: float
-                Root mean squared error.
-            std_error: float
-                Standard error of the root mean squared error.
+        mean: float
+            Root mean squared error.
+        std_error: float
+            Standard error of the root mean squared error.
         """
         n_obs = len(observed)
         sq_e = (observed - predicted) ** 2
@@ -853,11 +850,10 @@ class _DiagnosticsBase(_CoreBase):
 
         Returns
         -------
-        tuple (mean, std_error)
-            mean: float
-                Accuracy.
-            std_error: float
-                Standard error of the accuracy.
+        mean: float
+            Accuracy.
+        std_error: float
+            Standard error of the accuracy.
         """
         n_obs = len(observed)
         yhat = predicted > 0.5
@@ -879,11 +875,10 @@ class _DiagnosticsBase(_CoreBase):
 
         Returns
         -------
-        tuple (mean, std_error)
-            mean: float
-                Balanced accuracy.
-            std_error: float
-                Standard error of the balanced accuracy.
+        mean: float
+            Balanced accuracy.
+        std_error: float
+            Standard error of the balanced accuracy.
         """
         n_obs = len(observed)
         yhat = predicted > 0.5
