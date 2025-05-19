@@ -504,40 +504,6 @@ def _metrics(observed, predicted, kind, round_to):
         raise ValueError(f"kind must be one of {valid_kind}")
 
     estimate = namedtuple(kind, ["mean", "se"])
-    n_obs = len(observed)
-
-    if kind == "mae":
-        abs_e = np.abs(observed - predicted)
-        mean = np.mean(abs_e)
-        std_error = np.std(abs_e) / n_obs**0.5
-
-    elif kind == "mse":
-        sq_e = (observed - predicted) ** 2
-        mean = np.mean(sq_e)
-        std_error = np.std(sq_e) / n_obs**0.5
-
-    elif kind == "rmse":
-        sq_e = (observed - predicted) ** 2
-        mean_mse = np.mean(sq_e)
-        var_mse = np.var(sq_e) / n_obs
-        var_rmse = var_mse / mean_mse / 4  # Comes from the first order Taylor approx.
-        mean = mean_mse**0.5
-        std_error = var_rmse**0.5
-
-    elif kind == "acc":
-        yhat = predicted > 0.5
-        acc = yhat == observed
-        mean = np.mean(acc)
-        std_error = (mean * (1 - mean) / n_obs) ** 0.5
-
-    else:
-        yhat = predicted > 0.5
-        mask = observed == 0
-        true_neg = np.mean(yhat[mask] == observed[mask])
-        true_pos = np.mean(yhat[~mask] == observed[~mask])
-        mean = (true_pos + true_neg) / 2
-        # This approximation has quite large bias for small samples
-        bls_acc_var = (true_pos * (1 - true_pos) + true_neg * (1 - true_neg)) / 4
-        std_error = bls_acc_var / n_obs**0.5
+    mean, std_error = array_stats.metrics(observed, predicted, kind=kind)
 
     return estimate(round_num(mean, round_to), round_num(std_error, round_to))
