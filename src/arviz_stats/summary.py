@@ -2,12 +2,13 @@
 
 from typing import Any
 
+import numpy as np
 import xarray as xr
 from arviz_base import dataset_to_dataframe, extract, rcParams
 from pandas import DataFrame
 from xarray_einstats import stats
 
-__all__ = ["summary"]
+__all__ = ["summary", "ci_in_rope"]
 
 
 def summary(
@@ -215,3 +216,129 @@ def summary(
         summary_df = summary_df.round(round_to)
 
     return summary_df
+
+
+def ci_in_rope(
+    data,
+    var_names=None,
+    filter_vars=None,
+    group="posterior",
+    sample_dims=None,
+    rope=None,
+    ci_prob=None,
+    ci_kind=None,
+):
+    """
+    Compute the percentage of a credible interval that falls within a ROPE.
+
+    A region of practical equivalence (ROPE) indicates a small range of parameter values
+    that are considered to be practically equivalent to the null value for purposes of the
+    particular application see [1]_ for more details.
+
+    Parameters
+    ----------
+    data : DataTree, DataSet or InferenceData
+    var_names : list of str, optional
+        Names of variables for which the ROPE should be computed.
+        If None all variables are included.
+    filter_vars: {None, "like", "regex"}, default None
+        Used for `var_names` only.
+        If ``None`` (default), interpret var_names as the real variables names.
+        If "like", interpret var_names as substrings of the real variables names.
+        If "regex", interpret var_names as regular expressions on the real variables names.
+    group: str
+        Select a group to compute the ROPE. Defaults to “posterior”.
+    coords : dict, optional
+        Coordinates defining a subset over the selected group.
+    sample_dims : str or sequence of hashable, optional
+        Defaults to ``rcParams["data.sample_dims"]``
+    rope : tuple or dict
+        If tuple, the lower and upper bounds of the ROPE are the same for all variables.
+        If dict, the keys are the variable names and the values are tuples with the lower
+        and upper bounds of the ROPE. The keys must be in `var_names`.
+    ci_prob : float, optional
+        Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``.
+    ci_kind : {"hdi", "eti"}, optional
+        Type of credible interval. Defaults to ``rcParams["stats.ci_kind"]``.
+        If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
+
+    Returns
+    -------
+    xarray.Dataset
+
+    See Also
+    --------
+    arviz.summary : Compute summary statistics and or diagnostics.
+    arviz.hdi : Compute highest density interval (HDI).
+    arviz.eti : Compute equal tail interval (ETI).
+
+    Examples
+    --------
+    Apply the same ROPE to a subset of variables:
+
+    .. ipython::
+        In [1]: from arviz_base import load_arviz_data
+           ...: from arviz_stats import ci_in_rope
+           ...: data = load_arviz_data("centered_eight")
+           ...: ci_in_rope(data, var_names=["mu", "tau"], rope=(-0.5, 0.5))
+
+    Apply different ROPEs to each variable:
+
+    .. ipython::
+        In [1]: ci_in_rope(data, rope={"mu": (-0.5, 0.5), "tau": (0.1, 0.2), "theta": (-0.1, 0.1)})
+
+    References
+    ----------
+    .. [1] Kruschke. Doing Bayesian Data Analysis, Second Edition: A Tutorial with R,
+        JAGS, and Stan. Academic Press, 2014. ISBN 978-0-12-405888-0.
+    """
+    if ci_kind not in ("hdi", "eti", None):
+        raise ValueError("ci_kind must be either 'hdi' or 'eti'")
+    if ci_prob is None:
+        ci_prob = rcParams["stats.ci_prob"]
+    if ci_kind is None:
+        ci_kind = rcParams["stats.ci_kind"] if "stats.ci_kind" in rcParams else "eti"
+    if sample_dims is None:
+        sample_dims = rcParams["data.sample_dims"]
+
+    dataset = extract(
+        data,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        group=group,
+        combined=False,
+        keep_dataset=True,
+    )
+
+    if ci_kind == "eti":
+        c_i = dataset.azstats.eti(prob=ci_prob, dims=sample_dims).rename({"quantile": "ci_kind"})
+    else:
+        c_i = dataset.azstats.hdi(prob=ci_prob, dims=sample_dims).rename({"hdi": "ci_kind"})
+
+    stacked = dataset.stack(sample=sample_dims)
+
+    ci_low = c_i.sel(ci_kind="lower")
+    ci_high = c_i.sel(ci_kind="higher")
+
+    in_ci = (stacked >= ci_low) & (stacked <= ci_high)
+
+    if isinstance(rope, tuple):
+        rope_low = xr.full_like(ci_low, rope[0])
+        rope_high = xr.full_like(ci_high, rope[1])
+    elif isinstance(rope, dict):
+        rope_low = xr.full_like(ci_low, fill_value=np.nan)
+        rope_high = xr.full_like(ci_high, fill_value=np.nan)
+
+        for var, (low, high) in rope.items():
+            if var in rope_low:
+                rope_low[var] = low
+                rope_high[var] = high
+    else:
+        raise ValueError("`rope` must be a tuple or dict")
+
+    ci_samples = stacked.where(in_ci)
+    in_rope = (ci_samples >= rope_low) & (ci_samples <= rope_high)
+
+    proportion = (in_rope.sum(dim="sample") / in_ci.sum(dim="sample")) * 100
+
+    return proportion
