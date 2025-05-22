@@ -2,9 +2,8 @@
 
 from typing import Any
 
-import numpy as np
 import xarray as xr
-from arviz_base import dataset_to_dataframe, extract, rcParams
+from arviz_base import dataset_to_dataframe, extract, rcParams, references_to_dataset
 from pandas import DataFrame
 from xarray_einstats import stats
 
@@ -310,6 +309,17 @@ def ci_in_rope(
         keep_dataset=True,
     )
 
+    if isinstance(rope, tuple):
+        if len(rope) != 2:
+            raise ValueError("`rope` must be a tuple of length 2")
+    elif isinstance(rope, dict):
+        if not all(var in dataset.data_vars for var in rope.keys()):
+            raise ValueError("`rope` must be a subset of the variables in `data`")
+        if not all(isinstance(v, tuple) and len(v) == 2 for v in rope.values()):
+            raise ValueError("`rope` must be a dict of tuples of length 2")
+    else:
+        raise ValueError("`rope` must be a tuple or dict")
+
     if ci_kind == "eti":
         c_i = dataset.azstats.eti(prob=ci_prob, dims=sample_dims).rename({"quantile": "ci_kind"})
     else:
@@ -322,22 +332,10 @@ def ci_in_rope(
 
     in_ci = (stacked >= ci_low) & (stacked <= ci_high)
 
-    if isinstance(rope, tuple):
-        rope_low = xr.full_like(ci_low, rope[0])
-        rope_high = xr.full_like(ci_high, rope[1])
-    elif isinstance(rope, dict):
-        rope_low = xr.full_like(ci_low, fill_value=np.nan)
-        rope_high = xr.full_like(ci_high, fill_value=np.nan)
-
-        for var, (low, high) in rope.items():
-            if var in rope_low:
-                rope_low[var] = low
-                rope_high[var] = high
-    else:
-        raise ValueError("`rope` must be a tuple or dict")
+    rope_dt = references_to_dataset(rope, dataset)
 
     ci_samples = stacked.where(in_ci)
-    in_rope = (ci_samples >= rope_low) & (ci_samples <= rope_high)
+    in_rope = (ci_samples >= rope_dt.sel(ref_dim=0)) & (ci_samples <= rope_dt.sel(ref_dim=1))
 
     proportion = (in_rope.sum(dim="sample") / in_ci.sum(dim="sample")) * 100
 
