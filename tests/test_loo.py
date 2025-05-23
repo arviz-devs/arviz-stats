@@ -533,6 +533,7 @@ def test_loo_moment_match(radon_problematic, loo_orig, moment_match_data):
         split=True,
         max_iters=50,
     )
+
     assert isinstance(loo_mm, ELPDData)
     assert loo_mm.kind == "loo"
     assert loo_mm.method == "loo_moment_match"
@@ -540,8 +541,113 @@ def test_loo_moment_match(radon_problematic, loo_orig, moment_match_data):
     assert mm_bad_k_count <= orig_bad_k_count
     assert loo_mm.elpd > loo_orig.elpd
 
-    # assert hasattr(loo_mm, "p_loo_i"), "loo_mm object should have p_loo_i attribute"
-    # valid_p_loo_values = loo_mm.p_loo_i.values[~np.isnan(loo_mm.p_loo_i.values)]
-    # assert np.all(
-    #     valid_p_loo_values >= 0
-    # ), "p_loo values should be non-negative after moment matching"
+    assert hasattr(loo_mm, "p_loo_i"), "loo_mm object should have p_loo_i attribute"
+    assert np.sum(loo_mm.p_loo_i.values) >= 0
+
+
+def test_loo_moment_match_no_problematic_k(radon_problematic, loo_orig, moment_match_data):
+    upars_da, log_prob_fn, log_lik_i_fn = moment_match_data
+    k_threshold = np.nanmax(loo_orig.pareto_k.values) + 0.1
+
+    loo_mm = loo_moment_match(
+        radon_problematic,
+        loo_orig,
+        upars=upars_da,
+        log_prob_upars_fn=log_prob_fn,
+        log_lik_i_upars_fn=log_lik_i_fn,
+        k_threshold=k_threshold,
+        var_name="y",
+    )
+
+    assert loo_mm.elpd == loo_orig.elpd
+    assert_allclose(loo_mm.pareto_k.values, loo_orig.pareto_k.values)
+
+
+def test_loo_moment_match_errors(radon_problematic, moment_match_data):
+    upars_da, log_prob_fn, log_lik_i_fn = moment_match_data
+
+    loo_non_pointwise = loo(radon_problematic, pointwise=False, var_name="y")
+    with pytest.raises(
+        ValueError,
+        match="Moment matching requires pointwise LOO results with Pareto k values. "
+        "Please compute the initial LOO with pointwise=True",
+    ):
+        loo_moment_match(
+            radon_problematic,
+            loo_non_pointwise,
+            upars=upars_da,
+            log_prob_upars_fn=log_prob_fn,
+            log_lik_i_upars_fn=log_lik_i_fn,
+            var_name="y",
+        )
+
+    loo_pointwise = loo(radon_problematic, pointwise=True, var_name="y")
+    bad_upars = xr.DataArray(np.random.randn(10), dims=["sample"])
+    with pytest.raises(ValueError, match="upars must have dimensions"):
+        loo_moment_match(
+            radon_problematic,
+            loo_pointwise,
+            upars=bad_upars,
+            log_prob_upars_fn=log_prob_fn,
+            log_lik_i_upars_fn=log_lik_i_fn,
+            var_name="y",
+        )
+
+
+def test_loo_moment_match_function_errors(radon_problematic, loo_orig):
+    upars_da = xr.DataArray(
+        np.random.randn(4, 500, 10),
+        dims=["chain", "draw", "unconstrained_parameter"],
+        coords={"chain": [0, 1, 2, 3], "draw": np.arange(500)},
+    )
+
+    def bad_log_prob_fn(upars):  # pylint: disable=unused-argument
+        return xr.DataArray(np.array([1.0]))
+
+    def good_log_lik_fn(upars, i):  # pylint: disable=unused-argument
+        return xr.DataArray(
+            np.random.randn(upars.chain.size, upars.draw.size),
+            dims=["chain", "draw"],
+            coords={"chain": upars.chain, "draw": upars.draw},
+        )
+
+    with pytest.raises((ValueError, IndexError)):
+        loo_moment_match(
+            radon_problematic,
+            loo_orig,
+            upars=upars_da,
+            log_prob_upars_fn=bad_log_prob_fn,
+            log_lik_i_upars_fn=good_log_lik_fn,
+            k_threshold=0.7,
+            var_name="y",
+        )
+
+
+def test_loo_moment_match_2d_upars(radon_problematic, loo_orig, moment_match_data):
+    upars_da_orig, _, _ = moment_match_data
+
+    upars_2d = upars_da_orig.isel(unconstrained_parameter=0).drop_vars("unconstrained_parameter")
+    k_threshold = np.nanpercentile(loo_orig.pareto_k.values, 90)
+
+    def log_prob_2d_fn(upars_arg):
+        return -0.5 * (upars_arg.sum("upars_dim") ** 2)
+
+    def log_lik_2d_fn(upars_arg, i):
+        log_likelihood_data = radon_problematic.log_likelihood.y
+        obs_dims = [dim for dim in log_likelihood_data.dims if dim not in ["chain", "draw"]]
+        original_log_lik_for_i = log_likelihood_data.stack(i=obs_dims).isel(i=i)
+        perturbation = upars_arg.sum("upars_dim") * 0.1
+        return original_log_lik_for_i + perturbation
+
+    loo_mm = loo_moment_match(
+        radon_problematic,
+        loo_orig,
+        upars=upars_2d,
+        log_prob_upars_fn=log_prob_2d_fn,
+        log_lik_i_upars_fn=log_lik_2d_fn,
+        k_threshold=k_threshold,
+        var_name="y",
+    )
+
+    assert isinstance(loo_mm, ELPDData)
+    assert loo_mm.method == "loo_moment_match"

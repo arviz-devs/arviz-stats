@@ -1198,7 +1198,7 @@ def loo_moment_match(
     Examples
     --------
     We will use the radon dataset and artificially inflate some Pareto k values to demonstrate
-    moment matching.
+    how moment matching works.
 
     .. ipython::
 
@@ -1210,14 +1210,15 @@ def loo_moment_match(
            ...: import pytensor.tensor as pt
            ...: idata = az.load_arviz_data("radon")
 
-    Compute initial LOO:
+    Compute the initial pointwise LOO:
 
     .. ipython::
 
         In [2]: loo_orig = loo(idata, pointwise=True, var_name="y")
            ...: loo_orig
 
-    Artificially inflate some Pareto k values to demonstrate moment matching:
+    Artificially inflate some Pareto k values since the original Pareto k values are
+    all below the threshold:
 
     .. ipython::
 
@@ -1228,12 +1229,12 @@ def loo_moment_match(
            ...:
            ...: k_values = modified_loo.pareto_k.values.copy()
            ...: k_flat = k_values.flatten()
-           ...: k_flat[problematic_indices] = rng.uniform(0.75, 1.2, size=15)
+           ...: k_flat[problematic_indices] = rng.uniform(0.75, 1.5, size=15)
            ...:
            ...: modified_loo.pareto_k.values = k_flat.reshape(k_values.shape)
            ...: modified_loo
 
-    Reconstruct the model:
+    Reconstruct the model from the data:
 
     .. ipython::
 
@@ -1259,78 +1260,88 @@ def loo_moment_match(
            ...:         random_seed=42
            ...:     )
 
-    Extract unconstrained parameters:
+    We need to extract the unconstrained parameters from the posterior. Recall that moment matching
+    requires the parameters to be in the unconstrained space. Note that the paramters in this model
+    have different shapes, so we need to flatten into a single dimension before stacking them:
 
     .. ipython::
 
-        In [5]: import numpy as np
-           ...:
-           ...: upars_dict = {
-           ...:     'sigma_a_log__': idata_with_transforms.posterior['sigma_a_log__'],
-           ...:     'za_county': idata_with_transforms.posterior['za_county'],
-           ...:     'b': idata_with_transforms.posterior['b'],
-           ...:     'g': idata_with_transforms.posterior['g'],
-           ...:     'sigma_log__': idata_with_transforms.posterior['sigma_log__']
-           ...: }
-           ...:
-           ...: upars_list = [
-           ...:     upars_dict['sigma_a_log__'].values.reshape(2, 100, 1),
-           ...:     upars_dict['za_county'].values.reshape(2, 100, -1),
-           ...:     upars_dict['b'].values.reshape(2, 100, 1),
-           ...:     upars_dict['g'].values.reshape(2, 100, -1),
-           ...:     upars_dict['sigma_log__'].values.reshape(2, 100, 1)
+        In [5]: posterior = idata_with_transforms.posterior
+           ...: param_arrays = [
+           ...:     posterior['sigma_a_log__'].values[..., None],
+           ...:     posterior['za_county'].values,
+           ...:     posterior['b'].values[..., None],
+           ...:     posterior['g'].values,
+           ...:     posterior['sigma_log__'].values[..., None]
            ...: ]
-           ...: upars_np = np.concatenate(upars_list, axis=-1)
-           ...: upars_da = xr.DataArray(upars_np, dims=['chain', 'draw', 'param'],
-           ...:                         coords={'chain': idata_with_transforms.posterior.chain,
-           ...:                                 'draw': idata_with_transforms.posterior.draw,
-           ...:                                 'param': np.arange(upars_np.shape[-1])})
+           ...:
+           ...: upars = xr.DataArray(
+           ...:     np.concatenate(param_arrays, axis=-1),
+           ...:     dims=['chain', 'draw', 'param'],
+           ...:     coords={'chain': posterior.chain, 'draw': posterior.draw}
+           ...: )
 
-    Create log probability function:
+    Now we need to create the log density function that takes the unconstrained parameters and
+    returns the log density. We will use the compiled logp function from PyMC to do this:
 
     .. ipython::
 
         In [6]: compiled_logp = radon_model.compile_logp()
-           ...: def log_prob_upars(upars_da):
-           ...:     n_chains, n_draws = upars_da.shape[:2]
-           ...:     logp_values = np.empty((n_chains, n_draws))
-           ...:     for chain_idx, draw_idx in np.ndindex(n_chains, n_draws):
+           ...:
+           ...: def log_prob_upars(upars):
+           ...:     posterior = idata_with_transforms.posterior
+           ...:     logp_values = np.empty(upars.shape[:2])
+           ...:
+           ...:     for chain_idx, draw_idx in np.ndindex(*upars.shape[:2]):
            ...:         point_dict = {
-           ...:             name: upars_dict[name].isel(chain=chain_idx, draw=draw_idx).values
-           ...:             for name in upars_dict
+           ...:             'sigma_a_log__': posterior['sigma_a_log__'].isel(
+           ...:                 chain=chain_idx, draw=draw_idx
+           ...:             ).values,
+           ...:             'za_county': posterior['za_county'].isel(
+           ...:                 chain=chain_idx, draw=draw_idx
+           ...:             ).values,
+           ...:             'b': posterior['b'].isel(chain=chain_idx, draw=draw_idx).values,
+           ...:             'g': posterior['g'].isel(chain=chain_idx, draw=draw_idx).values,
+           ...:             'sigma_log__': posterior['sigma_log__'].isel(
+           ...:                 chain=chain_idx, draw=draw_idx
+           ...:             ).values
            ...:         }
            ...:         logp_values[chain_idx, draw_idx] = compiled_logp(point_dict)
+           ...:
            ...:     return xr.DataArray(
            ...:         logp_values,
            ...:         dims=["chain", "draw"],
-           ...:         coords={"chain": upars_da.chain, "draw": upars_da.draw}
+           ...:         coords={"chain": upars.chain, "draw": upars.draw}
            ...:     )
 
-    Create pointwise log likelihood function:
+    Next, we need to create the pointwise log likelihood function that takes the unconstrained
+    parameters and returns the pointwise log likelihood. We will use the compiled logp function
+    again to do this. Note that the log likelihood function takes the unconstrained parameters
+    and the index of the observation to return the log likelihood for that observation:
 
     .. ipython::
 
-        In [7]: def log_lik_i_upars(upars_da, i):
+        In [7]: def log_lik_i_upars(upars, i):
+           ...:     posterior = idata_with_transforms.posterior
            ...:     y_i = y_obs[i]
            ...:     c_idx, f_idx, u_val = county_idx[i], floor_idx[i], uranium[county_idx[i]]
            ...:
-           ...:     sigma_a_vals = np.exp(upars_dict['sigma_a_log__'].values)
-           ...:     sigma_vals = np.exp(upars_dict['sigma_log__'].values)
-           ...:     za_county_vals = upars_dict['za_county'].values
-           ...:     g_vals = upars_dict['g'].values
+           ...:     sigma_a = np.exp(posterior['sigma_a_log__'].values)
+           ...:     sigma = np.exp(posterior['sigma_log__'].values)
+           ...:     a_county_i = posterior['za_county'].values[:, :, c_idx] * sigma_a
+           ...:     mu_i = a_county_i + posterior['b'].values + \
+           ...:            posterior['g'].values[:, :, 0] * f_idx + \
+           ...:            posterior['g'].values[:, :, 1] * u_val
            ...:
-           ...:     a_vals = za_county_vals[:, :, c_idx] * sigma_a_vals
-           ...:     theta_vals = a_vals + g_vals[:, :, 0] * f_idx + g_vals[:, :, 1] * u_val
-           ...:
-           ...:     loglik_values = pm.logp(pm.Normal.dist(theta_vals, sigma_vals), y_i).eval()
+           ...:     loglik = pm.logp(pm.Normal.dist(mu_i, sigma), y_i).eval()
            ...:
            ...:     return xr.DataArray(
-           ...:         loglik_values,
+           ...:         loglik,
            ...:         dims=["chain", "draw"],
-           ...:         coords={"chain": upars_da.chain, "draw": upars_da.draw}
+           ...:         coords={"chain": upars.chain, "draw": upars.draw}
            ...:     )
 
-    Apply moment matching with covariance matching and split transformation:
+    Now we can apply moment matching with covariance matching and split transformation:
 
     .. ipython::
         :okwarning:
@@ -1338,7 +1349,7 @@ def loo_moment_match(
         In [8]: loo_mm = loo_moment_match(
            ...:     idata,
            ...:     modified_loo,
-           ...:     upars=upars_da,
+           ...:     upars=upars,
            ...:     log_prob_upars_fn=log_prob_upars,
            ...:     log_lik_i_upars_fn=log_lik_i_upars,
            ...:     var_name="y",
@@ -1346,6 +1357,8 @@ def loo_moment_match(
            ...:     cov=True,
            ...: )
            ...: loo_mm
+
+    All the Pareto k values are now below the threshold, and the LOO is improved.
 
     Notes
     -----
@@ -1358,7 +1371,7 @@ def loo_moment_match(
         T : \theta^{(s)} \mapsto \mathbf{A}\theta^{(s)} + \mathbf{b}
         =: \theta^{*{(s)}}.
 
-    The first transformation :math:`T_1` is a translation that matches the mean of the sample
+    The first transformation, :math:`T_1`, is a translation that matches the mean of the sample
     to its importance weighted mean given by
 
     .. math::
@@ -1366,17 +1379,18 @@ def loo_moment_match(
         \mathbf{\theta^{(s)}} - \bar{\theta} + \bar{\theta}_w,
 
     where :math:`\bar{\theta}` is the mean of the sample and :math:`\bar{\theta}_w` is the
-    importance weighted mean of the sample. The second transformation :math:`T_2` is a scaling that
-    matches the marginal variances in addition to the means given by
+    importance weighted mean of the sample. The second transformation, :math:`T_2`, is a scaling
+    that matches the marginal variances in addition to the means given by
 
     .. math::
         \mathbf{\theta^{*{(s)}}} = T_2(\mathbf{\theta^{(s)}}) =
         \mathbf{v}^{1/2}_w \circ \mathbf{v}^{-1/2} \circ (\mathbf{\theta^{(s)}} - \bar{\theta}) +
         \bar{\theta}_w,
 
-    where :math:`\mathbf{v}` and :math:`\mathbf{v}_w` are the sample and weighted variances.
-    The third transformation :math:`T_3` is a covariance transformation that matches the covariance
-    matrix of the sample to its importance weighted covariance matrix given by
+    where :math:`\mathbf{v}` and :math:`\mathbf{v}_w` are the sample and weighted variances, and
+    :math:`\circ` denotes the pointwise product of the elements of two vectors. The third
+    transformation, :math:`T_3`, is a covariance transformation that matches the covariance matrix
+    of the sample to its importance weighted covariance matrix given by
 
     .. math::
         \mathbf{\theta^{*{(s)}}} = T_3(\mathbf{\theta^{(s)}}) =
@@ -1437,8 +1451,8 @@ def loo_moment_match(
     param_dim_list = [dim for dim in upars.dims if dim not in sample_dims]
 
     if len(param_dim_list) == 0:
-        param_dim_name = "_upars_dim_"
-        upars.expand_dims(dim={param_dim_name: 1})
+        param_dim_name = "upars_dim"
+        upars = upars.expand_dims(dim={param_dim_name: 1})
     elif len(param_dim_list) == 1:
         param_dim_name = param_dim_list[0]
     else:
