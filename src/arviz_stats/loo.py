@@ -1487,10 +1487,7 @@ def loo_moment_match(
                 loo_data.p_loo_i = None
         return loo_data
 
-    if not hasattr(loo_data, "p_loo_i") or loo_data.p_loo_i is None:
-        loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
-        lpd_all = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims)
-        loo_data.p_loo_i.values = lpd_all.values - loo_data.elpd_i.values
+    loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
 
     # Moment matching algorithm
     for i in bad_obs_indices:
@@ -1683,7 +1680,19 @@ def loo_moment_match(
             stacklevel=2,
         )
 
+    # p_loo for good observations
     if hasattr(loo_data, "p_loo_i") and loo_data.p_loo_i is not None:
+        p_loo_i_flat = loo_data.p_loo_i.values.flatten()
+        nan_mask = np.isnan(p_loo_i_flat)
+
+        if np.any(nan_mask):
+            lpd_all = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims)
+            lpd_flat = lpd_all.values.flatten()
+            elpd_i_flat = loo_data.elpd_i.values.flatten()
+
+            p_loo_i_flat[nan_mask] = lpd_flat[nan_mask] - elpd_i_flat[nan_mask]
+            loo_data.p_loo_i.values = p_loo_i_flat.reshape(loo_data.p_loo_i.shape)
+
         loo_data.p = np.nansum(loo_data.p_loo_i.values)
     else:
         elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum().values
