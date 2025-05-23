@@ -1603,7 +1603,6 @@ def loo_moment_match(
             # If none of the transformations in this pass improved ki, break.
             break
 
-        # MODIFIED SECTION: Split transformation logic
         if split and transformations_applied:
             try:
                 split_res = _split_moment_match(
