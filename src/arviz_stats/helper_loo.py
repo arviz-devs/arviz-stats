@@ -507,10 +507,8 @@ def _update_loo_data_i(
         loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
 
     loo_data.p_loo_i[idx_dict] = p_loo_i
-
-    loo_data.elpd = float(np.nansum(loo_data.elpd_i.values))
-    loo_data.p = float(np.nansum(loo_data.p_loo_i.values))
-    loo_data.se = float(np.sqrt(loo_data.n_data_points * np.nanvar(loo_data.elpd_i.values)))
+    loo_data.elpd = np.nansum(loo_data.elpd_i.values)
+    loo_data.se = np.sqrt(loo_data.n_data_points * np.nanvar(loo_data.elpd_i.values))
 
     loo_data.warning, loo_data.good_k = _warn_pareto_k(
         loo_data.pareto_k.values[~np.isnan(loo_data.pareto_k.values)], loo_data.n_samples

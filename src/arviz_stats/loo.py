@@ -1224,11 +1224,11 @@ def loo_moment_match(
         In [3]: rng = np.random.default_rng(214)
            ...: modified_loo = loo_orig
            ...: n_obs = len(loo_orig.pareto_k.values.flatten())
-           ...: problematic_indices = rng.choice(n_obs, size=8, replace=False)
+           ...: problematic_indices = rng.choice(n_obs, size=15, replace=False)
            ...:
            ...: k_values = modified_loo.pareto_k.values.copy()
            ...: k_flat = k_values.flatten()
-           ...: k_flat[problematic_indices] = rng.uniform(0.75, 1.2, size=8)
+           ...: k_flat[problematic_indices] = rng.uniform(0.75, 1.2, size=15)
            ...:
            ...: modified_loo.pareto_k.values = k_flat.reshape(k_values.shape)
            ...: modified_loo
@@ -1487,6 +1487,11 @@ def loo_moment_match(
                 loo_data.p_loo_i = None
         return loo_data
 
+    if not hasattr(loo_data, "p_loo_i") or loo_data.p_loo_i is None:
+        loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
+        lpd_all = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims)
+        loo_data.p_loo_i.values = lpd_all.values - loo_data.elpd_i.values
+
     # Moment matching algorithm
     for i in bad_obs_indices:
         log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
@@ -1677,6 +1682,12 @@ def loo_moment_match(
             UserWarning,
             stacklevel=2,
         )
+
+    if hasattr(loo_data, "p_loo_i") and loo_data.p_loo_i is not None:
+        loo_data.p = np.nansum(loo_data.p_loo_i.values)
+    else:
+        elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum().values
+        loo_data.p = elpd_raw - loo_data.elpd
 
     if not pointwise:
         loo_data.elpd_i = None
