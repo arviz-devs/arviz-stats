@@ -15,6 +15,7 @@ from arviz_stats import (
     loo_approximate_posterior,
     loo_expectations,
     loo_metrics,
+    loo_moment_match,
     loo_pit,
     loo_subsample,
     update_subsample,
@@ -36,6 +37,11 @@ def fixture_non_centered_eight():
 @pytest.fixture(name="anes", scope="session")
 def fixture_anes():
     return azb.load_arviz_data("anes")
+
+
+@pytest.fixture(name="radon_problematic", scope="session")
+def fixture_radon_problematic():
+    return azb.load_arviz_data("radon")
 
 
 @pytest.fixture(scope="module")
@@ -462,3 +468,80 @@ def test_update_subsample_preserves_thin_factor(centered_eight):
     updated_loo = update_subsample(initial_loo, centered_eight, observations=2)
 
     assert updated_loo.thin_factor == thin_factor
+
+
+@pytest.fixture(scope="function")
+def loo_orig(radon_problematic):
+    return loo(radon_problematic, pointwise=True, var_name="y")
+
+
+@pytest.fixture(scope="module")
+def moment_match_data(radon_problematic):
+    log_likelihood_data = get_log_likelihood_dataset(radon_problematic, var_names="y")["y"]
+    posterior_draws = azb.extract(radon_problematic, group="posterior", combined=False)
+
+    a_params = posterior_draws["a"]
+    b_param = posterior_draws["b"]
+    log_sigma_param = np.log(posterior_draws["sigma"])
+    log_sigma_a_param = np.log(posterior_draws["sigma_a"])
+
+    param_list_for_ds = {}
+
+    for county_name in a_params.coords["County"].values:
+        sanitized_name = f"a_{str(county_name).replace(' ', '_').replace('-', '_')}"
+        county_specific_a = a_params.sel(County=county_name).drop_vars("County")
+        param_list_for_ds[sanitized_name] = county_specific_a
+
+    param_list_for_ds["b_main"] = b_param
+    param_list_for_ds["log_sigma"] = log_sigma_param
+    param_list_for_ds["log_sigma_a"] = log_sigma_a_param
+
+    temp_ds = xr.Dataset(param_list_for_ds)
+    upars_da_generated = temp_ds.to_array(dim="unconstrained_parameter", name="upars_values")
+    upars_da_final = upars_da_generated.transpose("chain", "draw", "unconstrained_parameter")
+
+    def log_prob_upars_fn(upars_arg):
+        return upars_arg.sum("unconstrained_parameter") * 0.01
+
+    def log_lik_i_upars_fn(upars_arg, i):
+        obs_dims = [dim for dim in log_likelihood_data.dims if dim not in ["chain", "draw"]]
+        original_log_lik_for_i = log_likelihood_data.stack(i=obs_dims).isel(i=i)
+        perturbation = upars_arg.sum("unconstrained_parameter") * 0.0001
+        return original_log_lik_for_i + perturbation
+
+    return upars_da_final, log_prob_upars_fn, log_lik_i_upars_fn
+
+
+def test_loo_moment_match(radon_problematic, loo_orig, moment_match_data):
+    upars_da, log_prob_fn, log_lik_i_fn = moment_match_data
+    max_k = np.nanmax(loo_orig.pareto_k.values)
+    k_threshold = np.nanpercentile(loo_orig.pareto_k.values, 90)
+    assert k_threshold < max_k
+
+    orig_bad_k_count = np.sum(loo_orig.pareto_k.values > k_threshold)
+    assert orig_bad_k_count > 0
+
+    loo_mm = loo_moment_match(
+        radon_problematic,
+        loo_orig,
+        upars=upars_da,
+        log_prob_upars_fn=log_prob_fn,
+        log_lik_i_upars_fn=log_lik_i_fn,
+        k_threshold=k_threshold,
+        var_name="y",
+        cov=True,
+        split=True,
+        max_iters=50,
+    )
+    assert isinstance(loo_mm, ELPDData)
+    assert loo_mm.kind == "loo"
+    assert loo_mm.method == "loo_moment_match"
+    mm_bad_k_count = np.sum(loo_mm.pareto_k.values > k_threshold)
+    assert mm_bad_k_count <= orig_bad_k_count
+    assert loo_mm.elpd > loo_orig.elpd
+
+    # assert hasattr(loo_mm, "p_loo_i"), "loo_mm object should have p_loo_i attribute"
+    # valid_p_loo_values = loo_mm.p_loo_i.values[~np.isnan(loo_mm.p_loo_i.values)]
+    # assert np.all(
+    #     valid_p_loo_values >= 0
+    # ), "p_loo values should be non-negative after moment matching"

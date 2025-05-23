@@ -12,6 +12,7 @@ try:
         loo_approximate_posterior,
         loo_subsample,
         update_subsample,
+        loo_moment_match,
         compare,
     )
     from arviz_stats.psense import psense, psense_summary
