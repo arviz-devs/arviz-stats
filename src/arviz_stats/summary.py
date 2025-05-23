@@ -2,10 +2,13 @@
 
 from typing import Any
 
+import numpy as np
 import xarray as xr
 from arviz_base import dataset_to_dataframe, extract, rcParams, references_to_dataset
 from pandas import DataFrame
 from xarray_einstats import stats
+
+from arviz_stats.validate import validate_dims
 
 __all__ = ["summary", "ci_in_rope"]
 
@@ -119,7 +122,7 @@ def summary(
     if ci_prob is None:
         ci_prob = rcParams["stats.ci_prob"]
     if ci_kind is None:
-        ci_kind = rcParams["stats.ci_kind"] if "stats.ci_kind" in rcParams else "eti"
+        ci_kind = rcParams["stats.ci_kind"]
 
     ci_perc = int(ci_prob * 100)
 
@@ -142,13 +145,13 @@ def summary(
         if ci_kind == "eti":
             ci = (
                 dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
-                .rename({"quantile": "summary"})
+                .rename({"ci_bound": "summary"})
                 .assign_coords(summary=[f"eti{ci_perc}_", f"eti{ci_perc}^"])
             )
         else:
             ci = (
                 dataset.azstats.hdi(prob=ci_prob, dims=sample_dims, skipna=skipna)
-                .rename({"hdi": "summary"})
+                .rename({"ci_bound": "summary"})
                 .assign_coords(summary=[f"hdi{ci_perc}_", f"hdi{ci_perc}^"])
             )
         to_concat.extend((mean, std, ci))
@@ -219,13 +222,14 @@ def summary(
 
 def ci_in_rope(
     data,
+    rope,
     var_names=None,
     filter_vars=None,
     group="posterior",
     sample_dims=None,
-    rope=None,
     ci_prob=None,
     ci_kind=None,
+    rope_dim="rope_dim",
 ):
     """
     Compute the percentage of a credible interval that falls within a ROPE.
@@ -237,6 +241,10 @@ def ci_in_rope(
     Parameters
     ----------
     data : DataTree, DataSet or InferenceData
+    rope : (2,) array-like or dict of {hashable : (2,) array-like} or Dataset
+        If tuple, the lower and upper bounds of the ROPE are the same for all variables.
+        If dict, the keys are the variable names and the values are tuples with the lower
+        and upper bounds of the ROPE. The keys must be in `var_names`.
     var_names : list of str, optional
         Names of variables for which the ROPE should be computed.
         If None all variables are included.
@@ -251,15 +259,14 @@ def ci_in_rope(
         Coordinates defining a subset over the selected group.
     sample_dims : str or sequence of hashable, optional
         Defaults to ``rcParams["data.sample_dims"]``
-    rope : tuple or dict
-        If tuple, the lower and upper bounds of the ROPE are the same for all variables.
-        If dict, the keys are the variable names and the values are tuples with the lower
-        and upper bounds of the ROPE. The keys must be in `var_names`.
     ci_prob : float, optional
         Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``.
     ci_kind : {"hdi", "eti"}, optional
         Type of credible interval. Defaults to ``rcParams["stats.ci_kind"]``.
         If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
+    rope_dim : str, default "rope_dim"
+        Name for the dimension containing the ROPE values. Only used when `rope`
+        is a :class:`~xarray.Dataset`
 
     Returns
     -------
@@ -276,6 +283,7 @@ def ci_in_rope(
     Apply the same ROPE to a subset of variables:
 
     .. ipython::
+
         In [1]: from arviz_base import load_arviz_data
            ...: from arviz_stats import ci_in_rope
            ...: data = load_arviz_data("centered_eight")
@@ -284,6 +292,7 @@ def ci_in_rope(
     Apply different ROPEs to each variable:
 
     .. ipython::
+
         In [1]: ci_in_rope(data, rope={"mu": (-0.5, 0.5), "tau": (0.1, 0.2), "theta": (-0.1, 0.1)})
 
     References
@@ -291,52 +300,54 @@ def ci_in_rope(
     .. [1] Kruschke. Doing Bayesian Data Analysis, Second Edition: A Tutorial with R,
         JAGS, and Stan. Academic Press, 2014. ISBN 978-0-12-405888-0.
     """
-    if ci_kind not in ("hdi", "eti", None):
-        raise ValueError("ci_kind must be either 'hdi' or 'eti'")
-    if ci_prob is None:
-        ci_prob = rcParams["stats.ci_prob"]
-    if ci_kind is None:
-        ci_kind = rcParams["stats.ci_kind"] if "stats.ci_kind" in rcParams else "eti"
-    if sample_dims is None:
-        sample_dims = rcParams["data.sample_dims"]
+    sample_dims = validate_dims(sample_dims)
+    sample_dim = "sample" if len(sample_dims) > 1 else sample_dims[0]
 
     dataset = extract(
         data,
         var_names=var_names,
         filter_vars=filter_vars,
         group=group,
-        combined=False,
+        sample_dims=sample_dims,
+        combined=True,
         keep_dataset=True,
     )
 
-    if isinstance(rope, tuple):
-        if len(rope) != 2:
-            raise ValueError("`rope` must be a tuple of length 2")
-    elif isinstance(rope, dict):
+    if isinstance(rope, dict):
         if not all(var in dataset.data_vars for var in rope.keys()):
             raise ValueError("`rope` must be a subset of the variables in `data`")
         if not all(isinstance(v, tuple) and len(v) == 2 for v in rope.values()):
             raise ValueError("`rope` must be a dict of tuples of length 2")
+    elif isinstance(rope, xr.Dataset):
+        if rope_dim not in rope.dims:
+            raise ValueError(f"{rope_dim} is not a dimension of `rope`")
+        if (rope_len := rope.sizes[rope_dim]) != 2:
+            raise ValueError(f"Length of {rope_dim} dim must be 2 but is {rope_len}")
     else:
-        raise ValueError("`rope` must be a tuple or dict")
+        try:
+            rope = np.array(rope)
+        except ValueError as err:
+            raise ValueError(
+                "`rope` must be a dict, Dataset or array-like, failed to convert to array"
+            ) from err
+        if len(rope) != 2:
+            raise ValueError("`rope` must be a tuple of length 2")
 
     if ci_kind == "eti":
-        c_i = dataset.azstats.eti(prob=ci_prob, dims=sample_dims).rename({"quantile": "ci_kind"})
+        c_i = dataset.azstats.eti(prob=ci_prob, dims=sample_dim)
     else:
-        c_i = dataset.azstats.hdi(prob=ci_prob, dims=sample_dims).rename({"hdi": "ci_kind"})
+        c_i = dataset.azstats.hdi(prob=ci_prob, dims=sample_dim)
 
-    stacked = dataset.stack(sample=sample_dims)
+    ci_low = c_i.sel(ci_bound="lower")
+    ci_high = c_i.sel(ci_bound="upper")
 
-    ci_low = c_i.sel(ci_kind="lower")
-    ci_high = c_i.sel(ci_kind="higher")
+    in_ci = (dataset >= ci_low) & (dataset <= ci_high)
 
-    in_ci = (stacked >= ci_low) & (stacked <= ci_high)
+    rope = references_to_dataset(rope, dataset, sample_dims=sample_dim, ref_dim=rope_dim)
 
-    rope_dt = references_to_dataset(rope, dataset)
+    ci_samples = dataset.where(in_ci)
+    in_rope = (ci_samples >= rope.sel({rope_dim: 0})) & (ci_samples <= rope.sel({rope_dim: 1}))
 
-    ci_samples = stacked.where(in_ci)
-    in_rope = (ci_samples >= rope_dt.sel(ref_dim=0)) & (ci_samples <= rope_dt.sel(ref_dim=1))
-
-    proportion = (in_rope.sum(dim="sample") / in_ci.sum(dim="sample")) * 100
+    proportion = (in_rope.sum(dim=sample_dim) / in_ci.sum(dim=sample_dim)) * 100
 
     return proportion
