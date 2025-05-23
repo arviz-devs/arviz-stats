@@ -30,16 +30,18 @@ class BaseDataArray:
         """Compute eti on DataArray input."""
         dims = validate_dims(dims)
         prob = validate_ci_prob(prob)
-        eti_coord = DataArray(["lower", "higher"], dims=["quantile"], attrs={"eti_prob": prob})
+        eti_coord = DataArray(
+            ["lower", "upper"], dims=["ci_bound"], attrs={"ci_kind": "eti", "ci_prob": prob}
+        )
 
         return apply_ufunc(
             self.array_class.eti,
             da,
             prob,
             input_core_dims=[dims, []],
-            output_core_dims=[["quantile"]],
+            output_core_dims=[["ci_bound"]],
             kwargs={"axis": np.arange(-len(dims), 0, 1), "method": method, **kwargs},
-        ).assign_coords({"quantile": eti_coord})
+        ).assign_coords({"ci_bound": eti_coord})
 
     def hdi(self, da, prob=None, dims=None, method="nearest", **kwargs):
         """Compute hdi on DataArray input."""
@@ -47,19 +49,23 @@ class BaseDataArray:
         prob = validate_ci_prob(prob)
 
         mode_dim = "mode" if da.name is None else f"{da.name}_mode"
-        hdi_coord = DataArray(["lower", "higher"], dims=["hdi"], attrs={"hdi_prob": prob})
+        hdi_coord = DataArray(
+            ["lower", "upper"], dims=["ci_bound"], attrs={"ci_kind": "hdi", "ci_prob": prob}
+        )
         return apply_ufunc(
             self.array_class.hdi,
             da,
             prob,
             input_core_dims=[dims, []],
-            output_core_dims=[[mode_dim, "hdi"] if method.startswith("multimodal") else ["hdi"]],
+            output_core_dims=[
+                [mode_dim, "ci_bound"] if method.startswith("multimodal") else ["ci_bound"]
+            ],
             kwargs={
                 "axis": np.arange(-len(dims), 0, 1),
                 "method": method,
                 **kwargs,
             },
-        ).assign_coords({"hdi": hdi_coord})
+        ).assign_coords({"ci_bound": hdi_coord})
 
     def ess(self, da, dims=None, method="bulk", relative=False, prob=None):
         """Compute ess on DataArray input."""
