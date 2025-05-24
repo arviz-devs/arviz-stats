@@ -1263,7 +1263,7 @@ def loo_moment_match(
            ...:     )
 
     We need to extract the unconstrained parameters from the posterior. Recall that moment matching
-    requires the parameters to be in the unconstrained space. Note that the paramters in this model
+    requires the parameters to be in the unconstrained space. The parameters in this model
     have different shapes, so we need to flatten into a single dimension before stacking them:
 
 
@@ -1315,8 +1315,7 @@ def loo_moment_match(
 
     Next, we need to create the pointwise log likelihood function that takes the unconstrained
     parameters and returns the pointwise log likelihood. We will use the compiled logp function
-    again to do this. Note that the log likelihood function takes the unconstrained parameters
-    and the index of the observation to return the log likelihood for that observation:
+    again to do this:
 
     .. ipython::
 

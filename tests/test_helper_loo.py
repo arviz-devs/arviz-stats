@@ -21,8 +21,13 @@ from arviz_stats.helper_loo import (
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
+    _recalculate_weights_k,
     _select_obs_by_coords,
     _select_obs_by_indices,
+    _shift,
+    _shift_and_cov,
+    _shift_and_scale,
+    _split_moment_match,
     _srs_estimator,
     _warn_pareto_k,
     _warn_pointwise_loo,
@@ -435,3 +440,257 @@ def test_prepare_update_subsample(centered_eight, log_lik_fn, method):
     assert result.lpd_approx_all.shape == (n_data_points,)
     assert not np.any(np.isin(result.new_indices, old_indices))
     assert len(np.intersect1d(result.new_indices, old_indices)) == 0
+
+
+def test_shift():
+    chain_size, draw_size, param_size = 2, 100, 3
+    upars = xr.DataArray(
+        np.random.randn(chain_size, draw_size, param_size),
+        dims=["chain", "draw", "param"],
+        coords={
+            "chain": np.arange(chain_size),
+            "draw": np.arange(draw_size),
+            "param": np.arange(param_size),
+        },
+    )
+
+    lwi = xr.DataArray(
+        np.random.randn(chain_size, draw_size),
+        dims=["chain", "draw"],
+        coords={"chain": upars.chain, "draw": upars.draw},
+    )
+
+    result = _shift(upars, lwi)
+
+    assert hasattr(result, "upars")
+    assert hasattr(result, "shift")
+    assert isinstance(result.upars, xr.DataArray)
+    assert isinstance(result.shift, np.ndarray)
+
+    assert set(result.upars.dims) == set(upars.dims)
+    assert result.upars.sizes == upars.sizes
+    assert result.shift.shape == (param_size,)
+
+    upars_stacked = upars.stack(__sample__=["chain", "draw"])
+    lwi_stacked = lwi.stack(__sample__=["chain", "draw"])
+    weights = np.exp(lwi_stacked.values - np.max(lwi_stacked.values))
+    weights = weights / np.sum(weights)
+
+    expected_mean = np.sum(
+        weights[:, None] * upars_stacked.transpose("__sample__", "param").values, axis=0
+    )
+    actual_mean = result.upars.stack(__sample__=["chain", "draw"]).mean(dim="__sample__").values
+
+    assert_allclose(actual_mean, expected_mean, rtol=1e-5)
+
+
+def test_shift_and_scale():
+    chain_size, draw_size, param_size = 2, 100, 3
+    upars = xr.DataArray(
+        np.random.randn(chain_size, draw_size, param_size),
+        dims=["chain", "draw", "param"],
+        coords={
+            "chain": np.arange(chain_size),
+            "draw": np.arange(draw_size),
+            "param": np.arange(param_size),
+        },
+    )
+
+    lwi = xr.DataArray(
+        np.random.randn(chain_size, draw_size),
+        dims=["chain", "draw"],
+        coords={"chain": upars.chain, "draw": upars.draw},
+    )
+
+    result = _shift_and_scale(upars, lwi)
+
+    assert hasattr(result, "upars")
+    assert hasattr(result, "shift")
+    assert hasattr(result, "scaling")
+    assert isinstance(result.upars, xr.DataArray)
+    assert isinstance(result.shift, np.ndarray)
+    assert isinstance(result.scaling, np.ndarray)
+
+    assert set(result.upars.dims) == set(upars.dims)
+    assert result.upars.sizes == upars.sizes
+    assert result.shift.shape == (param_size,)
+    assert result.scaling.shape == (param_size,)
+
+    assert np.all(result.scaling > 0)
+
+
+def test_shift_and_cov():
+    chain_size, draw_size, param_size = 2, 100, 3
+    upars = xr.DataArray(
+        np.random.randn(chain_size, draw_size, param_size),
+        dims=["chain", "draw", "param"],
+        coords={
+            "chain": np.arange(chain_size),
+            "draw": np.arange(draw_size),
+            "param": np.arange(param_size),
+        },
+    )
+
+    lwi = xr.DataArray(
+        np.random.randn(chain_size, draw_size),
+        dims=["chain", "draw"],
+        coords={"chain": upars.chain, "draw": upars.draw},
+    )
+
+    result = _shift_and_cov(upars, lwi)
+
+    assert hasattr(result, "upars")
+    assert hasattr(result, "shift")
+    assert hasattr(result, "mapping")
+    assert isinstance(result.upars, xr.DataArray)
+    assert isinstance(result.shift, np.ndarray)
+    assert isinstance(result.mapping, np.ndarray)
+
+    assert set(result.upars.dims) == set(upars.dims)
+    assert result.upars.sizes == upars.sizes
+    assert result.shift.shape == (param_size,)
+    assert result.mapping.shape == (param_size, param_size)
+
+
+@pytest.mark.parametrize("cov", [True, False])
+def test_split_moment_match(cov, centered_eight):
+    posterior = centered_eight.posterior
+    chain_size = posterior.chain.size
+    draw_size = posterior.draw.size
+    param_size = 3
+
+    upars = xr.DataArray(
+        np.random.randn(chain_size, draw_size, param_size),
+        dims=["chain", "draw", "param"],
+        coords={
+            "chain": posterior.chain,
+            "draw": posterior.draw,
+            "param": np.arange(param_size),
+        },
+    )
+
+    total_shift = np.random.randn(param_size)
+    total_scaling = np.random.uniform(0.5, 2.0, param_size)
+    total_mapping = np.eye(param_size) + 0.1 * np.random.randn(param_size, param_size)
+
+    total_mapping = total_mapping @ total_mapping.T
+
+    i = 0
+    reff = 0.8
+
+    def log_prob_upars_fn(upars_in):
+        return xr.DataArray(
+            -0.5 * (upars_in**2).sum(dim="param"),
+            dims=["chain", "draw"],
+            coords={"chain": upars_in.chain, "draw": upars_in.draw},
+        )
+
+    def log_lik_i_upars_fn(upars_in, _idx):
+        return xr.DataArray(
+            -0.5 * upars_in.isel(param=0) ** 2,
+            dims=["chain", "draw"],
+            coords={"chain": upars_in.chain, "draw": upars_in.draw},
+        )
+
+    result = _split_moment_match(
+        upars=upars,
+        cov=cov,
+        total_shift=total_shift,
+        total_scaling=total_scaling,
+        total_mapping=total_mapping,
+        i=i,
+        reff=reff,
+        log_prob_upars_fn=log_prob_upars_fn,
+        log_lik_i_upars_fn=log_lik_i_upars_fn,
+    )
+
+    assert hasattr(result, "lwi")
+    assert hasattr(result, "lwfi")
+    assert hasattr(result, "log_liki")
+    assert hasattr(result, "reff")
+
+    assert result.lwi.dims == ("chain", "draw")
+    assert result.lwfi.dims == ("chain", "draw")
+    assert result.log_liki.dims == ("chain", "draw")
+    assert result.reff == reff
+
+    assert result.lwi.shape == (chain_size, draw_size)
+    assert result.lwfi.shape == (chain_size, draw_size)
+    assert result.log_liki.shape == (chain_size, draw_size)
+
+
+def test_split_moment_match_errors():
+    with pytest.raises(TypeError, match="upars must be a DataArray"):
+        _split_moment_match(
+            upars=np.array([1, 2, 3]),
+            cov=False,
+            total_shift=None,
+            total_scaling=None,
+            total_mapping=None,
+            i=0,
+            reff=0.8,
+            log_prob_upars_fn=lambda x: x,
+            log_lik_i_upars_fn=lambda x, _i: x,
+        )
+
+    upars_bad = xr.DataArray(np.random.randn(10, 3), dims=["draw", "param"])
+    with pytest.raises(ValueError, match="Required sample dimensions"):
+        _split_moment_match(
+            upars=upars_bad,
+            cov=False,
+            total_shift=None,
+            total_scaling=None,
+            total_mapping=None,
+            i=0,
+            reff=0.8,
+            log_prob_upars_fn=lambda x: x,
+            log_lik_i_upars_fn=lambda x, _i: x,
+        )
+
+
+def test_recalculate_weights_k(centered_eight):
+    posterior = centered_eight.posterior
+    chain_size = posterior.chain.size
+    draw_size = posterior.draw.size
+    dims = ["chain", "draw"]
+    coords = {"chain": posterior.chain, "draw": posterior.draw}
+
+    log_liki_new = xr.DataArray(
+        np.random.randn(chain_size, draw_size),
+        dims=dims,
+        coords=coords,
+    )
+
+    log_prob_new = xr.DataArray(
+        np.random.randn(chain_size, draw_size),
+        dims=dims,
+        coords=coords,
+    )
+
+    orig_log_prob = xr.DataArray(
+        np.random.randn(chain_size, draw_size),
+        dims=dims,
+        coords=coords,
+    )
+
+    reff = 0.8
+    sample_dims = ["chain", "draw"]
+
+    result = _recalculate_weights_k(log_liki_new, log_prob_new, orig_log_prob, reff, sample_dims)
+
+    assert hasattr(result, "lwi")
+    assert hasattr(result, "lwfi")
+    assert hasattr(result, "ki")
+    assert hasattr(result, "kfi")
+    assert hasattr(result, "log_liki")
+
+    assert isinstance(result.lwi, xr.DataArray)
+    assert isinstance(result.lwfi, xr.DataArray)
+    assert isinstance(result.ki, float)
+    assert isinstance(result.kfi, float)
+    assert isinstance(result.log_liki, xr.DataArray)
+
+    assert result.lwi.dims == ("chain", "draw")
+    assert result.lwfi.dims == ("chain", "draw")
+    assert result.ki >= 0
+    assert result.kfi >= 0
