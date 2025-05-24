@@ -1197,8 +1197,7 @@ def loo_moment_match(
 
     Examples
     --------
-    We will use the radon dataset and artificially inflate some Pareto k values to demonstrate
-    how moment matching works.
+    We will use the radon dataset to demonstrate how moment matching works.
 
     .. ipython::
 
@@ -1207,7 +1206,6 @@ def loo_moment_match(
            ...: import numpy as np
            ...: import xarray as xr
            ...: import pymc as pm
-           ...: import pytensor.tensor as pt
            ...: idata = az.load_arviz_data("radon")
 
     Compute the initial pointwise LOO:
@@ -1223,39 +1221,43 @@ def loo_moment_match(
     .. ipython::
 
         In [3]: rng = np.random.default_rng(214)
-           ...: modified_loo = loo_orig
            ...: n_obs = len(loo_orig.pareto_k.values.flatten())
-           ...: problematic_indices = rng.choice(n_obs, size=15, replace=False)
+           ...: problematic_indices = rng.choice(n_obs, size=18, replace=False)
            ...:
-           ...: k_values = modified_loo.pareto_k.values.copy()
+           ...: k_values = loo_orig.pareto_k.values.copy()
            ...: k_flat = k_values.flatten()
-           ...: k_flat[problematic_indices] = rng.uniform(0.75, 1.5, size=15)
+           ...: k_flat[problematic_indices] = rng.uniform(0.8, 3.0, size=18)
            ...:
-           ...: modified_loo.pareto_k.values = k_flat.reshape(k_values.shape)
-           ...: modified_loo
+           ...: loo_orig.pareto_k.values = k_flat.reshape(k_values.shape)
+           ...: loo_orig
 
     Reconstruct the model from the data:
 
     .. ipython::
 
-        In [4]: n_counties = 85
-           ...: county_idx = idata.constant_data.county_idx.values
+        In [4]: county_idx = idata.constant_data.county_idx.values
            ...: floor_idx = idata.constant_data.floor_idx.values
            ...: uranium = idata.constant_data.uranium.values
            ...: y_obs = idata.observed_data.y.values
            ...:
            ...: with pm.Model() as radon_model:
+           ...:     # Hyperpriors
+           ...:     g = pm.Normal("g", mu=0.0, sigma=10.0, shape=2)
            ...:     sigma_a = pm.Exponential("sigma_a", 1.0)
-           ...:     za_county = pm.Normal("za_county", 0.0, 1.0, shape=n_counties)
-           ...:     a = pm.Deterministic("a", za_county[county_idx] * sigma_a)
-           ...:     b = pm.Normal("b", 0.0, 1.0)
-           ...:     g = pm.Normal("g", 0.0, 10.0, shape=2)
-           ...:     theta = a + g[0] * floor_idx + g[1] * uranium[county_idx]
+           ...:
+           ...:     # County effects
+           ...:     a = pm.Deterministic("a", g[0] + g[1] * uranium)
+           ...:     za_county = pm.Normal("za_county", mu=0.0, sigma=1.0, shape=85)
+           ...:     a_county = pm.Deterministic("a_county", a + za_county * sigma_a)
+           ...:
+           ...:     # Observation model
+           ...:     b = pm.Normal("b", mu=0.0, sigma=1.0)
+           ...:     theta = a_county[county_idx] + b * floor_idx
            ...:     sigma = pm.Exponential("sigma", 1.0)
-           ...:     y = pm.Normal("y", theta, sigma, observed=y_obs)
+           ...:     y = pm.Normal("y", theta, sigma=sigma, observed=y_obs)
            ...:
            ...:     idata_with_transforms = pm.sample(
-           ...:         draws=100, tune=100, chains=2,
+           ...:         draws=1000, tune=1000, chains=4,
            ...:         idata_kwargs={"include_transformed": True},
            ...:         random_seed=42
            ...:     )
@@ -1264,25 +1266,25 @@ def loo_moment_match(
     requires the parameters to be in the unconstrained space. Note that the paramters in this model
     have different shapes, so we need to flatten into a single dimension before stacking them:
 
+
     .. ipython::
 
         In [5]: posterior = idata_with_transforms.posterior
-           ...: param_arrays = [
-           ...:     posterior['sigma_a_log__'].values[..., None],
-           ...:     posterior['za_county'].values,
-           ...:     posterior['b'].values[..., None],
-           ...:     posterior['g'].values,
-           ...:     posterior['sigma_log__'].values[..., None]
-           ...: ]
            ...:
            ...: upars = xr.DataArray(
-           ...:     np.concatenate(param_arrays, axis=-1),
+           ...:     np.concatenate([
+           ...:         posterior['g'].values,
+           ...:         posterior['sigma_a_log__'].values[..., None],
+           ...:         posterior['za_county'].values,
+           ...:         posterior['b'].values[..., None],
+           ...:         posterior['sigma_log__'].values[..., None]
+           ...:     ], axis=-1),
            ...:     dims=['chain', 'draw', 'param'],
            ...:     coords={'chain': posterior.chain, 'draw': posterior.draw}
            ...: )
 
     Now we need to create the log density function that takes the unconstrained parameters and
-    returns the log density. We will use the compiled logp function from PyMC to do this:
+    returns the log density. We will use the compiled logp function from PyMC to do this.
 
     .. ipython::
 
@@ -1294,17 +1296,14 @@ def loo_moment_match(
            ...:
            ...:     for chain_idx, draw_idx in np.ndindex(*upars.shape[:2]):
            ...:         point_dict = {
-           ...:             'sigma_a_log__': posterior['sigma_a_log__'].isel(
-           ...:                 chain=chain_idx, draw=draw_idx
-           ...:             ).values,
-           ...:             'za_county': posterior['za_county'].isel(
-           ...:                 chain=chain_idx, draw=draw_idx
-           ...:             ).values,
-           ...:             'b': posterior['b'].isel(chain=chain_idx, draw=draw_idx).values,
            ...:             'g': posterior['g'].isel(chain=chain_idx, draw=draw_idx).values,
+           ...:             'sigma_a_log__': posterior['sigma_a_log__'].isel(
+           ...:                 chain=chain_idx, draw=draw_idx).item(),
+           ...:             'za_county': posterior['za_county'].isel(
+           ...:                 chain=chain_idx, draw=draw_idx).values,
+           ...:             'b': posterior['b'].isel(chain=chain_idx, draw=draw_idx).item(),
            ...:             'sigma_log__': posterior['sigma_log__'].isel(
-           ...:                 chain=chain_idx, draw=draw_idx
-           ...:             ).values
+           ...:                 chain=chain_idx, draw=draw_idx).item()
            ...:         }
            ...:         logp_values[chain_idx, draw_idx] = compiled_logp(point_dict)
            ...:
@@ -1323,16 +1322,14 @@ def loo_moment_match(
 
         In [7]: def log_lik_i_upars(upars, i):
            ...:     posterior = idata_with_transforms.posterior
-           ...:     y_i = y_obs[i]
-           ...:     c_idx, f_idx, u_val = county_idx[i], floor_idx[i], uranium[county_idx[i]]
+           ...:     obs_data = idata.constant_data
            ...:
-           ...:     sigma_a = np.exp(posterior['sigma_a_log__'].values)
-           ...:     sigma = np.exp(posterior['sigma_log__'].values)
-           ...:     a_county_i = posterior['za_county'].values[:, :, c_idx] * sigma_a
-           ...:     mu_i = a_county_i + posterior['b'].values + \
-           ...:            posterior['g'].values[:, :, 0] * f_idx + \
-           ...:            posterior['g'].values[:, :, 1] * u_val
+           ...:     c_idx = obs_data.county_idx.values[i]
+           ...:     a_county = posterior['a_county'].isel(a_county_dim_0=c_idx)
+           ...:     mu_i = a_county + posterior['b'] * obs_data.floor_idx.values[i]
            ...:
+           ...:     y_i = idata.observed_data.y.values[i]
+           ...:     sigma = np.exp(posterior['sigma_log__'])
            ...:     loglik = pm.logp(pm.Normal.dist(mu_i, sigma), y_i).eval()
            ...:
            ...:     return xr.DataArray(
@@ -1348,7 +1345,7 @@ def loo_moment_match(
 
         In [8]: loo_mm = loo_moment_match(
            ...:     idata,
-           ...:     modified_loo,
+           ...:     loo_orig,
            ...:     upars=upars,
            ...:     log_prob_upars_fn=log_prob_upars,
            ...:     log_lik_i_upars_fn=log_lik_i_upars,
