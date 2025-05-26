@@ -1135,14 +1135,11 @@ def loo_moment_match(
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
     loo_orig : ELPDData
-        An existing ELPDData object from a previous `loo` result. It must contain
+        An existing ELPDData object from a previous `loo` result. Must contain
         pointwise Pareto k values (`pointwise=True` must have been used).
     upars : DataArray
-        Posterior draws transformed to the unconstrained parameter space. It must have
-        "chain" and "draw" dimensions. If it has a third dimension, this dimension
-        represents the different unconstrained parameters. If it only has "chain" and
-        "draw" dimensions, it is assumed to represent a single unconstrained parameter and
-        will be expanded internally.
+        Posterior draws transformed to the unconstrained parameter space. Must have
+        `chain` and `draw` dimensions.
     log_prob_upars_fn : Callable[[DataArray], DataArray]
         A function that takes the unconstrained parameter draws and returns a
         :class:`~xarray.DataArray` containing the log probability density of the full posterior
