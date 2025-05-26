@@ -1215,7 +1215,7 @@ def loo_moment_match(
         In [2]: loo_orig = loo(idata, pointwise=True, var_name="y")
            ...: loo_orig
 
-    Artificially inflate some Pareto k values since the original Pareto k values are
+    We need to inflate some Pareto k values since the original Pareto k values are
     all below the threshold:
 
     .. ipython::
@@ -1354,7 +1354,7 @@ def loo_moment_match(
            ...: )
            ...: loo_mm
 
-    All the Pareto k values are now below the threshold, and the LOO is improved.
+    All the Pareto k values are now below the threshold, and the PSIS-LOO-CV is improved.
 
     Notes
     -----
