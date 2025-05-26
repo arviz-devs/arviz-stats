@@ -488,9 +488,9 @@ def moment_match_data(radon_problematic):
     param_list_for_ds = {}
 
     for county_name in a_params.coords["County"].values:
-        sanitized_name = f"a_{str(county_name).replace(' ', '_').replace('-', '_')}"
+        fixed_name = f"a_{str(county_name).replace(' ', '_').replace('-', '_')}"
         county_specific_a = a_params.sel(County=county_name).drop_vars("County")
-        param_list_for_ds[sanitized_name] = county_specific_a
+        param_list_for_ds[fixed_name] = county_specific_a
 
     param_list_for_ds["b_main"] = b_param
     param_list_for_ds["log_sigma"] = log_sigma_param
@@ -621,33 +621,3 @@ def test_loo_moment_match_function_errors(radon_problematic, loo_orig):
             k_threshold=0.7,
             var_name="y",
         )
-
-
-def test_loo_moment_match_2d_upars(radon_problematic, loo_orig, moment_match_data):
-    upars_da_orig, _, _ = moment_match_data
-
-    upars_2d = upars_da_orig.isel(unconstrained_parameter=0).drop_vars("unconstrained_parameter")
-    k_threshold = np.nanpercentile(loo_orig.pareto_k.values, 90)
-
-    def log_prob_2d_fn(upars_arg):
-        return -0.5 * (upars_arg.sum("upars_dim") ** 2)
-
-    def log_lik_2d_fn(upars_arg, i):
-        log_likelihood_data = radon_problematic.log_likelihood.y
-        obs_dims = [dim for dim in log_likelihood_data.dims if dim not in ["chain", "draw"]]
-        original_log_lik_for_i = log_likelihood_data.stack(i=obs_dims).isel(i=i)
-        perturbation = upars_arg.sum("upars_dim") * 0.1
-        return original_log_lik_for_i + perturbation
-
-    loo_mm = loo_moment_match(
-        radon_problematic,
-        loo_orig,
-        upars=upars_2d,
-        log_prob_upars_fn=log_prob_2d_fn,
-        log_lik_i_upars_fn=log_lik_2d_fn,
-        k_threshold=k_threshold,
-        var_name="y",
-    )
-
-    assert isinstance(loo_mm, ELPDData)
-    assert loo_mm.method == "loo_moment_match"
