@@ -1,11 +1,8 @@
 """Summaries for various statistics and diagnostics."""
 
-from typing import Any
-
 import numpy as np
 import xarray as xr
 from arviz_base import dataset_to_dataframe, extract, rcParams, references_to_dataset
-from pandas import DataFrame
 from xarray_einstats import stats
 
 from arviz_stats.validate import validate_dims
@@ -14,18 +11,18 @@ __all__ = ["summary", "ci_in_rope"]
 
 
 def summary(
-    data: Any,
-    var_names: list[str] | None = None,
-    filter_vars: str | None = None,
-    group: str = "posterior",
-    coords: list[str, Any] | None = None,
-    sample_dims: str | list[str] | None = None,
-    kind: str = "all",
-    ci_prob: float | None = None,
-    ci_kind: str | None = None,
-    round_to: int | str | None = 2,
-    skipna: bool = False,
-) -> DataFrame:
+    data,
+    var_names=None,
+    filter_vars=None,
+    group="posterior",
+    coords=None,
+    sample_dims=None,
+    kind="all",
+    ci_prob=None,
+    ci_kind=None,
+    round_to=2,
+    skipna=False,
+):
     """
     Create a data frame with summary statistics and or diagnostics.
 
@@ -123,6 +120,8 @@ def summary(
         ci_prob = rcParams["stats.ci_prob"]
     if ci_kind is None:
         ci_kind = rcParams["stats.ci_kind"]
+    if sample_dims is None:
+        sample_dims = rcParams["data.sample_dims"]
 
     ci_perc = int(ci_prob * 100)
 
@@ -131,6 +130,7 @@ def summary(
         var_names=var_names,
         filter_vars=filter_vars,
         group=group,
+        sample_dims=sample_dims,
         combined=False,
         keep_dataset=True,
     )
@@ -142,18 +142,12 @@ def summary(
     if kind in ["stats", "all"]:
         mean = dataset.mean(dim=sample_dims, skipna=skipna).expand_dims(summary=["mean"])
         std = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
-        if ci_kind == "eti":
-            ci = (
-                dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
-                .rename({"ci_bound": "summary"})
-                .assign_coords(summary=[f"eti{ci_perc}_", f"eti{ci_perc}^"])
-            )
-        else:
-            ci = (
-                dataset.azstats.hdi(prob=ci_prob, dims=sample_dims, skipna=skipna)
-                .rename({"ci_bound": "summary"})
-                .assign_coords(summary=[f"hdi{ci_perc}_", f"hdi{ci_perc}^"])
-            )
+        ci = (
+            dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
+            .rename({"ci_bound": "summary"})
+            .assign_coords(summary=[f"{ci_kind}{ci_perc}_lb", f"{ci_kind}{ci_perc}_ub"])
+        )
+
         to_concat.extend((mean, std, ci))
 
     if kind in ["diagnostics", "all"]:
@@ -163,7 +157,7 @@ def summary(
         ess_tail = dataset.azstats.ess(dims=sample_dims, method="tail").expand_dims(
             summary=["ess_tail"]
         )
-        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["R̂"])
+        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["r_hat"])
         mcse_mean = dataset.azstats.mcse(dims=sample_dims, method="mean").expand_dims(
             summary=["mcse_mean"]
         )
@@ -180,8 +174,8 @@ def summary(
         ).expand_dims(summary=["mad"])
         ci = (
             dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
-            .rename({"quantile": "summary"})
-            .assign_coords(summary=[f"eti{ci_perc}_", f"eti{ci_perc}^"])
+            .rename({"ci_bound": "summary"})
+            .assign_coords(summary=[f"eti{ci_perc}_lb", f"eti{ci_perc}_ub"])
         )
 
         to_concat.extend((median, mad, ci))
@@ -193,7 +187,7 @@ def summary(
         ess_tail = dataset.azstats.ess(dims=sample_dims, method="tail").expand_dims(
             summary=["ess_tail"]
         )
-        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["R̂"])
+        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["r_hat"])
         mcse_median = dataset.azstats.mcse(dims=sample_dims, method="median").expand_dims(
             summary=["mcse_median"]
         )
