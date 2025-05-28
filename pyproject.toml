@@ -64,7 +64,6 @@ doc = [
     "jupyter-sphinx",
     "h5netcdf",
     "sphinx_autosummary_accessors",
-    "pymc",
 ]
 numba = [
   "numba",
