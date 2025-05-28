@@ -61,26 +61,26 @@ def test_hdi_idata(centered_eight):
     accessor = centered_eight.posterior.ds.azstats
     result = accessor.hdi()
     assert isinstance(result, xr.Dataset)
-    assert result.sizes == {"school": 8, "hdi": 2}
+    assert result.sizes == {"school": 8, "ci_bound": 2}
 
     result = accessor.hdi(dims="chain")
     assert isinstance(result, xr.Dataset)
-    assert result.sizes == {"draw": 500, "hdi": 2, "school": 8}
+    assert result.sizes == {"draw": 500, "ci_bound": 2, "school": 8}
 
 
 def test_hdi_idata_varnames(centered_eight):
     accessor = centered_eight.posterior.ds.azstats
     result = accessor.filter_vars(var_names=["mu", "theta"]).hdi()
     assert isinstance(result, xr.Dataset)
-    assert result.sizes == {"hdi": 2, "school": 8}
+    assert result.sizes == {"ci_bound": 2, "school": 8}
     assert list(result.data_vars.keys()) == ["mu", "theta"]
 
 
-@pytest.mark.skip(reason="AttributeError: DatasetView objects are not to be initialized directly")
+# @pytest.mark.skip(reason="AttributeError: DatasetView objects are not to be initialized directly")
 def test_hdi_idata_group(centered_eight):
     result_posterior = centered_eight.azstats.hdi(group="posterior")
     result_prior = centered_eight.azstats.hdi(group="prior")
-    assert "hdi" in result_prior.mu.dims
+    assert "ci_bound" in result_prior.mu.dims
     range_posterior = result_posterior.mu.values[1] - result_posterior.mu.values[0]
     range_prior = result_prior.mu.values[1] - result_prior.mu.values[0]
     assert range_posterior < range_prior
@@ -240,10 +240,6 @@ def test_ecdf(centered_eight):
     result = accessor.ecdf()
     assert isinstance(result, xr.Dataset)
     assert result.sizes == {"plot_axis": 2, "quantile": 200}
-
-    result = accessor.hdi(dims="chain")
-    assert isinstance(result, xr.Dataset)
-    assert result.sizes == {"draw": 500, "hdi": 2, "school": 8}
 
 
 def test_ecdf_idata_varnames(centered_eight):
