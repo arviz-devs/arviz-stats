@@ -11,7 +11,7 @@ from .helpers import importorskip
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
-from arviz_stats.helper_loo import (
+from arviz_stats.loo.helper_loo import (
     _check_log_density,
     _diff_srs_estimator,
     _extract_loo_data,
@@ -27,12 +27,12 @@ from arviz_stats.helper_loo import (
     _shift,
     _shift_and_cov,
     _shift_and_scale,
-    _split_moment_match,
     _srs_estimator,
     _warn_pareto_k,
     _warn_pointwise_loo,
 )
-from arviz_stats.loo import loo_subsample
+from arviz_stats.loo.loo_moment_match import _split_moment_match
+from arviz_stats.loo.loo_subsample import loo_subsample
 from arviz_stats.manipulation import thin
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
