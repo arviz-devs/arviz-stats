@@ -32,27 +32,31 @@ but many features won't be available.
 This is mostly aimed at advanced users or libraries that want to use ArviZ
 to compute diagnostics and statistical summaries but don't want to depend on xarray.
 
+
+```{toctree}
+:hidden:
+:caption: User guide
+
+overview
+array_stats_only
+ArviZ in Context <https://arviz-devs.github.io/EABM/>
+```
+
 ```{toctree}
 :caption: Reference
 :hidden:
 
 api/index
+background
 ```
 
 ```{toctree}
 :hidden:
 :caption: Tutorials
 
-array_stats_only
 ArviZ in Context <https://arviz-devs.github.io/EABM/>
 ```
 
-```{toctree}
-:caption: Background
-:hidden:
-
-background
-```
 
 ```{toctree}
 :caption: Contributing
