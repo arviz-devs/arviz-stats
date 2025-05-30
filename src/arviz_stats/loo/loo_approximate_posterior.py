@@ -2,7 +2,7 @@
 
 from arviz_base import rcParams
 
-from arviz_stats.loo.helper_loo import (
+from arviz_stats.loo.helper_loo import (  # pylint: disable=cyclic-import
     _check_log_density,
     _compute_loo_results,
     _prepare_loo_inputs,

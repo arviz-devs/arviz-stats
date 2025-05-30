@@ -31,13 +31,13 @@ def loo_moment_match(
     upars,
     log_prob_upars_fn,
     log_lik_i_upars_fn,
+    var_name=None,
+    reff=None,
     max_iters=30,
     k_threshold=None,
     split=True,
     cov=False,
     pointwise=None,
-    var_name=None,
-    reff=None,
 ):
     r"""Compute moment matching for problematic observations in PSIS-LOO-CV.
 
@@ -72,6 +72,12 @@ def loo_moment_match(
         of the left-out observation. It should return a :class:`~xarray.DataArray` containing the
         log-likelihood of the left-out observation `i` evaluated at each unconstrained parameter
         draw. The returned DataArray must have dimensions `chain`, `draw`.
+    var_name : str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation.
+    reff: float, optional
+        Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
+        of actual samples. Computed from trace by default.
     max_iters : int, default 30
         Maximum number of moment matching iterations for each problematic observation.
     k_threshold : float, optional
@@ -88,12 +94,6 @@ def loo_moment_match(
         ``rcParams["stats.ic_pointwise"]``. Moment matching always requires
         pointwise data from `loo_orig`. This argument controls whether the returned
         object includes pointwise data.
-    var_name : str, optional
-        The name of the variable in log_likelihood groups storing the pointwise log
-        likelihood data to use for loo computation.
-    reff: float, optional
-        Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
-        of actual samples. Computed from trace by default.
 
     Returns
     -------

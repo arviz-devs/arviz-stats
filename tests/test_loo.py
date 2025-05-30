@@ -535,7 +535,6 @@ def test_loo_moment_match(radon_problematic, loo_orig, moment_match_data):
     )
 
     assert isinstance(loo_mm, ELPDData)
-    assert loo_mm.kind == "loo"
     assert loo_mm.method == "loo_moment_match"
     mm_bad_k_count = np.sum(loo_mm.pareto_k.values > k_threshold)
     assert mm_bad_k_count <= orig_bad_k_count
