@@ -1,14 +1,11 @@
 """Power-scaling sensitivity diagnostics."""
 
 import logging
-from typing import cast
 
 import numpy as np
-import pandas as pd
 import xarray as xr
-from arviz_base import convert_to_datatree, extract
+from arviz_base import convert_to_datatree, dataset_to_dataframe, extract
 from arviz_base.labels import BaseLabeller
-from arviz_base.sel_utils import xarray_var_iter
 
 from arviz_stats.utils import get_log_likelihood_dataset, get_log_prior
 from arviz_stats.validate import validate_dims
@@ -53,8 +50,7 @@ def psense(
         Coordinates defining a subset over the posterior. Only these variables will
         be used when computing the prior sensitivity.
     sample_dims : str or sequence of hashable, optional
-        Dimensions to reduce unless mapped to an aesthetic.
-        Defaults to ``rcParams["data.sample_dims"]``
+        Dimensions to reduce. Defaults to ``rcParams["data.sample_dims"]``
     alphas : tuple
         Lower and upper alpha values for gradient calculation. Defaults to (0.99, 1.01).
     group_var_names : str, optional
@@ -109,7 +105,7 @@ def psense(
         upper_w=upper_w,
         lower_alpha=alphas[0],
         upper_alpha=alphas[1],
-        dims=sample_dims,
+        sample_dims=sample_dims,
     )
 
 
@@ -220,20 +216,7 @@ def psense_summary(
     joined = xr.concat([pssdp, pssdl], dim="component").assign_coords(
         component=["prior", "likelihood"]
     )
-
-    n_vars = np.sum([joined[var].size // 2 for var in joined.data_vars])
-
-    psense_df = pd.DataFrame(
-        (np.full((cast(int, n_vars), 2), np.nan)), columns=["prior", "likelihood"]
-    )
-
-    indices = []
-    for i, (var_name, sel, isel, values) in enumerate(
-        xarray_var_iter(joined, skip_dims={"component"})
-    ):
-        psense_df.iloc[i] = values
-        indices.append(labeller.make_label_flat(var_name, sel, isel))
-    psense_df.index = indices
+    psense_df = dataset_to_dataframe(joined, sample_dims=["component"]).T
 
     def _diagnose(row):
         if row["prior"] >= threshold and row["likelihood"] >= threshold:
@@ -345,10 +328,10 @@ def _get_power_scale_weights(
     )
 
     # calculate importance sampling weights for lower and upper alpha power-scaling
-    lower_w = np.exp(group_draws.azstats.power_scale_lw(alpha=alphas[0], dims=sample_dims))
+    lower_w = np.exp(group_draws.azstats.power_scale_lw(alpha=alphas[0], dim=sample_dims))
     lower_w = lower_w / lower_w.sum(sample_dims)
 
-    upper_w = np.exp(group_draws.azstats.power_scale_lw(alpha=alphas[1], dims=sample_dims))
+    upper_w = np.exp(group_draws.azstats.power_scale_lw(alpha=alphas[1], dim=sample_dims))
     upper_w = upper_w / upper_w.sum(sample_dims)
 
     return lower_w, upper_w

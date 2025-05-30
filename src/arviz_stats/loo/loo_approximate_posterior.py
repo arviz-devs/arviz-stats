@@ -154,7 +154,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
 
     # ignore r_eff here, set to r_eff=1.0
     log_weights, pareto_k = corrected_log_ratios.azstats.psislw(
-        r_eff=1.0, dims=loo_inputs.sample_dims
+        r_eff=1.0, dim=loo_inputs.sample_dims
     )
 
     return _compute_loo_results(

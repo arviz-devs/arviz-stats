@@ -143,7 +143,7 @@ def summary(
         mean = dataset.mean(dim=sample_dims, skipna=skipna).expand_dims(summary=["mean"])
         std = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
         ci = (
-            dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
+            dataset.azstats.eti(prob=ci_prob, dim=sample_dims, skipna=skipna)
             .rename({"ci_bound": "summary"})
             .assign_coords(summary=[f"{ci_kind}{ci_perc}_lb", f"{ci_kind}{ci_perc}_ub"])
         )
@@ -151,17 +151,17 @@ def summary(
         to_concat.extend((mean, std, ci))
 
     if kind in ["diagnostics", "all"]:
-        ess_bulk = dataset.azstats.ess(dims=sample_dims, method="bulk").expand_dims(
+        ess_bulk = dataset.azstats.ess(sample_dims=sample_dims, method="bulk").expand_dims(
             summary=["ess_bulk"]
         )
-        ess_tail = dataset.azstats.ess(dims=sample_dims, method="tail").expand_dims(
+        ess_tail = dataset.azstats.ess(sample_dims=sample_dims, method="tail").expand_dims(
             summary=["ess_tail"]
         )
-        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["r_hat"])
-        mcse_mean = dataset.azstats.mcse(dims=sample_dims, method="mean").expand_dims(
+        rhat = dataset.azstats.rhat(sample_dims=sample_dims).expand_dims(summary=["r_hat"])
+        mcse_mean = dataset.azstats.mcse(sample_dims=sample_dims, method="mean").expand_dims(
             summary=["mcse_mean"]
         )
-        mcse_sd = dataset.azstats.mcse(dims=sample_dims, method="sd").expand_dims(
+        mcse_sd = dataset.azstats.mcse(sample_dims=sample_dims, method="sd").expand_dims(
             summary=["mcse_sd"]
         )
 
@@ -173,7 +173,7 @@ def summary(
             dataset, dims=("chain", "draw"), nan_policy="omit" if skipna else "propagate"
         ).expand_dims(summary=["mad"])
         ci = (
-            dataset.azstats.eti(prob=ci_prob, dims=sample_dims, skipna=skipna)
+            dataset.azstats.eti(prob=ci_prob, dim=sample_dims, skipna=skipna)
             .rename({"ci_bound": "summary"})
             .assign_coords(summary=[f"eti{ci_perc}_lb", f"eti{ci_perc}_ub"])
         )
@@ -181,27 +181,29 @@ def summary(
         to_concat.extend((median, mad, ci))
 
     if kind in ["diagnostics_median", "all_median"]:
-        ess_median = dataset.azstats.ess(dims=sample_dims, method="median").expand_dims(
+        ess_median = dataset.azstats.ess(sample_dims=sample_dims, method="median").expand_dims(
             summary=["ess_median"]
         )
-        ess_tail = dataset.azstats.ess(dims=sample_dims, method="tail").expand_dims(
+        ess_tail = dataset.azstats.ess(sample_dims=sample_dims, method="tail").expand_dims(
             summary=["ess_tail"]
         )
-        rhat = dataset.azstats.rhat(dims=sample_dims).expand_dims(summary=["r_hat"])
-        mcse_median = dataset.azstats.mcse(dims=sample_dims, method="median").expand_dims(
+        rhat = dataset.azstats.rhat(sample_dims=sample_dims).expand_dims(summary=["r_hat"])
+        mcse_median = dataset.azstats.mcse(sample_dims=sample_dims, method="median").expand_dims(
             summary=["mcse_median"]
         )
 
         to_concat.extend((ess_median, ess_tail, rhat, mcse_median))
 
     if kind == "mc_diagnostics":
-        mcse_mean = dataset.azstats.mcse(dims=sample_dims, method="mean").expand_dims(
+        mcse_mean = dataset.azstats.mcse(sample_dims=sample_dims, method="mean").expand_dims(
             summary=["mcse_mean"]
         )
-        ess_mean = dataset.azstats.ess(dims=sample_dims, method="mean").expand_dims(
+        ess_mean = dataset.azstats.ess(sample_dims=sample_dims, method="mean").expand_dims(
             summary=["ess_mean"]
         )
-        min_ss = dataset.azstats.pareto_min_ss(dims=sample_dims).expand_dims(summary=["min_ss"])
+        min_ss = dataset.azstats.pareto_min_ss(sample_dims=sample_dims).expand_dims(
+            summary=["min_ss"]
+        )
 
         to_concat.extend((mcse_mean, ess_mean, min_ss))
 
@@ -220,7 +222,7 @@ def ci_in_rope(
     var_names=None,
     filter_vars=None,
     group="posterior",
-    sample_dims=None,
+    dim=None,
     ci_prob=None,
     ci_kind=None,
     rope_dim="rope_dim",
@@ -251,7 +253,7 @@ def ci_in_rope(
         Select a group to compute the ROPE. Defaults to “posterior”.
     coords : dict, optional
         Coordinates defining a subset over the selected group.
-    sample_dims : str or sequence of hashable, optional
+    dim : str or sequence of hashable, optional
         Defaults to ``rcParams["data.sample_dims"]``
     ci_prob : float, optional
         Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``.
@@ -294,8 +296,7 @@ def ci_in_rope(
     .. [1] Kruschke. Doing Bayesian Data Analysis, Second Edition: A Tutorial with R,
         JAGS, and Stan. Academic Press, 2014. ISBN 978-0-12-405888-0.
     """
-    sample_dims = validate_dims(sample_dims)
-    sample_dim = "sample" if len(sample_dims) > 1 else sample_dims[0]
+    sample_dims = validate_dims(dim)
 
     dataset = extract(
         data,
@@ -303,7 +304,7 @@ def ci_in_rope(
         filter_vars=filter_vars,
         group=group,
         sample_dims=sample_dims,
-        combined=True,
+        combined=False,
         keep_dataset=True,
     )
 
@@ -328,20 +329,20 @@ def ci_in_rope(
             raise ValueError("`rope` must be a tuple of length 2")
 
     if ci_kind == "eti":
-        c_i = dataset.azstats.eti(prob=ci_prob, dims=sample_dim)
+        c_i = dataset.azstats.eti(prob=ci_prob, dim=sample_dims)
     else:
-        c_i = dataset.azstats.hdi(prob=ci_prob, dims=sample_dim)
+        c_i = dataset.azstats.hdi(prob=ci_prob, dim=sample_dims)
 
     ci_low = c_i.sel(ci_bound="lower")
     ci_high = c_i.sel(ci_bound="upper")
 
     in_ci = (dataset >= ci_low) & (dataset <= ci_high)
 
-    rope = references_to_dataset(rope, dataset, sample_dims=sample_dim, ref_dim=rope_dim)
+    rope = references_to_dataset(rope, dataset, sample_dims=sample_dims, ref_dim=rope_dim)
 
     ci_samples = dataset.where(in_ci)
     in_rope = (ci_samples >= rope.sel({rope_dim: 0})) & (ci_samples <= rope.sel({rope_dim: 1}))
 
-    proportion = (in_rope.sum(dim=sample_dim) / in_ci.sum(dim=sample_dim)) * 100
+    proportion = (in_rope.sum(dim=sample_dims) / in_ci.sum(dim=sample_dims)) * 100
 
     return proportion

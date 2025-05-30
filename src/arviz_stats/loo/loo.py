@@ -91,7 +91,7 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         reff = _get_r_eff(data, loo_inputs.n_samples)
 
     log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
-        r_eff=reff, dims=loo_inputs.sample_dims
+        r_eff=reff, dim=loo_inputs.sample_dims
     )
 
     return _compute_loo_results(

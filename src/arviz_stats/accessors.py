@@ -27,8 +27,11 @@ def update_dims(dims, da):
 
 
 def update_kwargs_with_dims(da, kwargs):
-    """Update kwargs dict which may have a `dims` keyword."""
+    """Update kwargs dict which may have a `dim` keyword."""
     kwargs = kwargs.copy()
+    if "dim" in kwargs:
+        kwargs.update({"dim": update_dims(kwargs["dim"], da)})
+    # TODO: remove. Used only for ecdf right now which needs to be moved here
     if "dims" in kwargs:
         kwargs.update({"dims": update_dims(kwargs["dims"], da)})
     return kwargs
@@ -78,54 +81,60 @@ class _BaseAccessor:
     def _apply(self, func, **kwargs):
         raise NotImplementedError("_apply private method needs to be implemented in subclasses")
 
-    def eti(self, prob=None, dims=None, **kwargs):
+    def eti(self, prob=None, dim=None, **kwargs):
         """Compute the equal tail interval."""
         kwargs["prob"] = prob
-        return self._apply("eti", dims=dims, **kwargs)
+        return self._apply("eti", dim=dim, **kwargs)
 
-    def hdi(self, prob=None, dims=None, **kwargs):
+    def hdi(self, prob=None, dim=None, **kwargs):
         """Compute hdi on all variables in the dataset."""
         kwargs["prob"] = prob
-        return self._apply("hdi", dims=dims, **kwargs)
+        return self._apply("hdi", dim=dim, **kwargs)
 
-    def ess(self, dims=None, method="bulk", relative=False, prob=None, **kwargs):
+    def ess(self, sample_dims=None, method="bulk", relative=False, prob=None, **kwargs):
         """Compute the ess of all the variables in the dataset."""
-        return self._apply("ess", dims=dims, method=method, relative=relative, prob=prob, **kwargs)
-
-    def rhat(self, dims=None, method="rank", **kwargs):
-        """Compute the rhat of all the variables in the dataset."""
-        return self._apply("rhat", dims=dims, method=method, **kwargs)
-
-    def rhat_nested(self, dims=None, method="rank", superchain_ids=None, **kwargs):
-        """Compute nested rhat of all the variables in the dataset."""
         return self._apply(
-            "rhat_nested", dims=dims, method=method, superchain_ids=superchain_ids, **kwargs
+            "ess", sample_dims=sample_dims, method=method, relative=relative, prob=prob, **kwargs
         )
 
-    def mcse(self, dims=None, method="mean", prob=None, **kwargs):
+    def rhat(self, sample_dims=None, method="rank", **kwargs):
+        """Compute the rhat of all the variables in the dataset."""
+        return self._apply("rhat", sample_dims=sample_dims, method=method, **kwargs)
+
+    def rhat_nested(self, sample_dims=None, method="rank", superchain_ids=None, **kwargs):
+        """Compute nested rhat of all the variables in the dataset."""
+        return self._apply(
+            "rhat_nested",
+            sample_dims=sample_dims,
+            method=method,
+            superchain_ids=superchain_ids,
+            **kwargs,
+        )
+
+    def mcse(self, sample_dims=None, method="mean", prob=None, **kwargs):
         """Compute the mcse of all the variables in the dataset."""
-        return self._apply("mcse", dims=dims, method=method, prob=prob, **kwargs)
+        return self._apply("mcse", sample_dims=sample_dims, method=method, prob=prob, **kwargs)
 
-    def kde(self, dims=None, **kwargs):
+    def kde(self, dim=None, **kwargs):
         """Compute the KDE for all variables in the dataset."""
-        return self._apply("kde", dims=dims, **kwargs)
+        return self._apply("kde", dim=dim, **kwargs)
 
-    def get_bins(self, dims=None, **kwargs):
+    def get_bins(self, dim=None, **kwargs):
         """Compute the histogram bin edges for all variables in the dataset."""
-        return self._apply(get_function("get_bins"), dims=dims, **kwargs)
+        return self._apply(get_function("get_bins"), dim=dim, **kwargs)
 
-    def histogram(self, dims=None, **kwargs):
+    def histogram(self, dim=None, **kwargs):
         """Compute the histogram for all variables in the dataset."""
-        return self._apply("histogram", dims=dims, **kwargs)
+        return self._apply("histogram", dim=dim, **kwargs)
 
-    def compute_ranks(self, dims=None, relative=False, **kwargs):
+    def compute_ranks(self, dim=None, relative=False, **kwargs):
         """Compute ranks for all variables in the dataset."""
-        return self._apply("compute_ranks", dims=dims, relative=relative, **kwargs)
+        return self._apply("compute_ranks", dim=dim, relative=relative, **kwargs)
 
-    def ecdf(self, dims=None, pit=False, **kwargs):
+    def ecdf(self, dim=None, pit=False, **kwargs):
         """Compute the ecdf for all variables in the dataset."""
         # TODO: implement ecdf here so it doesn't depend on numba
-        dt_ecdf = self._apply(ecdf, dims=dims, **kwargs).rename(ecdf_axis="plot_axis")
+        dt_ecdf = self._apply(ecdf, dims=dim, **kwargs).rename(ecdf_axis="plot_axis")
         if pit:
             x_values = dt_ecdf.sel(plot_axis="x")
             normalized_x = x_values / x_values.max()
@@ -135,25 +144,25 @@ class _BaseAccessor:
             dt_ecdf = dt_ecdf.where(dt_ecdf.plot_axis != "y", diff_y)
         return dt_ecdf
 
-    def pareto_min_ss(self, dims=None, **kwargs):
+    def pareto_min_ss(self, sample_dims=None, **kwargs):
         """Compute the min sample size for all variables in the dataset."""
-        return self._apply("pareto_min_ss", dims=dims, **kwargs)
+        return self._apply("pareto_min_ss", sample_dims=sample_dims, **kwargs)
 
-    def psislw(self, dims=None, **kwargs):
+    def psislw(self, dim=None, **kwargs):
         """Pareto smoothed importance sampling."""
-        return self._apply("psislw", dims=dims, **kwargs)
+        return self._apply("psislw", dim=dim, **kwargs)
 
-    def power_scale_lw(self, dims=None, **kwargs):
+    def power_scale_lw(self, dim=None, **kwargs):
         """Compute log weights for power-scaling of the DataTree."""
-        return self._apply("power_scale_lw", dims=dims, **kwargs)
+        return self._apply("power_scale_lw", dim=dim, **kwargs)
 
-    def power_scale_sense(self, dims=None, **kwargs):
+    def power_scale_sense(self, sample_dims=None, **kwargs):
         """Compute power-scaling sensitivity."""
-        return self._apply("power_scale_sense", dims=dims, **kwargs)
+        return self._apply("power_scale_sense", sample_dims=sample_dims, **kwargs)
 
-    def autocorr(self, dims=None, **kwargs):
+    def autocorr(self, dim=None, **kwargs):
         """Compute autocorrelation for all variables in the dataset."""
-        return self._apply("autocorr", dims=dims, **kwargs)
+        return self._apply("autocorr", dim=dim, **kwargs)
 
 
 @xr.register_dataarray_accessor("azstats")
@@ -166,9 +175,9 @@ class AzStatsDaAccessor(_BaseAccessor):
             func = get_function(func)
         return func(self._obj, **kwargs)
 
-    def thin(self, dims=None, factor="auto"):
+    def thin(self, sample_dims=None, factor="auto"):
         """Apply thinning to DataArray input."""
-        return self._apply("thin", dims=dims, factor=factor)
+        return self._apply("thin", sample_dims=sample_dims, factor=factor)
 
 
 @xr.register_dataset_accessor("azstats")
@@ -231,12 +240,12 @@ class AzStatsDsAccessor(_BaseAccessor):
             f"`reduce_func` {reduce_func} not recognized. Valid values are 'mean' or 'min'"
         )
 
-    def thin(self, dims=None, factor="auto"):
+    def thin(self, sample_dims=None, factor="auto"):
         """Perform thinning for all the variables in the dataset."""
         if factor == "auto":
             factor = self.thin_factor()
-            dims = "draw"
-        return self._apply("thin", dims=dims, factor=factor)
+            sample_dims = "draw"
+        return self._apply("thin", sample_dims=sample_dims, factor=factor)
 
 
 @xr.register_datatree_accessor("azstats")
@@ -330,9 +339,9 @@ class AzStatsDtAccessor(_BaseAccessor):
             f"`reduce_func` {reduce_func} not recognized. Valid values are 'mean' or 'min'"
         )
 
-    def thin(self, dims=None, group="posterior", **kwargs):
+    def thin(self, sample_dims=None, group="posterior", **kwargs):
         """Perform thinning for all variables in a group of the DataTree."""
         if kwargs.get("factor", "auto") == "auto":
             kwargs["factor"] = self.thin_factor()
-            dims = "draw"
-        return self._apply("thin", dims=dims, group=group, **kwargs)
+            sample_dims = "draw"
+        return self._apply("thin", sample_dims=sample_dims, group=group, **kwargs)
