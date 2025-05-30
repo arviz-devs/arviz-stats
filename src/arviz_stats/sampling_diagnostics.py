@@ -128,7 +128,9 @@ def ess(
     if isinstance(data, xr.DataArray):
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.ess(dims=sample_dims, method=method, relative=relative, prob=prob)
+        return data.azstats.ess(
+            sample_dims=sample_dims, method=method, relative=relative, prob=prob
+        )
 
     if isinstance(data, xr.DataTree):
         data = data.azstats.filter_vars(
@@ -137,7 +139,7 @@ def ess(
         if coords is not None:
             data = data.sel(coords)
         return data.azstats.ess(
-            dims=sample_dims, group=group, method=method, relative=relative, prob=prob
+            sample_dims=sample_dims, group=group, method=method, relative=relative, prob=prob
         )
 
     data = convert_to_dataset(data, group=group)
@@ -146,7 +148,7 @@ def ess(
     if coords is not None:
         data = data.sel(coords)
 
-    return data.azstats.ess(dims=sample_dims, method=method, relative=relative, prob=prob)
+    return data.azstats.ess(sample_dims=sample_dims, method=method, relative=relative, prob=prob)
 
 
 def rhat(
@@ -279,7 +281,7 @@ def rhat(
     if isinstance(data, xr.DataArray):
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.rhat(dims=sample_dims, method=method)
+        return data.azstats.rhat(sample_dims=sample_dims, method=method)
 
     if isinstance(data, xr.DataTree):
         data = data.azstats.filter_vars(
@@ -287,7 +289,7 @@ def rhat(
         ).datatree
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.rhat(dims=sample_dims, group=group, method=method)
+        return data.azstats.rhat(sample_dims=sample_dims, group=group, method=method)
 
     data = convert_to_dataset(data, group=group)
 
@@ -295,7 +297,7 @@ def rhat(
     if coords is not None:
         data = data.sel(coords)
 
-    return data.azstats.rhat(dims=sample_dims, method=method)
+    return data.azstats.rhat(sample_dims=sample_dims, method=method)
 
 
 def rhat_nested(
@@ -393,7 +395,7 @@ def rhat_nested(
     if isinstance(data, xr.DataArray):
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.rhat_nested(dims=sample_dims, superchain_ids=superchain_ids)
+        return data.azstats.rhat_nested(sample_dims=sample_dims, superchain_ids=superchain_ids)
 
     if isinstance(data, xr.DataTree):
         data = data.azstats.filter_vars(
@@ -402,7 +404,7 @@ def rhat_nested(
         if coords is not None:
             data = data.sel(coords)
         return data.azstats.rhat_nested(
-            dims=sample_dims, group=group, superchain_ids=superchain_ids
+            sample_dims=sample_dims, group=group, superchain_ids=superchain_ids
         )
 
     data = convert_to_dataset(data, group=group)
@@ -411,7 +413,9 @@ def rhat_nested(
     if coords is not None:
         data = data.sel(coords)
 
-    return data.azstats.rhat_nested(dims=sample_dims, method=method, superchain_ids=superchain_ids)
+    return data.azstats.rhat_nested(
+        sample_dims=sample_dims, method=method, superchain_ids=superchain_ids
+    )
 
 
 def mcse(
@@ -515,7 +519,7 @@ def mcse(
     if isinstance(data, xr.DataArray):
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.mcse(dims=sample_dims, method=method, prob=prob)
+        return data.azstats.mcse(sample_dims=sample_dims, method=method, prob=prob)
 
     if isinstance(data, xr.DataTree):
         data = data.azstats.filter_vars(
@@ -523,7 +527,7 @@ def mcse(
         ).datatree
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.mcse(dims=sample_dims, group=group, method=method, prob=prob)
+        return data.azstats.mcse(sample_dims=sample_dims, group=group, method=method, prob=prob)
 
     data = convert_to_dataset(data, group=group)
 
@@ -531,4 +535,4 @@ def mcse(
     if coords is not None:
         data = data.sel(coords)
 
-    return data.azstats.mcse(dims=sample_dims, method=method, prob=prob)
+    return data.azstats.mcse(sample_dims=sample_dims, method=method, prob=prob)

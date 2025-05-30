@@ -51,7 +51,7 @@ def test_kde_is_normalized(bound_correction, kde_kwargs):
     else:
         data = rng.normal(size=(1_000, 100))
     sample = azb.ndarray_to_dataarray(data, "x", sample_dims=["sample"])
-    kde = sample.azstats.kde(dims="sample", bound_correction=bound_correction, **kde_kwargs)
+    kde = sample.azstats.kde(dim="sample", bound_correction=bound_correction, **kde_kwargs)
     dx = kde.sel(plot_axis="x").diff(dim="kde_dim")
     density_norm = kde.sel(plot_axis="y").sum(dim="kde_dim") * dx
     assert_array_almost_equal(density_norm, 1, 6)
@@ -63,7 +63,7 @@ def test_hdi_idata(centered_eight):
     assert isinstance(result, xr.Dataset)
     assert result.sizes == {"school": 8, "ci_bound": 2}
 
-    result = accessor.hdi(dims="chain")
+    result = accessor.hdi(dim="chain")
     assert isinstance(result, xr.Dataset)
     assert result.sizes == {"draw": 500, "ci_bound": 2, "school": 8}
 
@@ -88,7 +88,7 @@ def test_hdi_idata_group(centered_eight):
 
 def test_hdi_coords(centered_eight):
     data = centered_eight.posterior.sel({"chain": [0, 1, 3]}).ds
-    result = data.azstats.hdi(dims="draw")
+    result = data.azstats.hdi(dim="draw")
     assert_array_equal(result.coords["chain"], [0, 1, 3])
 
 
@@ -113,7 +113,7 @@ def test_hdi_multimodal_continuous(prob, nearest):
         ],
         axis=0,
     )
-    intervals = normal_sample.azstats.hdi(dims="sample", method=method, prob=prob)
+    intervals = normal_sample.azstats.hdi(dim="sample", method=method, prob=prob)
     assert_array_almost_equal(intervals, exact_hdis, 1)
 
     if nearest:
@@ -129,7 +129,7 @@ def test_hdi_multimodal_discrete(prob):
     dist2 = poisson(100)
     x = np.concatenate([dist1.rvs(2500000, random_state=rng), dist2.rvs(2500000, random_state=rng)])
     sample = azb.ndarray_to_dataarray(x, "x", sample_dims=["sample"])
-    intervals = sample.azstats.hdi(dims="sample", method="multimodal", prob=prob)
+    intervals = sample.azstats.hdi(dim="sample", method="multimodal", prob=prob)
     assert intervals.sizes["mode"] == 2
     lower_mode = intervals.sel(mode=0)
     higher_mode = intervals.sel(mode=1)
@@ -138,7 +138,7 @@ def test_hdi_multimodal_discrete(prob):
 
     # restrict the bins to a range in which only a single mode will appear
     bins = np.arange(0, 20) - 0.5
-    intervals = sample.azstats.hdi(dims="sample", method="multimodal", prob=prob, bins=bins)
+    intervals = sample.azstats.hdi(dim="sample", method="multimodal", prob=prob, bins=bins)
     assert intervals.sizes["mode"] == 1
     assert intervals.sel(mode=0)[0] <= 10 <= intervals.sel(mode=0)[1]
 
@@ -149,8 +149,8 @@ def test_hdi_multimodal_unimodal_discrete_consistent(dist, prob):
     rng = np.random.default_rng(43)
     x = dist.rvs(size=1_000, random_state=rng)
     sample = azb.ndarray_to_dataarray(x, "x", sample_dims=["sample"])
-    intervals = sample.azstats.hdi(dims="sample", method="multimodal", prob=prob)
-    intervals_unimodal = sample.azstats.hdi(dims="sample", method="nearest", prob=prob)
+    intervals = sample.azstats.hdi(dim="sample", method="multimodal", prob=prob)
+    intervals_unimodal = sample.azstats.hdi(dim="sample", method="nearest", prob=prob)
     intervals = intervals.squeeze("mode")
     assert_array_equal(intervals, intervals_unimodal)
 
@@ -177,10 +177,10 @@ def test_hdi_multimodal_max_modes():
     rng = np.random.default_rng(42)
     x = np.concatenate([rng.normal(0, 1, 250_000), rng.normal(30, 1, 2_500_000)])
     sample = azb.ndarray_to_dataarray(x, "x", sample_dims=["sample"])
-    intervals = sample.azstats.hdi(dims="sample", method="multimodal", prob=0.9)
+    intervals = sample.azstats.hdi(dim="sample", method="multimodal", prob=0.9)
     assert intervals.sizes["mode"] == 2
     with pytest.warns(UserWarning, match="found more modes"):
-        intervals2 = sample.azstats.hdi(dims="sample", method="multimodal", prob=0.9, max_modes=1)
+        intervals2 = sample.azstats.hdi(dim="sample", method="multimodal", prob=0.9, max_modes=1)
     assert intervals2.sizes["mode"] == 1
     assert intervals2.equals(intervals.isel(mode=[1]))
 
@@ -199,7 +199,7 @@ def test_hdi_multimodal_circular(nearest):
         sample_dims=["sample"],
     )
     method = "multimodal_sample" if nearest else "multimodal"
-    interval = normal_sample.azstats.hdi(circular=True, method=method, prob=0.83, dims="sample")
+    interval = normal_sample.azstats.hdi(circular=True, method=method, prob=0.83, dim="sample")
     assert interval.sizes["mode"] == 2
     assert interval.sel(mode=0)[0] <= np.pi / 2 <= interval.sel(mode=0)[1]
     assert interval.sel(mode=1)[0] <= np.pi and interval.sel(mode=1)[1] >= -np.pi
@@ -210,10 +210,10 @@ def test_hdi_circular():
     normal_sample = azb.ndarray_to_dataarray(
         rng.vonmises(np.pi, 1, 5000000), "x", sample_dims=["sample"]
     )
-    interval = normal_sample.azstats.hdi(circular=True, prob=0.83, dims="sample")
+    interval = normal_sample.azstats.hdi(circular=True, prob=0.83, dim="sample")
     assert_array_almost_equal(interval, [1.3, -1.4], 1)
     interval_multi = normal_sample.azstats.hdi(
-        circular=True, prob=0.83, dims="sample", method="multimodal"
+        circular=True, prob=0.83, dim="sample", method="multimodal"
     )
     assert_array_almost_equal(interval_multi, [[1.3, -1.4]], 1)
 
@@ -222,7 +222,7 @@ def test_hdi_bad_ci():
     rng = np.random.default_rng(43)
     normal_sample = azb.ndarray_to_dataarray(rng.normal(size=50), "x", sample_dims=["sample"])
     with pytest.raises(ValueError):
-        normal_sample.azstats.hdi(prob=2, dims="sample")
+        normal_sample.azstats.hdi(prob=2, dim="sample")
 
 
 def test_hdi_skipna():
@@ -252,5 +252,5 @@ def test_ecdf_idata_varnames(centered_eight):
 
 def test_ecdf_coords(centered_eight):
     data = centered_eight.posterior.sel({"chain": [0, 1, 3]}).ds
-    result = data.azstats.ecdf(dims="draw")
+    result = data.azstats.ecdf(dim="draw")
     assert_array_equal(result.coords["chain"], [0, 1, 3])
