@@ -6,17 +6,24 @@ from numbers import Number
 
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_datatree, extract
+from arviz_base import convert_to_datatree, extract, rcParams
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.utils import get_log_likelihood
+from arviz_stats.utils import ELPDData, get_log_likelihood
 
 __all__ = [
-    "_get_r_eff",
+    "_shift",
+    "_shift_and_scale",
+    "_shift_and_cov",
+    "_recalculate_weights_k",
+    "_update_loo_data_i",
+    "_get_log_likelihood_i",
     "_plpd_approx",
     "_diff_srs_estimator",
     "_srs_estimator",
+    "_compute_loo_results",
     "_generate_subsample_indices",
+    "_get_r_eff",
     "_prepare_loo_inputs",
     "_extract_loo_data",
     "_check_log_density",
@@ -29,11 +36,11 @@ __all__ = [
     "_prepare_full_arrays",
 ]
 
-
 LooInputs = namedtuple(
     "LooInputs",
     ["log_likelihood", "var_name", "sample_dims", "obs_dims", "n_samples", "n_data_points"],
 )
+
 SubsampleData = namedtuple(
     "SubsampleData",
     ["log_likelihood_sample", "lpd_approx_sample", "lpd_approx_all", "indices", "subsample_size"],
@@ -52,19 +59,235 @@ UpdateSubsampleData = namedtuple(
     ],
 )
 
+ShiftResult = namedtuple("ShiftResult", ["upars", "shift"])
+ShiftAndScaleResult = namedtuple("ShiftAndScaleResult", ["upars", "shift", "scaling"])
+ShiftAndCovResult = namedtuple("ShiftAndCovResult", ["upars", "shift", "mapping"])
+RecalculateWeightsResult = namedtuple(
+    "RecalculateWeightsResult", ["lwi", "lwfi", "ki", "kfi", "log_liki"]
+)
 
-def _get_r_eff(data, n_samples):
-    if not hasattr(data, "posterior"):
-        raise TypeError("Must be able to extract a posterior group from data.")
-    posterior = data.posterior
-    n_chains = len(posterior.chain)
-    if n_chains == 1:
-        reff = 1.0
+
+def _shift(upars, lwi):
+    """Shift a DataArray of parameters to their weighted mean."""
+    sample_dims = ["chain", "draw"]
+    param_dim = [dim for dim in upars.dims if dim not in sample_dims][0]
+    upars_stacked = upars.stack(__sample__=sample_dims)
+    lwi_stacked = lwi.stack(__sample__=sample_dims)
+
+    upars_values = upars_stacked.transpose("__sample__", param_dim).data
+    lwi_values = lwi_stacked.transpose("__sample__").data
+
+    mean_original = np.mean(upars_values, axis=0)
+    weights = np.exp(
+        lwi_values - logsumexp(lwi_stacked.transpose("__sample__"), dims="__sample__").data
+    )
+    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
+    shift_vec = mean_weighted - mean_original
+    upars_new_values = upars_values + shift_vec[None, :]
+
+    upars_new_stacked = xr.DataArray(
+        upars_new_values,
+        dims=["__sample__", param_dim],
+        coords={
+            "__sample__": upars_stacked["__sample__"],
+            param_dim: upars_stacked[param_dim],
+        },
+    )
+    upars_new_da = upars_new_stacked.unstack("__sample__")
+    return ShiftResult(upars=upars_new_da, shift=shift_vec)
+
+
+def _shift_and_scale(upars, lwi):
+    """Shift parameters to weighted mean and scale marginal variances."""
+    sample_dims = ["chain", "draw"]
+    param_dim = [dim for dim in upars.dims if dim not in sample_dims][0]
+    upars_stacked = upars.stack(__sample__=sample_dims)
+    lwi_stacked = lwi.stack(__sample__=sample_dims)
+
+    upars_values = upars_stacked.transpose("__sample__", param_dim).data
+    lwi_values = lwi_stacked.transpose("__sample__").data
+
+    mean_original = np.mean(upars_values, axis=0)
+    weights = np.exp(
+        lwi_values - logsumexp(lwi_stacked.transpose("__sample__"), dims="__sample__").data
+    )
+    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
+    shift_vec = mean_weighted - mean_original
+
+    var_weighted = np.sum(weights[:, None] * (upars_values - mean_weighted[None, :]) ** 2, axis=0)
+    ess_approx = 1.0 / np.sum(weights**2)
+
+    if ess_approx > 1:
+        var_weighted *= ess_approx / (ess_approx - 1)
     else:
-        ess_p = posterior.azstats.ess(method="mean")
-        # this mean is over all data variables
-        reff = np.hstack([ess_p[v].values.flatten() for v in ess_p.data_vars]).mean() / n_samples
-    return reff
+        var_weighted = np.var(upars_values, axis=0)
+
+    var_original = np.var(upars_values, axis=0, ddof=1)
+
+    scaling_vec = np.ones_like(mean_original)
+    valid_mask = (var_original > 1e-9) & (var_weighted > 1e-9)
+    scaling_vec[valid_mask] = np.sqrt(var_weighted[valid_mask] / var_original[valid_mask])
+
+    upars_new_values = upars_values - mean_original[None, :]
+    upars_new_values = upars_new_values * scaling_vec[None, :]
+    upars_new_values = upars_new_values + mean_weighted[None, :]
+
+    upars_new_stacked = xr.DataArray(
+        upars_new_values,
+        dims=["__sample__", param_dim],
+        coords={
+            "__sample__": upars_stacked["__sample__"],
+            param_dim: upars_stacked[param_dim],
+        },
+    )
+    upars_new_da = upars_new_stacked.unstack("__sample__")
+    return ShiftAndScaleResult(upars=upars_new_da, shift=shift_vec, scaling=scaling_vec)
+
+
+def _shift_and_cov(upars, lwi):
+    """Shift parameters and scale covariance to match weighted covariance."""
+    sample_dims = ["chain", "draw"]
+    param_dim = [dim for dim in upars.dims if dim not in sample_dims][0]
+    upars_stacked = upars.stack(__sample__=sample_dims)
+    lwi_stacked = lwi.stack(__sample__=sample_dims)
+
+    upars_values = upars_stacked.transpose("__sample__", param_dim).data
+    lwi_values = lwi_stacked.transpose("__sample__").data
+
+    mean_original = np.mean(upars_values, axis=0)
+    weights = np.exp(
+        lwi_values - logsumexp(lwi_stacked.transpose("__sample__"), dims="__sample__").data
+    )
+    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
+    shift_vec = mean_weighted - mean_original
+
+    cov_original = np.cov(upars_values, rowvar=False, ddof=1)
+    cov_weighted = np.cov(upars_values, rowvar=False, aweights=weights, ddof=0)
+
+    mapping_mat = np.eye(upars_values.shape[1])
+    try:
+        min_eig_orig = np.min(np.linalg.eigvalsh(cov_original))
+        min_eig_weighted = np.min(np.linalg.eigvalsh(cov_weighted))
+        jitter = 1e-6
+
+        if min_eig_orig <= 0:
+            cov_original += np.eye(cov_original.shape[0]) * (jitter - min_eig_orig)
+        if min_eig_weighted <= 0:
+            cov_weighted += np.eye(cov_weighted.shape[0]) * (jitter - min_eig_weighted)
+
+        chol_weighted = np.linalg.cholesky(cov_weighted)
+        chol_original = np.linalg.cholesky(cov_original)
+        mapping_mat = chol_weighted @ np.linalg.inv(chol_original)
+
+    except np.linalg.LinAlgError as e:
+        warnings.warn(
+            f"Cholesky decomposition failed: {e}. Using mean-shift only with identity mapping. "
+            "Check Pareto k diagnostics and model specification for highly "
+            "influential observations.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    upars_new_values = upars_values - mean_original[None, :]
+    upars_new_values = upars_new_values @ mapping_mat.T
+    upars_new_values = upars_new_values + mean_weighted[None, :]
+
+    upars_new_stacked = xr.DataArray(
+        upars_new_values,
+        dims=["__sample__", param_dim],
+        coords={
+            "__sample__": upars_stacked["__sample__"],
+            param_dim: upars_stacked[param_dim],
+        },
+    )
+    upars_new_da = upars_new_stacked.unstack("__sample__")
+    return ShiftAndCovResult(upars=upars_new_da, shift=shift_vec, mapping=mapping_mat)
+
+
+def _get_log_likelihood_i(log_likelihood, i, obs_dims):
+    """Extract the log likelihood for a specific observation index `i`."""
+    if not obs_dims:
+        raise ValueError("log_likelihood must have observation dimensions.")
+
+    if len(obs_dims) == 1:
+        obs_dim = obs_dims[0]
+        if i < 0 or i >= log_likelihood.sizes[obs_dim]:
+            raise IndexError(f"Index {i} is out of bounds for dimension '{obs_dim}'.")
+        log_lik_i = log_likelihood.isel({obs_dim: i})
+    else:
+        stacked_obs_dim = "__obs__"
+        log_lik_stacked = log_likelihood.stack({stacked_obs_dim: obs_dims})
+        if i < 0 or i >= log_lik_stacked.sizes[stacked_obs_dim]:
+            raise IndexError(
+                f"Index {i} is out of bounds for stacked dimension '{stacked_obs_dim}'."
+            )
+        log_lik_i = log_lik_stacked.isel({stacked_obs_dim: i})
+    return log_lik_i
+
+
+def _recalculate_weights_k(
+    log_liki_new,
+    log_prob_new,
+    orig_log_prob,
+    reff,
+    sample_dims,
+):
+    """Recalculate importance weights and Pareto k after parameter transformation."""
+    log_ratio_i = -log_liki_new + log_prob_new - orig_log_prob
+    log_ratio_i = xr.where(np.isnan(log_ratio_i), -np.inf, log_ratio_i)
+
+    lwi_new, ki_new = log_ratio_i.azstats.psislw(r_eff=reff, dims=sample_dims)
+    ki_new = ki_new[0].item() if isinstance(ki_new, tuple) else ki_new.item()
+
+    log_ratio_full = log_prob_new - orig_log_prob
+    log_ratio_full = xr.where(np.isnan(log_ratio_full), -np.inf, log_ratio_full)
+
+    lwfi_new, kfi_new = log_ratio_full.azstats.psislw(r_eff=reff, dims=sample_dims)
+    kfi_new = kfi_new[0].item() if isinstance(kfi_new, tuple) else kfi_new.item()
+
+    return RecalculateWeightsResult(
+        lwi=lwi_new, lwfi=lwfi_new, ki=ki_new, kfi=kfi_new, log_liki=log_liki_new
+    )
+
+
+def _update_loo_data_i(
+    loo_data,
+    i,
+    new_elpd_i,
+    new_pareto_k,
+    log_liki,
+    sample_dims,
+    obs_dims,
+    n_samples,
+    original_log_liki=None,
+):
+    """Update the ELPDData object for a single observation."""
+    if loo_data.elpd_i is None or loo_data.pareto_k is None:
+        raise ValueError("loo_data must contain pointwise elpd_i and pareto_k values.")
+
+    lpd_i_log_lik = original_log_liki if original_log_liki is not None else log_liki
+    lpd_i = logsumexp(lpd_i_log_lik, dims=sample_dims, b=1 / n_samples).item()
+    p_loo_i = lpd_i - new_elpd_i
+
+    if len(obs_dims) == 1:
+        idx_dict = {obs_dims[0]: i}
+    else:
+        coords = np.unravel_index(i, tuple(loo_data.elpd_i.sizes[d] for d in obs_dims))
+        idx_dict = dict(zip(obs_dims, coords))
+
+    loo_data.elpd_i[idx_dict] = new_elpd_i
+    loo_data.pareto_k[idx_dict] = new_pareto_k
+
+    if not hasattr(loo_data, "p_loo_i") or loo_data.p_loo_i is None:
+        loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
+
+    loo_data.p_loo_i[idx_dict] = p_loo_i
+    loo_data.elpd = np.nansum(loo_data.elpd_i.values)
+    loo_data.se = np.sqrt(loo_data.n_data_points * np.nanvar(loo_data.elpd_i.values))
+
+    loo_data.warning, loo_data.good_k = _warn_pareto_k(
+        loo_data.pareto_k.values[~np.isnan(loo_data.pareto_k.values)], loo_data.n_samples
+    )
 
 
 def _plpd_approx(
@@ -268,6 +491,91 @@ def _srs_estimator(
     return y_hat, var_y_hat, hat_var_y
 
 
+def _compute_loo_results(
+    log_likelihood,
+    var_name,
+    sample_dims,
+    n_samples,
+    n_data_points,
+    pointwise=None,
+    log_weights=None,
+    pareto_k=None,
+    reff=None,
+    log_p=None,
+    log_q=None,
+    approx_posterior=False,
+    return_pointwise=False,
+):
+    """Compute PSIS-LOO-CV results."""
+    if log_p is not None and log_q is not None:
+        from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
+
+        data = xr.DataTree()
+        data["log_likelihood"] = log_likelihood
+
+        loo_results = loo_approximate_posterior(
+            data=data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
+        )
+
+        if return_pointwise:
+            return loo_results.elpd_i, loo_results.pareto_k, True
+        return loo_results
+
+    if log_weights is None or pareto_k is None:
+        log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dims=sample_dims)
+
+    log_weights += log_likelihood
+    pareto_k_da = pareto_k
+
+    warn_mg, good_k = _warn_pareto_k(pareto_k_da, n_samples)
+    elpd_i = logsumexp(log_weights, dims=sample_dims)
+
+    if return_pointwise:
+        if isinstance(elpd_i, xr.Dataset) and var_name in elpd_i:
+            elpd_i = elpd_i[var_name]
+        if isinstance(pareto_k_da, xr.Dataset) and var_name in pareto_k_da:
+            pareto_k_da = pareto_k_da[var_name]
+        return elpd_i, pareto_k_da, approx_posterior
+
+    elpd_i_values = elpd_i.values if hasattr(elpd_i, "values") else np.asarray(elpd_i)
+    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum().values
+    elpd = np.sum(elpd_i_values)
+    elpd_se = (n_data_points * np.var(elpd_i_values)) ** 0.5
+    p_loo = elpd_raw - elpd
+
+    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
+    if not pointwise:
+        return ELPDData(
+            "loo",
+            elpd,
+            elpd_se,
+            p_loo,
+            n_samples,
+            n_data_points,
+            "log",
+            warn_mg,
+            good_k,
+            approx_posterior=approx_posterior,
+        )
+
+    _warn_pointwise_loo(elpd, elpd_i_values)
+
+    return ELPDData(
+        "loo",
+        elpd,
+        elpd_se,
+        p_loo,
+        n_samples,
+        n_data_points,
+        "log",
+        warn_mg,
+        good_k,
+        elpd_i,
+        pareto_k_da,
+        approx_posterior=approx_posterior,
+    )
+
+
 def _generate_subsample_indices(n_data_points, observations, seed):
     """Generate subsample indices."""
     if isinstance(observations, int):
@@ -295,6 +603,20 @@ def _generate_subsample_indices(n_data_points, observations, seed):
     else:
         raise TypeError("observations must be an integer or a numpy array of integers.")
     return indices, subsample_size
+
+
+def _get_r_eff(data, n_samples):
+    if not hasattr(data, "posterior"):
+        raise TypeError("Must be able to extract a posterior group from data.")
+    posterior = data.posterior
+    n_chains = len(posterior.chain)
+    if n_chains == 1:
+        reff = 1.0
+    else:
+        ess_p = posterior.azstats.ess(method="mean")
+        # this mean is over all data variables
+        reff = np.hstack([ess_p[v].values.flatten() for v in ess_p.data_vars]).mean() / n_samples
+    return reff
 
 
 def _prepare_loo_inputs(data, var_name, thin_factor=None):
