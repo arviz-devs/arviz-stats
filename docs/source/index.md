@@ -37,7 +37,7 @@ The goal of ArviZ is to provide a unified interface for performing exploratory a
 (installation)=
 ## Installation
 
-For instructions on how to install the full ArviZ package (including `arviz-base`, `arviz-stats` and `arviz-plots`), please refer to the [installation guide](https://arviz-devs.github.io/arviz/stable/getting_started/Installation.html).
+For instructions on how to install the full ArviZ package (including `arviz-base`, `arviz-stats` and `arviz-plots`), please refer to the [installation guide](https://python.arviz.org/en/latest/getting_started/Installation.html).
 
 
 However, if you are only interested in the statistical summaries, diagnostics, and metrics provided by ArviZ-stats, please follow the instructions below:
