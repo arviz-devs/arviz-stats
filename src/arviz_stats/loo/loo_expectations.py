@@ -43,7 +43,7 @@ def loo_expectations(
     loo_expec : DataArray
         The weighted expectations.
     khat : DataArray
-        Function-specific k-hat diagnostics for each observation.
+        Function-specific Pareto k-hat diagnostics for each observation.
 
     Examples
     --------
@@ -211,8 +211,7 @@ def _get_function_khat(
     values : ndarray
         Values of the posterior predictive distribution, raveled across sample dimensions.
     log_weights : ndarray
-        Raw (not smoothed) log weights from PSIS, raveled across sample dimensions.
-        These are the negative of log-likelihood values.
+        Raw log weights from PSIS, raveled across sample dimensions.
     kind : str
         Type of expectation being computed ('mean', 'median', 'var', 'sd', 'quantile').
 
