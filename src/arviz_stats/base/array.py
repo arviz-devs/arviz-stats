@@ -276,6 +276,29 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return psl_ufunc(ary, out_shape=[(ary.shape[i] for i in axes), []], r_eff=r_eff)
 
+    def pareto_khat(self, ary, axis, r_eff, tail, log_weights):
+        """Compute Pareto k-hat diagnostic.
+
+        Parameters
+        ----------
+        ary : array-like
+        axis : int, sequence of int or None, default -1
+        r_eff : float
+        tail : str
+        log_weights : bool
+        """
+        ary_processed, axes_for_ufunc = process_ary_axes(ary, axis)
+
+        def _khat_wrapper(current_slice):
+            return self._pareto_khat(
+                current_slice, r_eff=r_eff, tail=tail, log_weights=log_weights
+            )[1]
+
+        khat_ufunc = make_ufunc(
+            _khat_wrapper, n_output=1, n_input=1, n_dims=len(axes_for_ufunc), ravel=False
+        )
+        return khat_ufunc(ary_processed, out_shape=())
+
     def power_scale_lw(self, ary, alpha=0, axis=-1):
         """Compute log weights for power-scaling component by alpha.
 

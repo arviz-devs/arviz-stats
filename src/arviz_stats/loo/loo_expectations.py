@@ -1,10 +1,10 @@
 """Compute weighted expectations and predictive metrics using PSIS-LOO-CV."""
 
 import numpy as np
+import xarray as xr
 from arviz_base import convert_to_datatree, extract
 from xarray import apply_ufunc
 
-from arviz_stats.base.diagnostics import _DiagnosticsBase
 from arviz_stats.metrics import _metrics
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -220,28 +220,29 @@ def _get_function_khat(
     khat : float
         Function-specific k-hat estimate.
     """
-    diag_base = _DiagnosticsBase()
-
-    lw_flat = log_weights.ravel()
-    r_theta = np.exp(lw_flat - np.max(lw_flat))
+    r_theta_da = xr.DataArray(
+        np.exp(log_weights.ravel() - np.max(log_weights.ravel())), dims=["sample"]
+    )
 
     # Get right tail khat
-    _, khat_r = diag_base.get_pareto_khat(r_theta, tail="right", log_weights=False)
+    khat_r_da = r_theta_da.azstats.pareto_khat(dims="sample", tail="right", log_weights=False)
+    khat_r = khat_r_da.item()
 
     # For quantile/median, only need khat_r
     if kind in ["quantile", "median"]:
         return khat_r
 
-    values_flat = values.ravel()
-    h_theta = values_flat if kind == "mean" else values_flat**2
-    h_theta_finite = h_theta[np.isfinite(h_theta)]
+    h_theta_values = values.ravel() if kind == "mean" else values.ravel() ** 2
+    h_theta_finite = h_theta_values[np.isfinite(h_theta_values)]
 
     if h_theta_finite.size == 0 or len(np.unique(h_theta_finite)) <= 2:
         return khat_r
 
     # Compute khat for h(theta) * r(theta)
-    _, khat_hr = diag_base.get_pareto_khat(h_theta * r_theta, tail="both", log_weights=False)
+    hr_theta_da = xr.DataArray(h_theta_values * r_theta_da.values, dims=["sample"])
+    khat_hr_da = hr_theta_da.azstats.pareto_khat(dims="sample", tail="both", log_weights=False)
+    khat_hr = khat_hr_da.item()
 
-    if np.isnan(khat_hr) and np.isnan(khat_r):
-        return np.nan
+    if np.isnan(khat_hr) or np.isnan(khat_r):
+        return khat_r
     return max(khat_hr, khat_r)

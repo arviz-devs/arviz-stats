@@ -207,12 +207,22 @@ def test_loo_expectations_khat(centered_eight, kind):
     assert np.all(khat.values >= -0.5) and np.all(khat.values <= 1.5)
 
     if kind == "quantile":
-        expected_shape = tuple(
-            s for i, s in enumerate(result.shape) if result.dims[i] != "quantile"
-        )
-        assert khat.shape == expected_shape
+        expected_dims = tuple(d for d in result.dims if d != "quantile")
+        assert khat.dims == expected_dims
+        assert khat.shape == tuple(result.sizes[d] for d in expected_dims)
     else:
+        assert khat.dims == result.dims
         assert khat.shape == result.shape
+
+    assert len(np.unique(khat.values.flatten())) > 1
+
+    for dim_name in khat.dims:
+        khat_coord_vals = khat.coords[dim_name].values
+        result_coord_vals = result.coords[dim_name].values
+        if khat_coord_vals.dtype.kind in ("U", "S", "O"):
+            assert np.array_equal(khat_coord_vals, result_coord_vals)
+        else:
+            assert_allclose(khat_coord_vals, result_coord_vals)
 
 
 @pytest.mark.parametrize(
