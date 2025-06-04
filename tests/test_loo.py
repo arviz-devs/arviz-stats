@@ -188,7 +188,7 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
     ],
 )
 def test_loo_expectations(centered_eight, kind, probs, expected_vals):
-    loo_exp_vals = loo_expectations(centered_eight, kind=kind, probs=probs)
+    loo_exp_vals, _ = loo_expectations(centered_eight, kind=kind, probs=probs)
 
     if kind == "quantile":
         assert loo_exp_vals.shape == (2, 8)
@@ -196,6 +196,23 @@ def test_loo_expectations(centered_eight, kind, probs, expected_vals):
         assert loo_exp_vals.shape == (8,)
 
     assert_almost_equal(loo_exp_vals.sel({"school": "Choate"}), expected_vals, decimal=2)
+
+
+@pytest.mark.parametrize("kind", ["mean", "var", "quantile"])
+def test_loo_expectations_khat(centered_eight, kind):
+    probs = [0.25, 0.75] if kind == "quantile" else None
+    result, khat = loo_expectations(centered_eight, kind=kind, probs=probs)
+
+    assert np.all(np.isfinite(khat.values))
+    assert np.all(khat.values >= -0.5) and np.all(khat.values <= 1.5)
+
+    if kind == "quantile":
+        expected_shape = tuple(
+            s for i, s in enumerate(result.shape) if result.dims[i] != "quantile"
+        )
+        assert khat.shape == expected_shape
+    else:
+        assert khat.shape == result.shape
 
 
 @pytest.mark.parametrize(

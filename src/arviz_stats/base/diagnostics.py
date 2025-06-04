@@ -395,6 +395,10 @@ class _DiagnosticsBase(_CoreBase):
 
         return ary, khat
 
+    def get_pareto_khat(self, ary, r_eff=1, tail="both", log_weights=False):
+        """Compute Pareto k-hat diagnostic."""
+        return self._pareto_khat(ary, r_eff=r_eff, tail=tail, log_weights=log_weights)
+
     @staticmethod
     def _get_ps_tails(n_draws, r_eff, tail):
         if n_draws * r_eff > 225:
