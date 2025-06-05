@@ -26,9 +26,9 @@ class BaseDataArray:
     def __init__(self, array_class=None):
         self.array_class = array_stats if array_class is None else array_class
 
-    def eti(self, da, prob=None, dims=None, method="linear", **kwargs):
+    def eti(self, da, prob=None, dim=None, method="linear", **kwargs):
         """Compute eti on DataArray input."""
-        dims = validate_dims(dims)
+        dims = validate_dims(dim)
         prob = validate_ci_prob(prob)
         eti_coord = DataArray(
             ["lower", "upper"], dims=["ci_bound"], attrs={"ci_kind": "eti", "ci_prob": prob}
@@ -43,9 +43,9 @@ class BaseDataArray:
             kwargs={"axis": np.arange(-len(dims), 0, 1), "method": method, **kwargs},
         ).assign_coords({"ci_bound": eti_coord})
 
-    def hdi(self, da, prob=None, dims=None, method="nearest", **kwargs):
+    def hdi(self, da, prob=None, dim=None, method="nearest", **kwargs):
         """Compute hdi on DataArray input."""
-        dims = validate_dims(dims)
+        dims = validate_dims(dim)
         prob = validate_ci_prob(prob)
 
         mode_dim = "mode" if da.name is None else f"{da.name}_mode"
@@ -67,9 +67,9 @@ class BaseDataArray:
             },
         ).assign_coords({"ci_bound": hdi_coord})
 
-    def ess(self, da, dims=None, method="bulk", relative=False, prob=None):
+    def ess(self, da, sample_dims=None, method="bulk", relative=False, prob=None):
         """Compute ess on DataArray input."""
-        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         if method in ("tail", "local") and isinstance(prob, Sequence):
             prob = (validate_prob(prob[0], allow_0=True), validate_prob(prob[1]))
         elif method in ("tail", "quantile"):
@@ -88,9 +88,9 @@ class BaseDataArray:
             },
         )
 
-    def compute_ranks(self, da, dims=None, relative=False):
+    def compute_ranks(self, da, dim=None, relative=False):
         """Compute ranks on DataArray input."""
-        dims = validate_dims(dims)
+        dims = validate_dims(dim)
         return _apply_nonreduce_func(
             self.array_class.compute_ranks,
             da,
@@ -99,9 +99,9 @@ class BaseDataArray:
             func_kwargs={"relative": relative},
         )
 
-    def rhat(self, da, dims=None, method="bulk"):
+    def rhat(self, da, sample_dims=None, method="bulk"):
         """Compute rhat on DataArray input."""
-        dims = validate_dims(dims)
+        dims = validate_dims(sample_dims)
         if len(dims) != 2:
             raise ValueError("dims must be of length 2 for rhat computation")
         return apply_ufunc(
@@ -112,9 +112,9 @@ class BaseDataArray:
             kwargs={"method": method, "chain_axis": -2, "draw_axis": -1},
         )
 
-    def rhat_nested(self, da, superchain_ids, dims=None):
+    def rhat_nested(self, da, superchain_ids, sample_dims=None):
         """Compute nested rhat on DataArray input."""
-        dims = validate_dims(dims)
+        dims = validate_dims(sample_dims)
         if len(dims) != 2:
             raise ValueError("dims must be of length 2 for rhat computation")
         return apply_ufunc(
@@ -125,9 +125,9 @@ class BaseDataArray:
             kwargs={"superchain_ids": superchain_ids, "chain_axis": -2, "draw_axis": -1},
         )
 
-    def mcse(self, da, dims=None, method="mean", prob=None):
+    def mcse(self, da, sample_dims=None, method="mean", prob=None):
         """Compute mcse on DataArray input."""
-        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.mcse,
             da,
@@ -141,9 +141,9 @@ class BaseDataArray:
             },
         )
 
-    def get_bins(self, da, dims=None, bins="arviz"):
+    def get_bins(self, da, dim=None, bins="arviz"):
         """Compute bins or align provided ones with DataArray input."""
-        dims = validate_dims(dims)
+        dims = validate_dims(dim)
         return apply_ufunc(
             self.array_class.get_bins,
             da,
@@ -156,9 +156,9 @@ class BaseDataArray:
         )
 
     # pylint: disable=redefined-builtin
-    def histogram(self, da, dims=None, bins=None, range=None, weights=None, density=None):
+    def histogram(self, da, dim=None, bins=None, range=None, weights=None, density=None):
         """Compute histogram on DataArray input."""
-        dims = validate_dims(dims)
+        dims = validate_dims(dim)
         edges_dim = "edges_dim" if da.name is None else f"edges_dim_{da.name}"
         hist_dim = "hist_dim" if da.name is None else f"hist_dim_{da.name}"
         input_core_dims = [dims]
@@ -222,9 +222,9 @@ class BaseDataArray:
         )
         return out
 
-    def kde(self, da, dims=None, circular=False, grid_len=512, **kwargs):
+    def kde(self, da, dim=None, circular=False, grid_len=512, **kwargs):
         """Compute kde on DataArray input."""
-        dims = validate_dims(dims)
+        dims = validate_dims(dim)
         grid, pdf, bw = apply_ufunc(
             self.array_class.kde,
             da,
@@ -255,8 +255,8 @@ class BaseDataArray:
         """
         n_samples = da.sizes["chain"] * da.sizes["draw"]
         ess = np.minimum(
-            self.ess(da, method="bulk", dims=["chain", "draw"]),
-            self.ess(da, method="tail", dims=["chain", "draw"]),
+            self.ess(da, method="bulk", sample_dims=["chain", "draw"]),
+            self.ess(da, method="tail", sample_dims=["chain", "draw"]),
         )
         if reduce_func == "mean":
             ess_ave = ess.mean()
@@ -280,22 +280,22 @@ class BaseDataArray:
             return int(np.floor(n_samples / target_ess))
         return int(np.ceil(n_samples / target_ess))
 
-    def thin(self, da, factor="auto", dims=None):
+    def thin(self, da, factor="auto", sample_dims=None):
         """Perform thinning on DataArray input."""
-        if factor == "auto" and dims is not None:
+        if factor == "auto" and sample_dims is not None:
             warnings.warn("dims are ignored if factor is auto")
         if factor == "auto":
             factor = self.thin_factor(da)
-            dims = "draw"
+            sample_dims = "draw"
 
         elif isinstance(factor, (float | int)):
-            if dims is None:
-                dims = rcParams["data.sample_dims"]
-            if not isinstance(dims, str):
-                if len(dims) >= 2:
+            if sample_dims is None:
+                sample_dims = rcParams["data.sample_dims"]
+            if not isinstance(sample_dims, str):
+                if len(sample_dims) >= 2:
                     raise ValueError("dims must be of length 1")
-                if len(dims) == 1:
-                    dims = dims[0]
+                if len(sample_dims) == 1:
+                    sample_dims = sample_dims[0]
 
             factor = int(factor)
             if factor == 1:
@@ -303,11 +303,11 @@ class BaseDataArray:
             if factor < 1:
                 raise ValueError("factor must be greater than 1")
 
-        return da.sel({dims: slice(None, None, factor)})
+        return da.sel({sample_dims: slice(None, None, factor)})
 
-    def pareto_min_ss(self, da, dims=None):
+    def pareto_min_ss(self, da, sample_dims=None):
         """Compute the minimum effective sample size for all variables in the dataset."""
-        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.pareto_min_ss,
             da,
@@ -316,9 +316,9 @@ class BaseDataArray:
             kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
         )
 
-    def psislw(self, da, r_eff=1, dims=None):
+    def psislw(self, da, r_eff=1, dim=None):
         """Compute log weights for Pareto-smoothed importance sampling (PSIS) method."""
-        dims = validate_dims(dims)
+        dims = validate_dims(dim)
         return apply_ufunc(
             self.array_class.psislw,
             da,
@@ -346,9 +346,9 @@ class BaseDataArray:
             output_dtypes=[float],
         ).rename("pareto_k")
 
-    def power_scale_lw(self, da, alpha=0, dims=None):
+    def power_scale_lw(self, da, alpha=0, dim=None):
         """Compute log weights for power-scaling component by alpha."""
-        dims = validate_dims(dims)
+        dims = validate_dims(dim)
         return apply_ufunc(
             self.array_class.power_scale_lw,
             da,
@@ -358,9 +358,9 @@ class BaseDataArray:
             kwargs={"axis": np.arange(-len(dims), 0, 1)},
         )
 
-    def power_scale_sense(self, da, lower_w, upper_w, lower_alpha, upper_alpha, dims=None):
+    def power_scale_sense(self, da, lower_w, upper_w, lower_alpha, upper_alpha, sample_dims=None):
         """Compute power-scaling sensitivity."""
-        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(dims)
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.power_scale_sense,
             *broadcast(da, lower_w, upper_w),
@@ -371,9 +371,9 @@ class BaseDataArray:
             kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
         )
 
-    def autocorr(self, da, dims=None):
+    def autocorr(self, da, dim=None):
         """Compute autocorrelation on DataArray input."""
-        dims = validate_dims(dims)
+        dims = validate_dims(dim)
         return apply_ufunc(
             self.array_class.autocorr,
             da,

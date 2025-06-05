@@ -100,7 +100,7 @@ def thin(
     if isinstance(data, xr.DataArray):
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.thin(dims=sample_dims, factor=factor)
+        return data.azstats.thin(sample_dims=sample_dims, factor=factor)
 
     if isinstance(data, xr.DataTree):
         data = data.azstats.filter_vars(
@@ -108,7 +108,7 @@ def thin(
         ).datatree
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.thin(dims=sample_dims, group=group, factor=factor)
+        return data.azstats.thin(sample_dims=sample_dims, group=group, factor=factor)
 
     data = convert_to_dataset(data, group=group)
 
@@ -116,4 +116,4 @@ def thin(
     if coords is not None:
         data = data.sel(coords)
 
-    return data.azstats.thin(dims=sample_dims, factor=factor)
+    return data.azstats.thin(sample_dims=sample_dims, factor=factor)

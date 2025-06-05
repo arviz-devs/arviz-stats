@@ -240,7 +240,7 @@ def loo_subsample(
         approx_posterior = True
     else:
         log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(
-            r_eff=reff, dims=loo_inputs.sample_dims
+            r_eff=reff, dim=loo_inputs.sample_dims
         )
         log_weights_ds += sample_ds
 
