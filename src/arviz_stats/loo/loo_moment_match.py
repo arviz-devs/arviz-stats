@@ -355,7 +355,7 @@ def loo_moment_match(
     for i in bad_obs_indices:
         log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
         log_ratio_i_init = -log_liki
-        lwi, ki_tuple = log_ratio_i_init.azstats.psislw(r_eff=reff, dims=sample_dims)
+        lwi, ki_tuple = log_ratio_i_init.azstats.psislw(r_eff=reff, dim=sample_dims)
 
         ki = ki_tuple[0].item() if isinstance(ki_tuple, tuple) else ki_tuple.item()
         ess_val = ess(log_liki.values.reshape(-1, 1), method="mean").item()
@@ -484,7 +484,7 @@ def loo_moment_match(
                 final_log_liki = split_res.log_liki
                 final_lwi = split_res.lwi
                 _, ki_split_tuple = split_res.lwi.azstats.psislw(
-                    r_eff=split_res.reff, dims=sample_dims
+                    r_eff=split_res.reff, dim=sample_dims
                 )
                 ki_split = (
                     ki_split_tuple[0].item()
@@ -776,13 +776,13 @@ def _split_moment_match(
     )
 
     # PSIS smoothing for half posterior
-    lwi_psis_da, _ = raw_log_weights_half.azstats.psislw(r_eff=reff, dims=sample_dims)
+    lwi_psis_da, _ = raw_log_weights_half.azstats.psislw(r_eff=reff, dim=sample_dims)
 
     lr_full = lwi_psis_da + log_liki_half
     lr_full = xr.where(np.isnan(lr_full) | (np.isinf(lr_full) & (lr_full > 0)), -np.inf, lr_full)
 
     # PSIS smoothing for full posterior
-    lwfi_psis_da, _ = lr_full.azstats.psislw(r_eff=reff, dims=sample_dims)
+    lwfi_psis_da, _ = lr_full.azstats.psislw(r_eff=reff, dim=sample_dims)
 
     return SplitMomentMatch(
         lwi=lwi_psis_da,

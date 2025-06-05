@@ -236,13 +236,13 @@ def _recalculate_weights_k(
     log_ratio_i = -log_liki_new + log_prob_new - orig_log_prob
     log_ratio_i = xr.where(np.isnan(log_ratio_i), -np.inf, log_ratio_i)
 
-    lwi_new, ki_new = log_ratio_i.azstats.psislw(r_eff=reff, dims=sample_dims)
+    lwi_new, ki_new = log_ratio_i.azstats.psislw(r_eff=reff, dim=sample_dims)
     ki_new = ki_new[0].item() if isinstance(ki_new, tuple) else ki_new.item()
 
     log_ratio_full = log_prob_new - orig_log_prob
     log_ratio_full = xr.where(np.isnan(log_ratio_full), -np.inf, log_ratio_full)
 
-    lwfi_new, kfi_new = log_ratio_full.azstats.psislw(r_eff=reff, dims=sample_dims)
+    lwfi_new, kfi_new = log_ratio_full.azstats.psislw(r_eff=reff, dim=sample_dims)
     kfi_new = kfi_new[0].item() if isinstance(kfi_new, tuple) else kfi_new.item()
 
     return RecalculateWeightsResult(
@@ -522,7 +522,7 @@ def _compute_loo_results(
         return loo_results
 
     if log_weights is None or pareto_k is None:
-        log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dims=sample_dims)
+        log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dim=sample_dims)
 
     log_weights += log_likelihood
     pareto_k_da = pareto_k
