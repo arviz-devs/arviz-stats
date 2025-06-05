@@ -199,7 +199,7 @@ def test_loo_expectations(centered_eight, kind, probs, expected_vals):
 
 
 @pytest.mark.parametrize("kind", ["mean", "var", "quantile"])
-def test_loo_expectations_khat(centered_eight, kind):
+def test_loo_expectations_khat(centered_eight, radon_problematic, kind):
     probs = [0.25, 0.75] if kind == "quantile" else None
     result, khat = loo_expectations(centered_eight, kind=kind, probs=probs)
 
@@ -223,6 +223,16 @@ def test_loo_expectations_khat(centered_eight, kind):
             assert np.array_equal(khat_coord_vals, result_coord_vals)
         else:
             assert_allclose(khat_coord_vals, result_coord_vals)
+
+    _, khat_check = loo_expectations(radon_problematic, var_name="y", kind=kind, probs=probs)
+    n_samples = (
+        radon_problematic.log_likelihood["y"].sizes["chain"]
+        * radon_problematic.log_likelihood["y"].sizes["draw"]
+    )
+    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
+    if np.any(khat_check.values > good_k):
+        with pytest.warns(UserWarning, match="Estimated shape parameter of Pareto distribution"):
+            loo_expectations(radon_problematic, var_name="y", kind=kind, probs=probs)
 
 
 @pytest.mark.parametrize(

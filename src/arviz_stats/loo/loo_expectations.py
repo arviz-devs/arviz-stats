@@ -5,6 +5,7 @@ import xarray as xr
 from arviz_base import convert_to_datatree, extract
 from xarray import apply_ufunc
 
+from arviz_stats.loo.helper_loo import _warn_pareto_k
 from arviz_stats.metrics import _metrics
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -83,8 +84,9 @@ def loo_expectations(
         var_name = list(data.observed_data.data_vars.keys())[0]
 
     data = convert_to_datatree(data)
-
     log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
+    n_samples = log_likelihood[var_name].sizes["chain"] * log_likelihood[var_name].sizes["draw"]
+
     log_weights, _ = log_likelihood.azstats.psislw()
     log_weights = log_weights[var_name]
     weights = np.exp(log_weights)
@@ -102,6 +104,9 @@ def loo_expectations(
         loo_expec = weighted_predictions.quantile(0.5, dim=dims)
 
     elif kind == "var":
+        # We use a Bessel's like correction term
+        # instead of n/(n-1) we use ESS/(ESS-1)
+        # where ESS/(ESS-1) = 1/(1-sum(weights**2))
         loo_expec = weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))
     elif kind == "sd":
         loo_expec = (weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))) ** 0.5
@@ -123,6 +128,8 @@ def loo_expectations(
         dask="parallelized",
         output_dtypes=[float],
     )
+
+    _warn_pareto_k(khat.values, n_samples)
 
     return loo_expec, khat
 
@@ -245,4 +252,5 @@ def _get_function_khat(
 
     if np.isnan(khat_hr) or np.isnan(khat_r):
         return khat_r
+
     return max(khat_hr, khat_r)
