@@ -188,7 +188,7 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
     ],
 )
 def test_loo_expectations(centered_eight, kind, probs, expected_vals):
-    loo_exp_vals = loo_expectations(centered_eight, kind=kind, probs=probs)
+    loo_exp_vals, _ = loo_expectations(centered_eight, kind=kind, probs=probs)
 
     if kind == "quantile":
         assert loo_exp_vals.shape == (2, 8)
@@ -196,6 +196,43 @@ def test_loo_expectations(centered_eight, kind, probs, expected_vals):
         assert loo_exp_vals.shape == (8,)
 
     assert_almost_equal(loo_exp_vals.sel({"school": "Choate"}), expected_vals, decimal=2)
+
+
+@pytest.mark.parametrize("kind", ["mean", "var", "quantile"])
+def test_loo_expectations_khat(centered_eight, radon_problematic, kind):
+    probs = [0.25, 0.75] if kind == "quantile" else None
+    result, khat = loo_expectations(centered_eight, kind=kind, probs=probs)
+
+    assert np.all(np.isfinite(khat.values))
+    assert np.all(khat.values >= -0.5) and np.all(khat.values <= 1.5)
+
+    if kind == "quantile":
+        expected_dims = tuple(d for d in result.dims if d != "quantile")
+        assert khat.dims == expected_dims
+        assert khat.shape == tuple(result.sizes[d] for d in expected_dims)
+    else:
+        assert khat.dims == result.dims
+        assert khat.shape == result.shape
+
+    assert len(np.unique(khat.values.flatten())) > 1
+
+    for dim_name in khat.dims:
+        khat_coord_vals = khat.coords[dim_name].values
+        result_coord_vals = result.coords[dim_name].values
+        if khat_coord_vals.dtype.kind in ("U", "S", "O"):
+            assert np.array_equal(khat_coord_vals, result_coord_vals)
+        else:
+            assert_allclose(khat_coord_vals, result_coord_vals)
+
+    _, khat_check = loo_expectations(radon_problematic, var_name="y", kind=kind, probs=probs)
+    n_samples = (
+        radon_problematic.log_likelihood["y"].sizes["chain"]
+        * radon_problematic.log_likelihood["y"].sizes["draw"]
+    )
+    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
+    if np.any(khat_check.values > good_k):
+        with pytest.warns(UserWarning, match="Estimated shape parameter of Pareto distribution"):
+            loo_expectations(radon_problematic, var_name="y", kind=kind, probs=probs)
 
 
 @pytest.mark.parametrize(

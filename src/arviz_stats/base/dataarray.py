@@ -328,6 +328,24 @@ class BaseDataArray:
             kwargs={"axis": np.arange(-len(dims), 0, 1)},
         )
 
+    def pareto_khat(self, da, dims=None, r_eff=1.0, tail="both", log_weights=False):
+        """Compute Pareto k-hat diagnostic on DataArray input."""
+        dims = validate_dims(dims)
+        return apply_ufunc(
+            self.array_class.pareto_khat,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[]],
+            kwargs={
+                "axis": np.arange(-len(dims), 0, 1),
+                "r_eff": r_eff,
+                "tail": tail,
+                "log_weights": log_weights,
+            },
+            dask="parallelized",
+            output_dtypes=[float],
+        ).rename("pareto_k")
+
     def power_scale_lw(self, da, alpha=0, dim=None):
         """Compute log weights for power-scaling component by alpha."""
         dims = validate_dims(dim)
