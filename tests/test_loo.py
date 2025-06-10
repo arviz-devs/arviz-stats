@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal
 
-from .helpers import create_binary_data, importorskip
+from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
@@ -32,11 +32,6 @@ def fixture_centered_eight():
 @pytest.fixture(name="non_centered_eight", scope="session")
 def fixture_non_centered_eight():
     return azb.load_arviz_data("non_centered_eight")
-
-
-@pytest.fixture(name="binary", scope="session")
-def fixture_binary():
-    return create_binary_data()
 
 
 @pytest.fixture(name="radon_problematic", scope="session")
@@ -252,12 +247,12 @@ def test_loo_metrics(centered_eight, kind, round_to, expected_mean, expected_se)
 @pytest.mark.parametrize(
     "kind, round_to, expected_mean, expected_se",
     [
-        ("acc", 2, 0.86, 0.07),
-        ("acc_balanced", "2g", 0.87, 0.012),
+        ("acc", 2, 0.43, 0.19),
+        ("acc_balanced", "2g", 0.42, 0.045),
     ],
 )
-def test_loo_metrics_acc(binary, kind, round_to, expected_mean, expected_se):
-    metrics = loo_metrics(binary, kind=kind, round_to=round_to)
+def test_loo_metrics_acc(datatree_binary, kind, round_to, expected_mean, expected_se):
+    metrics = loo_metrics(datatree_binary, kind=kind, round_to=round_to)
     assert_almost_equal(metrics.mean, expected_mean, decimal=4)
     assert_almost_equal(metrics.se, expected_se, decimal=4)
 
