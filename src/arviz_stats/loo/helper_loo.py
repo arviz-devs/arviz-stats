@@ -71,6 +71,8 @@ def _shift(upars, lwi):
     """Shift a DataArray of parameters to their weighted mean."""
     sample_dims = ["chain", "draw"]
     param_dim = [dim for dim in upars.dims if dim not in sample_dims][0]
+    upars_props = _get_upars_info(upars, param_dim)
+
     upars_stacked = upars.stack(__sample__=sample_dims)
     lwi_stacked = lwi.stack(__sample__=sample_dims)
 
@@ -78,22 +80,14 @@ def _shift(upars, lwi):
     lwi_values = lwi_stacked.transpose("__sample__").data
 
     mean_original = np.mean(upars_values, axis=0)
-    weights = np.exp(
-        lwi_values - logsumexp(lwi_stacked.transpose("__sample__"), dims="__sample__").data
-    )
-    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
+    weights = np.exp(lwi_values)
+    weights_sum = np.sum(weights)
+    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0) / weights_sum
     shift_vec = mean_weighted - mean_original
     upars_new_values = upars_values + shift_vec[None, :]
 
-    upars_new_stacked = xr.DataArray(
-        upars_new_values,
-        dims=["__sample__", param_dim],
-        coords={
-            "__sample__": upars_stacked["__sample__"],
-            param_dim: upars_stacked[param_dim],
-        },
-    )
-    upars_new_da = upars_new_stacked.unstack("__sample__")
+    upars_new_da = _reconstruct_upars(upars_new_values, upars_props)
+
     return ShiftResult(upars=upars_new_da, shift=shift_vec)
 
 
@@ -101,6 +95,8 @@ def _shift_and_scale(upars, lwi):
     """Shift parameters to weighted mean and scale marginal variances."""
     sample_dims = ["chain", "draw"]
     param_dim = [dim for dim in upars.dims if dim not in sample_dims][0]
+    upars_props = _get_upars_info(upars, param_dim)
+
     upars_stacked = upars.stack(__sample__=sample_dims)
     lwi_stacked = lwi.stack(__sample__=sample_dims)
 
@@ -108,19 +104,18 @@ def _shift_and_scale(upars, lwi):
     lwi_values = lwi_stacked.transpose("__sample__").data
 
     mean_original = np.mean(upars_values, axis=0)
-    weights = np.exp(
-        lwi_values - logsumexp(lwi_stacked.transpose("__sample__"), dims="__sample__").data
-    )
-    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
+    weights = np.exp(lwi_values)
+    weights_sum = np.sum(weights)
+    if weights_sum < 1e-9:
+        weights_sum = 1.0
+
+    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0) / weights_sum
     shift_vec = mean_weighted - mean_original
 
-    var_weighted = np.sum(weights[:, None] * (upars_values - mean_weighted[None, :]) ** 2, axis=0)
-    ess_approx = 1.0 / np.sum(weights**2)
-
-    if ess_approx > 1:
-        var_weighted *= ess_approx / (ess_approx - 1)
-    else:
-        var_weighted = np.var(upars_values, axis=0)
+    var_weighted = (
+        np.sum(weights[:, None] * (upars_values - mean_weighted[None, :]) ** 2, axis=0)
+        / weights_sum
+    )
 
     var_original = np.var(upars_values, axis=0, ddof=1)
 
@@ -132,15 +127,8 @@ def _shift_and_scale(upars, lwi):
     upars_new_values = upars_new_values * scaling_vec[None, :]
     upars_new_values = upars_new_values + mean_weighted[None, :]
 
-    upars_new_stacked = xr.DataArray(
-        upars_new_values,
-        dims=["__sample__", param_dim],
-        coords={
-            "__sample__": upars_stacked["__sample__"],
-            param_dim: upars_stacked[param_dim],
-        },
-    )
-    upars_new_da = upars_new_stacked.unstack("__sample__")
+    upars_new_da = _reconstruct_upars(upars_new_values, upars_props)
+
     return ShiftAndScaleResult(upars=upars_new_da, shift=shift_vec, scaling=scaling_vec)
 
 
@@ -148,6 +136,8 @@ def _shift_and_cov(upars, lwi):
     """Shift parameters and scale covariance to match weighted covariance."""
     sample_dims = ["chain", "draw"]
     param_dim = [dim for dim in upars.dims if dim not in sample_dims][0]
+    upars_props = _get_upars_info(upars, param_dim)
+
     upars_stacked = upars.stack(__sample__=sample_dims)
     lwi_stacked = lwi.stack(__sample__=sample_dims)
 
@@ -155,10 +145,9 @@ def _shift_and_cov(upars, lwi):
     lwi_values = lwi_stacked.transpose("__sample__").data
 
     mean_original = np.mean(upars_values, axis=0)
-    weights = np.exp(
-        lwi_values - logsumexp(lwi_stacked.transpose("__sample__"), dims="__sample__").data
-    )
-    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
+    weights = np.exp(lwi_values)
+    weights_sum = np.sum(weights)
+    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0) / weights_sum
     shift_vec = mean_weighted - mean_original
 
     cov_original = np.cov(upars_values, rowvar=False, ddof=1)
@@ -177,7 +166,7 @@ def _shift_and_cov(upars, lwi):
 
         chol_weighted = np.linalg.cholesky(cov_weighted)
         chol_original = np.linalg.cholesky(cov_original)
-        mapping_mat = chol_weighted @ np.linalg.inv(chol_original)
+        mapping_mat = chol_weighted.T @ np.linalg.inv(chol_original.T)
 
     except np.linalg.LinAlgError as e:
         warnings.warn(
@@ -192,15 +181,8 @@ def _shift_and_cov(upars, lwi):
     upars_new_values = upars_new_values @ mapping_mat.T
     upars_new_values = upars_new_values + mean_weighted[None, :]
 
-    upars_new_stacked = xr.DataArray(
-        upars_new_values,
-        dims=["__sample__", param_dim],
-        coords={
-            "__sample__": upars_stacked["__sample__"],
-            param_dim: upars_stacked[param_dim],
-        },
-    )
-    upars_new_da = upars_new_stacked.unstack("__sample__")
+    upars_new_da = _reconstruct_upars(upars_new_values, upars_props)
+
     return ShiftAndCovResult(upars=upars_new_da, shift=shift_vec, mapping=mapping_mat)
 
 
@@ -240,7 +222,6 @@ def _recalculate_weights_k(
     ki_new = ki_new[0].item() if isinstance(ki_new, tuple) else ki_new.item()
 
     log_ratio_full = log_prob_new - orig_log_prob
-    log_ratio_full = xr.where(np.isnan(log_ratio_full), -np.inf, log_ratio_full)
 
     lwfi_new, kfi_new = log_ratio_full.azstats.psislw(r_eff=reff, dim=sample_dims)
     kfi_new = kfi_new[0].item() if isinstance(kfi_new, tuple) else kfi_new.item()
@@ -260,6 +241,7 @@ def _update_loo_data_i(
     obs_dims,
     n_samples,
     original_log_liki=None,
+    suppress_warnings=False,
 ):
     """Update the ELPDData object for a single observation."""
     if loo_data.elpd_i is None or loo_data.pareto_k is None:
@@ -286,7 +268,9 @@ def _update_loo_data_i(
     loo_data.se = np.sqrt(loo_data.n_data_points * np.nanvar(loo_data.elpd_i.values))
 
     loo_data.warning, loo_data.good_k = _warn_pareto_k(
-        loo_data.pareto_k.values[~np.isnan(loo_data.pareto_k.values)], loo_data.n_samples
+        loo_data.pareto_k.values[~np.isnan(loo_data.pareto_k.values)],
+        loo_data.n_samples,
+        suppress=suppress_warnings,
     )
 
 
@@ -865,19 +849,20 @@ def _select_obs_by_coords(data_array, coord_array, dims, dim_name):
     return data_array.sel({dims[0]: coord_array[dims[0]]})
 
 
-def _warn_pareto_k(pareto_k_values, n_samples):
+def _warn_pareto_k(pareto_k_values, n_samples, suppress=False):
     """Check Pareto k values and issue warnings if necessary."""
     good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
     warn_mg = False
 
     if np.any(pareto_k_values > good_k):
-        warnings.warn(
-            f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-            "for one or more samples. You should consider using a more robust model, this is "
-            "because importance sampling is less likely to work well if the marginal posterior "
-            "and LOO posterior are very different. This is more likely to happen with a "
-            "non-robust model and highly influential observations."
-        )
+        if not suppress:
+            warnings.warn(
+                f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
+                "for one or more samples. You should consider using a more robust model, this is "
+                "because importance sampling is less likely to work well if the marginal posterior "
+                "and LOO posterior are very different. This is more likely to happen with a "
+                "non-robust model and highly influential observations."
+            )
         warn_mg = True
     return warn_mg, good_k
 
@@ -926,3 +911,28 @@ def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
     else:
         raise TypeError(f"{name} must be a numpy ndarray or xarray DataArray")
     return validated_log_dens
+
+
+def _get_upars_info(upars, param_dim):
+    """Get original properties from upars DataArray."""
+    props = {
+        "dims": upars.dims,
+        "shape": upars.shape,
+        "coords": {
+            "chain": upars.coords["chain"],
+            "draw": upars.coords["draw"],
+        },
+    }
+    if param_dim in upars.coords:
+        props["coords"][param_dim] = upars.coords[param_dim]
+    return props
+
+
+def _reconstruct_upars(upars_new_values, props):
+    """Reconstruct upars DataArray from new values."""
+    upars_new_values_reshaped = upars_new_values.reshape(props["shape"])
+    return xr.DataArray(
+        upars_new_values_reshaped,
+        dims=props["dims"],
+        coords=props["coords"],
+    )

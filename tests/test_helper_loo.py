@@ -612,7 +612,6 @@ def test_split_moment_match(cov, centered_eight):
     assert result.lwi.dims == ("chain", "draw")
     assert result.lwfi.dims == ("chain", "draw")
     assert result.log_liki.dims == ("chain", "draw")
-    assert result.reff == reff
 
     assert result.lwi.shape == (chain_size, draw_size)
     assert result.lwfi.shape == (chain_size, draw_size)

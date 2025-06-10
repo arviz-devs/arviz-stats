@@ -204,7 +204,7 @@ def loo_moment_match(
            ...:     var_name="obs",
            ...:     k_threshold=0.7,
            ...:     split=True,
-           ...:     cov=True,
+           ...:     cov=False,
            ...: )
            ...: loo_mm
 
@@ -315,7 +315,11 @@ def loo_moment_match(
     obs_dims = loo_inputs.obs_dims
     n_samples = loo_inputs.n_samples
     var_name = loo_inputs.var_name
+
     n_params = upars.sizes[param_dim_name]
+    n_data_points = loo_orig.n_data_points
+    n_chains = upars.sizes["chain"]
+    n_draws = upars.sizes["draw"]
 
     if reff is None:
         reff = _get_r_eff(data, n_samples)
@@ -349,17 +353,22 @@ def loo_moment_match(
                 loo_data.p_loo_i = None
         return loo_data
 
-    loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
+    lpd = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
+    loo_data.p_loo_i = lpd - loo_data.elpd_i
+    kfs = np.zeros(n_data_points)
 
     # Moment matching algorithm
     for i in bad_obs_indices:
         log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
-        log_ratio_i_init = -log_liki
-        lwi, ki_tuple = log_ratio_i_init.azstats.psislw(r_eff=reff, dim=sample_dims)
+        liki = np.exp(log_liki)
+        liki_reshaped = liki.values.reshape(n_chains, n_draws).T
 
-        ki = ki_tuple[0].item() if isinstance(ki_tuple, tuple) else ki_tuple.item()
-        ess_val = ess(log_liki.values.reshape(-1, 1), method="mean").item()
+        ess_val = ess(liki_reshaped, method="mean").item()
         reff_i = ess_val / n_samples if n_samples > 0 else 1.0
+
+        log_ratio_i_init = -log_liki
+        lwi, ki_tuple = log_ratio_i_init.azstats.psislw(r_eff=reff_i, dim=sample_dims)
+        ki = ki_tuple[0].item() if isinstance(ki_tuple, tuple) else ki_tuple.item()
 
         upars_i = upars.copy(deep=True)
         total_shift = np.zeros(upars_i.sizes[param_dim_name])
@@ -369,8 +378,8 @@ def loo_moment_match(
         iterind = 1
         transformations_applied = False
 
-        while ki > k_threshold:
-            if iterind > max_iters:
+        while iterind <= max_iters and ki > k_threshold:
+            if iterind == max_iters:
                 warnings.warn(
                     f"Maximum number of moment matching iterations ({max_iters}) reached "
                     f"for observation {i}. Final Pareto k is {ki:.2f}.",
@@ -392,7 +401,7 @@ def loo_moment_match(
                     lwi = weights_k_res.lwi
                     log_liki = weights_k_res.log_liki
                     upars_i = shift_res.upars
-                    total_shift += shift_res.shift
+                    total_shift = total_shift + shift_res.shift
                     transformations_applied = True
                     iterind += 1
                     continue  # Restart, try mean shift again
@@ -419,8 +428,8 @@ def loo_moment_match(
                     lwi = weights_k_res_scale.lwi
                     log_liki = weights_k_res_scale.log_liki
                     upars_i = scale_res.upars
-                    total_shift = scale_res.shift + total_shift * scale_res.scaling
-                    total_scaling *= scale_res.scaling
+                    total_shift = total_shift + scale_res.shift
+                    total_scaling = total_scaling * scale_res.scaling
                     transformations_applied = True
                     iterind += 1
                     continue  # Restart, try mean shift again
@@ -449,7 +458,7 @@ def loo_moment_match(
                         lwi = weights_k_res_cov.lwi
                         log_liki = weights_k_res_cov.log_liki
                         upars_i = cov_res.upars
-                        total_shift = cov_res.shift + total_shift @ cov_res.mapping.T
+                        total_shift = total_shift + cov_res.shift
                         total_mapping = cov_res.mapping @ total_mapping
                         transformations_applied = True
                         iterind += 1
@@ -486,12 +495,17 @@ def loo_moment_match(
                 _, ki_split_tuple = split_res.lwi.azstats.psislw(
                     r_eff=split_res.reff, dim=sample_dims
                 )
+
                 ki_split = (
                     ki_split_tuple[0].item()
                     if isinstance(ki_split_tuple, tuple)
                     else ki_split_tuple.item()
                 )
                 final_ki = ki_split
+
+                _, kf_tuple = split_res.lwfi.azstats.psislw(r_eff=split_res.reff, dim=sample_dims)
+                kfs[i] = kf_tuple[0].item() if isinstance(kf_tuple, tuple) else kf_tuple.item()
+                reff_i = split_res.reff
 
                 if ki_split > ki and ki <= k_threshold:
                     warnings.warn(
@@ -518,20 +532,43 @@ def loo_moment_match(
             final_lwi = lwi
             final_ki = ki
 
-        new_elpd_i = logsumexp(final_log_liki + final_lwi, dims=sample_dims).item()
-        original_log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
+            if transformations_applied:
+                liki_final = np.exp(final_log_liki)
+                liki_final_reshaped = liki_final.values.reshape(n_chains, n_draws).T
+                ess_val_final = ess(liki_final_reshaped, method="mean").item()
+                reff_i = ess_val_final / n_samples if n_samples > 0 else 1.0
 
-        _update_loo_data_i(
-            loo_data,
-            i,
-            new_elpd_i,
-            final_ki,
-            final_log_liki,
-            sample_dims,
-            obs_dims,
-            n_samples,
-            original_log_liki=original_log_liki,
-        )
+        original_ki = ks[i]
+        if final_ki < original_ki:
+            new_elpd_i = logsumexp(final_log_liki + final_lwi, dims=sample_dims).item()
+            original_log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
+
+            _update_loo_data_i(
+                loo_data,
+                i,
+                new_elpd_i,
+                final_ki,
+                final_log_liki,
+                sample_dims,
+                obs_dims,
+                n_samples,
+                original_log_liki,
+                suppress_warnings=True,
+            )
+        else:
+            warnings.warn(
+                f"Observation {i}: Moment matching did not improve k "
+                f"({original_ki:.2f} -> {final_ki:.2f}). Reverting.",
+                UserWarning,
+                stacklevel=2,
+            )
+            if hasattr(loo_orig, "p_loo_i") and loo_orig.p_loo_i is not None:
+                if len(obs_dims) == 1:
+                    idx_dict = {obs_dims[0]: i}
+                else:
+                    coords = np.unravel_index(i, tuple(loo_data.elpd_i.sizes[d] for d in obs_dims))
+                    idx_dict = dict(zip(obs_dims, coords))
+                loo_data.p_loo_i[idx_dict] = loo_orig.p_loo_i[idx_dict]
 
     final_ks = loo_data.pareto_k.stack(__obs__=obs_dims).transpose("__obs__").values
     if np.any(final_ks[bad_obs_indices] > k_threshold):
@@ -542,23 +579,16 @@ def loo_moment_match(
             stacklevel=2,
         )
 
-    # p_loo for good observations
-    if hasattr(loo_data, "p_loo_i") and loo_data.p_loo_i is not None:
-        p_loo_i_flat = loo_data.p_loo_i.values.flatten()
-        nan_mask = np.isnan(p_loo_i_flat)
+    if not split and np.any(kfs > k_threshold):
+        warnings.warn(
+            "The accuracy of self-normalized importance sampling may be bad. "
+            "Setting the argument 'split' to 'True' will likely improve accuracy.",
+            UserWarning,
+            stacklevel=2,
+        )
 
-        if np.any(nan_mask):
-            lpd_all = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims)
-            lpd_flat = lpd_all.values.flatten()
-            elpd_i_flat = loo_data.elpd_i.values.flatten()
-
-            p_loo_i_flat[nan_mask] = lpd_flat[nan_mask] - elpd_i_flat[nan_mask]
-            loo_data.p_loo_i.values = p_loo_i_flat.reshape(loo_data.p_loo_i.shape)
-
-        loo_data.p = np.nansum(loo_data.p_loo_i.values)
-    else:
-        elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum().values
-        loo_data.p = elpd_raw - loo_data.elpd
+    elpd_raw = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).sum().values
+    loo_data.p = elpd_raw - loo_data.elpd
 
     if not pointwise:
         loo_data.elpd_i = None
@@ -630,7 +660,7 @@ def _split_moment_match(
         - lwi: Updated log importance weights for each sample
         - lwfi: Updated log importance weights for full distribution
         - log_liki: Updated log likelihood values for the specific observation
-        - reff: Relative MCMC efficiency
+        - reff: Relative MCMC efficiency (updated based on the split samples)
 
     References
     ----------
@@ -680,20 +710,19 @@ def _split_moment_match(
     upars_trans = upars_trans * xr.DataArray(total_scaling, dims=param_dim)
     if cov and dim > 0:
         upars_trans = xr.DataArray(
-            np.einsum("sp,pq->sq", upars_trans.data, total_mapping),
+            upars_trans.data @ total_mapping.T,
             coords=upars_trans.coords,
             dims=upars_trans.dims,
         )
     upars_trans = upars_trans + (xr.DataArray(total_shift, dims=param_dim) + mean_original)
 
     # Inverse transformation
-    upars_trans_inv = upars_stacked - mean_original
-
+    upars_trans_inv = upars_stacked - (xr.DataArray(total_shift, dims=param_dim) + mean_original)
     if cov and dim > 0:
         try:
-            inv_mapping = np.linalg.inv(total_mapping)
+            inv_mapping_t = np.linalg.inv(total_mapping.T)
             upars_trans_inv = xr.DataArray(
-                np.einsum("sp,pq->sq", upars_trans_inv.data, inv_mapping),
+                upars_trans_inv.data @ inv_mapping_t,
                 coords=upars_trans_inv.coords,
                 dims=upars_trans_inv.dims,
             )
@@ -744,31 +773,28 @@ def _split_moment_match(
     # Jacobian adjustment
     log_jacobian_det = 0.0
     if dim > 0:
-        log_jacobian_det = -np.sum(np.log(total_scaling))
-        if cov:
-            try:
-                sign, logdet = np.linalg.slogdet(total_mapping)
-                if sign <= 0:
-                    log_jacobian_det -= np.inf
-                else:
-                    log_jacobian_det -= logdet
-            except np.linalg.LinAlgError:
+        log_jacobian_det = -np.sum(np.log(np.abs(total_scaling)))
+        try:
+            det_val = np.linalg.det(total_mapping)
+            if det_val > 0:
+                log_jacobian_det -= np.log(det_val)
+            else:
                 log_jacobian_det -= np.inf
+        except np.linalg.LinAlgError:
+            log_jacobian_det -= np.inf
 
     log_prob_half_trans_inv_adj = log_prob_half_trans_inv + log_jacobian_det
 
     # Multiple importance sampling
     use_forward_log_prob = log_prob_half_trans > log_prob_half_trans_inv_adj
     raw_log_weights_half = -log_liki_half + log_prob_half_trans
-
     log_sum_terms = xr.where(
         use_forward_log_prob,
         log_prob_half_trans
-        + xr.ufuncs.log1p(xr.ufuncs.exp(log_prob_half_trans_inv_adj - log_prob_half_trans)),
+        + xr.ufuncs.log1p(np.exp(log_prob_half_trans_inv_adj - log_prob_half_trans)),
         log_prob_half_trans_inv_adj
-        + xr.ufuncs.log1p(xr.ufuncs.exp(log_prob_half_trans - log_prob_half_trans_inv_adj)),
+        + xr.ufuncs.log1p(np.exp(log_prob_half_trans - log_prob_half_trans_inv_adj)),
     )
-
     raw_log_weights_half -= log_sum_terms
     raw_log_weights_half = xr.where(np.isnan(raw_log_weights_half), -np.inf, raw_log_weights_half)
     raw_log_weights_half = xr.where(
@@ -783,10 +809,39 @@ def _split_moment_match(
 
     # PSIS smoothing for full posterior
     lwfi_psis_da, _ = lr_full.azstats.psislw(r_eff=reff, dim=sample_dims)
+    n_chains = upars.sizes["chain"]
+
+    if n_chains == 1:
+        reff_updated = reff
+    else:
+        # Calculate ESS for each half of the data
+        log_liki_half_1 = log_liki_half.isel(
+            chain=slice(None), draw=slice(0, n_samples_half // n_chains)
+        )
+        log_liki_half_2 = log_liki_half.isel(
+            chain=slice(None), draw=slice(n_samples_half // n_chains, None)
+        )
+
+        liki_half_1 = np.exp(log_liki_half_1)
+        liki_half_2 = np.exp(log_liki_half_2)
+
+        ess_1 = liki_half_1.azstats.ess(method="mean")
+        ess_2 = liki_half_2.azstats.ess(method="mean")
+
+        ess_1_value = float(ess_1.values) if hasattr(ess_1, "values") else float(ess_1)
+        ess_2_value = float(ess_2.values) if hasattr(ess_2, "values") else float(ess_2)
+
+        n_samples_1 = log_liki_half_1.size
+        n_samples_2 = log_liki_half_2.size
+
+        r_eff_1 = ess_1_value / n_samples_1
+        r_eff_2 = ess_2_value / n_samples_2
+
+        reff_updated = min(r_eff_1, r_eff_2)
 
     return SplitMomentMatch(
         lwi=lwi_psis_da,
         lwfi=lwfi_psis_da,
         log_liki=log_liki_half,
-        reff=reff,
+        reff=reff_updated,
     )
