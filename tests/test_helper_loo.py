@@ -473,8 +473,7 @@ def test_shift():
 
     upars_stacked = upars.stack(__sample__=["chain", "draw"])
     lwi_stacked = lwi.stack(__sample__=["chain", "draw"])
-    weights = np.exp(lwi_stacked.values - np.max(lwi_stacked.values))
-    weights = weights / np.sum(weights)
+    weights = np.exp(lwi_stacked.values)
 
     expected_mean = np.sum(
         weights[:, None] * upars_stacked.transpose("__sample__", "param").values, axis=0

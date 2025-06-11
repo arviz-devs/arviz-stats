@@ -81,8 +81,8 @@ def _shift(upars, lwi):
 
     mean_original = np.mean(upars_values, axis=0)
     weights = np.exp(lwi_values)
-    weights_sum = np.sum(weights)
-    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0) / weights_sum
+    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
+
     shift_vec = mean_weighted - mean_original
     upars_new_values = upars_values + shift_vec[None, :]
 
@@ -103,25 +103,22 @@ def _shift_and_scale(upars, lwi):
     upars_values = upars_stacked.transpose("__sample__", param_dim).data
     lwi_values = lwi_stacked.transpose("__sample__").data
 
+    samples = upars_values.shape[0]
     mean_original = np.mean(upars_values, axis=0)
     weights = np.exp(lwi_values)
-    weights_sum = np.sum(weights)
-    if weights_sum < 1e-9:
-        weights_sum = 1.0
 
-    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0) / weights_sum
+    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
     shift_vec = mean_weighted - mean_original
 
-    var_weighted = (
-        np.sum(weights[:, None] * (upars_values - mean_weighted[None, :]) ** 2, axis=0)
-        / weights_sum
-    )
+    weighted_second_moment = np.sum(weights[:, None] * upars_values**2, axis=0)
+    mii = weighted_second_moment - mean_weighted**2
+    mii = mii * samples / (samples - 1)  # Bessel's correction
 
     var_original = np.var(upars_values, axis=0, ddof=1)
 
     scaling_vec = np.ones_like(mean_original)
-    valid_mask = (var_original > 1e-9) & (var_weighted > 1e-9)
-    scaling_vec[valid_mask] = np.sqrt(var_weighted[valid_mask] / var_original[valid_mask])
+    valid_mask = (var_original > 1e-9) & (mii > 1e-9)
+    scaling_vec[valid_mask] = np.sqrt(mii[valid_mask] / var_original[valid_mask])
 
     upars_new_values = upars_values - mean_original[None, :]
     upars_new_values = upars_new_values * scaling_vec[None, :]
@@ -146,8 +143,8 @@ def _shift_and_cov(upars, lwi):
 
     mean_original = np.mean(upars_values, axis=0)
     weights = np.exp(lwi_values)
-    weights_sum = np.sum(weights)
-    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0) / weights_sum
+
+    mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
     shift_vec = mean_weighted - mean_original
 
     cov_original = np.cov(upars_values, rowvar=False, ddof=1)
@@ -166,6 +163,7 @@ def _shift_and_cov(upars, lwi):
 
         chol_weighted = np.linalg.cholesky(cov_weighted)
         chol_original = np.linalg.cholesky(cov_original)
+
         mapping_mat = chol_weighted.T @ np.linalg.inv(chol_original.T)
 
     except np.linalg.LinAlgError as e:
