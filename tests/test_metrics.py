@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_almost_equal, assert_array_almost_equal
 
-from .helpers import datatree, datatree_binary, importorskip  # noqa: F401
+from .helpers import datatree, datatree_binary, fake_dt, importorskip  # noqa: F401
 
 azb = importorskip("arviz_base")
 
