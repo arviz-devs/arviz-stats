@@ -1,7 +1,9 @@
+# pylint: disable=redefined-outer-name, unused-import
+# ruff: noqa: F811
 import numpy as np
 import pytest
 
-from .helpers import importorskip
+from .helpers import fake_dt, importorskip  # noqa: F401
 
 azb = importorskip("arviz_base")
 
