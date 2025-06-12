@@ -188,128 +188,6 @@ def create_data_random(groups=None, seed=10):
     return idata
 
 
-def create_binary_data():
-    from arviz_base import from_dict
-
-    y_true = np.array([1, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0])
-    y_pred = np.array(
-        [
-            [
-                [
-                    1,
-                    0,
-                    1,
-                    0,
-                    0,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    0,
-                    1,
-                    0,
-                    1,
-                    0,
-                    1,
-                    0,
-                ],
-                [0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0],
-                [1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0],
-            ]
-        ]
-    )
-
-    log_likelihood = np.array(
-        [
-            [
-                -0.07947292,
-                -0.00673689,
-                -0.03548443,
-                -0.0734388,
-                -0.01053072,
-                -1.92504819,
-                -0.04810741,
-                -0.85600871,
-                -0.04810741,
-                -0.14321535,
-                -0.05885898,
-                -0.10014122,
-                -0.04810741,
-                -0.05321948,
-                -0.06293666,
-                -0.64476814,
-                -0.13867731,
-                -0.00251631,
-                -0.16804357,
-                -0.0734388,
-                -0.6068221,
-                -0.01797324,
-            ],
-            [
-                -0.07947292,
-                -0.00673689,
-                -0.03548443,
-                -0.0734388,
-                -0.01053072,
-                -1.92504819,
-                -0.04810741,
-                -0.85600871,
-                -0.04810741,
-                -0.14321535,
-                -0.05885898,
-                -0.10014122,
-                -0.04810741,
-                -0.05321948,
-                -0.06293666,
-                -0.64476814,
-                -0.13867731,
-                -0.00251631,
-                -0.16804357,
-                -0.0734388,
-                -0.6068221,
-                -0.01797324,
-            ],
-            [
-                -0.04076453,
-                -0.02625018,
-                -0.01322834,
-                -0.09253384,
-                -0.03323738,
-                -2.28945093,
-                -0.02020827,
-                -1.02274493,
-                -0.02020827,
-                -0.09329038,
-                -0.0267789,
-                -0.05638643,
-                -0.02020827,
-                -0.02326542,
-                -0.02940704,
-                -0.54261699,
-                -0.08915241,
-                -0.01558169,
-                -0.11687097,
-                -0.09253384,
-                -0.68570614,
-                -0.04406399,
-            ],
-        ]
-    )
-    return from_dict(
-        {
-            "observed_data": {"y": y_true},
-            "posterior_predictive": {"y": y_pred},
-            "log_likelihood": {"y": log_likelihood},
-        }
-    )
-
-
 @pytest.fixture()
 def data_random():
     """Fixture containing InferenceData object using random data."""
@@ -339,3 +217,24 @@ def multidim_models():
         model_2 = create_multidimensional_model(seed=11, transpose=True)
 
     return Models()
+
+
+azb = importorskip("arviz_base")
+
+
+@pytest.fixture(scope="session")
+def datatree():
+    """Fixture for a general DataTree."""
+    return azb.testing.datatree()
+
+
+@pytest.fixture(scope="session")
+def datatree_binary():
+    """Fixture for a DataTree with binary data."""
+    return azb.testing.datatree_binary()
+
+
+@pytest.fixture(scope="session")
+def fake_dt():
+    """Fixture for a fake posterior."""
+    return azb.testing.fake_dt()

@@ -1,10 +1,10 @@
-# pylint: disable=redefined-outer-name
-
+# pylint: disable=redefined-outer-name, unused-import
+# ruff: noqa: F811
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal
 
-from .helpers import create_binary_data, importorskip
+from .helpers import datatree, datatree_binary, importorskip  # noqa: F401
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
@@ -32,16 +32,6 @@ def fixture_centered_eight():
 @pytest.fixture(name="non_centered_eight", scope="session")
 def fixture_non_centered_eight():
     return azb.load_arviz_data("non_centered_eight")
-
-
-@pytest.fixture(name="binary", scope="session")
-def fixture_binary():
-    return create_binary_data()
-
-
-@pytest.fixture(name="radon_problematic", scope="session")
-def fixture_radon_problematic():
-    return azb.load_arviz_data("radon")
 
 
 @pytest.fixture(scope="module")
@@ -199,7 +189,7 @@ def test_loo_expectations(centered_eight, kind, probs, expected_vals):
 
 
 @pytest.mark.parametrize("kind", ["mean", "var", "quantile"])
-def test_loo_expectations_khat(centered_eight, radon_problematic, kind):
+def test_loo_expectations_khat(centered_eight, datatree, kind):
     probs = [0.25, 0.75] if kind == "quantile" else None
     result, khat = loo_expectations(centered_eight, kind=kind, probs=probs)
 
@@ -224,15 +214,14 @@ def test_loo_expectations_khat(centered_eight, radon_problematic, kind):
         else:
             assert_allclose(khat_coord_vals, result_coord_vals)
 
-    _, khat_check = loo_expectations(radon_problematic, var_name="y", kind=kind, probs=probs)
+    _, khat_check = loo_expectations(datatree, var_name="y", kind=kind, probs=probs)
     n_samples = (
-        radon_problematic.log_likelihood["y"].sizes["chain"]
-        * radon_problematic.log_likelihood["y"].sizes["draw"]
+        datatree.log_likelihood["y"].sizes["chain"] * datatree.log_likelihood["y"].sizes["draw"]
     )
     good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
     if np.any(khat_check.values > good_k):
         with pytest.warns(UserWarning, match="Estimated shape parameter of Pareto distribution"):
-            loo_expectations(radon_problematic, var_name="y", kind=kind, probs=probs)
+            loo_expectations(datatree, var_name="y", kind=kind, probs=probs)
 
 
 @pytest.mark.parametrize(
@@ -252,12 +241,12 @@ def test_loo_metrics(centered_eight, kind, round_to, expected_mean, expected_se)
 @pytest.mark.parametrize(
     "kind, round_to, expected_mean, expected_se",
     [
-        ("acc", 2, 0.86, 0.07),
-        ("acc_balanced", "2g", 0.87, 0.012),
+        ("acc", 2, 0.43, 0.19),
+        ("acc_balanced", "2g", 0.42, 0.045),
     ],
 )
-def test_loo_metrics_acc(binary, kind, round_to, expected_mean, expected_se):
-    metrics = loo_metrics(binary, kind=kind, round_to=round_to)
+def test_loo_metrics_acc(datatree_binary, kind, round_to, expected_mean, expected_se):
+    metrics = loo_metrics(datatree_binary, kind=kind, round_to=round_to)
     assert_almost_equal(metrics.mean, expected_mean, decimal=4)
     assert_almost_equal(metrics.se, expected_se, decimal=4)
 
@@ -508,30 +497,28 @@ def test_update_subsample_preserves_thin_factor(centered_eight):
 
 
 @pytest.fixture(scope="function")
-def loo_orig(radon_problematic):
-    return loo(radon_problematic, pointwise=True, var_name="y")
+def loo_orig(datatree):
+    return loo(datatree, pointwise=True, var_name="y")
 
 
 @pytest.fixture(scope="module")
-def moment_match_data(radon_problematic):
-    log_likelihood_data = get_log_likelihood_dataset(radon_problematic, var_names="y")["y"]
-    posterior_draws = azb.extract(radon_problematic, group="posterior", combined=False)
+def moment_match_data(datatree):
+    log_likelihood_data = get_log_likelihood_dataset(datatree, var_names="y")["y"]
+    posterior_draws = azb.extract(datatree, group="posterior", combined=False)
 
-    a_params = posterior_draws["a"]
-    b_param = posterior_draws["b"]
-    log_sigma_param = np.log(posterior_draws["sigma"])
-    log_sigma_a_param = np.log(posterior_draws["sigma_a"])
+    a_params = posterior_draws["theta"]
+    b_param = posterior_draws["mu"]
+    log_sigma_param = np.log(posterior_draws["tau"])
 
     param_list_for_ds = {}
 
-    for county_name in a_params.coords["County"].values:
-        fixed_name = f"a_{str(county_name).replace(' ', '_').replace('-', '_')}"
-        county_specific_a = a_params.sel(County=county_name).drop_vars("County")
-        param_list_for_ds[fixed_name] = county_specific_a
+    for hierarchy_name in a_params.coords["hierarchy"].values:
+        fixed_name = f"theta_{hierarchy_name}"
+        hierarchy_specific_a = a_params.sel(hierarchy=hierarchy_name).drop_vars("hierarchy")
+        param_list_for_ds[fixed_name] = hierarchy_specific_a
 
     param_list_for_ds["b_main"] = b_param
     param_list_for_ds["log_sigma"] = log_sigma_param
-    param_list_for_ds["log_sigma_a"] = log_sigma_a_param
 
     temp_ds = xr.Dataset(param_list_for_ds)
     upars_da_generated = temp_ds.to_array(dim="unconstrained_parameter", name="upars_values")
@@ -549,7 +536,7 @@ def moment_match_data(radon_problematic):
     return upars_da_final, log_prob_upars_fn, log_lik_i_upars_fn
 
 
-def test_loo_moment_match(radon_problematic, loo_orig, moment_match_data):
+def test_loo_moment_match(datatree, loo_orig, moment_match_data):
     upars_da, log_prob_fn, log_lik_i_fn = moment_match_data
     max_k = np.nanmax(loo_orig.pareto_k.values)
     k_threshold = np.nanpercentile(loo_orig.pareto_k.values, 90)
@@ -559,7 +546,7 @@ def test_loo_moment_match(radon_problematic, loo_orig, moment_match_data):
     assert orig_bad_k_count > 0
 
     loo_mm = loo_moment_match(
-        radon_problematic,
+        datatree,
         loo_orig,
         upars=upars_da,
         log_prob_upars_fn=log_prob_fn,
@@ -581,12 +568,12 @@ def test_loo_moment_match(radon_problematic, loo_orig, moment_match_data):
     assert np.sum(loo_mm.p_loo_i.values) >= 0
 
 
-def test_loo_moment_match_no_problematic_k(radon_problematic, loo_orig, moment_match_data):
+def test_loo_moment_match_no_problematic_k(datatree, loo_orig, moment_match_data):
     upars_da, log_prob_fn, log_lik_i_fn = moment_match_data
     k_threshold = np.nanmax(loo_orig.pareto_k.values) + 0.1
 
     loo_mm = loo_moment_match(
-        radon_problematic,
+        datatree,
         loo_orig,
         upars=upars_da,
         log_prob_upars_fn=log_prob_fn,
@@ -599,17 +586,17 @@ def test_loo_moment_match_no_problematic_k(radon_problematic, loo_orig, moment_m
     assert_allclose(loo_mm.pareto_k.values, loo_orig.pareto_k.values)
 
 
-def test_loo_moment_match_errors(radon_problematic, moment_match_data):
+def test_loo_moment_match_errors(datatree, moment_match_data):
     upars_da, log_prob_fn, log_lik_i_fn = moment_match_data
 
-    loo_non_pointwise = loo(radon_problematic, pointwise=False, var_name="y")
+    loo_non_pointwise = loo(datatree, pointwise=False, var_name="y")
     with pytest.raises(
         ValueError,
         match="Moment matching requires pointwise LOO results with Pareto k values. "
         "Please compute the initial LOO with pointwise=True",
     ):
         loo_moment_match(
-            radon_problematic,
+            datatree,
             loo_non_pointwise,
             upars=upars_da,
             log_prob_upars_fn=log_prob_fn,
@@ -617,11 +604,11 @@ def test_loo_moment_match_errors(radon_problematic, moment_match_data):
             var_name="y",
         )
 
-    loo_pointwise = loo(radon_problematic, pointwise=True, var_name="y")
+    loo_pointwise = loo(datatree, pointwise=True, var_name="y")
     bad_upars = xr.DataArray(np.random.randn(10), dims=["sample"])
     with pytest.raises(ValueError, match="upars must have dimensions"):
         loo_moment_match(
-            radon_problematic,
+            datatree,
             loo_pointwise,
             upars=bad_upars,
             log_prob_upars_fn=log_prob_fn,
@@ -630,7 +617,7 @@ def test_loo_moment_match_errors(radon_problematic, moment_match_data):
         )
 
 
-def test_loo_moment_match_function_errors(radon_problematic, loo_orig):
+def test_loo_moment_match_function_errors(datatree, loo_orig):
     upars_da = xr.DataArray(
         np.random.randn(4, 500, 10),
         dims=["chain", "draw", "unconstrained_parameter"],
@@ -649,7 +636,7 @@ def test_loo_moment_match_function_errors(radon_problematic, loo_orig):
 
     with pytest.raises((ValueError, IndexError)):
         loo_moment_match(
-            radon_problematic,
+            datatree,
             loo_orig,
             upars=upars_da,
             log_prob_upars_fn=bad_log_prob_fn,

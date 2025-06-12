@@ -1,33 +1,16 @@
-# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name, unused-import
+# ruff: noqa: F811
 from copy import deepcopy
 
 import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from .helpers import importorskip
+from .helpers import datatree, fake_dt, importorskip  # noqa: F401
 
 azb = importorskip("arviz_base")
 
 from arviz_stats.summary import ci_in_rope, summary
-
-
-@pytest.fixture(scope="session")
-def centered_eight():
-    centered_eight = azb.load_arviz_data("centered_eight")
-    return centered_eight
-
-
-@pytest.fixture
-def fake_post():
-    return azb.from_dict(
-        {
-            "posterior": {
-                "a": np.random.normal(size=(4, 100)),
-                "b": np.random.normal(size=(4, 100)),
-            },
-        }
-    )
 
 
 def test_summary_ndarray():
@@ -36,17 +19,17 @@ def test_summary_ndarray():
     assert summary_df.shape
 
 
-@pytest.mark.parametrize("var_names_expected", ((None, 10), ("mu", 1), (["mu", "tau"], 2)))
-def test_summary_var_names(centered_eight, var_names_expected):
+@pytest.mark.parametrize("var_names_expected", ((None, 9), ("mu", 1), (["mu", "tau"], 2)))
+def test_summary_var_names(datatree, var_names_expected):
     var_names, expected = var_names_expected
-    summary_df = summary(centered_eight, var_names=var_names)
+    summary_df = summary(datatree, var_names=var_names)
     assert len(summary_df.index) == expected
 
 
-def test_summary_group_argument(centered_eight):
-    summary_df_posterior = summary(centered_eight, group="posterior")
-    summary_df_prior = summary(centered_eight, group="prior")
-    assert list(summary_df_posterior.index) != list(summary_df_prior.index)
+def test_summary_group_argument(datatree):
+    summary_df_posterior = summary(datatree, group="posterior", kind="stats")
+    summary_df_prior = summary(datatree, group="prior", kind="stats")
+    assert list(summary_df_posterior["mean"]) != list(summary_df_prior["mean"])
 
 
 METRICS_NAMES = [
@@ -85,47 +68,47 @@ METRICS_NAMES = [
         ("mc_diagnostics", METRICS_NAMES[17:]),
     ),
 )
-def test_summary_focus_kind(centered_eight, params):
+def test_summary_focus_kind(datatree, params):
     kind, metrics_names_ = params
-    summary_df = summary(centered_eight, kind=kind)
+    summary_df = summary(datatree, kind=kind)
     assert_array_equal(summary_df.columns, metrics_names_)
 
 
-def test_summary_nan(centered_eight):
-    centered_eight = deepcopy(centered_eight)
-    centered_eight.posterior["theta"].loc[{"school": "Deerfield"}] = np.nan
-    summary_xarray = summary(centered_eight, skipna=True)
+def test_summary_nan(datatree):
+    datatree = deepcopy(datatree)
+    datatree.posterior["theta"].loc[{"hierarchy": 0}] = np.nan
+    summary_xarray = summary(datatree, skipna=True)
     assert summary_xarray is not None
-    assert summary_xarray.loc["theta[Deerfield]"].isnull().all()
+    assert summary_xarray.loc["theta[0]"].isnull().all()
     assert (
-        summary_xarray.loc[[ix for ix in summary_xarray.index if ix != "theta[Deerfield]"]]
+        summary_xarray.loc[[ix for ix in summary_xarray.index if ix != "theta[0]"]]
         .notnull()
         .all()
         .all()
     )
 
 
-def test_summary_skip_nan(centered_eight):
-    centered_eight = deepcopy(centered_eight)
-    centered_eight.posterior["theta"].loc[{"draw": slice(10), "school": "Deerfield"}] = np.nan
-    summary_xarray = summary(centered_eight, skipna=True)
-    theta_1 = summary_xarray.loc["theta[Deerfield]"].isnull()
+def test_summary_skip_nan(datatree):
+    datatree = deepcopy(datatree)
+    datatree.posterior["theta"].loc[{"draw": slice(10), "hierarchy": 0}] = np.nan
+    summary_xarray = summary(datatree, skipna=True)
+    theta_1 = summary_xarray.loc["theta[0]"].isnull()
     assert summary_xarray is not None
     assert ~theta_1[:4].all()
     assert theta_1[4:].all()
 
 
-def test_rope_single(fake_post):
-    result = ci_in_rope(fake_post, var_names=["a", "b"], rope=(-1, 1))
+def test_rope_single(fake_dt):
+    result = ci_in_rope(fake_dt, var_names=["a", "b"], rope=(-1, 1))
     assert all(result > 60)
-    result = ci_in_rope(fake_post, var_names=["a", "b"], rope=(-1, 1), ci_prob=0.5, ci_kind="hdi")
+    result = ci_in_rope(fake_dt, var_names=["a", "b"], rope=(-1, 1), ci_prob=0.5, ci_kind="hdi")
     assert all(result == 100)
     assert "a" in result.data_vars
     assert "b" in result.data_vars
 
 
-def test_rope_multiple(fake_post):
-    result = ci_in_rope(fake_post, rope={"a": (-100, -99), "b": (-2, 2)})
+def test_rope_multiple(fake_dt):
+    result = ci_in_rope(fake_dt, rope={"a": (-100, -99), "b": (-2, 2)})
     assert result["a"] == 0
     assert result["b"] > 90
     assert "a" in result.data_vars
