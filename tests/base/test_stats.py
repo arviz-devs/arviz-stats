@@ -45,16 +45,27 @@ def multivariable_log_likelihood(centered_eight):
 )
 @pytest.mark.parametrize("bound_correction", [True, False])
 def test_kde_is_normalized(bound_correction, kde_kwargs):
+    if "circular" in kde_kwargs and bound_correction:
+        pytest.skip("Bound correction not implemented for circular kde")
     rng = np.random.default_rng(43)
     if kde_kwargs.get("circular", False):
         data = rng.vonmises(np.pi, 1, (1_000, 100))
     else:
         data = rng.normal(size=(1_000, 100))
+        kde_kwargs["bound_correction"] = bound_correction
     sample = azb.ndarray_to_dataarray(data, "x", sample_dims=["sample"])
-    kde = sample.azstats.kde(dim="sample", bound_correction=bound_correction, **kde_kwargs)
+    kde = sample.azstats.kde(dim="sample", **kde_kwargs)
     dx = kde.sel(plot_axis="x").diff(dim="kde_dim")
     density_norm = kde.sel(plot_axis="y").sum(dim="kde_dim") * dx
     assert_array_almost_equal(density_norm, 1, 6)
+
+
+@pytest.mark.parametrize("func", ("eti", "hdi", "kde", "histogram"))
+def test_extra_kwargs_raise(centered_eight, func):
+    accessor = centered_eight.posterior.ds.azstats
+    with pytest.raises(TypeError, match=".*unexpected keyword argument.*"):
+        # 'dims' is not valid, to match xarray behaviour we use 'dim' only
+        getattr(accessor, func)(dims="draw")
 
 
 def test_hdi_idata(centered_eight):
