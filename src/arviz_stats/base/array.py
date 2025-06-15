@@ -114,6 +114,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             else:
                 func_kwargs["bw"] = "isj" if not circular else "taylor"
             func_kwargs.update(kwargs)
+        else:
+            extra_kwargs = list(kwargs.keys())
+            if len(extra_kwargs) == 1:
+                raise TypeError(f"hdi got an unexpected keyword argument: '{extra_kwargs[0]}'")
+            if len(extra_kwargs) > 1:
+                raise TypeError(f"hdi got unexpected keyword arguments: {extra_kwargs}")
 
         if method == "multimodal_sample":
             func_kwargs["from_sample"] = True

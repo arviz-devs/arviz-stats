@@ -391,7 +391,6 @@ class _DensityBase(_CoreBase):
         custom_lims=None,
         cumulative=False,
         grid_len=512,
-        **kwargs,  # pylint: disable=unused-argument
     ):
         """One dimensional density estimation for linear data.
 
@@ -482,8 +481,8 @@ class _DensityBase(_CoreBase):
 
         return grid, pdf, bw
 
-    # pylint: disable=no-self-use, unused-argument
-    def kde_convolution(self, x, bw, grid_edges, grid_counts, grid_len, bound_correction, **kwargs):
+    # pylint: disable=no-self-use
+    def kde_convolution(self, x, bw, grid_edges, grid_counts, grid_len, bound_correction):
         """Kernel density with convolution.
 
         One dimensional Gaussian kernel density estimation via convolution of the binned relative
@@ -514,7 +513,7 @@ class _DensityBase(_CoreBase):
 
         return grid, pdf
 
-    def kde_adaptive(self, x, bw, grid_edges, grid_counts, grid_len, bound_correction, **kwargs):
+    def kde_adaptive(self, x, bw, grid_edges, grid_counts, grid_len, bound_correction):
         """Compute Adaptive Kernel Density Estimation.
 
         Notes
@@ -589,7 +588,6 @@ class _DensityBase(_CoreBase):
         custom_lims=None,
         cumulative=False,
         grid_len=512,
-        **kwargs,  # pylint: disable=unused-argument
     ):
         """One dimensional density estimation for circular data.
 
