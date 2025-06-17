@@ -189,7 +189,7 @@ class SamplingWrapper:
             getattr(self, method)(*args)
         except NotImplementedError:
             return False
-        except (TypeError, ValueError, RuntimeError):
+        except (TypeError, ValueError, RuntimeError, AttributeError):
             return True
         return True
 
