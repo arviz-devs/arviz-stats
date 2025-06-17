@@ -63,6 +63,7 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.loo_approximate_posterior
    arviz_stats.loo_moment_match
    arviz_stats.loo_subsample
+   arviz_stats.reloo
    arviz_stats.update_subsample
 ```
 
@@ -72,6 +73,7 @@ you should jump to {ref}`array_stats_api` and read forward.
 .. autosummary::
    :toctree: generated/
 
+   arviz_stats.SamplingWrapper
    arviz_stats.thin
 ```
 

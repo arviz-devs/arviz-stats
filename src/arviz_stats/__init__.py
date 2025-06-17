@@ -13,7 +13,9 @@ try:
         loo_subsample,
         update_subsample,
         loo_moment_match,
+        reloo,
         compare,
+        SamplingWrapper,
     )
     from arviz_stats.psense import psense, psense_summary
     from arviz_stats.metrics import kl_divergence, metrics, r2_score, wasserstein
