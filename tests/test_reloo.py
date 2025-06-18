@@ -63,18 +63,6 @@ class MockSamplingWrapper(SamplingWrapper):
         return log_lik
 
 
-class FailingSamplingWrapper(MockSamplingWrapper):
-    def __init__(self, model, idata_orig=None, fail_indices=None, **kwargs):
-        super().__init__(model, idata_orig, **kwargs)
-        self.fail_indices = fail_indices or []
-
-    def sample(self, modified_observed_data):
-        self.refit_count += 1
-        if len(modified_observed_data) in self.fail_indices:
-            raise RuntimeError("Sampling failed (mock)")
-        return super().sample(modified_observed_data)
-
-
 @pytest.fixture
 def mock_wrapper(non_centered_eight):
     return MockSamplingWrapper(model=None, idata_orig=non_centered_eight)
