@@ -1,6 +1,5 @@
 """Compute exact Leave-One-Out cross validation refitting for problematic observations."""
 
-import warnings
 from copy import deepcopy
 
 import numpy as np
@@ -124,7 +123,7 @@ def reloo(
         )
 
     sample_dims = ["chain", "draw"]
-    loo_reloo = deepcopy(loo_orig)
+    loo_refitted = deepcopy(loo_orig)
 
     loo_inputs = _prepare_loo_inputs(wrapper.data, wrapper.log_lik_var_name)
     obs_dims = loo_inputs.obs_dims
@@ -136,48 +135,29 @@ def reloo(
 
     if len(bad_obs_indices) == 0:
         if not pointwise:
-            loo_reloo.elpd_i = None
-            loo_reloo.pareto_k = None
-        return loo_reloo
+            loo_refitted.elpd_i = None
+            loo_refitted.pareto_k = None
+        return loo_refitted
 
     lppd_orig = loo_orig.p + loo_orig.elpd
 
     for obs_idx in bad_obs_indices:
-        try:
-            new_obs, excluded_obs = wrapper.sel_observations(obs_idx)
-            fit = wrapper.sample(new_obs)
-            idata_idx = wrapper.get_inference_data(fit)
-            log_lik_idx = wrapper.log_likelihood__i(excluded_obs, idata_idx)
-            loo_lppd_idx = logsumexp(log_lik_idx, dims=sample_dims, b=1 / log_lik_idx.size).item()
+        new_obs, excluded_obs = wrapper.sel_observations(obs_idx)
+        fit = wrapper.sample(new_obs)
+        idata_idx = wrapper.get_inference_data(fit)
+        log_lik_idx = wrapper.log_likelihood__i(excluded_obs, idata_idx)
+        loo_lppd_idx = logsumexp(log_lik_idx, dims=sample_dims, b=1 / log_lik_idx.size).item()
+        loo_refitted.elpd_i.loc[obs_idx] = loo_lppd_idx
+        loo_refitted.pareto_k.loc[obs_idx] = 0.0
 
-            if len(obs_dims) == 1:
-                idx_dict = {obs_dims[0]: obs_idx}
-            else:
-                coords = np.unravel_index(
-                    obs_idx, tuple(loo_reloo.elpd_i.sizes[d] for d in obs_dims)
-                )
-                idx_dict = dict(zip(obs_dims, coords))
+    loo_refitted.elpd = np.sum(loo_refitted.elpd_i.values)
+    loo_refitted.se = np.sqrt(n_data_points * np.var(loo_refitted.elpd_i.values))
+    loo_refitted.p = lppd_orig - loo_refitted.elpd
 
-            loo_reloo.elpd_i.loc[idx_dict] = loo_lppd_idx
-            loo_reloo.pareto_k.loc[idx_dict] = 0.0
-
-        except (ValueError, TypeError, RuntimeError) as e:
-            warnings.warn(
-                f"Failed to refit for observation {obs_idx}: {str(e)}. "
-                f"Keeping original PSIS estimate.",
-                UserWarning,
-                stacklevel=2,
-            )
-            continue
-
-    loo_reloo.elpd = np.sum(loo_reloo.elpd_i.values)
-    loo_reloo.se = np.sqrt(n_data_points * np.var(loo_reloo.elpd_i.values))
-    loo_reloo.p = lppd_orig - loo_reloo.elpd
-
-    loo_reloo.warning = np.any(loo_reloo.pareto_k.values > loo_reloo.good_k)
+    loo_refitted.warning = np.any(loo_refitted.pareto_k.values > loo_refitted.good_k)
 
     if not pointwise:
-        loo_reloo.elpd_i = None
-        loo_reloo.pareto_k = None
+        loo_refitted.elpd_i = None
+        loo_refitted.pareto_k = None
 
-    return loo_reloo
+    return loo_refitted

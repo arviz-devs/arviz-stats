@@ -189,7 +189,7 @@ class SamplingWrapper:
             getattr(self, method)(*args)
         except NotImplementedError:
             return False
-        except (TypeError, ValueError, RuntimeError, AttributeError):
+        except Exception:  # pylint: disable=broad-exception-caught
             return True
         return True
 
