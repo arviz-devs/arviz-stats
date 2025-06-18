@@ -44,16 +44,6 @@ class SamplingWrapper:
         Keyword arguments passed to ``log_lik_fun``.
     apply_ufunc_kwargs : dict, optional
         Passed to :func:`xarray:xarray.apply_ufunc` or :func:`wrap_xarray_ufunc`.
-
-
-    Warnings
-    --------
-    Sampling wrappers are an experimental feature in a very early stage. Please use them
-    with caution.
-
-    Notes
-    -----
-    Example of ``log_like_fun`` usage.
     """
 
     def __init__(
