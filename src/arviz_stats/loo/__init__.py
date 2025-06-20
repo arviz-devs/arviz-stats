@@ -6,6 +6,8 @@ from arviz_stats.loo.loo_expectations import loo_expectations, loo_metrics
 from arviz_stats.loo.loo_pit import loo_pit
 from arviz_stats.loo.loo_subsample import loo_subsample, update_subsample
 from arviz_stats.loo.loo_moment_match import loo_moment_match
+from arviz_stats.loo.reloo import reloo
+from arviz_stats.loo.wrapper import SamplingWrapper
 from arviz_stats.loo.compare import compare, _calculate_ics
 
 __all__ = [
@@ -17,5 +19,7 @@ __all__ = [
     "loo_subsample",
     "update_subsample",
     "loo_moment_match",
+    "reloo",
+    "SamplingWrapper",
     "compare",
 ]
