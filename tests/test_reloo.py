@@ -17,11 +17,6 @@ def fixture_non_centered_eight():
     return azb.load_arviz_data("non_centered_eight")
 
 
-@pytest.fixture(name="centered_eight", scope="session")
-def fixture_centered_eight():
-    return azb.load_arviz_data("centered_eight")
-
-
 class MockSamplingWrapper(SamplingWrapper):
     def __init__(self, model, idata_orig=None, **kwargs):
         super().__init__(model, idata_orig, **kwargs)
