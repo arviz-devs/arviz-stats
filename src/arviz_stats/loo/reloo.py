@@ -3,6 +3,7 @@
 from copy import deepcopy
 
 import numpy as np
+import xarray as xr
 from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
@@ -136,6 +137,7 @@ def reloo(
     obs_dims = loo_inputs.obs_dims
     n_data_points = loo_inputs.n_data_points
     n_samples = loo_inputs.n_samples
+    log_likelihood = loo_inputs.log_likelihood
 
     if k_threshold is None:
         k_threshold = min(1 - 1 / np.log10(n_samples), 0.7)
@@ -151,7 +153,10 @@ def reloo(
             loo_refitted.pareto_k = None
         return loo_refitted
 
-    lppd_orig = loo_orig.p + loo_orig.elpd
+    if not hasattr(loo_refitted, "p_loo_i") or loo_refitted.p_loo_i is None:
+        loo_refitted.p_loo_i = xr.full_like(loo_refitted.elpd_i, np.nan)
+        lpd_i = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims)
+        loo_refitted.p_loo_i = lpd_i - loo_refitted.elpd_i
 
     if len(obs_dims) == 1:
         bad_obs_indices = bad_obs_flat_indices
@@ -173,22 +178,28 @@ def reloo(
                 obs_idx_dict[dim] = coord_value
             sel_idx = obs_idx_dict
 
+        log_lik_i = log_likelihood.sel(obs_idx_dict)
+        hat_lpd_i = logsumexp(log_lik_i, dims=sample_dims, b=1 / n_samples).item()
+
         new_obs, excluded_obs = wrapper.sel_observations(sel_idx)
         fit = wrapper.sample(new_obs)
         idata_idx = wrapper.get_inference_data(fit)
         log_lik_idx = wrapper.log_likelihood__i(excluded_obs, idata_idx)
-        loo_lppd_idx = logsumexp(log_lik_idx, dims=sample_dims, b=1 / log_lik_idx.size).item()
-        loo_refitted.elpd_i.loc[obs_idx_dict] = loo_lppd_idx
+        elpd_loo_i = logsumexp(log_lik_idx, dims=sample_dims, b=1 / log_lik_idx.size).item()
+
+        loo_refitted.elpd_i.loc[obs_idx_dict] = elpd_loo_i
         loo_refitted.pareto_k.loc[obs_idx_dict] = 0.0
+        loo_refitted.p_loo_i.loc[obs_idx_dict] = hat_lpd_i - elpd_loo_i
 
     loo_refitted.elpd = np.sum(loo_refitted.elpd_i.values)
     loo_refitted.se = np.sqrt(n_data_points * np.var(loo_refitted.elpd_i.values))
-    loo_refitted.p = lppd_orig - loo_refitted.elpd
+    loo_refitted.p = np.sum(loo_refitted.p_loo_i.values)
 
     loo_refitted.warning = np.any(loo_refitted.pareto_k.values > loo_refitted.good_k)
 
     if not pointwise:
         loo_refitted.elpd_i = None
         loo_refitted.pareto_k = None
+        loo_refitted.p_loo_i = None
 
     return loo_refitted
