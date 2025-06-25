@@ -1,18 +1,21 @@
 """Utility functions for computing the PIT ECDF and the simultaneous confidence bands."""
 
 import math
+import warnings
 
 import numpy as np
 from arviz_base import dict_to_dataset
-from numba import vectorize
-from scipy.optimize import minimize_scalar
 from scipy.special import bdtr, bdtrik  # pylint: disable=no-name-in-module
-from scipy.stats import uniform
+
+try:
+    from numba import vectorize
+
+    NUMBA_FLAG = True
+except ImportError:
+    NUMBA_FLAG = False
 
 
-def difference_ecdf_pit(
-    dt, data_pairs, group, ci_prob, coverage, randomized, method, n_simulations
-):
+def difference_ecdf_pit(dt, data_pairs, group, ci_prob, coverage, randomized, n_simulations):
     """Compute the difference PIT ECDF values.
 
     The probability of the posterior predictive being less than or equal to the observed data.
@@ -34,8 +37,6 @@ def difference_ecdf_pit(
         Whether to randomize the PIT values. Randomization is needed for discrete data.
     n_simulations : int
         The number of simulations to use with method `simulation`.
-    method : str
-        The method to use to compute the confidence bands. Either `simulation` or `optimized`.
     """
     dictio = {}
     rng = np.random.default_rng(214)
@@ -53,7 +54,7 @@ def difference_ecdf_pit(
         if coverage:
             vals = 2 * np.abs(vals - 0.5)
 
-        eval_points, ecdf, ci_lb, ci_ub = ecdf_pit(vals, ci_prob, method, n_simulations, rng)
+        eval_points, ecdf, ci_lb, ci_ub = ecdf_pit(vals, ci_prob, n_simulations, rng=rng)
         dictio[var_predictive] = np.stack(
             [eval_points, ecdf - eval_points, ci_lb - eval_points, ci_ub - eval_points]
         )
@@ -65,7 +66,7 @@ def difference_ecdf_pit(
     )
 
 
-def ecdf_pit(vals, ci_prob, method, n_simulations, rng=None):
+def ecdf_pit(vals, ci_prob, n_simulations, n_chains=1, rng=None):
     """
     Compute the PIT ECDF and the pointwise confidence bands.
 
@@ -75,10 +76,10 @@ def ecdf_pit(vals, ci_prob, method, n_simulations, rng=None):
         The values to compute the PIT ECDF.
     ci_prob : float, optional
         The probability for the credible interval.
-    method : str
-        The method to use to compute the confidence bands. Either `simulation` or `optimized`.
     n_simulations : int
         The number of simulations to use with method `simulation`.
+    n_chains : int, optional
+        The number of chains.
     rng : Generator, optional
         The random number generator to use with the simulation method.
 
@@ -97,27 +98,19 @@ def ecdf_pit(vals, ci_prob, method, n_simulations, rng=None):
         rng = np.random.default_rng(214)
 
     n_draws = len(vals)
-    eval_points = np.linspace(1 / n_draws, 1, n_draws)
+    eval_points = np.arange(1, n_draws) / n_draws
     ecdf = compute_ecdf(vals, eval_points)
 
-    cdf_at_eval_points = uniform(0, 1).cdf(eval_points)
+    prob_pointwise = simulate_confidence_bands(
+        n_draws,
+        n_chains,
+        eval_points,
+        ci_prob,
+        n_simulations,
+        rng,
+    )
 
-    if method == "simulation":
-        prob_pointwise = simulate_confidence_bands(
-            n_draws,
-            eval_points,
-            cdf_at_eval_points,
-            ci_prob,
-            n_simulations,
-            rng,
-        )
-
-    elif method == "optimized":
-        prob_pointwise = optimize_confidence_bands(n_draws, cdf_at_eval_points, ci_prob)
-    else:
-        raise ValueError(f"Invalid method: {method}")
-
-    lower, upper = get_pointwise_confidence_band(prob_pointwise, n_draws, cdf_at_eval_points)
+    lower, upper = get_pointwise_confidence_band(prob_pointwise, n_draws, eval_points)
 
     return eval_points, ecdf, lower, upper
 
@@ -128,23 +121,21 @@ def compute_ecdf(sample, eval_points):
     return np.searchsorted(sample, eval_points, side="right") / len(sample)
 
 
-def get_pointwise_confidence_band(prob, ndraws, cdf_at_eval_points):
+def get_pointwise_confidence_band(prob, ndraws, eval_points):
     """Compute the `prob`-level pointwise confidence band."""
     lower_ci = (1 - prob) / 2
     upper_ci = 1 - lower_ci
-
     # We use the bdtrik function instead of instantiating a binomial distribution
     # and computing the quantiles because it is faster
-    count_lower = np.ceil(bdtrik(lower_ci, ndraws, cdf_at_eval_points))
-    count_upper = np.ceil(bdtrik(upper_ci, ndraws, cdf_at_eval_points))
+    count_lower = np.ceil(bdtrik(lower_ci, ndraws, eval_points))
+    count_upper = np.ceil(bdtrik(upper_ci, ndraws, eval_points))
 
     prob_lower = count_lower / ndraws
     prob_upper = count_upper / ndraws
     return prob_lower, prob_upper
 
 
-### Simulation method
-def simulate_confidence_bands(n_draws, eval_points, cdf_at_eval_points, prob, n_simulations, rng):
+def simulate_confidence_bands(n_draws, n_chains, eval_points, prob, n_simulations, rng):
     """Simulate method for simultaneous confidence bands.
 
     Compute the smallest marginal probability of a pointwise confidence band that
@@ -153,123 +144,91 @@ def simulate_confidence_bands(n_draws, eval_points, cdf_at_eval_points, prob, n_
     Parameters
     ----------
     n_draws : int
-        The number of draws.
+        The total number of draws.
+    n_chains : int
+        The number of chains.
     eval_points : array-like
         The evaluation points.
-    cdf_at_eval_points : array-like
-        The CDF at the evaluation points.
     prob : float
         The probability for the credible interval.
-    num_trials : int
+    n_simulations : int
         The number of trials to use.
     rng : Generator
         The random number generator to use.
     """
-    probs_pointwise = np.empty(n_simulations)
-    for i in range(n_simulations):
-        sample = rng.uniform(0, 1, size=n_draws)
-        ecdf_at_eval_points = compute_ecdf(sample, eval_points)
-        prob_pointwise = fit_pointwise_band_probability(
-            n_draws, ecdf_at_eval_points, cdf_at_eval_points
-        )
-        probs_pointwise[i] = prob_pointwise
+    if n_chains > 1:
+        total_draws = n_draws * n_chains
+        evaluated_counts = np.linspace(1, total_draws, n_draws - 1, dtype=int, endpoint=False)
+        if NUMBA_FLAG:
+            func = hypergeometric_cdf
+        else:
+            warnings.warn(
+                "Numba is not available, using slower implementation for hypergeometric CDF."
+                " Please consider installing numba for better performance.",
+            )
+            from scipy.special._ufuncs import _hypergeom_cdf
 
-    return np.quantile(probs_pointwise, prob)
+            def func(x, population, draws, successes):
+                return _hypergeom_cdf(x, draws, successes, population)
 
+        gamma = np.empty(n_simulations)
+        for i in range(n_simulations):
+            gamma_chains = np.empty(n_chains)
+            for j in range(n_chains):
+                sample = rng.uniform(0, 1, size=n_draws)
+                ecdf_at_eval_points = (compute_ecdf(sample, eval_points) * n_draws).astype(int)
+                prob_lower_tail = np.nanmin(
+                    func(ecdf_at_eval_points, total_draws, n_draws, evaluated_counts)
+                )
+                prob_upper_tail = np.nanmin(
+                    1 - func(ecdf_at_eval_points - 1, total_draws, n_draws, evaluated_counts)
+                )
+                gamma_chains[j] = 1 - 2 * min(prob_lower_tail, prob_upper_tail)
 
-def fit_pointwise_band_probability(
-    n_draws,
-    ecdf_at_eval_points,
-    cdf_at_eval_points,
-):
-    """Return the smallest marginal prob of confidence band that contains the ECDF.
+            gamma[i] = np.min(gamma_chains)
 
-    Parameters
-    ----------
-    n_draws : int
-        The number of draws.
-    ecdf_at_eval_points : array-like
-        The ECDF at the evaluation points.
-    cdf_at_eval_points : array-like
-        The CDF at the evaluation points.
-    """
-    ecdf_scaled = n_draws * ecdf_at_eval_points
-    # We use the bdtr function instead of instantiating a binomial distribution
-    # and computing the cdf because it is faster
-    prob_lower_tail = np.min(bdtr(ecdf_scaled, n_draws, cdf_at_eval_points))
-    prob_upper_tail = np.min(1 - bdtr(ecdf_scaled - 1, n_draws, cdf_at_eval_points))
-    prob_pointwise = 1 - 2 * min(prob_lower_tail, prob_upper_tail)
-    return prob_pointwise
+    else:
+        gamma = np.empty(n_simulations)
+        for i in range(n_simulations):
+            sample = rng.uniform(0, 1, size=n_draws)
+            ecdf_at_eval_points = (compute_ecdf(sample, eval_points) * n_draws).astype(int)
+            prob_lower_tail = np.min(bdtr(ecdf_at_eval_points, n_draws, eval_points))
+            prob_upper_tail = np.min(1 - bdtr(ecdf_at_eval_points - 1, n_draws, eval_points))
+            gamma[i] = 1 - 2 * min(prob_lower_tail, prob_upper_tail)
 
-
-### Optimization method
-### The optimization method should be faster than the simulation method
-### but it is not the case with the current implementation
-### Leave it here for future reference
-def optimize_confidence_bands(ndraws, cdf_at_eval_points, prob):
-    """Estimate probability for simultaneous confidence band using optimization.
-
-    This function simulates the pointwise probability needed to construct pointwise confidence bands
-    that form a `prob`-level confidence envelope for the ECDF of a sample.
-    """
-    # cdf_at_eval_points = np.unique(cdf_at_eval_points)
-    prob_pointwise = minimize_scalar(
-        ecdf_band_optimization_objective,
-        bounds=(prob, 1),
-        method="bounded",
-        options={"xatol": 0.001},
-        args=(cdf_at_eval_points, ndraws, prob),
-    ).x
-    return prob_pointwise
+    return np.quantile(gamma, prob)
 
 
 @vectorize()
-def binomial_pmf(k, n, p, loc):
-    """Compute the binomial probability mass function."""
-    k -= loc
-    if k < 0 or k > n:
+def ln_binomial(n, k):
+    """Compute the natural logarithm of the binomial coefficient."""
+    return math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
+
+
+@vectorize(["float64(int64, int64, int64, int64)"], target="parallel", cache=True)
+def hypergeometric_cdf(x_val, population, draws, successes):
+    """Compute the hypergeometric cumulative distribution function."""
+    k_min = max(0, draws + successes - population)
+
+    if x_val < k_min:
         return 0.0
-    if p == 0:
-        return 1.0 if k == 0 else 0.0
-    if p == 1:
-        return 1.0 if k == n else 0.0
-    if k == 0:
-        return (1 - p) ** n
-    if k == n:
-        return p**n
-    lbinom = math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
-    return np.exp(lbinom + k * np.log(p) + (n - k) * np.log1p(-p))
+    if x_val >= min(successes, draws):
+        return 1.0
 
-
-def ecdf_band_optimization_objective(prob_pointwise, cdf_at_eval_points, ndraws, prob_target):
-    """Objective function for optimizing the simultaneous confidence band probability."""
-    lower, upper = get_pointwise_confidence_band(prob_pointwise, ndraws, cdf_at_eval_points)
-    lower_count = (lower * ndraws).astype(int)
-    upper_count = (upper * ndraws).astype(int) + 1
-    cdf_with_zero = np.insert(cdf_at_eval_points[:-1], 0, 0)
-    prob_between_points = (cdf_at_eval_points - cdf_with_zero) / (1 - cdf_with_zero)
-    prob_interior = ecdf_band_interior_probability(
-        prob_between_points, ndraws, lower_count, upper_count
+    cdf = np.exp(
+        ln_binomial(successes, k_min)
+        + ln_binomial(population - successes, draws - k_min)
+        - ln_binomial(population, draws)
     )
-    return abs(prob_interior - prob_target)
 
-
-def ecdf_band_interior_probability(prob_between_points, ndraws, lower_count, upper_count):
-    """Compute the probability of the ECDF being inside the pointwise confidence bands."""
-    interval_left = np.zeros(1)
-    prob_interior = np.ones(1)
-    for i in range(prob_between_points.shape[0]):
-        interval_right = np.arange(lower_count[i], upper_count[i])
-        prob_interior = update_ecdf_band_interior_probabilities(
-            prob_interior, interval_left, interval_right, prob_between_points[i], ndraws
-        )
-        interval_left = interval_right
-    return prob_interior.sum()
-
-
-def update_ecdf_band_interior_probabilities(prob_left, interval_left, interval_right, p, ndraws):
-    """Update the probability of the ECDF being inside the pointwise confidence bands."""
-    interval_left = interval_left[:, None]
-    prob_conditional = binomial_pmf(interval_right, ndraws - interval_left, p, interval_left)
-    prob_right = np.dot(prob_left, prob_conditional)
-    return prob_right
+    current_prob = cdf
+    if cdf > 0.0:
+        for k in range(k_min + 1, x_val + 1):
+            if k <= successes and k <= draws and (population - successes - draws + k) > 0:
+                ratio = ((successes - k + 1) * (draws - k + 1)) / (
+                    k * (population - successes - draws + k)
+                )
+                current_prob *= ratio
+                cdf += current_prob
+        return min(cdf, 1.0)
+    return np.nan
