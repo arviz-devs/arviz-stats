@@ -161,7 +161,7 @@ def reloo(
     if len(obs_dims) == 1:
         bad_obs_indices = bad_obs_flat_indices
     else:
-        obs_shape = [len(loo_orig.pareto_k.coords[dim]) for dim in obs_dims]
+        obs_shape = [loo_orig.pareto_k.sizes[dim] for dim in obs_dims]
         bad_obs_indices = np.array(np.unravel_index(bad_obs_flat_indices, obs_shape)).T
 
     for i, _ in enumerate(bad_obs_flat_indices):
