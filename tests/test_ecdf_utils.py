@@ -1,6 +1,9 @@
 from numpy.testing import assert_array_almost_equal
 from scipy.special._ufuncs import _hypergeom_cdf
 
+from .helpers import importorskip
+
+azb = importorskip("arviz_base")
 from arviz_stats.ecdf_utils import hypergeometric_cdf
 
 
