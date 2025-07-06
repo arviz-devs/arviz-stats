@@ -9,7 +9,7 @@ from arviz_stats.loo.helper_loo import (
 )
 
 
-def loo(data, pointwise=None, var_name=None, reff=None):
+def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None):
     """Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
@@ -30,6 +30,9 @@ def loo(data, pointwise=None, var_name=None, reff=None):
     reff: float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
+    log_weights : DataArray, optional
+        Smoothed log weights. It must have the same shape as the log likelihood data.
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
 
     Returns
     -------
@@ -49,6 +52,8 @@ def loo(data, pointwise=None, var_name=None, reff=None):
         - **good_k**: For a sample size S, the threshold is computed as
           ``min(1 - 1/log10(S), 0.7)``
         - **approx_posterior**: True if approximate posterior was used.
+        - **log_weights**: :class:`~xarray.DataArray` containing the log weights used in the
+          computation
 
     Examples
     --------
@@ -90,9 +95,12 @@ def loo(data, pointwise=None, var_name=None, reff=None):
     if reff is None:
         reff = _get_r_eff(data, loo_inputs.n_samples)
 
-    log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
-        r_eff=reff, dim=loo_inputs.sample_dims
-    )
+    if log_weights is None:
+        log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
+            r_eff=reff, dim=loo_inputs.sample_dims
+        )
+
+    _, pareto_k = loo_inputs.log_likelihood.azstats.psislw(r_eff=reff, dim=loo_inputs.sample_dims)
 
     return _compute_loo_results(
         log_likelihood=loo_inputs.log_likelihood,

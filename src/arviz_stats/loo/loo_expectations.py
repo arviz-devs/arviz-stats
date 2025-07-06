@@ -15,6 +15,7 @@ def loo_expectations(
     var_name=None,
     kind="mean",
     probs=None,
+    log_weights=None,
 ):
     """Compute weighted expectations using the PSIS-LOO-CV method.
 
@@ -38,6 +39,9 @@ def loo_expectations(
         - 'quantile': the quantile of the posterior predictive distribution.
     probs: float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
+    log_weights : DataArray, optional
+        Smoothed log weights. It must have the same shape as the log likelihood data.
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
 
     Returns
     -------
@@ -87,8 +91,10 @@ def loo_expectations(
     log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
     n_samples = log_likelihood[var_name].sizes["chain"] * log_likelihood[var_name].sizes["draw"]
 
-    log_weights, _ = log_likelihood.azstats.psislw()
-    log_weights = log_weights[var_name]
+    if log_weights is None:
+        log_weights, _ = log_likelihood.azstats.psislw()
+        log_weights = log_weights[var_name]
+
     weights = np.exp(log_weights)
 
     posterior_predictive = extract(

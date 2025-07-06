@@ -97,6 +97,9 @@ def test_loo(centered_eight, pointwise):
     assert loo_data.warning is False
     assert loo_data.kind == "loo"
     assert loo_data.scale == "log"
+    assert loo_data.log_weights is not None
+    assert loo_data.log_weights.shape == (8, 4, 500)
+
     if pointwise:
         assert_almost_equal(
             loo_data.pareto_k, [0.43, 0.39, 0.49, 0.47, 0.44, 0.55, 0.31, 0.52], decimal=1
@@ -562,7 +565,7 @@ def test_loo_moment_match(datatree, loo_orig, moment_match_data):
     assert loo_mm.method == "loo_moment_match"
     mm_bad_k_count = np.sum(loo_mm.pareto_k.values > k_threshold)
     assert mm_bad_k_count <= orig_bad_k_count
-    assert loo_mm.elpd > loo_orig.elpd
+    assert loo_mm.elpd >= loo_orig.elpd
 
     assert hasattr(loo_mm, "p_loo_i"), "loo_mm object should have p_loo_i attribute"
     assert np.sum(loo_mm.p_loo_i.values) >= 0

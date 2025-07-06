@@ -31,8 +31,8 @@ def loo_pit(
         variables are used. The function assumes that the observed and log_likelihood
         variables share the same names.
     log_weights: DataArray
-        Smoothed log_weights. It must have the same shape as ``y_pred``
-        Defaults to None, it will be computed using the PSIS-LOO method.
+        Smoothed log_weights. It must have the same shape as ``y_pred``.
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
 
     Returns
     -------
