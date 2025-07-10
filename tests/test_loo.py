@@ -648,58 +648,7 @@ def test_loo_moment_match_function_errors(datatree, loo_orig):
         )
 
 
-def test_loo_weights_reuse_and_elpddata_input(centered_eight):
-    loo_result = loo(centered_eight, pointwise=True)
-    assert loo_result.log_weights is not None
-    assert loo_result.log_weights.shape == (8, 4, 500)
-    assert loo_result.log_weights.values.shape == (8, 4, 500)
-
-    loo_exp, khat = loo_expectations(
-        centered_eight, kind="mean", log_weights=loo_result.log_weights
-    )
-    assert loo_exp is not None
-    assert khat is not None
-    assert loo_exp.shape == (8,)
-
-    loo_pit_vals = loo_pit(centered_eight, log_weights=loo_result.log_weights)
-    assert loo_pit_vals is not None
-    assert "obs" in loo_pit_vals
-    assert loo_pit_vals["obs"].shape == (8,)
-
-    metrics = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result.log_weights)
-    assert metrics is not None
-    assert hasattr(metrics, "mean")
-    assert hasattr(metrics, "se")
-
-    loo_exp_elpddata, khat_elpddata = loo_expectations(
-        centered_eight, kind="mean", log_weights=loo_result
-    )
-    assert loo_exp_elpddata is not None
-    assert khat_elpddata is not None
-    assert_array_equal(loo_exp.values, loo_exp_elpddata.values)
-
-    loo_pit_elpddata = loo_pit(centered_eight, log_weights=loo_result)
-    assert loo_pit_elpddata is not None
-    assert_array_equal(loo_pit_vals["obs"].values, loo_pit_elpddata["obs"].values)
-
-    metrics_elpddata = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result)
-    assert metrics_elpddata is not None
-    assert metrics_elpddata.mean == metrics.mean
-    assert metrics_elpddata.se == metrics.se
-
-    loo_sub_elpddata = loo_subsample(
-        centered_eight,
-        observations=4,
-        pointwise=True,
-        var_name="obs",
-        log_weights=loo_result,
-    )
-    assert loo_sub_elpddata is not None
-    assert loo_sub_elpddata.log_weights is not None
-    assert loo_sub_elpddata.log_weights["obs"].shape == (4, 4, 500)
-
-
-def test_log_weights_storage_and_reuse(centered_eight):
+def test_log_weights_storage(centered_eight):
     loo_pw_true = loo(centered_eight, pointwise=True)
     assert loo_pw_true.log_weights is not None
     assert loo_pw_true.log_weights.shape == (8, 4, 500)
@@ -728,29 +677,58 @@ def test_log_weights_storage_and_reuse(centered_eight):
     assert loo_with_weights.log_weights is not None
     assert_array_equal(loo_with_weights.log_weights.values, loo_pw_true.log_weights.values)
 
-    loo_exp, khat = loo_expectations(centered_eight, kind="mean", log_weights=loo_pw_true)
-    assert loo_exp is not None
-    assert khat is not None
-    assert loo_exp.shape == (8,)
 
-    loo_pit_vals = loo_pit(centered_eight, log_weights=loo_pw_true)
-    assert loo_pit_vals is not None
-    assert "obs" in loo_pit_vals
-    assert loo_pit_vals["obs"].shape == (8,)
+def test_log_weights_input_formats(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+    log_weights_da = loo_result.log_weights
 
-    metrics = loo_metrics(centered_eight, kind="rmse", log_weights=loo_pw_true)
-    assert metrics is not None
-    assert hasattr(metrics, "mean")
-    assert hasattr(metrics, "se")
+    loo_exp_da, khat_da = loo_expectations(centered_eight, kind="mean", log_weights=log_weights_da)
+    loo_exp_elpddata, khat_elpddata = loo_expectations(
+        centered_eight, kind="mean", log_weights=loo_result
+    )
+    assert_array_equal(loo_exp_da.values, loo_exp_elpddata.values)
+    assert_array_equal(khat_da.values, khat_elpddata.values)
+
+    loo_pit_da = loo_pit(centered_eight, log_weights=log_weights_da)
+    loo_pit_elpddata = loo_pit(centered_eight, log_weights=loo_result)
+    assert_array_equal(loo_pit_da["obs"].values, loo_pit_elpddata["obs"].values)
+
+    metrics_da = loo_metrics(centered_eight, kind="rmse", log_weights=log_weights_da)
+    metrics_elpddata = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result)
+    assert metrics_da.mean == metrics_elpddata.mean
+    assert metrics_da.se == metrics_elpddata.se
 
     loo_sub_elpddata = loo_subsample(
         centered_eight,
         observations=4,
         pointwise=True,
         var_name="obs",
-        log_weights=loo_pw_true,
-        seed=42,
+        log_weights=loo_result,
     )
     assert loo_sub_elpddata is not None
     assert loo_sub_elpddata.log_weights is not None
     assert loo_sub_elpddata.log_weights["obs"].shape == (4, 4, 500)
+
+
+def test_log_weights_reuse(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+    assert loo_result.log_weights is not None
+    assert loo_result.log_weights.shape == (8, 4, 500)
+    assert loo_result.log_weights.values.shape == (8, 4, 500)
+
+    loo_exp, khat = loo_expectations(
+        centered_eight, kind="mean", log_weights=loo_result.log_weights
+    )
+    assert loo_exp is not None
+    assert khat is not None
+    assert loo_exp.shape == (8,)
+
+    loo_pit_vals = loo_pit(centered_eight, log_weights=loo_result.log_weights)
+    assert loo_pit_vals is not None
+    assert "obs" in loo_pit_vals
+    assert loo_pit_vals["obs"].shape == (8,)
+
+    metrics = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result.log_weights)
+    assert metrics is not None
+    assert hasattr(metrics, "mean")
+    assert hasattr(metrics, "se")
