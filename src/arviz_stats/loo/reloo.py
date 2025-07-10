@@ -18,10 +18,10 @@ __all__ = ["reloo"]
 def reloo(
     wrapper,
     loo_orig=None,
+    var_name=None,
+    log_weights=None,
     k_threshold=-np.inf,
     pointwise=None,
-    log_weights=None,
-    var_name=None,
 ):
     r"""Recalculate exact Leave-One-Out cross validation refitting where the approximation fails.
 
@@ -50,13 +50,10 @@ def reloo(
     loo_orig : ELPDData, optional
         Existing LOO results with pointwise data. If None, will compute
         PSIS-LOO-CV first using the data from ``wrapper``.
-    k_threshold : float, optional
-        Pareto shape threshold. Observations with k values above this
-        threshold will trigger a refit. Defaults to :math:`\min(1 - 1/\log_{10}(S), 0.7)`,
-        where S is the number of samples.
-    pointwise : bool, optional
-        If True, return pointwise LOO data. Defaults to
-        ``rcParams["stats.ic_pointwise"]``.
+    var_name : str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation. Defaults to None, which will
+        use all log likelihood data.
     log_weights : DataArray or ELPDData, optional
         Smoothed log weights. Can be either:
 
@@ -64,10 +61,13 @@ def reloo(
         - An ELPDData object from a previous :func:`arviz_stats.loo` call.
 
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
-    var_name : str, optional
-        The name of the variable in log_likelihood groups storing the pointwise log
-        likelihood data to use for loo computation. Defaults to None, which will
-        use all log likelihood data.
+    k_threshold : float, optional
+        Pareto shape threshold. Observations with k values above this
+        threshold will trigger a refit. Defaults to :math:`\min(1 - 1/\log_{10}(S), 0.7)`,
+        where S is the number of samples.
+    pointwise : bool, optional
+        If True, return pointwise LOO data. Defaults to
+        ``rcParams["stats.ic_pointwise"]``.
 
     Returns
     -------

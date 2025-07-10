@@ -13,9 +13,9 @@ from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 def loo_expectations(
     data,
     var_name=None,
+    log_weights=None,
     kind="mean",
     probs=None,
-    log_weights=None,
 ):
     """Compute weighted expectations using the PSIS-LOO-CV method.
 
@@ -29,6 +29,13 @@ def loo_expectations(
     var_name: str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
+    log_weights : DataArray or ELPDData, optional
+        Smoothed log weights. Can be either:
+
+        - A DataArray with the same shape as the log likelihood data
+        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
+
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     kind: str, optional
         The kind of expectation to compute. Available options are:
 
@@ -39,13 +46,6 @@ def loo_expectations(
         - 'quantile': the quantile of the posterior predictive distribution.
     probs: float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
-    log_weights : DataArray or ELPDData, optional
-        Smoothed log weights. Can be either:
-
-        - A DataArray with the same shape as the log likelihood data
-        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
-
-        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
 
     Returns
     -------
