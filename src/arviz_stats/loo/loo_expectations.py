@@ -7,7 +7,7 @@ from xarray import apply_ufunc
 
 from arviz_stats.loo.helper_loo import _warn_pareto_k
 from arviz_stats.metrics import _metrics
-from arviz_stats.utils import get_log_likelihood_dataset
+from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
 def loo_expectations(
@@ -39,8 +39,12 @@ def loo_expectations(
         - 'quantile': the quantile of the posterior predictive distribution.
     probs: float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
-    log_weights : DataArray, optional
-        Smoothed log weights. It must have the same shape as the log likelihood data.
+    log_weights : DataArray or ELPDData, optional
+        Smoothed log weights. Can be either:
+
+        - A DataArray with the same shape as the log likelihood data
+        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
+
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
 
     Returns
@@ -95,6 +99,13 @@ def loo_expectations(
         log_weights, _ = log_likelihood.azstats.psislw()
         log_weights = log_weights[var_name]
 
+    if isinstance(log_weights, ELPDData):
+        if log_weights.log_weights is None:
+            raise ValueError("ELPDData object does not contain log_weights")
+        log_weights = log_weights.log_weights
+        if var_name in log_weights:
+            log_weights = log_weights[var_name]
+
     weights = np.exp(log_weights)
 
     posterior_predictive = extract(
@@ -140,7 +151,7 @@ def loo_expectations(
     return loo_expec, khat
 
 
-def loo_metrics(data, kind="rmse", var_name=None, round_to="2g"):
+def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to="2g"):
     """Compute predictive metrics using the PSIS-LOO-CV method.
 
     Currently supported metrics are mean absolute error, mean squared error and
@@ -165,6 +176,13 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to="2g"):
     var_name: str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
+    log_weights: DataArray or ELPDData, optional
+        Smoothed log weights. Can be either:
+
+        - A DataArray with the same shape as the log likelihood data
+        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
+
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     round_to: int or str, optional
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.
@@ -207,7 +225,7 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to="2g"):
         var_name = list(data.observed_data.data_vars.keys())[0]
 
     observed = data.observed_data[var_name]
-    predicted, _ = loo_expectations(data, kind="mean", var_name=var_name)
+    predicted, _ = loo_expectations(data, kind="mean", var_name=var_name, log_weights=log_weights)
 
     return _metrics(observed, predicted, kind, round_to)
 

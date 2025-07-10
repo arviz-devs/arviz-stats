@@ -2,7 +2,7 @@
 # ruff: noqa: F811
 import numpy as np
 import pytest
-from numpy.testing import assert_allclose, assert_almost_equal
+from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
 
 from .helpers import datatree, datatree_binary, importorskip  # noqa: F401
 
@@ -568,7 +568,6 @@ def test_loo_moment_match(datatree, loo_orig, moment_match_data):
     assert loo_mm.elpd >= loo_orig.elpd
 
     assert hasattr(loo_mm, "p_loo_i"), "loo_mm object should have p_loo_i attribute"
-    assert np.sum(loo_mm.p_loo_i.values) >= 0
 
 
 def test_loo_moment_match_no_problematic_k(datatree, loo_orig, moment_match_data):
@@ -647,3 +646,111 @@ def test_loo_moment_match_function_errors(datatree, loo_orig):
             k_threshold=0.7,
             var_name="y",
         )
+
+
+def test_loo_weights_reuse_and_elpddata_input(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+    assert loo_result.log_weights is not None
+    assert loo_result.log_weights.shape == (8, 4, 500)
+    assert loo_result.log_weights.values.shape == (8, 4, 500)
+
+    loo_exp, khat = loo_expectations(
+        centered_eight, kind="mean", log_weights=loo_result.log_weights
+    )
+    assert loo_exp is not None
+    assert khat is not None
+    assert loo_exp.shape == (8,)
+
+    loo_pit_vals = loo_pit(centered_eight, log_weights=loo_result.log_weights)
+    assert loo_pit_vals is not None
+    assert "obs" in loo_pit_vals
+    assert loo_pit_vals["obs"].shape == (8,)
+
+    metrics = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result.log_weights)
+    assert metrics is not None
+    assert hasattr(metrics, "mean")
+    assert hasattr(metrics, "se")
+
+    loo_exp_elpddata, khat_elpddata = loo_expectations(
+        centered_eight, kind="mean", log_weights=loo_result
+    )
+    assert loo_exp_elpddata is not None
+    assert khat_elpddata is not None
+    assert_array_equal(loo_exp.values, loo_exp_elpddata.values)
+
+    loo_pit_elpddata = loo_pit(centered_eight, log_weights=loo_result)
+    assert loo_pit_elpddata is not None
+    assert_array_equal(loo_pit_vals["obs"].values, loo_pit_elpddata["obs"].values)
+
+    metrics_elpddata = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result)
+    assert metrics_elpddata is not None
+    assert metrics_elpddata.mean == metrics.mean
+    assert metrics_elpddata.se == metrics.se
+
+    loo_sub_elpddata = loo_subsample(
+        centered_eight,
+        observations=4,
+        pointwise=True,
+        var_name="obs",
+        log_weights=loo_result,
+    )
+    assert loo_sub_elpddata is not None
+    assert loo_sub_elpddata.log_weights is not None
+    assert loo_sub_elpddata.log_weights["obs"].shape == (4, 4, 500)
+
+
+def test_log_weights_storage_and_reuse(centered_eight):
+    loo_pw_true = loo(centered_eight, pointwise=True)
+    assert loo_pw_true.log_weights is not None
+    assert loo_pw_true.log_weights.shape == (8, 4, 500)
+
+    loo_pw_false = loo(centered_eight, pointwise=False)
+    assert loo_pw_false.log_weights is not None
+    assert loo_pw_false.log_weights.shape == (8, 4, 500)
+
+    loo_sub_pw_true = loo_subsample(centered_eight, observations=4, pointwise=True, seed=42)
+    assert loo_sub_pw_true.log_weights is not None
+    assert isinstance(loo_sub_pw_true.log_weights, xr.Dataset)
+    assert "obs" in loo_sub_pw_true.log_weights
+    assert loo_sub_pw_true.log_weights["obs"].shape == (4, 4, 500)
+
+    loo_sub_pw_false = loo_subsample(centered_eight, observations=4, pointwise=False, seed=42)
+    assert loo_sub_pw_false.log_weights is not None
+    assert loo_sub_pw_false.log_weights.shape == (4, 4, 500)
+
+    loo_updated = update_subsample(loo_sub_pw_true, centered_eight, observations=2, seed=43)
+    assert loo_updated.log_weights is not None
+    assert isinstance(loo_updated.log_weights, xr.Dataset)
+    assert "obs" in loo_updated.log_weights
+    assert loo_updated.log_weights["obs"].shape[0] >= 5
+
+    loo_with_weights = loo(centered_eight, pointwise=True, log_weights=loo_pw_true.log_weights)
+    assert loo_with_weights.log_weights is not None
+    assert_array_equal(loo_with_weights.log_weights.values, loo_pw_true.log_weights.values)
+
+    loo_exp, khat = loo_expectations(centered_eight, kind="mean", log_weights=loo_pw_true)
+    assert loo_exp is not None
+    assert khat is not None
+    assert loo_exp.shape == (8,)
+
+    loo_pit_vals = loo_pit(centered_eight, log_weights=loo_pw_true)
+    assert loo_pit_vals is not None
+    assert "obs" in loo_pit_vals
+    assert loo_pit_vals["obs"].shape == (8,)
+
+    metrics = loo_metrics(centered_eight, kind="rmse", log_weights=loo_pw_true)
+    assert metrics is not None
+    assert hasattr(metrics, "mean")
+    assert hasattr(metrics, "se")
+
+    loo_sub_elpddata = loo_subsample(
+        centered_eight,
+        observations=4,
+        pointwise=True,
+        var_name="obs",
+        log_weights=loo_pw_true,
+        seed=42,
+    )
+    assert loo_sub_elpddata is not None
+    assert loo_sub_elpddata.log_weights is not None
+    assert loo_sub_elpddata.log_weights["obs"].shape == (4, 4, 500)

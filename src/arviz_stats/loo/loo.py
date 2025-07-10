@@ -52,8 +52,7 @@ def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None):
         - **good_k**: For a sample size S, the threshold is computed as
           ``min(1 - 1/log10(S), 0.7)``
         - **approx_posterior**: True if approximate posterior was used.
-        - **log_weights**: :class:`~xarray.DataArray` containing the log weights used in the
-          computation
+        - **log_weights**: Smoothed log weights.
 
     Examples
     --------
@@ -99,8 +98,10 @@ def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None):
         log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
             r_eff=reff, dim=loo_inputs.sample_dims
         )
-
-    _, pareto_k = loo_inputs.log_likelihood.azstats.psislw(r_eff=reff, dim=loo_inputs.sample_dims)
+    else:
+        _, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
+            r_eff=reff, dim=loo_inputs.sample_dims
+        )
 
     return _compute_loo_results(
         log_likelihood=loo_inputs.log_likelihood,

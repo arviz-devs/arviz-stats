@@ -528,7 +528,6 @@ def _compute_loo_results(
     if log_weights is None or pareto_k is None:
         log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dim=sample_dims)
 
-    raw_log_weights = log_weights.copy()
     log_weights_sum = log_weights + log_likelihood
     pareto_k_da = pareto_k
 
@@ -561,7 +560,7 @@ def _compute_loo_results(
             warn_mg,
             good_k,
             approx_posterior=approx_posterior,
-            log_weights=raw_log_weights,
+            log_weights=log_weights,
         )
 
     _warn_pointwise_loo(elpd, elpd_i_values)
