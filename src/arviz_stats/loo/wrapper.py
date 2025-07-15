@@ -173,16 +173,6 @@ class SamplingWrapper:
         )
         return log_lik_idx
 
-    def _check_method_is_implemented(self, method, *args):
-        """Check a given method is implemented."""
-        try:
-            getattr(self, method)(*args)
-        except NotImplementedError:
-            return False
-        except Exception:  # pylint: disable=broad-exception-caught
-            return True
-        return True
-
     def check_implemented_methods(self, methods):
         """Check that all methods listed are implemented.
 
@@ -199,13 +189,12 @@ class SamplingWrapper:
         -------
             List with all non implemented methods
         """
-        supported_methods_1arg = (
+        supported_methods = (
             "sel_observations",
             "sample",
             "get_inference_data",
+            "log_likelihood__i",
         )
-        supported_methods_2args = ("log_likelihood__i",)
-        supported_methods = [*supported_methods_1arg, *supported_methods_2args]
         bad_methods = [method for method in methods if method not in supported_methods]
         if bad_methods:
             raise ValueError(
@@ -214,13 +203,9 @@ class SamplingWrapper:
             )
 
         not_implemented = []
-        for method in methods:
-            if method in supported_methods_1arg:
-                if self._check_method_is_implemented(method, 1):
-                    continue
-                not_implemented.append(method)
-            elif method in supported_methods_2args:
-                if self._check_method_is_implemented(method, 1, 1):
-                    continue
-                not_implemented.append(method)
+        for method_name in methods:
+            instance_method = getattr(self.__class__, method_name)
+            base_class_method = getattr(SamplingWrapper, method_name)
+            if instance_method == base_class_method:
+                not_implemented.append(method_name)
         return not_implemented
