@@ -6,7 +6,7 @@ from arviz_base import convert_to_datatree, extract
 from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.helper_loo import _get_r_eff
-from arviz_stats.utils import get_log_likelihood_dataset
+from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
 def loo_pit(
@@ -30,9 +30,13 @@ def loo_pit(
         Names of the variables to be used to compute the LOO-PIT values. If None, all
         variables are used. The function assumes that the observed and log_likelihood
         variables share the same names.
-    log_weights: DataArray
-        Smoothed log_weights. It must have the same shape as ``y_pred``
-        Defaults to None, it will be computed using the PSIS-LOO method.
+    log_weights: DataArray or ELPDData, optional
+        Smoothed log weights. Can be either:
+
+        - A DataArray with the same shape as ``y_pred``
+        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
+
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
 
     Returns
     -------
@@ -91,6 +95,11 @@ def loo_pit(
         n_samples = log_likelihood.chain.size * log_likelihood.draw.size
         reff = _get_r_eff(data, n_samples)
         log_weights, _ = log_likelihood.azstats.psislw(r_eff=reff)
+
+    if isinstance(log_weights, ELPDData):
+        if log_weights.log_weights is None:
+            raise ValueError("ELPDData object does not contain log_weights")
+        log_weights = log_weights.log_weights
 
     posterior_predictive = extract(
         data,

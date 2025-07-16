@@ -1,6 +1,7 @@
 # pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
+from numpy.testing import assert_array_almost_equal
 
 from .helpers import importorskip
 
@@ -70,6 +71,7 @@ def high_k_loo_data(non_centered_eight):
         scale=loo_data.scale,
         elpd_i=loo_data.elpd_i.copy(),
         pareto_k=loo_data.pareto_k.copy(),
+        log_weights=loo_data.log_weights.copy() if loo_data.log_weights is not None else None,
     )
     loo_data_modified.pareto_k.values[loo_data_modified.pareto_k.values > 0.7] = 0.6
     loo_data_modified.pareto_k.values[[0, 2, 5]] = [0.8, 0.9, 1.1]
@@ -214,3 +216,41 @@ def test_reloo_multidimensional(mock_2d_data):
 
     unchanged_loc = {"school": "school_0", "measurement": "meas_0"}
     assert result.pareto_k.loc[unchanged_loc] == loo_modified.pareto_k.loc[unchanged_loc]
+
+
+def test_reloo_with_log_weights(mock_wrapper):
+    loo_result = loo(mock_wrapper.idata_orig, pointwise=True, var_name="obs")
+
+    result_with_weights = reloo(
+        mock_wrapper,
+        loo_orig=loo_result,
+        k_threshold=0.7,
+        pointwise=True,
+        var_name="obs",
+    )
+
+    assert result_with_weights.elpd is not None and not np.isnan(result_with_weights.elpd)
+    assert result_with_weights.se is not None and not np.isnan(result_with_weights.se)
+    assert result_with_weights.p is not None and not np.isnan(result_with_weights.p)
+
+
+def test_reloo_log_weights_storage(mock_wrapper, high_k_loo_data):
+    result_pw_true = reloo(mock_wrapper, loo_orig=high_k_loo_data, k_threshold=0.7, pointwise=True)
+
+    assert result_pw_true.log_weights is not None
+    bad_k_mask = high_k_loo_data.pareto_k > 0.7
+    assert np.all(np.isnan(result_pw_true.log_weights.values[bad_k_mask]))
+    good_k_mask = ~bad_k_mask
+    assert_array_almost_equal(
+        result_pw_true.log_weights.values[good_k_mask],
+        high_k_loo_data.log_weights.values[good_k_mask],
+    )
+
+    result_pw_false = reloo(
+        mock_wrapper, loo_orig=high_k_loo_data, k_threshold=0.7, pointwise=False
+    )
+
+    assert result_pw_false.log_weights is not None
+    assert_array_almost_equal(
+        result_pw_false.log_weights.values, high_k_loo_data.log_weights.values
+    )

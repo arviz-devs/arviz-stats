@@ -18,6 +18,8 @@ __all__ = ["reloo"]
 def reloo(
     wrapper,
     loo_orig=None,
+    var_name=None,
+    log_weights=None,
     k_threshold=-np.inf,
     pointwise=None,
 ):
@@ -48,6 +50,17 @@ def reloo(
     loo_orig : ELPDData, optional
         Existing LOO results with pointwise data. If None, will compute
         PSIS-LOO-CV first using the data from ``wrapper``.
+    var_name : str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation. Defaults to None, which will
+        use all log likelihood data.
+    log_weights : DataArray or ELPDData, optional
+        Smoothed log weights. Can be either:
+
+        - A DataArray with the same shape as the log likelihood data
+        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
+
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     k_threshold : float, optional
         Pareto shape threshold. Observations with k values above this
         threshold will trigger a refit. Defaults to :math:`\min(1 - 1/\log_{10}(S), 0.7)`,
@@ -119,7 +132,27 @@ def reloo(
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     if loo_orig is None:
-        loo_orig = loo(wrapper.data, var_name=wrapper.log_lik_var_name, pointwise=True)
+        pareto_k = None
+        if isinstance(log_weights, ELPDData):
+            if log_weights.log_weights is None:
+                raise ValueError("ELPDData object does not contain log_weights")
+            pareto_k = log_weights.pareto_k
+            log_weights = log_weights.log_weights
+
+            # Dataset case comes from loo_subsample
+            if isinstance(log_weights, xr.Dataset):
+                if var_name and var_name in log_weights:
+                    log_weights = log_weights[var_name]
+                else:
+                    log_weights = log_weights[list(log_weights.data_vars)[0]]
+
+        loo_orig = loo(
+            wrapper.idata_orig,
+            var_name=var_name,
+            pointwise=True,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+        )
 
     if not isinstance(loo_orig, ELPDData):
         raise TypeError("loo_orig must be an ELPDData object.")
@@ -133,7 +166,7 @@ def reloo(
     sample_dims = ["chain", "draw"]
     loo_refitted = deepcopy(loo_orig)
 
-    loo_inputs = _prepare_loo_inputs(wrapper.data, wrapper.log_lik_var_name)
+    loo_inputs = _prepare_loo_inputs(wrapper.idata_orig, var_name)
     obs_dims = loo_inputs.obs_dims
     n_data_points = loo_inputs.n_data_points
     n_samples = loo_inputs.n_samples
@@ -201,5 +234,16 @@ def reloo(
         loo_refitted.elpd_i = None
         loo_refitted.pareto_k = None
         loo_refitted.p_loo_i = None
+        if hasattr(loo_orig, "log_weights") and loo_orig.log_weights is not None:
+            loo_refitted.log_weights = loo_orig.log_weights
+    else:
+        if hasattr(loo_orig, "log_weights") and loo_orig.log_weights is not None:
+            loo_refitted.log_weights = loo_orig.log_weights.copy()
+            for i, obs_idx in enumerate(bad_obs_flat_indices):
+                if len(obs_dims) == 1:
+                    loo_refitted.log_weights[bad_obs_indices[i]] = np.nan
+                else:
+                    obs_idx_tuple = tuple(bad_obs_indices[i])
+                    loo_refitted.log_weights[obs_idx_tuple] = np.nan
 
     return loo_refitted
