@@ -132,9 +132,11 @@ def reloo(
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     if loo_orig is None:
+        pareto_k = None
         if isinstance(log_weights, ELPDData):
             if log_weights.log_weights is None:
                 raise ValueError("ELPDData object does not contain log_weights")
+            pareto_k = log_weights.pareto_k
             log_weights = log_weights.log_weights
 
             # Dataset case comes from loo_subsample
@@ -145,7 +147,11 @@ def reloo(
                     log_weights = log_weights[list(log_weights.data_vars)[0]]
 
         loo_orig = loo(
-            wrapper.idata_orig, var_name=var_name, pointwise=True, log_weights=log_weights
+            wrapper.idata_orig,
+            var_name=var_name,
+            pointwise=True,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
         )
 
     if not isinstance(loo_orig, ELPDData):

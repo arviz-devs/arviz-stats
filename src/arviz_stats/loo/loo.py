@@ -9,7 +9,7 @@ from arviz_stats.loo.helper_loo import (
 )
 
 
-def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None):
+def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None, pareto_k=None):
     """Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
@@ -33,6 +33,11 @@ def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None):
     log_weights : DataArray, optional
         Smoothed log weights. It must have the same shape as the log likelihood data.
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
+        Must be provided together with pareto_k or both must be None.
+    pareto_k : DataArray, optional
+        Pareto shape values. It must have the same shape as the log likelihood data.
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
+        Must be provided together with log_weights or both must be None.
 
     Returns
     -------
@@ -94,12 +99,14 @@ def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None):
     if reff is None:
         reff = _get_r_eff(data, loo_inputs.n_samples)
 
-    if log_weights is None:
-        log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
-            r_eff=reff, dim=loo_inputs.sample_dims
+    if (log_weights is None) != (pareto_k is None):
+        raise ValueError(
+            "Both log_weights and pareto_k must be provided together or both must be None. "
+            "Only one was provided."
         )
-    else:
-        _, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
+
+    if log_weights is None and pareto_k is None:
+        log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
             r_eff=reff, dim=loo_inputs.sample_dims
         )
 

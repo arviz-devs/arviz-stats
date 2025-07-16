@@ -673,7 +673,12 @@ def test_log_weights_storage(centered_eight):
     assert "obs" in loo_updated.log_weights
     assert loo_updated.log_weights["obs"].shape[0] >= 5
 
-    loo_with_weights = loo(centered_eight, pointwise=True, log_weights=loo_pw_true.log_weights)
+    loo_with_weights = loo(
+        centered_eight,
+        pointwise=True,
+        log_weights=loo_pw_true.log_weights,
+        pareto_k=loo_pw_true.pareto_k,
+    )
     assert loo_with_weights.log_weights is not None
     assert_array_equal(loo_with_weights.log_weights.values, loo_pw_true.log_weights.values)
 
