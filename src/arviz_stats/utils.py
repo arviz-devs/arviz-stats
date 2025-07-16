@@ -183,6 +183,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     log_p: object = None
     log_q: object = None
     thin_factor: object = None
+    log_weights: DataArray = None
 
     def __str__(self):
         """Print elpd data in a user friendly way."""

@@ -14,6 +14,7 @@ from arviz_stats.loo.helper_loo import (
     _prepare_subsample,
     _prepare_update_subsample,
     _select_obs_by_coords,
+    _select_obs_by_indices,
     _srs_estimator,
     _warn_pareto_k,
 )
@@ -27,6 +28,7 @@ def loo_subsample(
     pointwise=None,
     var_name=None,
     reff=None,
+    log_weights=None,
     log_p=None,
     log_q=None,
     seed=315,
@@ -66,6 +68,13 @@ def loo_subsample(
     reff: float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
+    log_weights : DataArray or ELPDData, optional
+        Smoothed log weights. Can be either:
+
+        - A DataArray with the same shape as the log likelihood data
+        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
+
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     log_p : ndarray or DataArray, optional
         The (target) log-density evaluated at samples from the target distribution (p).
         If provided along with ``log_q``, approximate posterior correction will be applied.
@@ -122,6 +131,7 @@ def loo_subsample(
         - **log_p**: Log density of the target posterior.
         - **log_q**: Log density of the proposal posterior.
         - **thin**: Thinning factor for posterior draws.
+        - **log_weights**: Smoothed log weights.
 
     Examples
     --------
@@ -239,10 +249,38 @@ def loo_subsample(
         pareto_k_sample_da = loo_approx.pareto_k
         approx_posterior = True
     else:
-        log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(
-            r_eff=reff, dim=loo_inputs.sample_dims
-        )
-        log_weights_ds += sample_ds
+        if log_weights is not None:
+            if isinstance(log_weights, ELPDData):
+                if log_weights.log_weights is None:
+                    raise ValueError("ELPDData object does not contain log_weights")
+                log_weights = log_weights.log_weights
+                if loo_inputs.var_name in log_weights:
+                    log_weights = log_weights[loo_inputs.var_name]
+
+            if len(loo_inputs.obs_dims) > 1:
+                stacked_obs_dim = "__obs__"
+                log_weights_stacked = log_weights.stack({stacked_obs_dim: loo_inputs.obs_dims})
+                log_weights_sample = _select_obs_by_indices(
+                    log_weights_stacked, subsample_data.indices, [stacked_obs_dim], stacked_obs_dim
+                )
+                log_weights_sample = log_weights_sample.unstack(stacked_obs_dim)
+            else:
+                obs_dim = loo_inputs.obs_dims[0]
+                log_weights_sample = _select_obs_by_indices(
+                    log_weights, subsample_data.indices, loo_inputs.obs_dims, obs_dim
+                )
+
+            log_weights_sample_ds = xr.Dataset({loo_inputs.var_name: log_weights_sample})
+
+            _, pareto_k_ds = sample_ds.azstats.psislw(r_eff=reff, dim=loo_inputs.sample_dims)
+
+            log_weights_ds = log_weights_sample_ds + sample_ds
+        else:
+            log_weights_ds, pareto_k_ds = sample_ds.azstats.psislw(
+                r_eff=reff, dim=loo_inputs.sample_dims
+            )
+            log_weights_sample = log_weights_ds[loo_inputs.var_name]
+            log_weights_ds += sample_ds
 
         elpd_loo_i = logsumexp(log_weights_ds, dims=loo_inputs.sample_dims)[loo_inputs.var_name]
         pareto_k_sample_da = pareto_k_ds[loo_inputs.var_name]
@@ -268,6 +306,7 @@ def loo_subsample(
     )
 
     if not pointwise:
+        stored_log_weights = log_weights_sample if "log_weights_sample" in locals() else None
         return ELPDData(
             "loo",
             elpd_loo_hat,
@@ -286,6 +325,7 @@ def loo_subsample(
             log_p,
             log_q,
             thin,
+            stored_log_weights,
         )
 
     elpd_i_full, pareto_k_full = _prepare_full_arrays(
@@ -296,6 +336,11 @@ def loo_subsample(
         loo_inputs.obs_dims,
         elpd_loo_hat,
     )
+
+    if "log_weights_sample" in locals() and log_weights_sample is not None:
+        log_weights_full = xr.Dataset({loo_inputs.var_name: log_weights_sample})
+    else:
+        log_weights_full = None
 
     return ELPDData(
         "loo",
@@ -315,6 +360,7 @@ def loo_subsample(
         log_p,
         log_q,
         thin,
+        log_weights_full,
     )
 
 
@@ -324,6 +370,7 @@ def update_subsample(
     observations=None,
     var_name=None,
     reff=None,
+    log_weights=None,
     seed=315,
     method="lpd",
     log_lik_fn=None,
@@ -357,6 +404,13 @@ def update_subsample(
     reff : float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
+    log_weights : DataArray or ELPDData, optional
+        Smoothed log weights. Can be either:
+
+        - A DataArray with the same shape as the log likelihood data
+        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
+
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     seed : int, optional
         Seed for random sampling.
     method: str, optional
@@ -402,6 +456,7 @@ def update_subsample(
         - **log_p**: Log density of the target posterior.
         - **log_q**: Log density of the proposal posterior.
         - **thin**: Thinning factor for posterior draws.
+        - **log_weights**: Smoothed log weights.
 
     Examples
     --------
@@ -454,12 +509,44 @@ def update_subsample(
     log_p = getattr(loo_orig, "log_p", None)
     log_q = getattr(loo_orig, "log_q", None)
 
+    log_weights_new = None
+    if log_weights is None:
+        log_weights = getattr(loo_orig, "log_weights", None)
+
+    if log_weights is not None:
+        if isinstance(log_weights, ELPDData):
+            if log_weights.log_weights is None:
+                raise ValueError("ELPDData object does not contain log_weights")
+            log_weights = log_weights.log_weights
+            if loo_inputs.var_name in log_weights:
+                log_weights = log_weights[loo_inputs.var_name]
+
+        if len(loo_inputs.obs_dims) > 1:
+            stacked_obs_dim = "__obs__"
+            log_weights_stacked = log_weights.stack({stacked_obs_dim: loo_inputs.obs_dims})
+            log_weights_new = _select_obs_by_indices(
+                log_weights_stacked, update_data.new_indices, [stacked_obs_dim], stacked_obs_dim
+            )
+            log_weights_new = log_weights_new.unstack(stacked_obs_dim)
+        else:
+            obs_dim = loo_inputs.obs_dims[0]
+            log_weights_new = _select_obs_by_indices(
+                log_weights, update_data.new_indices, loo_inputs.obs_dims, obs_dim
+            )
+
+    if log_weights_new is None:
+        log_weights_new_ds, _ = update_data.log_likelihood_new.azstats.psislw(
+            r_eff=reff, dim=loo_inputs.sample_dims
+        )
+        log_weights_new = log_weights_new_ds[loo_inputs.var_name]
+
     elpd_loo_i_new_da, pareto_k_new_da, approx_posterior = _compute_loo_results(
         log_likelihood=update_data.log_likelihood_new,
         var_name=loo_inputs.var_name,
         sample_dims=loo_inputs.sample_dims,
         n_samples=loo_inputs.n_samples,
         n_data_points=len(update_data.new_indices),
+        log_weights=log_weights_new,
         reff=reff,
         log_p=log_p,
         log_q=log_q,
@@ -507,6 +594,20 @@ def update_subsample(
         elpd_loo_hat,
     )
 
+    if loo_orig.log_weights is not None and log_weights_new is not None:
+        old_log_weights = loo_orig.log_weights
+        if isinstance(old_log_weights, xr.Dataset):
+            old_log_weights = old_log_weights[loo_inputs.var_name]
+
+        if isinstance(log_weights_new, xr.Dataset):
+            log_weights_new = log_weights_new[loo_inputs.var_name]
+        combined_log_weights = xr.concat(
+            [old_log_weights, log_weights_new], dim=update_data.concat_dim
+        )
+        log_weights_full = xr.Dataset({loo_inputs.var_name: combined_log_weights})
+    else:
+        log_weights_full = None
+
     return ELPDData(
         "loo",
         elpd_loo_hat,
@@ -525,4 +626,5 @@ def update_subsample(
         log_p,
         log_q,
         thin,
+        log_weights_full,
     )

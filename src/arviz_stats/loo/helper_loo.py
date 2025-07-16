@@ -18,6 +18,7 @@ __all__ = [
     "_recalculate_weights_k",
     "_update_loo_data_i",
     "_get_log_likelihood_i",
+    "_get_log_weights_i",
     "_plpd_approx",
     "_diff_srs_estimator",
     "_srs_estimator",
@@ -203,6 +204,27 @@ def _get_log_likelihood_i(log_likelihood, i, obs_dims):
             )
         log_lik_i = log_lik_stacked.isel({stacked_obs_dim: i})
     return log_lik_i
+
+
+def _get_log_weights_i(log_weights, i, obs_dims):
+    """Extract the log weights for a specific observation index `i`."""
+    if not obs_dims:
+        raise ValueError("log_weights must have observation dimensions.")
+
+    if len(obs_dims) == 1:
+        obs_dim = obs_dims[0]
+        if i < 0 or i >= log_weights.sizes[obs_dim]:
+            raise IndexError(f"Index {i} is out of bounds for dimension '{obs_dim}'.")
+        log_weights_i = log_weights.isel({obs_dim: i})
+    else:
+        stacked_obs_dim = "__obs__"
+        log_weights_stacked = log_weights.stack({stacked_obs_dim: obs_dims})
+        if i < 0 or i >= log_weights_stacked.sizes[stacked_obs_dim]:
+            raise IndexError(
+                f"Index {i} is out of bounds for stacked dimension '{stacked_obs_dim}'."
+            )
+        log_weights_i = log_weights_stacked.isel({stacked_obs_dim: i})
+    return log_weights_i
 
 
 def _recalculate_weights_k(
@@ -506,11 +528,11 @@ def _compute_loo_results(
     if log_weights is None or pareto_k is None:
         log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dim=sample_dims)
 
-    log_weights += log_likelihood
+    log_weights_sum = log_weights + log_likelihood
     pareto_k_da = pareto_k
 
     warn_mg, good_k = _warn_pareto_k(pareto_k_da, n_samples)
-    elpd_i = logsumexp(log_weights, dims=sample_dims)
+    elpd_i = logsumexp(log_weights_sum, dims=sample_dims)
 
     if return_pointwise:
         if isinstance(elpd_i, xr.Dataset) and var_name in elpd_i:
@@ -538,6 +560,7 @@ def _compute_loo_results(
             warn_mg,
             good_k,
             approx_posterior=approx_posterior,
+            log_weights=log_weights,
         )
 
     _warn_pointwise_loo(elpd, elpd_i_values)
@@ -555,6 +578,7 @@ def _compute_loo_results(
         elpd_i,
         pareto_k_da,
         approx_posterior=approx_posterior,
+        log_weights=log_weights,
     )
 
 
