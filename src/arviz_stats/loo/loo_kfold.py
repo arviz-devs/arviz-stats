@@ -34,10 +34,6 @@ def loo_kfold(
     importance sampling leave-one-out cross-validation), which approximates cross-validation
     efficiently, K-fold requires actual model refitting but yields exact results.
 
-    When K equals the number of observations, this becomes exact leave-one-out
-    cross-validation, though :func:`arviz_stats.loo` provides a much more efficient
-    approximation for that case.
-
     Parameters
     ----------
     data : DataTree or InferenceData
@@ -88,6 +84,12 @@ def loo_kfold(
 
         - **fold_fits**: Dictionary containing fitted models for each fold
         - **fold_indices**: Dictionary containing test indices for each fold
+
+    Notes
+    -----
+    When K equals the number of observations, this becomes exact leave-one-out
+    cross-validation. Note that :func:`arviz_stats.loo` provides a much more efficient
+    approximation for that case and is recommended for large datasets.
 
     See Also
     --------
