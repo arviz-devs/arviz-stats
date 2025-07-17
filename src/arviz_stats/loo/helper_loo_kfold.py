@@ -3,6 +3,7 @@
 from collections import namedtuple
 
 import numpy as np
+import xarray as xr
 from arviz_base import convert_to_datatree
 from xarray_einstats.stats import logsumexp
 
@@ -37,13 +38,13 @@ KfoldInputs = namedtuple(
         "n_data_points",
         "n_samples",
         "folds",
-        "K",
+        "k",
     ],
 )
 
 
 def _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_by):
-    """Prepare inputs for kfold."""
+    """Prepare inputs for k-fold cross-validation."""
     data = convert_to_datatree(data)
 
     if not isinstance(wrapper, SamplingWrapper):
@@ -87,7 +88,7 @@ def _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_
         n_data_points=n_data_points,
         n_samples=n_samples,
         folds=folds,
-        K=k,
+        k=k,
     )
 
 
@@ -96,12 +97,12 @@ def _compute_kfold_results(kfold_inputs, wrapper, save_fits):
     ll_full = kfold_inputs.log_likelihood
     lpds_full = logsumexp(ll_full, dims=kfold_inputs.sample_dims, b=1 / kfold_inputs.n_samples)
 
-    fold_indices = _get_fold_indices(kfold_inputs.folds, kfold_inputs.K)
+    fold_indices = _get_fold_indices(kfold_inputs.folds, kfold_inputs.k)
 
     elpd_unordered = []
     fold_results = {} if save_fits else None
 
-    for fold_num in range(1, kfold_inputs.K + 1):
+    for fold_num in range(1, kfold_inputs.k + 1):
         test_idx = fold_indices[fold_num]["test_indices"]
         train_data, test_data = wrapper.sel_observations(test_idx)
         fitted_model = wrapper.sample(train_data)
@@ -136,20 +137,7 @@ def _compute_kfold_results(kfold_inputs, wrapper, save_fits):
 
 
 def _kfold_split_random(k=10, n=None):
-    """Split the data into K groups of equal size (or roughly equal size).
-
-    Parameters
-    ----------
-    k : int, default=10
-        The number of folds to use.
-    n : int
-        The number of observations in the data.
-
-    Returns
-    -------
-    ndarray
-        An integer vector of length n where each element is an index in 1:k.
-    """
+    """Split the data into K groups of equal size (or roughly equal size)."""
     if n is None:
         raise ValueError("n must be provided")
     if not isinstance(n, int | np.integer) or np.isnan(n):
@@ -173,21 +161,7 @@ def _kfold_split_random(k=10, n=None):
 
 
 def _kfold_split_stratified(k=10, x=None):
-    """Split observations into k groups ensuring relative category frequencies are preserved.
-
-    Parameters
-    ----------
-    k : int, default=10
-        The number of folds to use.
-    x : array-like
-        A discrete variable of length n with at least k levels (unique values).
-        Will be coerced to integer categories.
-
-    Returns
-    -------
-    ndarray
-        An integer vector of length n where each element is an index in 1:k.
-    """
+    """Split observations into k groups ensuring relative category frequencies are preserved."""
     if x is None:
         raise ValueError("x must be provided")
     x = np.asarray(x)
@@ -218,20 +192,7 @@ def _kfold_split_stratified(k=10, x=None):
 
 
 def _kfold_split_grouped(k=10, x=None):
-    """Split observations ensuring all observations from the same group stay together.
-
-    Parameters
-    ----------
-    k : int, default=10
-        The number of folds to use.
-    x : array-like
-        A grouping variable of length n. Will be coerced to integer categories.
-
-    Returns
-    -------
-    ndarray
-        An integer vector of length n where each element is an index in 1:k.
-    """
+    """Split observations ensuring all observations from the same group stay together."""
     if x is None:
         raise ValueError("x must be provided")
     x = np.asarray(x)
@@ -275,23 +236,7 @@ def _kfold_split_grouped(k=10, x=None):
 
 
 def _extract_fold_data(data, fold_indices, train=True):
-    """Extract data for a specific fold.
-
-    Parameters
-    ----------
-    data : DataArray
-        The data array to extract from
-    fold_indices : array-like
-        Boolean mask or integer indices for the fold
-    train : bool, default=True
-        If True, extract training data (complement of fold_indices)
-        If False, extract test data (fold_indices)
-
-    Returns
-    -------
-    DataArray
-        The extracted data
-    """
+    """Extract data for a specific fold."""
     if train:
         mask = np.ones(data.shape[-1], dtype=bool)
         mask[fold_indices] = False
@@ -300,20 +245,7 @@ def _extract_fold_data(data, fold_indices, train=True):
 
 
 def _get_fold_indices(fold_assignments, k):
-    """Get test indices for each fold.
-
-    Parameters
-    ----------
-    fold_assignments : ndarray
-        Fold assignments for each observation (1 to k)
-    k : int
-        Number of folds
-
-    Returns
-    -------
-    dict
-        Dictionary mapping fold number to test indices and test count
-    """
+    """Get test indices for each fold."""
     results = {}
 
     for i in range(1, k + 1):
@@ -324,20 +256,7 @@ def _get_fold_indices(fold_assignments, k):
 
 
 def _combine_fold_elpds(fold_elpds, n_data_points):
-    """Combine ELPD values from all folds into final estimates.
-
-    Parameters
-    ----------
-    fold_elpds : list
-        List of ELPD values from each fold
-    n_data_points : int
-        Total number of data points
-
-    Returns
-    -------
-    dict
-        Combined results with estimates and standard errors
-    """
+    """Combine ELPD values from all folds into final estimates."""
     elpds = np.concatenate(fold_elpds)
     elpd_kfold = np.sum(elpds)
     se_elpd_kfold = np.sqrt(n_data_points * np.var(elpds))
@@ -361,13 +280,21 @@ def _validate_array_length(array, expected_length, param_name):
     """Validate array length matches expected number of observations."""
     if array is None:
         raise ValueError(f"{param_name} must be provided")
-    array = np.asarray(array)
-    if len(array) != expected_length:
+
+    if isinstance(array, xr.DataArray):
+        array_length = array.size
+        array_values = array.values.flatten()
+    else:
+        array = np.asarray(array)
+        array_length = len(array)
+        array_values = array
+
+    if array_length != expected_length:
         raise ValueError(
-            f"Length of {param_name} ({len(array)}) must match number of "
+            f"Length of {param_name} ({array_length}) must match number of "
             f"observations ({expected_length})"
         )
-    return array
+    return array_values
 
 
 def _validate_fold_parameters(folds, stratify_by, group_by):

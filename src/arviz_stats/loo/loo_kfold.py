@@ -50,18 +50,25 @@ def loo_kfold(
     k : int, default=10
         The number of folds for cross-validation. The data will be partitioned into k subsets
         of equal (or approximately equal) size.
-    folds : array-like, optional
-        An optional integer array with one element per observation in the data. Each element
-        should be an integer in 1:k indicating which fold the observation belongs to.
-        If not provided, data will be randomly partitioned into k folds.
-    stratify_by : array-like, optional
-        A categorical variable to use for stratified K-fold splitting. When provided,
-        the folds will be created to preserve the relative frequencies of the categories.
-        Cannot be used together with `folds` or `group_by`.
-    group_by : array-like, optional
-        A grouping variable to use for grouped K-fold splitting. When provided,
-        all observations from the same group will be kept together in the same fold.
-        Cannot be used together with `folds` or `stratify_by`.
+    folds : array or DataArray, optional
+        An optional integer array or DataArray with one element per observation in the data.
+        Each element should be an integer from 1 to k indicating which fold the observation
+        belongs to. For example, with k=4 and 8 observations, one possible assignment is
+        [1,1,2,2,3,3,4,4] to put the first two observations in fold 1, next two in fold 2, etc.
+        If not provided, data will be randomly partitioned into k folds of approximately
+        equal size. DataArray inputs will be automatically flattened to 1D.
+    stratify_by : array or DataArray, optional
+        A categorical variable to use for stratified K-fold splitting. For example, with
+        8 observations where [0,0,1,1,0,0,1,1] indicates two categories (0 and 1), the
+        algorithm ensures each fold contains approximately the same 50/50 split of 0s and 1s
+        as the full dataset. Cannot be used together with `folds` or `group_by`. DataArray
+        inputs will be automatically flattened to 1D.
+    group_by : array or DataArray, optional
+        A grouping variable to use for grouped K-fold splitting. For example, with
+        [1,1,2,2,3,3,4,4] representing 4 subjects with 2 observations each, all observations
+        from subject 1 will be placed in the same fold, all from subject 2 in the same fold,
+        etc. This ensures related observations stay together. Cannot be used together with
+        `folds` or `stratify_by`. DataArray inputs will be automatically flattened to 1D.
     save_fits : bool, default=False
         If True, store the fitted models and fold indices in the returned object.
 

@@ -148,6 +148,42 @@ def test_loo_kfold_save_fits(centered_eight, mock_wrapper):
         assert "test_indices" in kfold_data.fold_fits[k]
 
 
+def test_loo_kfold_dataarray_inputs(centered_eight, mock_wrapper):
+    mock_wrapper.fit_count = 0
+    mock_wrapper.test_indices_history = []
+
+    folds_da = xr.DataArray([1, 1, 2, 2, 3, 3, 4, 4], dims=["school"])
+    kfold_data = loo_kfold(
+        data=centered_eight, pointwise=True, wrapper=mock_wrapper, folds=folds_da
+    )
+    assert kfold_data.kind == "loo_kfold"
+    assert mock_wrapper.fit_count == 4
+
+    mock_wrapper.fit_count = 0
+    strata_da = xr.DataArray([0, 0, 1, 1, 0, 0, 1, 1], dims=["school"])
+    kfold_data = loo_kfold(
+        data=centered_eight, pointwise=False, wrapper=mock_wrapper, k=4, stratify_by=strata_da
+    )
+    assert kfold_data.kind == "loo_kfold"
+    assert mock_wrapper.fit_count == 4
+
+    mock_wrapper.fit_count = 0
+    groups_da = xr.DataArray([1, 1, 2, 2, 3, 3, 4, 4], dims=["school"])
+    kfold_data = loo_kfold(
+        data=centered_eight, pointwise=False, wrapper=mock_wrapper, k=2, group_by=groups_da
+    )
+    assert kfold_data.kind == "loo_kfold"
+    assert mock_wrapper.fit_count == 2
+
+    mock_wrapper.fit_count = 0
+    folds_2d = xr.DataArray([[1, 2], [1, 2], [3, 4], [3, 4]], dims=["school", "county"])
+    kfold_data = loo_kfold(
+        data=centered_eight, pointwise=False, wrapper=mock_wrapper, folds=folds_2d
+    )
+    assert kfold_data.kind == "loo_kfold"
+    assert mock_wrapper.fit_count == 4
+
+
 def test_loo_kfold_errors(centered_eight, mock_wrapper):
     with pytest.raises(TypeError, match="wrapper must be an instance of SamplingWrapper"):
         loo_kfold(data=centered_eight, wrapper="not_a_wrapper")
