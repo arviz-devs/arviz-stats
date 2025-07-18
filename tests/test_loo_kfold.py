@@ -4,6 +4,7 @@
 
 import numpy as np
 import pytest
+from scipy import stats
 
 from .helpers import datatree, importorskip  # noqa: F401
 
@@ -57,8 +58,18 @@ def mock_wrapper(centered_eight):
             train_y = self.original_obs_data[train_indices]
             test_y = self.original_obs_data[idx]
 
-            train_data = {"indices": train_indices, "y": train_y, "n_schools": len(train_indices)}
-            test_data = {"indices": idx, "y": test_y, "n_schools": len(idx)}
+            train_data = {
+                "indices": train_indices,
+                "y": train_y,
+                "sigma": self.sigma_values[train_indices],
+                "n_schools": len(train_indices),
+            }
+            test_data = {
+                "indices": idx,
+                "y": test_y,
+                "sigma": self.sigma_values[idx],
+                "n_schools": len(idx),
+            }
 
             self.test_indices_history.append(idx)
             return train_data, test_data
@@ -123,29 +134,16 @@ def mock_wrapper(centered_eight):
 
         def log_likelihood__i(self, excluded_obs, idata__i):
             test_y = excluded_obs["y"]
-            test_indices = excluded_obs["indices"]
-            n_test = len(test_indices)
+            test_sigma = excluded_obs["sigma"]
+            mu = idata__i.posterior["mu"].values.flatten()
+            tau = idata__i.posterior["tau"].values.flatten()
 
-            mu_samples = idata__i.posterior["mu"].values.flatten()
-            tau_samples = idata__i.posterior["tau"].values.flatten()
-            n_samples = len(mu_samples)
+            var_total = tau[:, np.newaxis] ** 2 + test_sigma**2
+            log_lik = stats.norm.logpdf(test_y, loc=mu[:, np.newaxis], scale=np.sqrt(var_total))
 
-            sigma_values = self.sigma_values[test_indices]
-            log_lik = np.zeros((n_samples, n_test))
-
-            for i in range(n_samples):
-                for j, (y_j, sigma_j) in enumerate(zip(test_y, sigma_values)):
-                    total_var = tau_samples[i] ** 2 + sigma_j**2
-                    log_lik[i, j] = (
-                        -0.5 * np.log(2 * np.pi * total_var)
-                        - 0.5 * (y_j - mu_samples[i]) ** 2 / total_var
-                    )
-
-            return xr.DataArray(
-                log_lik.T.reshape(1, n_test, n_samples),
-                dims=["chain", "school", "draw"],
-                coords={"chain": [0], "school": test_indices, "draw": np.arange(n_samples)},
-            )
+            dims = ["chain", "school", "draw"]
+            coords = {"school": excluded_obs["indices"]}
+            return xr.DataArray(log_lik.T[np.newaxis, :, :], dims=dims, coords=coords)
 
     return CenteredEightWrapper(centered_eight)
 
