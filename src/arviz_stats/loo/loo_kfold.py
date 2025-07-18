@@ -1,4 +1,4 @@
-"""K-fold cross-validation for model assessment."""
+"""K-fold cross-validation."""
 
 import numpy as np
 from arviz_base import rcParams
