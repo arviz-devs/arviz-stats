@@ -26,7 +26,7 @@ __all__ = [
 
 FoldData = namedtuple("FoldData", ["train_indices", "test_indices", "fold_id"])
 
-KfoldResults = namedtuple("KfoldResults", ["elpds", "ps", "fold_fits"])
+KfoldResults = namedtuple("KfoldResults", ["elpds", "ps", "fold_fits", "elpd_i", "p_kfold_i"])
 
 KfoldInputs = namedtuple(
     "KfoldInputs",
@@ -133,7 +133,23 @@ def _compute_kfold_results(kfold_inputs, wrapper, save_fits):
     lpds_ordered = lpds_full.values.flatten()
     ps = lpds_ordered - elpds
 
-    return KfoldResults(elpds=elpds, ps=ps, fold_fits=fold_results)
+    obs_dim = kfold_inputs.obs_dims[-1] if kfold_inputs.obs_dims else "obs"
+
+    elpd_i = xr.DataArray(
+        elpds,
+        dims=[obs_dim],
+        coords={obs_dim: kfold_inputs.log_likelihood.coords[obs_dim]},
+    )
+
+    p_kfold_i = xr.DataArray(
+        ps,
+        dims=[obs_dim],
+        coords={obs_dim: kfold_inputs.log_likelihood.coords[obs_dim]},
+    )
+
+    return KfoldResults(
+        elpds=elpds, ps=ps, fold_fits=fold_results, elpd_i=elpd_i, p_kfold_i=p_kfold_i
+    )
 
 
 def _kfold_split_random(k=10, n=None):

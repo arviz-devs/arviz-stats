@@ -1,7 +1,6 @@
 """K-fold cross-validation for model assessment."""
 
 import numpy as np
-import xarray as xr
 from arviz_base import rcParams
 
 from arviz_stats.loo.helper_loo_kfold import (
@@ -84,6 +83,7 @@ def loo_kfold(
         - **n_data_points**: number of data points
         - **warning**: True if any issues occurred during fitting
         - **elpd_i**: pointwise predictive accuracy (if ``pointwise=True``)
+        - **p_kfold_i**: pointwise effective number of parameters (if ``pointwise=True``)
         - **pareto_k**: None (not applicable for k-fold)
         - **scale**: "log"
 
@@ -119,21 +119,6 @@ def loo_kfold(
     kfold_inputs = _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_by)
     kfold_results = _compute_kfold_results(kfold_inputs, wrapper, save_fits)
 
-    if pointwise:
-        pointwise_data = np.column_stack([kfold_results.elpds, kfold_results.ps])
-        obs_dim = kfold_inputs.obs_dims[-1] if kfold_inputs.obs_dims else "observation"
-
-        pointwise_df = xr.DataArray(
-            pointwise_data,
-            dims=[obs_dim, "metric"],
-            coords={
-                obs_dim: kfold_inputs.log_likelihood.coords[obs_dim],
-                "metric": ["elpd_loo_kfold", "p_loo_kfold"],
-            },
-        )
-    else:
-        pointwise_df = None
-
     combined_results = _combine_fold_elpds([kfold_results.elpds], kfold_inputs.n_data_points)
     elpd_sum = combined_results["elpd_kfold"]
     se_elpd = combined_results["se_elpd_kfold"]
@@ -149,10 +134,14 @@ def loo_kfold(
         scale="log",
         warning=False,
         good_k=None,
-        elpd_i=pointwise_df if pointwise else None,
+        elpd_i=kfold_results.elpd_i if pointwise else None,
         pareto_k=None,
     )
 
     if save_fits:
         elpd_data.fold_fits = kfold_results.fold_fits
+
+    if pointwise:
+        elpd_data.p_kfold_i = kfold_results.p_kfold_i
+
     return elpd_data

@@ -173,13 +173,13 @@ def test_loo_kfold(centered_eight, fresh_wrapper, pointwise):
 
     if pointwise:
         assert kfold_data.elpd_i is not None
-        assert kfold_data.elpd_i.shape == (8, 2)
-        assert list(kfold_data.elpd_i.coords["metric"].values) == [
-            "elpd_loo_kfold",
-            "p_loo_kfold",
-        ]
+        assert kfold_data.elpd_i.shape == (8,)
+        assert hasattr(kfold_data, "p_kfold_i")
+        assert kfold_data.p_kfold_i is not None
+        assert kfold_data.p_kfold_i.shape == (8,)
     else:
         assert kfold_data.elpd_i is None
+        assert not hasattr(kfold_data, "p_kfold_i")
 
 
 @pytest.mark.parametrize("k", [2, 5, 8])
