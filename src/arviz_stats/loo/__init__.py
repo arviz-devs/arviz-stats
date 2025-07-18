@@ -1,4 +1,4 @@
-"""Pareto-smoothed importance sampling LOO (PSIS-LOO-CV) functions."""
+"""Pareto-smoothed importance sampling LOO (PSIS-LOO-CV) and K-fold cross-validation functions."""
 
 from arviz_stats.loo.loo import loo
 from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
@@ -9,6 +9,7 @@ from arviz_stats.loo.loo_moment_match import loo_moment_match
 from arviz_stats.loo.reloo import reloo
 from arviz_stats.loo.wrapper import SamplingWrapper
 from arviz_stats.loo.compare import compare, _calculate_ics
+from arviz_stats.loo.loo_kfold import loo_kfold
 
 __all__ = [
     "loo",
@@ -22,4 +23,5 @@ __all__ = [
     "reloo",
     "SamplingWrapper",
     "compare",
+    "loo_kfold",
 ]

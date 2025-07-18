@@ -16,6 +16,7 @@ try:
         reloo,
         compare,
         SamplingWrapper,
+        loo_kfold,
     )
     from arviz_stats.psense import psense, psense_summary
     from arviz_stats.metrics import kl_divergence, metrics, r2_score, wasserstein
