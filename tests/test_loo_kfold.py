@@ -1,4 +1,4 @@
-# pylint: disable=redefined-outer-name, unused-import
+# pylint: disable=redefined-outer-name, unused-import, too-many-function-args
 # ruff: noqa: F811
 """Test k-fold cross-validation."""
 
@@ -22,31 +22,117 @@ def fixture_centered_eight():
 
 @pytest.fixture
 def mock_wrapper(centered_eight):
-    class MockSamplingWrapper(SamplingWrapper):
+    class CenteredEightWrapper(SamplingWrapper):
         def __init__(self, idata):
             super().__init__(model=None, idata_orig=idata)
             self.fit_count = 0
             self.test_indices_history = []
+            self.rng = np.random.default_rng(42)
+
+            self.original_posterior = idata.posterior
+            self.original_obs_data = idata.observed_data["obs"].values
+            self.n_schools = len(self.original_obs_data)
+
+            self.sigma_values = np.array([15, 10, 16, 11, 9, 11, 10, 18])
 
         def sel_observations(self, idx):
-            train_data = {"n": len(idx)}
-            test_data = {"indices": idx}
+            all_indices = np.arange(self.n_schools)
+            train_indices = np.setdiff1d(all_indices, idx)
+
+            train_y = self.original_obs_data[train_indices]
+            test_y = self.original_obs_data[idx]
+
+            train_data = {"indices": train_indices, "y": train_y, "n_schools": len(train_indices)}
+            test_data = {"indices": idx, "y": test_y, "n_schools": len(idx)}
+
             self.test_indices_history.append(idx)
             return train_data, test_data
 
         def sample(self, modified_observed_data):
             self.fit_count += 1
-            return {"model_id": self.fit_count, "data": modified_observed_data}
+
+            train_y = modified_observed_data["y"]
+            n_train = len(train_y)
+
+            y_mean = np.mean(train_y)
+            y_std = np.std(train_y, ddof=1)
+
+            n_samples = 2000
+            mu_samples = self.rng.normal(y_mean, y_std / np.sqrt(n_train), n_samples)
+
+            tau_samples = np.abs(self.rng.normal(y_std, y_std / 2, n_samples))
+            tau_samples = np.maximum(tau_samples, 0.1)
+
+            theta_samples = np.zeros((n_samples, n_train))
+            for i in range(n_samples):
+                theta_samples[i] = self.rng.normal(mu_samples[i], tau_samples[i], n_train)
+
+            return {
+                "mu": mu_samples,
+                "tau": tau_samples,
+                "theta": theta_samples,
+                "train_indices": modified_observed_data["indices"],
+                "n_train": n_train,
+            }
 
         def get_inference_data(self, fitted_model):
-            return self.idata_orig
+            posterior_dict = {
+                "mu": xr.DataArray(
+                    fitted_model["mu"].reshape(1, 2000),
+                    dims=["chain", "draw"],
+                    coords={"chain": [0], "draw": np.arange(2000)},
+                ),
+                "tau": xr.DataArray(
+                    fitted_model["tau"].reshape(1, 2000),
+                    dims=["chain", "draw"],
+                    coords={"chain": [0], "draw": np.arange(2000)},
+                ),
+                "theta": xr.DataArray(
+                    fitted_model["theta"].T.reshape(1, 2000, fitted_model["n_train"]),
+                    dims=["chain", "draw", "school"],
+                    coords={
+                        "chain": [0],
+                        "draw": np.arange(2000),
+                        "school": fitted_model["train_indices"],
+                    },
+                ),
+            }
+
+            idata_new = azb.from_dict(
+                {"posterior": posterior_dict},
+                dims={"school": ["school"]},
+                coords={"school": fitted_model["train_indices"]},
+            )
+
+            return idata_new
 
         def log_likelihood__i(self, excluded_obs, idata__i):
-            log_lik = idata__i.log_likelihood["obs"]
-            test_idx = excluded_obs["indices"]
-            return log_lik.isel(school=test_idx)
+            test_y = excluded_obs["y"]
+            test_indices = excluded_obs["indices"]
+            n_test = len(test_indices)
 
-    return MockSamplingWrapper(centered_eight)
+            mu_samples = idata__i.posterior["mu"].values.flatten()
+            tau_samples = idata__i.posterior["tau"].values.flatten()
+            n_samples = len(mu_samples)
+
+            sigma_values = self.sigma_values[test_indices]
+            log_lik = np.zeros((n_samples, n_test))
+
+            for i in range(n_samples):
+                for j, (y_j, sigma_j) in enumerate(zip(test_y, sigma_values)):
+                    total_var = tau_samples[i] ** 2 + sigma_j**2
+                    log_lik[i, j] = (
+                        -0.5 * np.log(2 * np.pi * total_var)
+                        - 0.5 * (y_j - mu_samples[i]) ** 2 / total_var
+                    )
+
+            return xr.DataArray(
+                log_lik.T.reshape(1, n_test, n_samples),
+                dims=["chain", "school", "draw"],
+                coords={"chain": [0], "school": test_indices, "draw": np.arange(n_samples)},
+            )
+
+    return CenteredEightWrapper(centered_eight)
 
 
 @pytest.mark.parametrize("pointwise", [True, False])
@@ -178,7 +264,7 @@ def test_loo_kfold_dataarray_inputs(centered_eight, mock_wrapper):
     mock_wrapper.fit_count = 0
     folds_2d = xr.DataArray([[1, 2], [1, 2], [3, 4], [3, 4]], dims=["school", "county"])
     kfold_data = loo_kfold(
-        data=centered_eight, pointwise=False, wrapper=mock_wrapper, folds=folds_2d
+        data=centered_eight, pointwise=False, wrapper=mock_wrapper, k=4, group_by=folds_2d
     )
     assert kfold_data.kind == "loo_kfold"
     assert mock_wrapper.fit_count == 4

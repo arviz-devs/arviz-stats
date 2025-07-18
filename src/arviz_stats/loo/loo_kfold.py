@@ -14,9 +14,9 @@ from arviz_stats.utils import ELPDData
 
 def loo_kfold(
     data,
+    wrapper,
     pointwise=None,
     var_name=None,
-    wrapper=None,
     k=10,
     folds=None,
     stratify_by=None,
@@ -38,15 +38,15 @@ def loo_kfold(
     ----------
     data : DataTree or InferenceData
         Input data containing the posterior and log_likelihood groups from the full model fit.
+    wrapper : SamplingWrapper
+        An instance of SamplingWrapper class handling model refitting. The wrapper must
+        implement the following methods: sel_observations, sample, get_inference_data,
+        and log_likelihood__i.
     pointwise : bool, optional
         If True, return pointwise estimates. Defaults to ``rcParams["stats.ic_pointwise"]``.
     var_name : str, optional
         The name of the variable in log_likelihood group storing the pointwise log
         likelihood data to use for computation.
-    wrapper : SamplingWrapper
-        An instance of SamplingWrapper class handling model refitting. The wrapper must
-        implement the following methods: sel_observations, sample, get_inference_data,
-        and log_likelihood__i.
     k : int, default=10
         The number of folds for cross-validation. The data will be partitioned into k subsets
         of equal (or approximately equal) size.
@@ -96,7 +96,7 @@ def loo_kfold(
     -----
     When K equals the number of observations, this becomes exact leave-one-out
     cross-validation. Note that :func:`arviz_stats.loo` provides a much more efficient
-    approximation for that case and is recommended for large datasets.
+    approximation for that case and is recommended.
 
     See Also
     --------
