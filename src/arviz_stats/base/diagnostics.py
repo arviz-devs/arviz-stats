@@ -333,9 +333,20 @@ class _DiagnosticsBase(_CoreBase):
     def _pareto_min_ss(self, ary):
         """Compute the minimum effective sample size."""
         ary = np.asarray(ary)
-        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
+        if _not_valid(ary, check_nan=False, shape_kwargs={"min_draws": 4, "min_chains": 1}):
+            warnings.warn(
+                "Pareto minimum effective sample size requieres "
+                "at least 4 draws and at least 1 chain."
+            )
             return np.nan
+        if not np.all(np.isfinite(ary)):
+            warnings.warn(
+                "Pareto minimum effective sample size cannot be computed with non-finite values."
+            )
+            return np.nan
+
         ary_flatten = ary.flatten()
+
         r_eff = self._ess_tail(ary, prob=0.05, relative=True)
 
         _, kappa = self._pareto_khat(ary_flatten, r_eff=r_eff, tail="both", log_weights=False)
@@ -498,7 +509,7 @@ class _DiagnosticsBase(_CoreBase):
         if log_weights:
             ary -= logsumexp(ary)
         else:
-            ary /= np.sum(ary)
+            ary = ary / np.sum(ary)
 
         return ary, khat
 
