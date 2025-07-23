@@ -96,10 +96,11 @@ def eti(data, prob=None, dim=None, group="posterior", var_names=None, filter_var
     prob = validate_ci_prob(prob)
     return _apply_multi_input_function("eti", data, dim, "dim", group=group, var_names=var_names, filter_vars=filter_vars, coords=coords, prob=prob, method=method, skipna=skipna, **kwargs)
 
-def ecdf():
+def ecdf(data, dim=None, group="posterior", var_names=None, filter_vars=None, coords=None, pit=False, **kwargs):
     """ECDF
 
     TODO: add full detailed docstring that can be referenced from accessors and da/array interfaces."""
+    return _apply_multi_input_function("ecdf", data, dim, "dim", group=group, var_names=var_names, filter_vars=filter_vars, coords=coords, pit=pit, **kwargs)
 
 def histogram(data, dim=None, group="posterior", var_names=None, filter_vars=None, coords=None, bins=None, range=None, weights=None, density=True):
     """Histogram

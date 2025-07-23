@@ -23,7 +23,7 @@ try:
     from arviz_stats.summary import summary, ci_in_rope
     from arviz_stats.manipulation import thin
     from arviz_stats.bayes_factor import bayes_factor
-    from arviz_stats.visualization import eti, hdi, histogram, kde
+    from arviz_stats.visualization import ecdf, eti, hdi, histogram, kde
 
 except ModuleNotFoundError:
     pass
