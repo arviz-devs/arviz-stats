@@ -21,6 +21,7 @@ from arviz_stats import (
     update_subsample,
 )
 from arviz_stats.loo import _calculate_ics
+from arviz_stats.loo.loo_expectations import _get_function_khat
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
@@ -257,6 +258,50 @@ def test_loo_metrics_acc(datatree_binary, kind, round_to, expected_mean, expecte
 def test_loo_metrics_invalid_kind(centered_eight):
     with pytest.raises(ValueError, match="kind must be one of"):
         loo_metrics(centered_eight, kind="invalid_kind")
+
+
+@pytest.mark.parametrize(
+    "values_type, expected_behavior",
+    [
+        ("single_value", "returns_khat"),
+        ("two_values", "returns_khat"),
+        ("all_nan", "returns_khat"),
+        ("all_inf", "returns_khat"),
+        ("mixed_finite_nonfinite", "returns_khat"),
+        ("extreme_weights", "returns_khat"),
+        ("constant_tail_weights", "returns_khat"),
+    ],
+)
+def test_get_function_khat(values_type, expected_behavior):
+    rng = np.random.default_rng(seed=42)
+    n_samples = 100
+    log_weights = rng.normal(0, 0.1, n_samples)
+
+    if values_type == "single_value":
+        values = np.full(n_samples, 2.5)
+    elif values_type == "two_values":
+        values = np.array([1.0, 2.0] * (n_samples // 2))
+    elif values_type == "all_nan":
+        values = np.full(n_samples, np.nan)
+    elif values_type == "all_inf":
+        values = np.full(n_samples, np.inf)
+    elif values_type == "mixed_finite_nonfinite":
+        values = rng.normal(0, 1, n_samples)
+        values[::10] = np.nan
+        values[5::10] = np.inf
+    elif values_type == "extreme_weights":
+        log_weights = np.full(n_samples, -50.0)
+        log_weights[-5:] = 0.0
+        values = rng.normal(0, 1, n_samples)
+    elif values_type == "constant_tail_weights":
+        log_weights = np.zeros(n_samples)
+        log_weights[-20:] = -1e-10
+        values = rng.normal(0, 1, n_samples)
+
+    khat = _get_function_khat(values, log_weights, kind="mean")
+
+    if expected_behavior == "returns_khat":
+        assert isinstance(khat, float | np.floating)
 
 
 @pytest.mark.parametrize(
