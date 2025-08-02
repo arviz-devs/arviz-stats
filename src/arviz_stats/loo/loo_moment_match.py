@@ -13,7 +13,6 @@ from arviz_stats.loo.helper_loo import (
     _get_log_likelihood_i,
     _get_r_eff,
     _prepare_loo_inputs,
-    _recalculate_weights_k,
     _shift,
     _shift_and_cov,
     _shift_and_scale,
@@ -23,6 +22,11 @@ from arviz_stats.sampling_diagnostics import ess
 from arviz_stats.utils import ELPDData
 
 SplitMomentMatch = namedtuple("SplitMomentMatch", ["lwi", "lwfi", "log_liki", "reff"])
+UpdateQuantities = namedtuple("UpdateQuantities", ["lwi", "lwfi", "ki", "kfi", "log_liki"])
+LooMomentMatchResult = namedtuple(
+    "LooMomentMatchResult",
+    ["final_log_liki", "final_lwi", "final_ki", "kfs_i", "reff_i", "original_ki", "i"],
+)
 
 
 def loo_moment_match(
@@ -264,8 +268,7 @@ def loo_moment_match(
     See Also
     --------
     loo : Standard PSIS-LOO-CV.
-    loo_approximate_posterior : Approximate posterior PSIS-LOO-CV.
-    loo_subsample : Sub-sampled PSIS-LOO-CV.
+    reloo : Exact re-fitting for problematic observations.
 
     References
     ----------
@@ -318,8 +321,6 @@ def loo_moment_match(
 
     n_params = upars.sizes[param_dim_name]
     n_data_points = loo_orig.n_data_points
-    n_chains = upars.sizes["chain"]
-    n_draws = upars.sizes["draw"]
 
     if reff is None:
         reff = _get_r_eff(data, n_samples)
@@ -359,196 +360,39 @@ def loo_moment_match(
 
     # Moment matching algorithm
     for i in bad_obs_indices:
-        log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
-        liki = np.exp(log_liki)
-        liki_reshaped = liki.values.reshape(n_chains, n_draws).T
+        mm_result = _loo_moment_match_i(
+            i=i,
+            upars=upars,
+            log_likelihood=log_likelihood,
+            log_prob_upars_fn=log_prob_upars_fn,
+            log_lik_i_upars_fn=log_lik_i_upars_fn,
+            max_iters=max_iters,
+            k_threshold=k_threshold,
+            split=split,
+            cov=cov,
+            orig_log_prob=orig_log_prob,
+            ks=ks,
+            sample_dims=sample_dims,
+            obs_dims=obs_dims,
+            n_samples=n_samples,
+            n_params=n_params,
+            param_dim_name=param_dim_name,
+        )
 
-        ess_val = ess(liki_reshaped, method="mean").item()
-        reff_i = ess_val / n_samples if n_samples > 0 else 1.0
+        kfs[i] = mm_result.kfs_i
 
-        log_ratio_i_init = -log_liki
-        lwi, ki_tuple = log_ratio_i_init.azstats.psislw(r_eff=reff_i, dim=sample_dims)
-        ki = ki_tuple[0].item() if isinstance(ki_tuple, tuple) else ki_tuple.item()
-
-        upars_i = upars.copy(deep=True)
-        total_shift = np.zeros(upars_i.sizes[param_dim_name])
-        total_scaling = np.ones(upars_i.sizes[param_dim_name])
-        total_mapping = np.eye(upars_i.sizes[param_dim_name])
-
-        iterind = 1
-        transformations_applied = False
-
-        while iterind <= max_iters and ki > k_threshold:
-            if iterind == max_iters:
-                warnings.warn(
-                    f"Maximum number of moment matching iterations ({max_iters}) reached "
-                    f"for observation {i}. Final Pareto k is {ki:.2f}.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                break
-
-            # Try Mean Shift
-            try:
-                shift_res = _shift(upars_i, lwi)
-                log_prob_shifted = log_prob_upars_fn(shift_res.upars)
-                log_liki_shifted = log_lik_i_upars_fn(shift_res.upars, i)
-                weights_k_res = _recalculate_weights_k(
-                    log_liki_shifted, log_prob_shifted, orig_log_prob, reff_i, sample_dims
-                )
-                if weights_k_res.ki < ki:
-                    ki = weights_k_res.ki
-                    lwi = weights_k_res.lwi
-                    log_liki = weights_k_res.log_liki
-                    upars_i = shift_res.upars
-                    total_shift = total_shift + shift_res.shift
-                    transformations_applied = True
-                    iterind += 1
-                    continue  # Restart, try mean shift again
-
-            except RuntimeError as e:
-                warnings.warn(
-                    f"Error during mean shift calculation for observation {i}: {e}. "
-                    "Stopping moment matching for this observation.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                break
-
-            # Try Scale Shift (only if mean shift didn't improve)
-            try:
-                scale_res = _shift_and_scale(upars_i, lwi)
-                log_prob_scaled = log_prob_upars_fn(scale_res.upars)
-                log_liki_scaled = log_lik_i_upars_fn(scale_res.upars, i)
-                weights_k_res_scale = _recalculate_weights_k(
-                    log_liki_scaled, log_prob_scaled, orig_log_prob, reff_i, sample_dims
-                )
-                if weights_k_res_scale.ki < ki:
-                    ki = weights_k_res_scale.ki
-                    lwi = weights_k_res_scale.lwi
-                    log_liki = weights_k_res_scale.log_liki
-                    upars_i = scale_res.upars
-                    total_shift = total_shift + scale_res.shift
-                    total_scaling = total_scaling * scale_res.scaling
-                    transformations_applied = True
-                    iterind += 1
-                    continue  # Restart, try mean shift again
-
-            except RuntimeError as e:
-                warnings.warn(
-                    f"Error during scale shift calculation for observation {i}: {e}. "
-                    "Stopping moment matching for this observation.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                break
-
-            # Try Covariance Shift (only if mean and scale shift didn't improve, cov=True,
-            # and S >= 10 * npars)
-            if cov and n_samples >= 10 * n_params:
-                try:
-                    cov_res = _shift_and_cov(upars_i, lwi)
-                    log_prob_cov = log_prob_upars_fn(cov_res.upars)
-                    log_liki_cov = log_lik_i_upars_fn(cov_res.upars, i)
-                    weights_k_res_cov = _recalculate_weights_k(
-                        log_liki_cov, log_prob_cov, orig_log_prob, reff_i, sample_dims
-                    )
-                    if weights_k_res_cov.ki < ki:
-                        ki = weights_k_res_cov.ki
-                        lwi = weights_k_res_cov.lwi
-                        log_liki = weights_k_res_cov.log_liki
-                        upars_i = cov_res.upars
-                        total_shift = total_shift + cov_res.shift
-                        total_mapping = cov_res.mapping @ total_mapping
-                        transformations_applied = True
-                        iterind += 1
-                        continue  # Restart, try mean shift again
-
-                except RuntimeError as e:
-                    warnings.warn(
-                        f"Error during covariance shift calculation for observation {i}: {e}. "
-                        "Stopping moment matching for this observation.",
-                        UserWarning,
-                        stacklevel=2,
-                    )
-                    break
-
-            # If none of the transformations in this pass improved ki, break.
-            break
-
-        if split and transformations_applied:
-            try:
-                split_res = _split_moment_match(
-                    upars=upars,
-                    cov=cov,
-                    total_shift=total_shift,
-                    total_scaling=total_scaling,
-                    total_mapping=total_mapping,
-                    i=i,
-                    reff=reff_i,
-                    log_prob_upars_fn=log_prob_upars_fn,
-                    log_lik_i_upars_fn=log_lik_i_upars_fn,
-                )
-
-                final_log_liki = split_res.log_liki
-                final_lwi = split_res.lwi
-                _, ki_split_tuple = split_res.lwi.azstats.psislw(
-                    r_eff=split_res.reff, dim=sample_dims
-                )
-
-                ki_split = (
-                    ki_split_tuple[0].item()
-                    if isinstance(ki_split_tuple, tuple)
-                    else ki_split_tuple.item()
-                )
-                final_ki = ki_split
-
-                _, kf_tuple = split_res.lwfi.azstats.psislw(r_eff=split_res.reff, dim=sample_dims)
-                kfs[i] = kf_tuple[0].item() if isinstance(kf_tuple, tuple) else kf_tuple.item()
-                reff_i = split_res.reff
-
-                if ki_split > ki and ki <= k_threshold:
-                    warnings.warn(
-                        f"Split transformation increased Pareto k for observation {i} "
-                        f"({ki:.2f} -> {ki_split:.2f}). This may indicate numerical issues.",
-                        UserWarning,
-                        stacklevel=2,
-                    )
-
-            except RuntimeError as e:
-                warnings.warn(
-                    f"Error during split moment matching for observation {i}: {e}. "
-                    "Using non-split transformation result.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                # On error, keep the non-split results
-                final_log_liki = log_liki
-                final_lwi = lwi
-                final_ki = ki
-        else:
-            # No split transformation
-            final_log_liki = log_liki
-            final_lwi = lwi
-            final_ki = ki
-
-            if transformations_applied:
-                liki_final = np.exp(final_log_liki)
-                liki_final_reshaped = liki_final.values.reshape(n_chains, n_draws).T
-                ess_val_final = ess(liki_final_reshaped, method="mean").item()
-                reff_i = ess_val_final / n_samples if n_samples > 0 else 1.0
-
-        original_ki = ks[i]
-        if final_ki < original_ki:
-            new_elpd_i = logsumexp(final_log_liki + final_lwi, dims=sample_dims).item()
+        if mm_result.final_ki < mm_result.original_ki:
+            new_elpd_i = logsumexp(
+                mm_result.final_log_liki + mm_result.final_lwi, dims=sample_dims
+            ).item()
             original_log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
 
             _update_loo_data_i(
                 loo_data,
                 i,
                 new_elpd_i,
-                final_ki,
-                final_log_liki,
+                mm_result.final_ki,
+                mm_result.final_log_liki,
                 sample_dims,
                 obs_dims,
                 n_samples,
@@ -558,7 +402,7 @@ def loo_moment_match(
         else:
             warnings.warn(
                 f"Observation {i}: Moment matching did not improve k "
-                f"({original_ki:.2f} -> {final_ki:.2f}). Reverting.",
+                f"({mm_result.original_ki:.2f} -> {mm_result.final_ki:.2f}). Reverting.",
                 UserWarning,
                 stacklevel=2,
             )
@@ -571,6 +415,7 @@ def loo_moment_match(
                 loo_data.p_loo_i[idx_dict] = loo_orig.p_loo_i[idx_dict]
 
     final_ks = loo_data.pareto_k.stack(__obs__=obs_dims).transpose("__obs__").values
+
     if np.any(final_ks[bad_obs_indices] > k_threshold):
         warnings.warn(
             f"After Moment Matching, {np.sum(final_ks > k_threshold)} observations still have "
@@ -708,16 +553,18 @@ def _split_moment_match(
     # Forward transformation
     upars_trans = upars_stacked - mean_original
     upars_trans = upars_trans * xr.DataArray(total_scaling, dims=param_dim)
+
     if cov and dim > 0:
         upars_trans = xr.DataArray(
             upars_trans.data @ total_mapping.T,
             coords=upars_trans.coords,
             dims=upars_trans.dims,
         )
-    upars_trans = upars_trans + (xr.DataArray(total_shift, dims=param_dim) + mean_original)
 
+    upars_trans = upars_trans + (xr.DataArray(total_shift, dims=param_dim) + mean_original)
     # Inverse transformation
     upars_trans_inv = upars_stacked - (xr.DataArray(total_shift, dims=param_dim) + mean_original)
+
     if cov and dim > 0:
         try:
             inv_mapping_t = np.linalg.inv(total_mapping.T)
@@ -788,6 +635,7 @@ def _split_moment_match(
     # Multiple importance sampling
     use_forward_log_prob = log_prob_half_trans > log_prob_half_trans_inv_adj
     raw_log_weights_half = -log_liki_half + log_prob_half_trans
+
     log_sum_terms = xr.where(
         use_forward_log_prob,
         log_prob_half_trans
@@ -795,6 +643,7 @@ def _split_moment_match(
         log_prob_half_trans_inv_adj
         + xr.ufuncs.log1p(np.exp(log_prob_half_trans - log_prob_half_trans_inv_adj)),
     )
+
     raw_log_weights_half -= log_sum_terms
     raw_log_weights_half = xr.where(np.isnan(raw_log_weights_half), -np.inf, raw_log_weights_half)
     raw_log_weights_half = xr.where(
@@ -844,4 +693,257 @@ def _split_moment_match(
         lwfi=lwfi_psis_da,
         log_liki=log_liki_half,
         reff=reff_updated,
+    )
+
+
+def _loo_moment_match_i(
+    i,
+    upars,
+    log_likelihood,
+    log_prob_upars_fn,
+    log_lik_i_upars_fn,
+    max_iters,
+    k_threshold,
+    split,
+    cov,
+    orig_log_prob,
+    ks,
+    sample_dims,
+    obs_dims,
+    n_samples,
+    n_params,
+    param_dim_name,
+):
+    """Compute moment matching for a single observation."""
+    n_chains = upars.sizes["chain"]
+    n_draws = upars.sizes["draw"]
+
+    log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
+    liki = np.exp(log_liki)
+    liki_reshaped = liki.values.reshape(n_chains, n_draws).T
+
+    ess_val = ess(liki_reshaped, method="mean").item()
+    reff_i = ess_val / n_samples if n_samples > 0 else 1.0
+
+    log_ratio_i_init = -log_liki
+    lwi, ki_tuple = log_ratio_i_init.azstats.psislw(r_eff=reff_i, dim=sample_dims)
+    ki = ki_tuple[0].item() if isinstance(ki_tuple, tuple) else ki_tuple.item()
+    original_ki = ks[i]
+
+    upars_i = upars.copy(deep=True)
+    total_shift = np.zeros(upars_i.sizes[param_dim_name])
+    total_scaling = np.ones(upars_i.sizes[param_dim_name])
+    total_mapping = np.eye(upars_i.sizes[param_dim_name])
+
+    iterind = 1
+    transformations_applied = False
+    kfs_i = 0
+
+    while iterind <= max_iters and ki > k_threshold:
+        if iterind == max_iters:
+            warnings.warn(
+                f"Maximum number of moment matching iterations ({max_iters}) reached "
+                f"for observation {i}. Final Pareto k is {ki:.2f}.",
+                UserWarning,
+                stacklevel=2,
+            )
+            break
+
+        # Try Mean Shift
+        try:
+            shift_res = _shift(upars_i, lwi)
+            quantities_i = _update_quantities_i(
+                shift_res.upars,
+                i,
+                orig_log_prob,
+                log_prob_upars_fn,
+                log_lik_i_upars_fn,
+                reff_i,
+                sample_dims,
+            )
+            if quantities_i.ki < ki:
+                ki = quantities_i.ki
+                lwi = quantities_i.lwi
+                log_liki = quantities_i.log_liki
+                kfs_i = quantities_i.kfi
+                upars_i = shift_res.upars
+                total_shift = total_shift + shift_res.shift
+                transformations_applied = True
+                iterind += 1
+                continue  # Restart, try mean shift again
+
+        except RuntimeError as e:
+            warnings.warn(
+                f"Error during mean shift calculation for observation {i}: {e}. "
+                "Stopping moment matching for this observation.",
+                UserWarning,
+                stacklevel=2,
+            )
+            break
+
+        # Try Scale Shift
+        try:
+            scale_res = _shift_and_scale(upars_i, lwi)
+            quantities_i = _update_quantities_i(
+                scale_res.upars,
+                i,
+                orig_log_prob,
+                log_prob_upars_fn,
+                log_lik_i_upars_fn,
+                reff_i,
+                sample_dims,
+            )
+            if quantities_i.ki < ki:
+                ki = quantities_i.ki
+                lwi = quantities_i.lwi
+                log_liki = quantities_i.log_liki
+                kfs_i = quantities_i.kfi
+                upars_i = scale_res.upars
+                total_shift = total_shift + scale_res.shift
+                total_scaling = total_scaling * scale_res.scaling
+                transformations_applied = True
+                iterind += 1
+                continue  # Restart, try mean shift again
+
+        except RuntimeError as e:
+            warnings.warn(
+                f"Error during scale shift calculation for observation {i}: {e}. "
+                "Stopping moment matching for this observation.",
+                UserWarning,
+                stacklevel=2,
+            )
+            break
+
+        # Try Covariance Shift
+        if cov and n_samples >= 10 * n_params:
+            try:
+                cov_res = _shift_and_cov(upars_i, lwi)
+                quantities_i = _update_quantities_i(
+                    cov_res.upars,
+                    i,
+                    orig_log_prob,
+                    log_prob_upars_fn,
+                    log_lik_i_upars_fn,
+                    reff_i,
+                    sample_dims,
+                )
+                if quantities_i.ki < ki:
+                    ki = quantities_i.ki
+                    lwi = quantities_i.lwi
+                    log_liki = quantities_i.log_liki
+                    kfs_i = quantities_i.kfi
+                    upars_i = cov_res.upars
+                    total_shift = total_shift + cov_res.shift
+                    total_mapping = cov_res.mapping @ total_mapping
+                    transformations_applied = True
+                    iterind += 1
+                    continue  # Restart, try mean shift again
+
+            except RuntimeError as e:
+                warnings.warn(
+                    f"Error during covariance shift calculation for observation {i}: {e}. "
+                    "Stopping moment matching for this observation.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                break
+
+        break
+
+    if split and transformations_applied:
+        try:
+            split_res = _split_moment_match(
+                upars=upars,
+                cov=cov,
+                total_shift=total_shift,
+                total_scaling=total_scaling,
+                total_mapping=total_mapping,
+                i=i,
+                reff=reff_i,
+                log_prob_upars_fn=log_prob_upars_fn,
+                log_lik_i_upars_fn=log_lik_i_upars_fn,
+            )
+
+            final_log_liki = split_res.log_liki
+            final_lwi = split_res.lwi
+            _, ki_split_tuple = split_res.lwi.azstats.psislw(r_eff=split_res.reff, dim=sample_dims)
+
+            ki_split = (
+                ki_split_tuple[0].item()
+                if isinstance(ki_split_tuple, tuple)
+                else ki_split_tuple.item()
+            )
+            final_ki = ki_split
+
+            _, kf_tuple = split_res.lwfi.azstats.psislw(r_eff=split_res.reff, dim=sample_dims)
+            kfs_i = kf_tuple[0].item() if isinstance(kf_tuple, tuple) else kf_tuple.item()
+            reff_i = split_res.reff
+
+            if ki_split > ki and ki <= k_threshold:
+                warnings.warn(
+                    f"Split transformation increased Pareto k for observation {i} "
+                    f"({ki:.2f} -> {ki_split:.2f}). This may indicate numerical issues.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        except RuntimeError as e:
+            warnings.warn(
+                f"Error during split moment matching for observation {i}: {e}. "
+                "Using non-split transformation result.",
+                UserWarning,
+                stacklevel=2,
+            )
+            final_log_liki = log_liki
+            final_lwi = lwi
+            final_ki = ki
+    else:
+        final_log_liki = log_liki
+        final_lwi = lwi
+        final_ki = ki
+
+        if transformations_applied:
+            liki_final = np.exp(final_log_liki)
+            liki_final_reshaped = liki_final.values.reshape(n_chains, n_draws).T
+            ess_val_final = ess(liki_final_reshaped, method="mean").item()
+            reff_i = ess_val_final / n_samples if n_samples > 0 else 1.0
+
+    return LooMomentMatchResult(
+        final_log_liki=final_log_liki,
+        final_lwi=final_lwi,
+        final_ki=final_ki,
+        kfs_i=kfs_i,
+        reff_i=reff_i,
+        original_ki=original_ki,
+        i=i,
+    )
+
+
+def _update_quantities_i(
+    upars,
+    i,
+    orig_log_prob,
+    log_prob_upars_fn,
+    log_lik_i_upars_fn,
+    reff_i,
+    sample_dims,
+):
+    """Update the importance weights, Pareto diagnostic and log-likelihood for observation i."""
+    log_prob_new = log_prob_upars_fn(upars)
+    log_liki_new = log_lik_i_upars_fn(upars, i)
+
+    log_ratio_i = -log_liki_new + log_prob_new - orig_log_prob
+    lwi_new, ki_new_tuple = log_ratio_i.azstats.psislw(r_eff=reff_i, dim=sample_dims)
+    ki_new = ki_new_tuple[0].item() if isinstance(ki_new_tuple, tuple) else ki_new_tuple.item()
+
+    log_ratio_f = log_prob_new - orig_log_prob
+    lwfi_new, kfi_new_tuple = log_ratio_f.azstats.psislw(r_eff=reff_i, dim=sample_dims)
+    kfi_new = kfi_new_tuple[0].item() if isinstance(kfi_new_tuple, tuple) else kfi_new_tuple.item()
+
+    return UpdateQuantities(
+        lwi=lwi_new,
+        lwfi=lwfi_new,
+        ki=ki_new,
+        kfi=kfi_new,
+        log_liki=log_liki_new,
     )
