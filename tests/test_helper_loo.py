@@ -22,7 +22,6 @@ from arviz_stats.loo.helper_loo import (
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
-    _recalculate_weights_k,
     _select_obs_by_coords,
     _select_obs_by_indices,
     _shift,
@@ -645,54 +644,6 @@ def test_split_moment_match_errors():
             log_prob_upars_fn=lambda x: x,
             log_lik_i_upars_fn=lambda x, _i: x,
         )
-
-
-def test_recalculate_weights_k(centered_eight):
-    posterior = centered_eight.posterior
-    chain_size = posterior.chain.size
-    draw_size = posterior.draw.size
-    dims = ["chain", "draw"]
-    coords = {"chain": posterior.chain, "draw": posterior.draw}
-
-    log_liki_new = xr.DataArray(
-        np.random.randn(chain_size, draw_size),
-        dims=dims,
-        coords=coords,
-    )
-
-    log_prob_new = xr.DataArray(
-        np.random.randn(chain_size, draw_size),
-        dims=dims,
-        coords=coords,
-    )
-
-    orig_log_prob = xr.DataArray(
-        np.random.randn(chain_size, draw_size),
-        dims=dims,
-        coords=coords,
-    )
-
-    reff = 0.8
-    sample_dims = ["chain", "draw"]
-
-    result = _recalculate_weights_k(log_liki_new, log_prob_new, orig_log_prob, reff, sample_dims)
-
-    assert hasattr(result, "lwi")
-    assert hasattr(result, "lwfi")
-    assert hasattr(result, "ki")
-    assert hasattr(result, "kfi")
-    assert hasattr(result, "log_liki")
-
-    assert isinstance(result.lwi, xr.DataArray)
-    assert isinstance(result.lwfi, xr.DataArray)
-    assert isinstance(result.ki, float)
-    assert isinstance(result.kfi, float)
-    assert isinstance(result.log_liki, xr.DataArray)
-
-    assert result.lwi.dims == ("chain", "draw")
-    assert result.lwfi.dims == ("chain", "draw")
-    assert result.ki >= 0
-    assert result.kfi >= 0
 
 
 def test_get_log_weights_i():

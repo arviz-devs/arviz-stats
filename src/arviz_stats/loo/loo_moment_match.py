@@ -936,8 +936,8 @@ def _update_quantities_i(
     lwi_new, ki_new_tuple = log_ratio_i.azstats.psislw(r_eff=reff_i, dim=sample_dims)
     ki_new = ki_new_tuple[0].item() if isinstance(ki_new_tuple, tuple) else ki_new_tuple.item()
 
-    log_ratio_f = log_prob_new - orig_log_prob
-    lwfi_new, kfi_new_tuple = log_ratio_f.azstats.psislw(r_eff=reff_i, dim=sample_dims)
+    log_ratio_full = log_prob_new - orig_log_prob
+    lwfi_new, kfi_new_tuple = log_ratio_full.azstats.psislw(r_eff=reff_i, dim=sample_dims)
     kfi_new = kfi_new_tuple[0].item() if isinstance(kfi_new_tuple, tuple) else kfi_new_tuple.item()
 
     return UpdateQuantities(

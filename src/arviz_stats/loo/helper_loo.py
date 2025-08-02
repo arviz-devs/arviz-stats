@@ -15,7 +15,6 @@ __all__ = [
     "_shift",
     "_shift_and_scale",
     "_shift_and_cov",
-    "_recalculate_weights_k",
     "_update_loo_data_i",
     "_get_log_likelihood_i",
     "_get_log_weights_i",
@@ -63,9 +62,6 @@ UpdateSubsampleData = namedtuple(
 ShiftResult = namedtuple("ShiftResult", ["upars", "shift"])
 ShiftAndScaleResult = namedtuple("ShiftAndScaleResult", ["upars", "shift", "scaling"])
 ShiftAndCovResult = namedtuple("ShiftAndCovResult", ["upars", "shift", "mapping"])
-RecalculateWeightsResult = namedtuple(
-    "RecalculateWeightsResult", ["lwi", "lwfi", "ki", "kfi", "log_liki"]
-)
 
 
 def _shift(upars, lwi):
@@ -225,30 +221,6 @@ def _get_log_weights_i(log_weights, i, obs_dims):
             )
         log_weights_i = log_weights_stacked.isel({stacked_obs_dim: i})
     return log_weights_i
-
-
-def _recalculate_weights_k(
-    log_liki_new,
-    log_prob_new,
-    orig_log_prob,
-    reff,
-    sample_dims,
-):
-    """Recalculate importance weights and Pareto k after parameter transformation."""
-    log_ratio_i = -log_liki_new + log_prob_new - orig_log_prob
-    log_ratio_i = xr.where(np.isnan(log_ratio_i), -np.inf, log_ratio_i)
-
-    lwi_new, ki_new = log_ratio_i.azstats.psislw(r_eff=reff, dim=sample_dims)
-    ki_new = ki_new[0].item() if isinstance(ki_new, tuple) else ki_new.item()
-
-    log_ratio_full = log_prob_new - orig_log_prob
-
-    lwfi_new, kfi_new = log_ratio_full.azstats.psislw(r_eff=reff, dim=sample_dims)
-    kfi_new = kfi_new[0].item() if isinstance(kfi_new, tuple) else kfi_new.item()
-
-    return RecalculateWeightsResult(
-        lwi=lwi_new, lwfi=lwfi_new, ki=ki_new, kfi=kfi_new, log_liki=log_liki_new
-    )
 
 
 def _update_loo_data_i(
