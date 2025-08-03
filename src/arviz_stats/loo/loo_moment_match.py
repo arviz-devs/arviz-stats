@@ -16,7 +16,7 @@ from arviz_stats.loo.helper_loo import (
     _shift,
     _shift_and_cov,
     _shift_and_scale,
-    _update_loo_data_i,
+    _warn_pareto_k,
 )
 from arviz_stats.sampling_diagnostics import ess
 from arviz_stats.utils import ELPDData
@@ -934,6 +934,49 @@ def _loo_moment_match_i(
     )
 
 
+def _update_loo_data_i(
+    loo_data,
+    i,
+    new_elpd_i,
+    new_pareto_k,
+    log_liki,
+    sample_dims,
+    obs_dims,
+    n_samples,
+    original_log_liki=None,
+    suppress_warnings=False,
+):
+    """Update the ELPDData object for a single observation."""
+    if loo_data.elpd_i is None or loo_data.pareto_k is None:
+        raise ValueError("loo_data must contain pointwise elpd_i and pareto_k values.")
+
+    lpd_i_log_lik = original_log_liki if original_log_liki is not None else log_liki
+    lpd_i = logsumexp(lpd_i_log_lik, dims=sample_dims, b=1 / n_samples).item()
+    p_loo_i = lpd_i - new_elpd_i
+
+    if len(obs_dims) == 1:
+        idx_dict = {obs_dims[0]: i}
+    else:
+        coords = np.unravel_index(i, tuple(loo_data.elpd_i.sizes[d] for d in obs_dims))
+        idx_dict = dict(zip(obs_dims, coords))
+
+    loo_data.elpd_i[idx_dict] = new_elpd_i
+    loo_data.pareto_k[idx_dict] = new_pareto_k
+
+    if not hasattr(loo_data, "p_loo_i") or loo_data.p_loo_i is None:
+        loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
+
+    loo_data.p_loo_i[idx_dict] = p_loo_i
+    loo_data.elpd = np.nansum(loo_data.elpd_i.values)
+    loo_data.se = np.sqrt(loo_data.n_data_points * np.nanvar(loo_data.elpd_i.values))
+
+    loo_data.warning, loo_data.good_k = _warn_pareto_k(
+        loo_data.pareto_k.values[~np.isnan(loo_data.pareto_k.values)],
+        loo_data.n_samples,
+        suppress=suppress_warnings,
+    )
+
+
 def _update_quantities_i(
     upars,
     i,
@@ -943,7 +986,7 @@ def _update_quantities_i(
     reff_i,
     sample_dims,
 ):
-    """Update the importance weights, Pareto diagnostic and log-likelihood for observation i."""
+    """Update the moment matching quantities for a single observation."""
     log_prob_new = log_prob_upars_fn(upars)
     log_liki_new = log_lik_i_upars_fn(upars, i)
 
