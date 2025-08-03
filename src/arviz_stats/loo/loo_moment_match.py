@@ -6,7 +6,7 @@ from copy import deepcopy
 
 import numpy as np
 import xarray as xr
-from arviz_base import rcParams
+from arviz_base import dataset_to_dataarray, rcParams
 from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.helper_loo import (
@@ -32,9 +32,9 @@ LooMomentMatchResult = namedtuple(
 def loo_moment_match(
     data,
     loo_orig,
-    upars,
     log_prob_upars_fn,
     log_lik_i_upars_fn,
+    upars=None,
     var_name=None,
     reff=None,
     max_iters=30,
@@ -61,11 +61,6 @@ def loo_moment_match(
     loo_orig : ELPDData
         An existing ELPDData object from a previous `loo` result. Must contain
         pointwise Pareto k values (`pointwise=True` must have been used).
-    upars : DataArray
-        Posterior draws transformed to the unconstrained parameter space. Must have
-        `chain` and `draw` dimensions, plus one additional dimension containing all
-        parameters. Parameter names can be provided as coordinate values on this
-        dimension.
     log_prob_upars_fn : Callable[[DataArray], DataArray]
         A function that takes the unconstrained parameter draws and returns a
         :class:`~xarray.DataArray` containing the log probability density of the full posterior
@@ -76,6 +71,12 @@ def loo_moment_match(
         of the left-out observation. It should return a :class:`~xarray.DataArray` containing the
         log-likelihood of the left-out observation `i` evaluated at each unconstrained parameter
         draw. The returned DataArray must have dimensions `chain`, `draw`.
+    upars : DataArray, optional
+        Posterior draws transformed to the unconstrained parameter space. Must have
+        `chain` and `draw` dimensions, plus one additional dimension containing all
+        parameters. Parameter names can be provided as coordinate values on this
+        dimension. If not provided, will attempt to use the `unconstrained_posterior`
+        group from the input data if available.
     var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
@@ -293,6 +294,20 @@ def loo_moment_match(
         )
 
     sample_dims = ["chain", "draw"]
+
+    if upars is None:
+        if hasattr(data, "unconstrained_posterior"):
+            upars_ds = data.unconstrained_posterior.ds
+            upars = dataset_to_dataarray(
+                upars_ds, sample_dims=sample_dims, new_dim="unconstrained_parameter"
+            )
+
+            if "chain" in upars.dims and "draw" in upars.dims:
+                upars = upars.transpose("chain", "draw", "unconstrained_parameter", ...)
+        else:
+            raise ValueError(
+                "upars must be provided or data must contain an 'unconstrained_posterior' group."
+            )
 
     if not isinstance(upars, xr.DataArray):
         raise TypeError("upars must be a DataArray.")
