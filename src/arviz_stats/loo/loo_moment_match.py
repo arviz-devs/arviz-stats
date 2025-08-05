@@ -4,6 +4,7 @@ import warnings
 from collections import namedtuple
 from copy import deepcopy
 
+import arviz_base as azb
 import numpy as np
 import xarray as xr
 from arviz_base import dataset_to_dataarray, rcParams
@@ -297,13 +298,10 @@ def loo_moment_match(
 
     if upars is None:
         if hasattr(data, "unconstrained_posterior"):
-            upars_ds = data.unconstrained_posterior.ds
+            upars_ds = azb.get_unconstrained_samples(data, return_dataset=True)
             upars = dataset_to_dataarray(
                 upars_ds, sample_dims=sample_dims, new_dim="unconstrained_parameter"
             )
-
-            if "chain" in upars.dims and "draw" in upars.dims:
-                upars = upars.transpose("chain", "draw", "unconstrained_parameter", ...)
         else:
             raise ValueError(
                 "upars must be provided or data must contain an 'unconstrained_posterior' group."

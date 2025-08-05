@@ -632,8 +632,7 @@ def test_loo_moment_match_optional_upars(datatree, loo_orig, moment_match_data):
     assert isinstance(loo_mm_explicit, ELPDData)
 
     datatree_with_unconstrained = datatree.copy()
-    unconstrained_group = xr.DataTree(name="unconstrained_posterior")
-    unconstrained_group.ds = upars_ds
+    unconstrained_group = xr.DataTree(dataset=upars_ds, name="unconstrained_posterior")
     datatree_with_unconstrained["unconstrained_posterior"] = unconstrained_group
 
     loo_mm_implicit = loo_moment_match(
