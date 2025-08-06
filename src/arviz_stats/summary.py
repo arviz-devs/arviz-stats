@@ -432,7 +432,7 @@ def hdi(
 
     .. ipython::
 
-        In [1]: dt = azs.load_arviz_data("centered_eight")
+        In [1]: dt = azb.load_arviz_data("centered_eight")
            ...: azs.hdi(dt, var_names=["mu", "theta"])
 
     Calculate the HDI for the "theta" variable also over the school dimension:
@@ -587,7 +587,7 @@ def eti(
 
     .. ipython::
 
-        In [1]: dt = azs.load_arviz_data("centered_eight")
+        In [1]: dt = azb.load_arviz_data("centered_eight")
            ...: azs.eti(dt, var_names=["mu", "theta"])
 
     Calculate the ETI for the "theta" variable also over the school dimension:
