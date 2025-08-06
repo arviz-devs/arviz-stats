@@ -2,12 +2,19 @@
 
 import numpy as np
 import xarray as xr
-from arviz_base import dataset_to_dataframe, extract, rcParams, references_to_dataset
+from arviz_base import (
+    convert_to_dataset,
+    dataset_to_dataframe,
+    extract,
+    rcParams,
+    references_to_dataset,
+)
 from xarray_einstats import stats
 
+from arviz_stats.utils import get_array_function
 from arviz_stats.validate import validate_dims
 
-__all__ = ["summary", "ci_in_rope"]
+__all__ = ["summary", "ci_in_rope", "hdi", "eti"]
 
 
 def summary(
@@ -346,3 +353,311 @@ def ci_in_rope(
     proportion = (in_rope.sum(dim=sample_dims) / in_ci.sum(dim=sample_dims)) * 100
 
     return proportion
+
+
+def hdi(
+    data,
+    sample_dims=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    prob=None,
+    method="nearest",
+    circular=False,
+    max_modes=10,
+    skipna=False,
+    axis=-1,
+):
+    r"""Compute the highest density interval (HDI) given a probability.
+
+    The HDI is the shortest interval that contains the specified probability mass.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset`
+
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions and are to be reduced.
+        Default ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the ESS.
+    var_names : str or list of str, optional
+        Names of the variables for which the Rhat should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    prob : float, optional
+        Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``
+    method : str, default "nearest"
+        Valid options are "nearest", "multimodal" or "multimodal_sample"
+    circular : bool, default False
+        Whether to compute the HDI taking into account that `data` represent circular variables
+        (in the range [-np.pi, np.pi]) or not. Defaults to False (i.e non-circular variables).
+    max_modes : int, default 10
+        Maximum number of modes to consider when computing the HDI using the multimodal method.
+    skipna : bool, default False
+            If true ignores nan values when computing the ETI.
+    axis : int, sequence of int or None, default -1
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested HDI of the provided input
+
+
+    See Also
+    --------
+    arviz.eti : Calculate the equal tail interval (ETI).
+    arviz.summary : Calculate summary statistics and diagnostics.
+
+
+    Examples
+    --------
+    Calculate the HDI of a Normal random variable:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: data = np.random.normal(size=2000)
+           ...: azs.hdi(data, hdi_prob=.68)
+
+    Calculate the HDI for specific variables:
+
+    .. ipython::
+
+        In [1]: dt = azs.load_arviz_data("centered_eight")
+           ...: azs.hdi(dt, var_names=["mu", "theta"])
+
+    Calculate the HDI for the "theta" variable also over the school dimension:
+
+    .. ipython::
+
+        In [1]: azs.hdi(data,
+                        var_names="theta",
+                        sample_dims = ["chain","draw", "school"])
+    """
+    if prob is None:
+        prob = rcParams["stats.ci_prob"]
+
+    if sample_dims is None:
+        sample_dims = rcParams["data.sample_dims"]
+
+    if isinstance(data, list | tuple | np.ndarray):
+        data = np.array(data)
+        return get_array_function("hdi")(
+            data,
+            prob=prob,
+            axis=axis,
+            method=method,
+            circular=circular,
+            max_modes=max_modes,
+            skipna=skipna,
+        )
+
+    if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
+        # Make sure the grouped dimension is added as one of the dimensions to be reduced
+        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
+        return data.map(
+            hdi,
+            sample_dims=sample_dims,
+            var_names=var_names,
+            coords=coords,
+            prob=prob,
+        )
+
+    if isinstance(data, xr.DataArray):
+        if coords is not None:
+            data = data.sel(coords)
+        return data.azstats.hdi(
+            prob=prob,
+            method=method,
+            circular=circular,
+            max_modes=max_modes,
+            skipna=skipna,
+            dim=sample_dims,
+        )
+
+    if isinstance(data, xr.DataTree):
+        data = data.azstats.filter_vars(
+            group=group, var_names=var_names, filter_vars=filter_vars
+        ).datatree
+        if coords is not None:
+            data = data.sel(coords)
+        return data.azstats.hdi(
+            prob=prob,
+            method=method,
+            circular=circular,
+            max_modes=max_modes,
+            skipna=skipna,
+            dim=sample_dims,
+            group=group,
+        )
+
+    data = convert_to_dataset(data, group=group)
+
+    data = data.azstats.filter_vars(var_names=var_names, filter_vars=filter_vars).dataset
+    if coords is not None:
+        data = data.sel(coords)
+
+    return data.azstats.hdi(
+        prob=prob,
+        method=method,
+        circular=circular,
+        max_modes=max_modes,
+        skipna=skipna,
+        dim=sample_dims,
+    )
+
+
+def eti(
+    data,
+    sample_dims=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    prob=None,
+    method="linear",
+    skipna=False,
+    axis=-1,
+):
+    r"""Compute the  equal tail interval (ETI) given a probability.
+
+    The ETI is constructed by dividing the remaining probability (e.g., 6% for a 94% interval)
+    equally between the two tails of a distribution. Other names for ETI are central interval and
+    quantile-based interval.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset`
+
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions and are to be reduced.
+        Default ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the ESS.
+    var_names : str or list of str, optional
+        Names of the variables for which the Rhat should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    prob : float, optional
+        Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``
+    method : str, default "linear"
+        For other options see :func:`numpy.quantile`.
+    skipna : bool, default False
+        If true ignores nan values when computing the ETI.
+    axis : int, sequence of int or None, default -1
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested ETI of the provided input
+
+    See Also
+    --------
+    arviz.hdi : Calculate the highest density interval (HDI).
+    arviz.summary : Calculate summary statistics and diagnostics.
+
+
+    Examples
+    --------
+    Calculate the ETI of a Normal random variable:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: data = np.random.normal(size=2000)
+           ...: azs.eti(data, hdi_prob=.68)
+
+    Calculate the ETI for specific variables:
+
+    .. ipython::
+
+        In [1]: dt = azs.load_arviz_data("centered_eight")
+           ...: azs.eti(dt, var_names=["mu", "theta"])
+
+    Calculate the ETI for the "theta" variable also over the school dimension:
+
+    .. ipython::
+
+        In [1]: azs.eti(data,
+                        var_names="theta",
+                        sample_dims = ["chain","draw", "school"])
+    """
+    if prob is None:
+        prob = rcParams["stats.ci_prob"]
+
+    if sample_dims is None:
+        sample_dims = rcParams["data.sample_dims"]
+
+    if isinstance(data, list | tuple | np.ndarray):
+        data = np.array(data)
+        return get_array_function("eti")(
+            data,
+            prob=prob,
+            axis=axis,
+            method=method,
+            skipna=skipna,
+        )
+
+    if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
+        # Make sure the grouped dimension is added as one of the dimensions to be reduced
+        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
+        return data.map(
+            eti,
+            sample_dims=sample_dims,
+            var_names=var_names,
+            coords=coords,
+            prob=prob,
+        )
+
+    if isinstance(data, xr.DataArray):
+        if coords is not None:
+            data = data.sel(coords)
+        return data.azstats.eti(
+            prob=prob,
+            method=method,
+            skipna=skipna,
+            dim=sample_dims,
+        )
+
+    if isinstance(data, xr.DataTree):
+        data = data.azstats.filter_vars(
+            group=group, var_names=var_names, filter_vars=filter_vars
+        ).datatree
+        if coords is not None:
+            data = data.sel(coords)
+        return data.azstats.eti(
+            prob=prob,
+            method=method,
+            skipna=skipna,
+            dim=sample_dims,
+            group=group,
+        )
+
+    data = convert_to_dataset(data, group=group)
+
+    data = data.azstats.filter_vars(var_names=var_names, filter_vars=filter_vars).dataset
+    if coords is not None:
+        data = data.sel(coords)
+
+    return data.azstats.eti(
+        prob=prob,
+        method=method,
+        skipna=skipna,
+        dim=sample_dims,
+    )

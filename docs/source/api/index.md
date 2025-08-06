@@ -43,6 +43,8 @@ you should jump to {ref}`array_stats_api` and read forward.
 
    arviz_stats.bayes_factor
    arviz_stats.ci_in_rope
+   arviz_stats.eti
+   arviz_stats.hdi
    arviz_stats.kl_divergence
    arviz_stats.loo_expectations
    arviz_stats.loo_metrics
