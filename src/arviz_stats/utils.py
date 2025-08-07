@@ -6,8 +6,11 @@ from dataclasses import dataclass
 from importlib import import_module
 
 import numpy as np
-from arviz_base import rcParams
+import xarray as xr
+from arviz_base import convert_to_dataset, rcParams
 from xarray import DataArray
+
+from arviz_stats.validate import validate_dims
 
 __all__ = ["ELPDData", "get_function", "get_log_likelihood"]
 
@@ -278,3 +281,83 @@ def round_num(value, precision):
             return round(value, sig_digits - int(np.floor(np.log10(abs(value)))) - 1)
 
     return value
+
+
+def _warn_non_unique_coords(xr_obj, dims_to_reduce):
+    """Warn if coordinates in `xr_obj` for `dims_to_reduce` have duplicated values."""
+    non_unique_coords = [
+        dim
+        for dim in xr_obj.dims
+        if len(np.unique(xr_obj.coords[dim])) != xr_obj.sizes[dim] and dim not in dims_to_reduce
+    ]
+    if non_unique_coords:
+        warnings.warn(
+            f"Dimensions {non_unique_coords} don't have unique coordinates which might result "
+            "in unexpected results. Either use 'groupby' beforehand or define unique coordiates "
+            "to remove this warning"
+        )
+
+
+def _apply_multi_input_function(
+    name,
+    data,
+    dims,
+    dims_arg,
+    *,
+    group,
+    var_names,
+    filter_vars,
+    coords,
+    **kwargs,
+):
+    all_kwargs = {dims_arg: dims} | kwargs
+    if isinstance(data, list | tuple | np.ndarray):
+        data = np.array(data)
+        return get_array_function(name)(data, **kwargs)
+
+    dims = validate_dims(dims)
+    if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
+        # Make sure the grouped dimension is added as one of the dimensions to be reduced
+        dims = list(set(dims).union(data.group1d.dims))
+
+        if isinstance(data, xr.core.groupby.DataArrayGroupBy):
+
+            def reduce_func(xr_obj):
+                if coords is not None:
+                    xr_obj = xr_obj.sel(coords)
+                return getattr(xr_obj.azstats, name)(**{dims_arg: dims}, **kwargs)
+        else:
+
+            def reduce_func(xr_obj):
+                xr_obj = xr_obj.azstats.filter_vars(
+                    var_names=var_names, filter_vars=filter_vars
+                ).dataset
+                if coords is not None:
+                    xr_obj = xr_obj.sel(coords)
+                return getattr(xr_obj.azstats, name)(**{dims_arg: dims}, **kwargs)
+
+        return data.map(reduce_func)
+
+    if isinstance(data, xr.DataArray):
+        if coords is not None:
+            data = data.sel(coords)
+        _warn_non_unique_coords(data, dims)
+        return getattr(data.azstats, name)(**all_kwargs)
+
+    if isinstance(data, xr.DataTree):
+        data = data.azstats.filter_vars(
+            group=group, var_names=var_names, filter_vars=filter_vars
+        ).datatree
+        if coords is not None:
+            data = data.sel(coords)
+        _warn_non_unique_coords(data, dims)
+        return getattr(data.azstats, name)(**all_kwargs)
+
+    data = convert_to_dataset(data, group=group)
+
+    data = data.azstats.filter_vars(var_names=var_names, filter_vars=filter_vars).dataset
+    if coords is not None:
+        data = data.sel(coords)
+
+    _warn_non_unique_coords(data, dims)
+    return getattr(data.azstats, name)(**all_kwargs)
