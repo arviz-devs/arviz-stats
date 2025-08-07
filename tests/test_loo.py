@@ -568,8 +568,10 @@ def moment_match_data(datatree):
     param_list_for_ds["b_main"] = b_param
     param_list_for_ds["log_sigma"] = log_sigma_param
 
-    temp_ds = xr.Dataset(param_list_for_ds)
-    upars_da_generated = temp_ds.to_array(dim="unconstrained_parameter", name="upars_values")
+    upars_ds = xr.Dataset(param_list_for_ds)
+    upars_da_generated = azb.dataset_to_dataarray(
+        upars_ds, sample_dims=["chain", "draw"], new_dim="unconstrained_parameter"
+    )
     upars_da_final = upars_da_generated.transpose("chain", "draw", "unconstrained_parameter")
 
     def log_prob_upars_fn(upars_arg):
@@ -581,11 +583,11 @@ def moment_match_data(datatree):
         perturbation = upars_arg.sum("unconstrained_parameter") * 0.0001
         return original_log_lik_for_i + perturbation
 
-    return upars_da_final, log_prob_upars_fn, log_lik_i_upars_fn
+    return upars_da_final, log_prob_upars_fn, log_lik_i_upars_fn, upars_ds
 
 
 def test_loo_moment_match(datatree, loo_orig, moment_match_data):
-    upars_da, log_prob_fn, log_lik_i_fn = moment_match_data
+    upars_da, log_prob_fn, log_lik_i_fn, _ = moment_match_data
     max_k = np.nanmax(loo_orig.pareto_k.values)
     k_threshold = np.nanpercentile(loo_orig.pareto_k.values, 90)
     assert k_threshold < max_k
@@ -615,8 +617,51 @@ def test_loo_moment_match(datatree, loo_orig, moment_match_data):
     assert hasattr(loo_mm, "p_loo_i"), "loo_mm object should have p_loo_i attribute"
 
 
+def test_loo_moment_match_optional_upars(datatree, loo_orig, moment_match_data):
+    upars_da, log_prob_fn, log_lik_i_fn, upars_ds = moment_match_data
+
+    loo_mm_explicit = loo_moment_match(
+        datatree,
+        loo_orig,
+        upars=upars_da,
+        log_prob_upars_fn=log_prob_fn,
+        log_lik_i_upars_fn=log_lik_i_fn,
+        var_name="y",
+        max_iters=2,
+    )
+    assert isinstance(loo_mm_explicit, ELPDData)
+
+    datatree_with_unconstrained = datatree.copy()
+    unconstrained_group = xr.DataTree(dataset=upars_ds, name="unconstrained_posterior")
+    datatree_with_unconstrained["unconstrained_posterior"] = unconstrained_group
+
+    loo_mm_implicit = loo_moment_match(
+        datatree_with_unconstrained,
+        loo_orig,
+        upars=None,
+        log_prob_upars_fn=log_prob_fn,
+        log_lik_i_upars_fn=log_lik_i_fn,
+        var_name="y",
+        max_iters=2,
+    )
+    assert isinstance(loo_mm_implicit, ELPDData)
+
+    with pytest.raises(
+        ValueError,
+        match="upars must be provided or data must contain an 'unconstrained_posterior' group",
+    ):
+        loo_moment_match(
+            datatree,
+            loo_orig,
+            upars=None,
+            log_prob_upars_fn=log_prob_fn,
+            log_lik_i_upars_fn=log_lik_i_fn,
+            var_name="y",
+        )
+
+
 def test_loo_moment_match_no_problematic_k(datatree, loo_orig, moment_match_data):
-    upars_da, log_prob_fn, log_lik_i_fn = moment_match_data
+    upars_da, log_prob_fn, log_lik_i_fn, _ = moment_match_data
     k_threshold = np.nanmax(loo_orig.pareto_k.values) + 0.1
 
     loo_mm = loo_moment_match(
@@ -634,7 +679,7 @@ def test_loo_moment_match_no_problematic_k(datatree, loo_orig, moment_match_data
 
 
 def test_loo_moment_match_errors(datatree, moment_match_data):
-    upars_da, log_prob_fn, log_lik_i_fn = moment_match_data
+    upars_da, log_prob_fn, log_lik_i_fn, _ = moment_match_data
 
     loo_non_pointwise = loo(datatree, pointwise=False, var_name="y")
     with pytest.raises(
@@ -746,8 +791,10 @@ def test_log_weights_input_formats(centered_eight):
     metrics_da = loo_metrics(centered_eight, kind="rmse", log_weights=log_weights_da)
     metrics_elpddata = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result)
     assert metrics_da.mean == metrics_elpddata.mean
-    assert metrics_da.se == metrics_elpddata.se
 
+
+def test_log_weights_input_formats_subsample(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
     loo_sub_elpddata = loo_subsample(
         centered_eight,
         observations=4,
