@@ -10,7 +10,7 @@ from .helpers import datatree, fake_dt, importorskip  # noqa: F401
 
 azb = importorskip("arviz_base")
 
-from arviz_stats.summary import ci_in_rope, summary
+from arviz_stats import ci_in_rope, eti, hdi, summary
 
 
 def test_summary_ndarray():
@@ -113,3 +113,31 @@ def test_rope_multiple(fake_dt):
     assert result["b"] > 90
     assert "a" in result.data_vars
     assert "b" in result.data_vars
+
+
+def test_hdi(datatree):
+    result = hdi(datatree, prob=0.5)
+    assert result["mu"].shape == (2,)
+    assert result["theta"].shape == (7, 2)
+    assert "ci_bound" in result.dims
+    result = hdi(datatree.posterior, method="multimodal")
+    assert result["mu"].shape == (1, 2)
+    assert result["theta"].shape == (7, 1, 2)
+    result = hdi(datatree.posterior["mu"])
+    assert result.shape == (2,)
+    result = hdi(datatree.posterior["mu"].values)
+    assert result.shape == (4, 2)
+
+
+def test_eti(datatree):
+    result = eti(datatree, prob=0.5)
+    assert result["mu"].shape == (2,)
+    assert result["theta"].shape == (7, 2)
+    assert "ci_bound" in result.dims
+    result = eti(datatree.posterior, skipna=True)
+    assert result["mu"].shape == (2,)
+    assert result["theta"].shape == (7, 2)
+    result = eti(datatree.posterior["mu"])
+    assert result.shape == (2,)
+    result = eti(datatree.posterior["mu"].values)
+    assert result.shape == (4, 2)
