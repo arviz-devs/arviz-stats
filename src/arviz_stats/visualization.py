@@ -536,8 +536,8 @@ def qds(
 ):
     r"""Compute the marginal quantile dots.
 
-    See the EABM chapter on `Visualization of Random Variables with ArviZ <https://arviz-devs.github.io/EABM/Chapters/Distributions.html#distributions-in-arviz>`_
-    for more details.
+    For details see  [1]_ and check the EABM chapter on `Visualization of Random Variables with
+    ArviZ <https://arviz-devs.github.io/EABM/Chapters/Distributions.html#distributions-in-arviz>`_.
 
     Parameters
     ----------
@@ -588,6 +588,13 @@ def qds(
     arviz_stats.ecdf, arviz_stats.histogram, arviz_stats.qds:
         Alternative visual summaries for marginal distributions
     arviz_plots.plot_dist
+
+    References
+    ----------
+    .. [1] Kay M, Kola T, Hullman JR, and Munson SA. *When (ish) is My Bus?:
+       User-centered Visualizations of Uncertainty in Everyday, Mobile Predictive
+       Systems.* In Proceedings of the 2016 CHI Conference Association for Computing
+       Machinery. 2016. https://doi.org/10.1145/2858036.2858558
 
     Examples
     --------

@@ -543,7 +543,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
 
     def qds(self, ary, nquantiles=100, binwidth=None, dotsize=1, stackratio=1, axis=-1, **kwargs):
-        """Compute quantile dot product."""
+        """Compute quantile dot."""
         ary, axes = process_ary_axes(ary, axis)
         qd_ufunc = make_ufunc(
             self._qds,
