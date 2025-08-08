@@ -10,7 +10,7 @@ from .helpers import datatree, fake_dt, importorskip  # noqa: F401
 
 azb = importorskip("arviz_base")
 
-from arviz_stats import ci_in_rope, eti, hdi, summary
+from arviz_stats import ci_in_rope, eti, hdi, qds, summary
 
 
 def test_summary_ndarray():
@@ -141,3 +141,18 @@ def test_eti(datatree):
     assert result.shape == (2,)
     result = eti(datatree.posterior["mu"].values)
     assert result.shape == (4, 2)
+
+
+def test_qds(datatree):
+    result = qds(datatree, nquantiles=50)
+    assert result["mu"].shape == (2, 50)
+    assert result["theta"].shape == (2, 7, 50)
+    assert "plot_axis" in result.dims
+    result = qds(datatree.posterior)
+    assert result["mu"].shape == (2, 100)
+    assert result["theta"].shape == (2, 7, 100)
+    result = qds(datatree.posterior["mu"])
+    assert result.shape == (2, 100)
+    result = qds(datatree.posterior["mu"].values)
+    assert result[0].shape == (4, 100)
+    assert result[2].shape == (4,)

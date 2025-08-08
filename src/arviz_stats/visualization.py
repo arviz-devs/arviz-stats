@@ -173,7 +173,9 @@ def eti(
     Returns
     -------
     ndarray, DataArray, Dataset, DataTree
-        Requested ETI of the provided input
+        Requested ETI of the provided input. It will have a ``ci_bound`` dimension
+        with coordinate values "lower" and "upper" indicating the two extremes of
+        the credible interval.
 
     See Also
     --------
@@ -269,13 +271,14 @@ def ecdf(
     Returns
     -------
     ndarray, DataArray, Dataset, DataTree
-        Requested HDI of the provided input.
+        Requested ECDF of the provided input.
         It will have a ``quantile`` dimension and a ``plot_axis`` dimension with coordinate
         values "x" and "y".
 
     See Also
     --------
-    arviz_stats.kde, arviz_stats.histogram : Alternative visual summaries for marginal distributions
+    arviz_stats.histogram, arviz_stats.kde, arviz_stats.qds :
+        Alternative visual summaries for marginal distributions
     arviz_plots.plot_dist
 
     Examples
@@ -370,13 +373,14 @@ def histogram(
     Returns
     -------
     ndarray, DataArray, Dataset, DataTree
-        Requested HDI of the provided input.
+        Requested histogram of the provided input.
         It will have a ``{var_name}_hist_dim`` dimension and a ``plot_axis`` dimension
         with coordinates "histogram", "left_edges" and "right_edges"
 
     See Also
     --------
-    arviz_stats.ecdf, arviz_stats.kde : Alternative visual summaries for marginal distributions
+    arviz_stats.ecdf, arviz_stats.kde, arviz_stats.qds :
+        Alternative visual summaries for marginal distributions
     arviz_plots.plot_dist
 
     Examples
@@ -468,13 +472,13 @@ def kde(
     Returns
     -------
     ndarray, DataArray, Dataset, DataTree
-        Requested HDI of the provided input.
-        It will have a ``{var_name}_hist_dim`` dimension and a ``plot_axis`` dimension
-        with coordinates "histogram", "left_edges" and "right_edges"
+        Requested KDE of the provided input.
+        The xarray objects will have a ``kde_dim`` dimension and a ``plot_axis`` dimension
+        with coordinates "x", and "y".
 
     See Also
     --------
-    arviz_stats.ecdf, arviz_stats.histogram :
+    arviz_stats.ecdf, arviz_stats.histogram, arviz_stats.qds:
         Alternative visual summaries for marginal distributions
     arviz_plots.plot_dist
 
@@ -513,5 +517,122 @@ def kde(
         filter_vars=filter_vars,
         coords=coords,
         circular=circular,
+        **kwargs,
+    )
+
+
+def qds(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    nquantiles=100,
+    binwidth=None,
+    dotsize=1,
+    stackratio=1,
+    **kwargs,
+):
+    r"""Compute the marginal quantile dots.
+
+    For details see [1]_ and check the EABM chapter on `Visualization of Random Variables with
+    ArviZ <https://arviz-devs.github.io/EABM/Chapters/Distributions.html#distributions-in-arviz>`_.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.kde``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions to be reduced when computing the KDE.
+        Default ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the KDE
+    var_names : str or list of str, optional
+        Names of the variables for which the KDE should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    binwidth : float, optional
+        Width of the bin for the dots.
+    dotsize : float, default 1
+        The size of the dots relative to the bin width. The default makes dots be just about as
+        wide as the bin width.
+    stackratio : float, default 1
+        The distance between the center of the dots in the same stack relative to the bin height.
+        The default makes dots in the same stack just touch each other.
+    **kwargs : any, optional
+        Forwarded to the array or dataarray interface for KDE.
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested QDs of the provided input.
+        The xarray objects will have a ``qds_dim`` dimension and a ``plot_axis`` dimension
+        with coordinates "x", and "y".
+
+    See Also
+    --------
+    arviz_stats.ecdf, arviz_stats.histogram, arviz_stats.qds:
+        Alternative visual summaries for marginal distributions
+    arviz_plots.plot_dist
+
+    References
+    ----------
+    .. [1] Kay M, Kola T, Hullman JR, and Munson SA. *When (ish) is My Bus?:
+       User-centered Visualizations of Uncertainty in Everyday, Mobile Predictive
+       Systems.* In Proceedings of the 2016 CHI Conference Association for Computing
+       Machinery. 2016. https://doi.org/10.1145/2858036.2858558
+
+    Examples
+    --------
+    Calculate the QDs of a Normal random variable:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: import numpy as np
+           ...: data = np.random.default_rng().normal(size=2000)
+           ...: azs.qds(data)
+
+    Calculate the QDs for specific variables:
+
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: dt = azb.load_arviz_data("centered_eight")
+           ...: azs.qds(dt, var_names=["mu", "theta"])
+
+    Calculate the QDs also over the school dimension (for variables where present):
+
+    .. ipython::
+
+        In [1]: azs.qds(dt, dim=["chain", "draw", "school"])
+    """
+    return _apply_multi_input_function(
+        "qds",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        nquantiles=nquantiles,
+        binwidth=binwidth,
+        dotsize=dotsize,
+        stackratio=stackratio,
         **kwargs,
     )
