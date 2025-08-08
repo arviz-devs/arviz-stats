@@ -542,6 +542,25 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
+    def qds(self, ary, nquantiles=100, binwidth=None, dotsize=1, stackratio=1, axis=-1, **kwargs):
+        """Compute quantile dot."""
+        ary, axes = process_ary_axes(ary, axis)
+        qd_ufunc = make_ufunc(
+            self._qds,
+            n_output=3,
+            n_input=1,
+            n_dims=len(axes),
+        )
+        return qd_ufunc(
+            ary,
+            out_shape=((nquantiles,), (nquantiles,), ()),
+            nquantiles=nquantiles,
+            binwidth=binwidth,
+            dotsize=dotsize,
+            stackratio=stackratio,
+            **kwargs,
+        )
+
     def r2_score(self, y_true, y_pred):
         """Compute R² for Bayesian regression models."""
         r2_ufunc = make_ufunc(

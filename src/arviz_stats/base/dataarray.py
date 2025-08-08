@@ -241,6 +241,27 @@ class BaseDataArray:
         out = concat((grid, pdf), dim=plot_axis)
         return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
 
+    def qds(self, da, nquantiles=100, binwidth=None, dotsize=1, stackratio=1, dim=None, **kwargs):
+        """Compute quantile dots on DataArray input."""
+        dims = validate_dims(dim)
+        x, y, radius = apply_ufunc(
+            self.array_class.qds,
+            da,
+            kwargs={
+                "nquantiles": nquantiles,
+                "binwidth": binwidth,
+                "dotsize": dotsize,
+                "stackratio": stackratio,
+                "axis": np.arange(-len(dims), 0, 1),
+                **kwargs,
+            },
+            input_core_dims=[dims],
+            output_core_dims=[["qd_dim"], ["qd_dim"], []],
+        )
+        plot_axis = DataArray(["x", "y"], dims="plot_axis")
+        out = concat((x, y), dim=plot_axis)
+        return out.assign_coords({"radius" if da.name is None else f"radius_{da.name}": radius})
+
     def thin_factor(self, da, target_ess=None, reduce_func="mean"):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
 
