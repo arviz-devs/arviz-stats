@@ -285,10 +285,12 @@ class AzStatsDtAccessor(_BaseAccessor):
         if isinstance(group, Hashable):
             group = [group]
             hashable_group = True
+        if isinstance(func, str):
+            func = get_function(func)
         out_dt = xr.DataTree.from_dict(
             {
                 group_i: apply_function_to_dataset(
-                    get_function(func),
+                    func,
                     # if group is a single str/hashable that doesn't match the group name,
                     # still allow it and apply the function to the top level of the provided input
                     self._process_input(group_i, func, allow_non_matching=hashable_group),
@@ -304,6 +306,12 @@ class AzStatsDtAccessor(_BaseAccessor):
         # if group was a sequence, return a DataTree with multiple groups in the 1st level,
         # as many groups as requested
         return out_dt
+
+    def ecdf(self, *args, **kwargs):
+        """Overwrite ecdf method with error until fixed for datatree."""
+        raise NotImplementedError(
+            "DataTree ecdf not available yet, use 'dt[group].dataset' instead."
+        )
 
     def filter_vars(self, group="posterior", var_names=None, filter_vars=None):
         """Access and filter variables of the provided group."""
