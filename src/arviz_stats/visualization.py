@@ -34,7 +34,7 @@ def hdi(
           which is completely automated and will be needed again in future executions or
           similar functions.
 
-          It is recommeded to first perform the conversion manually and then call
+          It is recommended to first perform the conversion manually and then call
           ``arviz_stats.hdi``. This allows controlling the conversion step and inspecting
           its results.
     prob : float, optional
@@ -140,6 +140,7 @@ def eti(
     ----------
     data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
         Input data. It will have different pre-processing applied to it depending on its type:
+
         - array-like: call array layer within ``arviz-stats``.
         - xarray object: apply dimension aware function to all relevant subsets
         - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
@@ -147,8 +148,8 @@ def eti(
           which is completely automated and will be needed again in future executions or
           similar functions.
 
-          It is recommeded to first perform the conversion manually and then call
-          ``arviz_stats.hdi``. This allows controlling the conversion step and inspecting
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.eti``. This allows controlling the conversion step and inspecting
           its results.
     prob : float, optional
         Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``
@@ -248,8 +249,8 @@ def ecdf(
           which is completely automated and will be needed again in future executions or
           similar functions.
 
-          It is recommeded to first perform the conversion manually and then call
-          ``arviz_stats.hdi``. This allows controlling the conversion step and inspecting
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.ecdf``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
         Dimensions to be reduced when computing the ECDF. Default ``rcParams["data.sample_dims"]``.
@@ -345,8 +346,8 @@ def histogram(
           which is completely automated and will be needed again in future executions or
           similar functions.
 
-          It is recommeded to first perform the conversion manually and then call
-          ``arviz_stats.hdi``. This allows controlling the conversion step and inspecting
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.histogram``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
         Dimensions to be reduced when computing the histogram.
@@ -446,8 +447,8 @@ def kde(
           which is completely automated and will be needed again in future executions or
           similar functions.
 
-          It is recommeded to first perform the conversion manually and then call
-          ``arviz_stats.hdi``. This allows controlling the conversion step and inspecting
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.kde``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
         Dimensions to be reduced when computing the KDE.
