@@ -374,7 +374,7 @@ def histogram(
     -------
     ndarray, DataArray, Dataset, DataTree
         Requested histogram of the provided input.
-        It will have a ``{var_name}_hist_dim`` dimension and a ``plot_axis`` dimension
+        It will have a ``hist_dim_{var_name}`` dimension and a ``plot_axis`` dimension
         with coordinates "histogram", "left_edges" and "right_edges"
 
     See Also
@@ -555,12 +555,12 @@ def qds(
           ``arviz_stats.kde``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
-        Dimensions to be reduced when computing the KDE.
+        Dimensions to be reduced when computing the quantile dots
         Default ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the KDE
+        Group on which to compute the quantile dots
     var_names : str or list of str, optional
-        Names of the variables for which the KDE should be computed.
+        Names of the variables for which the quantile dots should be computed.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
@@ -574,7 +574,7 @@ def qds(
         The distance between the center of the dots in the same stack relative to the bin height.
         The default makes dots in the same stack just touch each other.
     **kwargs : any, optional
-        Forwarded to the array or dataarray interface for KDE.
+        Forwarded to the array or dataarray interface for quantile dots.
 
     Returns
     -------
@@ -585,7 +585,7 @@ def qds(
 
     See Also
     --------
-    arviz_stats.ecdf, arviz_stats.histogram, arviz_stats.qds:
+    arviz_stats.ecdf, arviz_stats.histogram, arviz_stats.kde:
         Alternative visual summaries for marginal distributions
     arviz_plots.plot_dist
 
