@@ -402,5 +402,19 @@ class BaseDataArray:
             output_core_dims=[dims],
         )
 
+    def mode(self, da, dim=None):
+        """Compute mode on DataArray input."""
+        if dim is None:
+            dims = list(da.dims)
+        else:
+            dims = dim if isinstance(dim, (list | tuple)) else [dim]
+
+        return apply_ufunc(
+            self.array_class.mode,
+            da,
+            input_core_dims=[dims],
+            kwargs={"axis": np.arange(-len(dims), 0, 1)},
+        )
+
 
 dataarray_stats = BaseDataArray(array_class=array_stats)

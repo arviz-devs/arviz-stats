@@ -586,5 +586,30 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return metrics_ufunc(observed, predicted)
 
+    def mode(self, ary, axis=None):
+        """Compute mode of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to compute the mode.
+
+        Returns
+        -------
+        mode : array-like
+            Mode of the input values along the specified axis.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        mode_ufunc = make_ufunc(
+            self._mode,
+            n_output=1,
+            n_input=1,
+            n_dims=len(axes),
+            ravel=False,
+        )
+        return mode_ufunc(ary)
+
 
 array_stats = BaseArray()
