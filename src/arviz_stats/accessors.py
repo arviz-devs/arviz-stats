@@ -119,6 +119,10 @@ class _BaseAccessor:
         """Compute the KDE for all variables in the dataset."""
         return self._apply("kde", dim=dim, **kwargs)
 
+    def qds(self, dim=None, **kwargs):
+        """Compute quantile dots."""
+        return self._apply("qds", dim=dim, **kwargs)
+
     def get_bins(self, dim=None, **kwargs):
         """Compute the histogram bin edges for all variables in the dataset."""
         return self._apply(get_function("get_bins"), dim=dim, **kwargs)

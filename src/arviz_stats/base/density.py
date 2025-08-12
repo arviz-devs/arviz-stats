@@ -780,3 +780,120 @@ class _DensityBase(_CoreBase):
                 contours[idx] = sorted_density[0]
 
         return contours
+
+    def _qds(self, x, nquantiles, binwidth, dotsize, stackratio):
+        """Compute quantile dot stacking for 1D data."""
+        x = x.flatten()
+        x = x[np.isfinite(x)]
+        qvalues, binwidth = self._compute_quantiles_and_binwidth(x, nquantiles, binwidth)
+        stack_locs, stack_counts = self._wilkinson_algorithm(qvalues, binwidth)
+        x, y = self._layout_stacks(stack_locs, stack_counts, binwidth, stackratio)
+        radius = dotsize * binwidth / 2
+
+        return x, y, radius
+
+    def _compute_quantiles_and_binwidth(self, values, nquantiles, binwidth=None):
+        """
+        Compute evenly spaced quantile values and binwidth.
+
+        Parameters
+        ----------
+        values : array-like
+            Input data.
+        nquantiles : int
+            Number of quantiles to compute.
+        binwidth : float, optional
+            Pre-computed binwidth. If None, it will be estimated.
+
+        Returns
+        -------
+        qvalues : ndarray
+            The computed quantile values (sorted).
+        binwidth : float
+            Binwidth for stacking dots.
+        """
+        len_values = len(values)
+        if nquantiles > len_values:
+            warnings.warn(
+                f"nquantiles ({nquantiles}) must be ≤ number of data points ({len_values});"
+                f"using {len_values} instead.",
+                UserWarning,
+            )
+            nquantiles = len_values
+
+        qlist = np.linspace(1 / (2 * nquantiles), 1 - 1 / (2 * nquantiles), nquantiles)
+        qvalues = np.quantile(values, qlist)
+
+        if binwidth is None:
+            binwidth = ((qvalues[-1] - qvalues[0]) ** 2 / (2 * nquantiles * np.pi)) ** 0.5
+
+        return qvalues, binwidth
+
+    def _wilkinson_algorithm(self, values, binwidth):
+        """
+        Wilkinson's algorithm to distribute dots into horizontal stacks [1]_.
+
+        Parameters
+        ----------
+        values : array-like
+            Sorted numeric values.
+        binwidth : float
+            Horizontal binwidth for stacking.
+
+        Returns
+        -------
+        stack_locs : list of float
+            Central location of each stack.
+        stack_counts : list of int
+            Number of dots in each stack.
+
+        References
+        ----------
+        .. [1] Wilkinson, L. *Dot plots*. The American Statistician. (1999).
+           https://doi.org/10.1080/00031305.1999.10474474
+        """
+        ndots = len(values)
+        count = 0
+        stack_locs, stack_counts = [], []
+
+        while count < ndots:
+            stack_first_dot = values[count]
+            num_dots_stack = 0
+            while count < ndots and values[count] - stack_first_dot < binwidth:
+                num_dots_stack += 1
+                count += 1
+            stack_locs.append((stack_first_dot + values[count - 1]) / 2)
+            stack_counts.append(num_dots_stack)
+
+        return stack_locs, stack_counts
+
+    def _layout_stacks(self, stack_locs, stack_counts, binwidth, stackratio):
+        """Use count and location of stacks to get coordinates of dots.
+
+        Parameters
+        ----------
+        stack_locs : array-like
+            Central x (or y) position of each stack.
+        stack_counts : array-like of int
+            Number of dots in each stack.
+        binwidth : float
+            Binwidth used for stacking.
+        stackratio : float
+            Vertical spacing between dots as a proportion of binwidth.
+
+        Returns
+        -------
+        x, y : ndarray
+            Coordinates of each dot.
+        """
+        stack_locs = np.asarray(stack_locs)
+        stack_counts = np.asarray(stack_counts, dtype=int)
+
+        dotheight = stackratio * binwidth
+        binradius = binwidth / 2
+
+        x = np.repeat(stack_locs, stack_counts)
+        y = np.hstack(
+            [dotheight * np.arange(count) + binradius for count in stack_counts if count > 0]
+        )
+        return x, y
