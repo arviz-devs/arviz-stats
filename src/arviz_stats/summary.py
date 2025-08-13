@@ -401,8 +401,7 @@ def mode(
 
     See Also
     --------
-    :func:`xarray.DataArray.mean`, :func:`xarray.Dataset.mean`, :func:`xarray.DataArray.median`,
-    :func:`xarray.Dataset.median`
+    :func:`xarray.Dataset.mean`, :func:`xarray.Dataset.median`
 
 
     References
