@@ -379,19 +379,19 @@ def mode(
           similar functions.
 
           It is recommended to first perform the conversion manually and then call
-          ``arviz_stats.kde``. This allows controlling the conversion step and inspecting
+          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
     group : hashable, default "posterior"
-        Group on which to compute the quantile dots
+        Group on which to compute the mode
     var_names : str or list of str, optional
-        Names of the variables for which the quantile dots should be computed.
+        Names of the variables for which the mode should be computed.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
     **kwargs : any, optional
-        Forwarded to the array or dataarray interface for quantile dots.
+        Forwarded to the array or dataarray interface for mode.
 
     Returns
     -------
