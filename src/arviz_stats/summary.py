@@ -382,6 +382,7 @@ def mode(
           ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
+        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
         Group on which to compute the mode
     var_names : str or list of str, optional
