@@ -9,8 +9,16 @@ from arviz_stats.loo.helper_loo import (
 )
 
 
-def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None, pareto_k=None):
-    """Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
+def loo(
+    data,
+    pointwise=None,
+    var_name=None,
+    reff=None,
+    log_weights=None,
+    pareto_k=None,
+    log_jacobian=None,
+):
+    r"""Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV). Also calculates LOO's
@@ -21,13 +29,13 @@ def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None, pareto
     ----------
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
-    pointwise: bool, optional
+    pointwise : bool, optional
         If True the pointwise predictive accuracy will be returned. Defaults to
         ``rcParams["stats.ic_pointwise"]``.
     var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
-    reff: float, optional
+    reff : float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
     log_weights : DataArray, optional
@@ -38,6 +46,12 @@ def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None, pareto
         Pareto shape values. It must have the same shape as the log likelihood data.
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
         Must be provided together with log_weights or both must be None.
+    log_jacobian : DataArray, optional
+        Log-Jacobian adjustment for variable transformations. Required when the model was fitted
+        on transformed response data :math:`z = T(y)` but you want to compute ELPD on the
+        original response scale :math:`y`. The value should be :math:`\log|\frac{dz}{dy}|`
+        (the log absolute value of the derivative of the transformation). Must be a DataArray
+        with dimensions matching the observation dimensions.
 
     Returns
     -------
@@ -51,7 +65,7 @@ def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None, pareto
         - **n_data_points**: number of data points
         - **warning**: True if the estimated shape parameter of Pareto distribution is greater
           than ``good_k``.
-        - **elp_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
+        - **elpd_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
           ``pointwise=True``
         - **pareto_k**: array of Pareto shape values, only if ``pointwise=True``
         - **good_k**: For a sample size S, the threshold is computed as
@@ -77,21 +91,47 @@ def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None, pareto
 
         In [2]: loo_data.elpd_i
 
+    If a model was fit on a transformed response :math:`z = T(y)` (e.g., :math:`z=\sqrt{y}`), you
+    can report LOO results on the original :math:`y` scale by adding the log-Jacobian of the forward
+    transform to each pointwise log-likelihood value via the ``log_jacobian`` argument.
+
+    For example, with :math:`z=\sqrt{y}` (and :math:`y>0`), the derivative of :math:`z` with respect
+    to :math:`y` is :math:`\tfrac{dz}{dy} = \tfrac{1}{2\sqrt{y}}`. So, the log-Jacobian is
+    :math:`\log\!\left|\tfrac{dz}{dy}\right| = -\log 2 - \tfrac{1}{2}\log y`:
+
+    .. ipython::
+
+        In [3]: import numpy as np
+           ...: import xarray as xr
+           ...: from arviz_stats import loo
+           ...: from arviz_base import load_arviz_data
+           ...: data = load_arviz_data("centered_eight")
+           ...: y = data.observed_data["obs"]
+           ...: y_positive = y - y.min() + 1  # Positive values for sqrt
+           ...: log_jacobian_values = -np.log(2) - 0.5 * np.log(y_positive)
+           ...: log_jacobian = xr.DataArray(
+           ...:     log_jacobian_values,
+           ...:     dims=y.dims,
+           ...:     coords=y.coords
+           ...: )
+           ...: loo_data_adjusted = loo(data, log_jacobian=log_jacobian)
+           ...: loo_data_adjusted
+
     See Also
     --------
     :func:`compare` : Compare models based on their ELPD.
-    :func:`arviz_plots.plot_compare`: Summary plot for model comparison.
+    :func:`arviz_plots.plot_compare` : Summary plot for model comparison.
 
     References
     ----------
 
     .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
-        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
-        arXiv preprint https://arxiv.org/abs/1507.04544.
+       and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+       arXiv preprint https://arxiv.org/abs/1507.04544.
 
     .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
-        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
-        arXiv preprint https://arxiv.org/abs/1507.02646
+       Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+       arXiv preprint https://arxiv.org/abs/1507.02646
     """
     loo_inputs = _prepare_loo_inputs(data, var_name)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
@@ -120,4 +160,5 @@ def loo(data, pointwise=None, var_name=None, reff=None, log_weights=None, pareto
         log_weights=log_weights,
         pareto_k=pareto_k,
         approx_posterior=False,
+        log_jacobian=log_jacobian,
     )
