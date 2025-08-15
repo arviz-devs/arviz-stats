@@ -522,12 +522,11 @@ def _compute_loo_results(
     if return_pointwise:
         return elpd_i, pareto_k, approx_posterior
 
-    elpd_i_values = elpd_i.values.astype(np.float64)
-    elpd_se = (n_data_points * np.var(elpd_i_values)) ** 0.5
+    elpd_se = (n_data_points * np.var(elpd_i.values)) ** 0.5
 
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
     if pointwise:
-        _warn_pointwise_loo(elpd, elpd_i_values)
+        _warn_pointwise_loo(elpd, elpd_i.values)
 
     return ELPDData(
         "loo",
