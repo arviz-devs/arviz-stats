@@ -26,6 +26,7 @@ __all__ = [
     "_prepare_loo_inputs",
     "_extract_loo_data",
     "_check_log_density",
+    "_check_log_jacobian",
     "_warn_pareto_k",
     "_warn_pointwise_loo",
     "_prepare_subsample",
@@ -437,6 +438,7 @@ def _compute_loo_results(
     log_q=None,
     approx_posterior=False,
     return_pointwise=False,
+    log_jacobian=None,
 ):
     """Compute PSIS-LOO-CV results."""
     if log_p is not None and log_q is not None:
@@ -456,11 +458,22 @@ def _compute_loo_results(
     if log_weights is None or pareto_k is None:
         log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dim=sample_dims)
 
+    obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
     log_weights_sum = log_weights + log_likelihood
     pareto_k_da = pareto_k
 
     warn_mg, good_k = _warn_pareto_k(pareto_k_da, n_samples)
     elpd_i = logsumexp(log_weights_sum, dims=sample_dims)
+
+    jacobian_da = None
+    if isinstance(elpd_i, xr.DataArray):
+        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+        if jacobian_da is not None:
+            elpd_i = elpd_i + jacobian_da
+    elif isinstance(elpd_i, xr.Dataset) and var_name in elpd_i:
+        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+        if jacobian_da is not None:
+            elpd_i[var_name] = elpd_i[var_name] + jacobian_da
 
     if return_pointwise:
         if isinstance(elpd_i, xr.Dataset) and var_name in elpd_i:
@@ -471,6 +484,10 @@ def _compute_loo_results(
 
     elpd_i_values = elpd_i.values if hasattr(elpd_i, "values") else np.asarray(elpd_i)
     elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum().values
+
+    if jacobian_da is not None:
+        elpd_raw = elpd_raw + jacobian_da.sum().values
+
     elpd = np.sum(elpd_i_values)
     elpd_se = (n_data_points * np.var(elpd_i_values)) ** 0.5
     p_loo = elpd_raw - elpd
@@ -861,6 +878,54 @@ def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
     else:
         raise TypeError(f"{name} must be a numpy ndarray or xarray DataArray")
     return validated_log_dens
+
+
+def _check_log_jacobian(log_jacobian, obs_dims):
+    """Validate Jacobian adjustment input."""
+    if log_jacobian is None:
+        return None
+
+    if not isinstance(log_jacobian, xr.DataArray):
+        raise TypeError(
+            f"log_jacobian must be an xarray.DataArray or None. "
+            f"Got type {type(log_jacobian).__name__}. "
+        )
+
+    jacobian_dims = set(log_jacobian.dims)
+    obs_dims_set = set(obs_dims) if obs_dims else set()
+
+    if not obs_dims_set.issubset(jacobian_dims):
+        missing_dims = obs_dims_set - jacobian_dims
+        raise ValueError(
+            f"log_jacobian must have all observation dimensions. "
+            f"Missing dimensions: {missing_dims}. "
+            f"log_jacobian has dims {list(log_jacobian.dims)}, "
+            f"but needs dims {obs_dims}"
+        )
+
+    extra_dims = jacobian_dims - obs_dims_set
+    if extra_dims:
+        warnings.warn(
+            f"log_jacobian has extra dimensions {list(extra_dims)} that are not "
+            f"observation dimensions {obs_dims}. These will be included in the adjustment.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    if not np.issubdtype(log_jacobian.dtype, np.number):
+        raise TypeError(
+            f"log_jacobian must contain numeric values, but has dtype {log_jacobian.dtype}"
+        )
+
+    if not np.all(np.isfinite(log_jacobian.values)):
+        n_inf = np.sum(np.isinf(log_jacobian.values))
+        n_nan = np.sum(np.isnan(log_jacobian.values))
+        raise ValueError(
+            f"log_jacobian must contain only finite values. "
+            f"Found {n_nan} NaN and {n_inf} Inf values."
+        )
+
+    return log_jacobian
 
 
 def _get_upars_info(upars, param_dim):
