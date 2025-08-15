@@ -419,3 +419,27 @@ class _CoreBase:
                 [hdi_intervals, np.full((max_modes - hdi_intervals.shape[0], 2), np.nan)]
             )
         return hdi_intervals
+
+    def _mode(self, ary):  # pylint: disable=no-self-use
+        ary = ary.flatten()
+
+        if ary.size == 0:
+            return np.nan
+        if ary.size == 1:
+            return ary.item()
+
+        ary = ary[~np.isnan(ary)]
+
+        if ary.dtype.kind == "f":
+            # For continuous data, we use the half-sample mode algorithm.
+            x = np.sort(ary)
+            while len(x) > 2:
+                n = (len(x) + 1) // 2
+                widths = x[n:] - x[:-n]
+                min_idx = np.argmin(widths)
+                x = x[min_idx : min_idx + n]
+
+            return (x[0] + x[1]) / 2
+        # For discrete data, we use the most frequent value.
+        vals, cnts = np.unique(ary, return_counts=True)
+        return vals[cnts.argmax()]

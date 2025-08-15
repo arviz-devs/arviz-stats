@@ -174,6 +174,10 @@ class _BaseAccessor:
         """Compute autocorrelation for all variables in the dataset."""
         return self._apply("autocorr", dim=dim, **kwargs)
 
+    def mode(self, dim=None, **kwargs):
+        """Compute mode for all variables in the dataset."""
+        return self._apply("mode", dim=dim, **kwargs)
+
 
 @xr.register_dataarray_accessor("azstats")
 class AzStatsDaAccessor(_BaseAccessor):
