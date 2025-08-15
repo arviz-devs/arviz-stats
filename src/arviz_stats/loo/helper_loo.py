@@ -499,12 +499,12 @@ def _compute_loo_results(
                 )
 
     if log_weights is None or pareto_k is None:
-        log_weights, pareto_k = log_likelihood_da.azstats.psislw(r_eff=reff, dim=list(sample_dims))
+        log_weights, pareto_k = log_likelihood_da.azstats.psislw(r_eff=reff, dim=sample_dims)
 
     warn_mg, good_k = _warn_pareto_k(pareto_k, n_samples)
 
     log_weights_sum = log_weights + log_likelihood_da
-    elpd_i = logsumexp(log_weights_sum, dims=list(sample_dims))
+    elpd_i = logsumexp(log_weights_sum, dims=sample_dims)
 
     jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
     if jacobian_da is not None:
@@ -512,7 +512,7 @@ def _compute_loo_results(
 
     elpd = elpd_i.sum().item()
 
-    lppd_da = logsumexp(log_likelihood_da, b=1 / n_samples, dims=list(sample_dims))
+    lppd_da = logsumexp(log_likelihood_da, b=1 / n_samples, dims=sample_dims)
     if jacobian_da is not None:
         lppd_da = lppd_da + jacobian_da
     lppd = lppd_da.sum().item()
