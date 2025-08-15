@@ -441,6 +441,17 @@ def _compute_loo_results(
     log_jacobian=None,
 ):
     """Compute PSIS-LOO-CV results."""
+    if isinstance(log_likelihood, xr.Dataset):
+        if var_name is None:
+            raise ValueError("var_name must be specified when log_likelihood is a Dataset")
+        if var_name not in log_likelihood:
+            raise ValueError(f"Variable '{var_name}' not found in log_likelihood Dataset")
+        log_likelihood_da = log_likelihood[var_name]
+    else:
+        log_likelihood_da = log_likelihood
+
+    obs_dims = [dim for dim in log_likelihood_da.dims if dim not in sample_dims]
+
     if log_p is not None and log_q is not None:
         from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
 
@@ -451,64 +462,72 @@ def _compute_loo_results(
             data=data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
         )
 
+        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+
+        if jacobian_da is not None:
+            loo_results.elpd_i = loo_results.elpd_i + jacobian_da
+            loo_results.elpd = loo_results.elpd_i.sum().item()
+
         if return_pointwise:
             return loo_results.elpd_i, loo_results.pareto_k, True
         return loo_results
 
+    if log_weights is not None:
+        if isinstance(log_weights, xr.Dataset):
+            if var_name is None:
+                raise ValueError("var_name must be specified when log_weights is a Dataset")
+            log_weights = log_weights[var_name]
+        for dim in sample_dims:
+            if dim not in log_weights.dims:
+                raise ValueError(f"log_weights must have sample dimension '{dim}'")
+
+    if pareto_k is not None:
+        if isinstance(pareto_k, xr.Dataset):
+            if var_name is None:
+                raise ValueError("var_name must be specified when pareto_k is a Dataset")
+            pareto_k = pareto_k[var_name]
+        if set(pareto_k.dims) != set(obs_dims):
+            raise ValueError(
+                f"pareto_k dimensions {list(pareto_k.dims)} must match "
+                f"observation dimensions {obs_dims}"
+            )
+        for dim in pareto_k.dims:
+            if pareto_k.sizes[dim] != log_likelihood_da.sizes[dim]:
+                raise ValueError(
+                    f"pareto_k size for dimension '{dim}' ({pareto_k.sizes[dim]}) "
+                    f"must match log_likelihood size ({log_likelihood_da.sizes[dim]})"
+                )
+
     if log_weights is None or pareto_k is None:
-        log_weights, pareto_k = log_likelihood.azstats.psislw(r_eff=reff, dim=sample_dims)
+        log_weights, pareto_k = log_likelihood_da.azstats.psislw(r_eff=reff, dim=list(sample_dims))
 
-    obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
-    log_weights_sum = log_weights + log_likelihood
-    pareto_k_da = pareto_k
+    warn_mg, good_k = _warn_pareto_k(pareto_k, n_samples)
 
-    warn_mg, good_k = _warn_pareto_k(pareto_k_da, n_samples)
-    elpd_i = logsumexp(log_weights_sum, dims=sample_dims)
+    log_weights_sum = log_weights + log_likelihood_da
+    elpd_i = logsumexp(log_weights_sum, dims=list(sample_dims))
 
-    jacobian_da = None
-    if isinstance(elpd_i, xr.DataArray):
-        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
-        if jacobian_da is not None:
-            elpd_i = elpd_i + jacobian_da
-    elif isinstance(elpd_i, xr.Dataset) and var_name in elpd_i:
-        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
-        if jacobian_da is not None:
-            elpd_i[var_name] = elpd_i[var_name] + jacobian_da
+    jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+    if jacobian_da is not None:
+        elpd_i = elpd_i + jacobian_da
+
+    elpd = elpd_i.sum().item()
+
+    lppd_da = logsumexp(log_likelihood_da, b=1 / n_samples, dims=list(sample_dims))
+    if jacobian_da is not None:
+        lppd_da = lppd_da + jacobian_da
+    lppd = lppd_da.sum().item()
+
+    p_loo = lppd - elpd
 
     if return_pointwise:
-        if isinstance(elpd_i, xr.Dataset) and var_name in elpd_i:
-            elpd_i = elpd_i[var_name]
-        if isinstance(pareto_k_da, xr.Dataset) and var_name in pareto_k_da:
-            pareto_k_da = pareto_k_da[var_name]
-        return elpd_i, pareto_k_da, approx_posterior
+        return elpd_i, pareto_k, approx_posterior
 
-    elpd_i_values = elpd_i.values if hasattr(elpd_i, "values") else np.asarray(elpd_i)
-    elpd_raw = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims).sum().values
-
-    if jacobian_da is not None:
-        elpd_raw = elpd_raw + jacobian_da.sum().values
-
-    elpd = np.sum(elpd_i_values)
+    elpd_i_values = elpd_i.values.astype(np.float64)
     elpd_se = (n_data_points * np.var(elpd_i_values)) ** 0.5
-    p_loo = elpd_raw - elpd
 
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
-    if not pointwise:
-        return ELPDData(
-            "loo",
-            elpd,
-            elpd_se,
-            p_loo,
-            n_samples,
-            n_data_points,
-            "log",
-            warn_mg,
-            good_k,
-            approx_posterior=approx_posterior,
-            log_weights=log_weights,
-        )
-
-    _warn_pointwise_loo(elpd, elpd_i_values)
+    if pointwise:
+        _warn_pointwise_loo(elpd, elpd_i_values)
 
     return ELPDData(
         "loo",
@@ -520,8 +539,8 @@ def _compute_loo_results(
         "log",
         warn_mg,
         good_k,
-        elpd_i,
-        pareto_k_da,
+        elpd_i if pointwise else None,
+        pareto_k if pointwise else None,
         approx_posterior=approx_posterior,
         log_weights=log_weights,
     )
@@ -888,28 +907,7 @@ def _check_log_jacobian(log_jacobian, obs_dims):
     if not isinstance(log_jacobian, xr.DataArray):
         raise TypeError(
             f"log_jacobian must be an xarray.DataArray or None. "
-            f"Got type {type(log_jacobian).__name__}. "
-        )
-
-    jacobian_dims = set(log_jacobian.dims)
-    obs_dims_set = set(obs_dims) if obs_dims else set()
-
-    if not obs_dims_set.issubset(jacobian_dims):
-        missing_dims = obs_dims_set - jacobian_dims
-        raise ValueError(
-            f"log_jacobian must have all observation dimensions. "
-            f"Missing dimensions: {missing_dims}. "
-            f"log_jacobian has dims {list(log_jacobian.dims)}, "
-            f"but needs dims {obs_dims}"
-        )
-
-    extra_dims = jacobian_dims - obs_dims_set
-    if extra_dims:
-        warnings.warn(
-            f"log_jacobian has extra dimensions {list(extra_dims)} that are not "
-            f"observation dimensions {obs_dims}. These will be included in the adjustment.",
-            UserWarning,
-            stacklevel=2,
+            f"Got type {type(log_jacobian).__name__}."
         )
 
     if not np.issubdtype(log_jacobian.dtype, np.number):
@@ -924,6 +922,30 @@ def _check_log_jacobian(log_jacobian, obs_dims):
             f"log_jacobian must contain only finite values. "
             f"Found {n_nan} NaN and {n_inf} Inf values."
         )
+
+    sample_dims = {"chain", "draw"}
+    jacobian_dims = set(log_jacobian.dims)
+    if sample_dims.intersection(jacobian_dims):
+        raise ValueError(
+            f"log_jacobian must not have sample dimensions {sample_dims}. "
+            f"Found dimensions: {list(log_jacobian.dims)}"
+        )
+
+    obs_dims_set = set(obs_dims) if obs_dims else set()
+
+    if jacobian_dims != obs_dims_set:
+        missing_dims = obs_dims_set - jacobian_dims
+        extra_dims = jacobian_dims - obs_dims_set
+        error_msg = "log_jacobian dimensions must exactly match observation dimensions.\n"
+
+        if missing_dims:
+            error_msg += f"  Missing dimensions: {list(missing_dims)}\n"
+        if extra_dims:
+            error_msg += f"  Extra dimensions: {list(extra_dims)}\n"
+
+        error_msg += f"  Expected dimensions: {obs_dims}\n"
+        error_msg += f"  Got dimensions: {list(log_jacobian.dims)}"
+        raise ValueError(error_msg)
 
     return log_jacobian
 
