@@ -828,4 +828,67 @@ def test_log_weights_reuse(centered_eight):
     metrics = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result.log_weights)
     assert metrics is not None
     assert hasattr(metrics, "mean")
-    assert hasattr(metrics, "se")
+
+
+def test_loo_jacobian(centered_eight):
+    loo_no_jacobian = loo(centered_eight, pointwise=True)
+
+    y_obs = centered_eight.observed_data["obs"].values
+    y_positive = y_obs + np.abs(y_obs.min()) + 1
+
+    log_jacobian_values = -np.log(2) - 0.5 * np.log(y_positive)
+    log_jacobian = xr.DataArray(
+        log_jacobian_values,
+        dims=["school"],
+        coords={"school": centered_eight.observed_data["obs"].coords["school"]},
+    )
+    loo_with_jacobian = loo(centered_eight, pointwise=True, log_jacobian=log_jacobian)
+
+    elpd_i_no_jac = loo_no_jacobian.elpd_i.values
+    elpd_i_with_jac = loo_with_jacobian.elpd_i.values
+    expected_elpd_i = elpd_i_no_jac + log_jacobian_values
+    assert_allclose(elpd_i_with_jac, expected_elpd_i, rtol=1e-10)
+
+    expected_elpd = loo_no_jacobian.elpd + np.sum(log_jacobian_values)
+    assert_almost_equal(loo_with_jacobian.elpd, expected_elpd, decimal=10)
+
+    n_obs = len(y_obs)
+    elpd_se_adjusted = (n_obs * np.var(elpd_i_with_jac)) ** 0.5
+
+    assert_almost_equal(loo_with_jacobian.se, elpd_se_adjusted, decimal=10)
+    assert_almost_equal(loo_with_jacobian.p, loo_no_jacobian.p, decimal=10)
+
+    jacobian_da_reordered = xr.DataArray(
+        log_jacobian_values[::-1],
+        dims=["school"],
+        coords={"school": centered_eight.log_likelihood["obs"].coords["school"][::-1]},
+    )
+    loo_with_jacobian_reordered = loo(
+        centered_eight, pointwise=True, log_jacobian=jacobian_da_reordered
+    )
+    assert_allclose(loo_with_jacobian_reordered.elpd_i.values, expected_elpd_i, rtol=1e-10)
+
+    assert loo_with_jacobian.elpd != loo_no_jacobian.elpd
+
+    loo_no_pointwise = loo(centered_eight, pointwise=False, log_jacobian=log_jacobian)
+    assert_almost_equal(loo_no_pointwise.elpd, expected_elpd, decimal=10)
+
+    wrong_type_jacobian = np.ones(8)
+    with pytest.raises(TypeError, match="log_jacobian must be an xarray.DataArray"):
+        loo(centered_eight, pointwise=True, log_jacobian=wrong_type_jacobian)
+
+    wrong_dims_jacobian = xr.DataArray(
+        np.ones(5),
+        dims=["wrong_dim"],
+        coords={"wrong_dim": np.arange(5)},
+    )
+    with pytest.raises(ValueError, match="Missing dimensions"):
+        loo(centered_eight, pointwise=True, log_jacobian=wrong_dims_jacobian)
+
+    nan_jacobian = xr.DataArray(
+        np.array([np.nan] + [0.1] * 7),
+        dims=["school"],
+        coords={"school": centered_eight.observed_data["obs"].coords["school"]},
+    )
+    with pytest.raises(ValueError, match="must contain only finite values"):
+        loo(centered_eight, pointwise=True, log_jacobian=nan_jacobian)

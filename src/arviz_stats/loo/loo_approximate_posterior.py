@@ -9,8 +9,8 @@ from arviz_stats.loo.helper_loo import (  # pylint: disable=cyclic-import
 )
 
 
-def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None):
-    """Compute PSIS-LOO-CV for approximate posteriors.
+def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None, log_jacobian=None):
+    r"""Compute PSIS-LOO-CV for approximate posteriors.
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV) for approximate
@@ -40,6 +40,12 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
     var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
+    log_jacobian : DataArray, optional
+        Log-Jacobian adjustment for variable transformations. Required when the model was fitted
+        on transformed response data :math:`z = T(y)` but you want to compute ELPD on the
+        original response scale :math:`y`. The value should be :math:`\log|\frac{dz}{dy}|`
+        (the log absolute value of the derivative of the transformation). Must be a DataArray
+        with dimensions matching the observation dimensions.
 
     Returns
     -------
@@ -167,4 +173,5 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None)
         log_weights=log_weights,
         pareto_k=pareto_k,
         approx_posterior=True,
+        log_jacobian=log_jacobian,
     )
