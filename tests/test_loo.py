@@ -1,5 +1,7 @@
 # pylint: disable=redefined-outer-name, unused-import
 # ruff: noqa: F811
+import copy
+
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
@@ -119,7 +121,10 @@ def test_compare_same(centered_eight, method):
 
 def test_compare_unknown_method(centered_eight, non_centered_eight):
     model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match="Invalid method 'Unknown'. Available methods: stacking, bb-pseudo-bma, pseudo-bma",
+    ):
         compare(model_dict, method="Unknown")
 
 
@@ -134,7 +139,7 @@ def test_compare_different(centered_eight, non_centered_eight, method):
 def test_compare_different_size(centered_eight):
     centered_eight_subset = centered_eight.sel(school="Choate")
     model_dict = {"centered": centered_eight, "centered__subset": centered_eight_subset}
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Model .* has .* observations but expected .*"):
         compare(model_dict)
 
 
@@ -170,7 +175,20 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
         "centered": loo(centered_eight, pointwise=True),
         "non_centered": loo(non_centered_eight, pointwise=False),
     }
-    with pytest.raises(ValueError, match="should have been calculated with pointwise=True"):
+    with pytest.raises(ValueError, match="Model .* is missing pointwise ELPD values"):
+        _calculate_ics(in_dict)
+
+
+def test_calculate_ics_mixed_methods_error(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+    waic_result = copy.deepcopy(loo_result)
+    waic_result.kind = "waic"
+
+    in_dict = {
+        "model1": loo_result,
+        "model2": waic_result,
+    }
+    with pytest.raises(ValueError, match="All ELPD values must be computed using the same method"):
         _calculate_ics(in_dict)
 
 

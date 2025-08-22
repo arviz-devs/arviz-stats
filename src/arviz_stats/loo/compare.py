@@ -118,8 +118,13 @@ def compare(
     )
 
     method = rcParams["stats.ic_compare_method"] if method is None else method
-    if method.lower() not in ["stacking", "bb-pseudo-bma", "pseudo-bma"]:
-        raise ValueError(f"The method {method}, to compute weights, is not supported.")
+    available_methods = ["stacking", "bb-pseudo-bma", "pseudo-bma"]
+    if method.lower() not in available_methods:
+        raise ValueError(
+            f"Invalid method '{method}'. "
+            f"Available methods: {', '.join(available_methods)}. "
+            f"Use 'stacking' (recommended) for robust model averaging."
+        )
 
     ics = pd.DataFrame.from_dict(ics_dict, orient="index")
     ics.sort_values(by="elpd", inplace=True, ascending=False)
@@ -218,7 +223,13 @@ def _ic_matrix(ics):
         ic = ics.loc[val]["elpd_i"]
 
         if len(ic) != rows:
-            raise ValueError("The number of observations should be the same across all models")
+            expected_count = rows
+            model_count = len(ic)
+            raise ValueError(
+                f"Model '{val}' has {model_count} observations but expected {expected_count}. "
+                f"All models must have the same number of observations. "
+                f"First model has {expected_count} observations."
+            )
 
         ic_i_val[:, idx] = ic
 
@@ -252,13 +263,18 @@ def _calculate_ics(
     }
     if precomputed_elpds:
         first_kind = list(precomputed_elpds.values())[0].kind
-        for _, elpd_data in precomputed_elpds.items():
+        for name, elpd_data in precomputed_elpds.items():
             if elpd_data.elpd_i is None:
                 raise ValueError(
-                    "All provided ELPDData should have been calculated with pointwise=True"
+                    f"Model '{name}' is missing pointwise ELPD values. "
+                    f"Recalculate with: loo(model, pointwise=True)"
                 )
             if elpd_data.kind != first_kind:
-                raise ValueError("All elpd values should be computed using the same method")
+                raise ValueError(
+                    f"All ELPD values must be computed using the same method. "
+                    f"Found mixed methods: '{first_kind}' and '{elpd_data.kind}'. "
+                    f"Please recalculate all models using the same method (e.g., all using 'loo')."
+                )
 
     compare_dict = deepcopy(compare_dict)
     for name, dataset in compare_dict.items():
@@ -271,6 +287,6 @@ def _calculate_ics(
                 )
             except Exception as e:
                 raise e.__class__(
-                    f"Encountered error trying to compute elpd from model {name}."
+                    f"Encountered error trying to compute ELPD from model {name}."
                 ) from e
     return compare_dict
