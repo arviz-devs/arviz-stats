@@ -123,7 +123,8 @@ def compare(
         raise ValueError(
             f"Invalid method '{method}'. "
             f"Available methods: {', '.join(available_methods)}. "
-            f"Use 'stacking' (recommended) for robust model averaging."
+            f"Use 'stacking' for robust model averaging as recommended in "
+            f"the original paper https://arxiv.org/abs/1704.02030."
         )
 
     ics = pd.DataFrame.from_dict(ics_dict, orient="index")
