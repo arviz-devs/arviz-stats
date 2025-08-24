@@ -190,15 +190,19 @@ def _get_log_likelihood_i(log_likelihood, i, obs_dims):
         obs_dim = obs_dims[0]
         if i < 0 or i >= log_likelihood.sizes[obs_dim]:
             raise IndexError(f"Index {i} is out of bounds for dimension '{obs_dim}'.")
-        log_lik_i = log_likelihood.isel({obs_dim: i})
+        log_lik_i = log_likelihood.isel({obs_dim: slice(i, i + 1)})
     else:
         stacked_obs_dim = "__obs__"
         log_lik_stacked = log_likelihood.stack({stacked_obs_dim: obs_dims})
+
         if i < 0 or i >= log_lik_stacked.sizes[stacked_obs_dim]:
             raise IndexError(
                 f"Index {i} is out of bounds for stacked dimension '{stacked_obs_dim}'."
             )
-        log_lik_i = log_lik_stacked.isel({stacked_obs_dim: i})
+
+        log_lik_i = log_lik_stacked.isel({stacked_obs_dim: slice(i, i + 1)})
+        log_lik_i = log_lik_i.unstack(stacked_obs_dim)
+
     return log_lik_i
 
 
