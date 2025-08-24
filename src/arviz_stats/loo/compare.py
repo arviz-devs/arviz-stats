@@ -123,8 +123,8 @@ def compare(
         raise ValueError(
             f"Invalid method '{method}'. "
             f"Available methods: {', '.join(available_methods)}. "
-            f"Use 'stacking' for robust model averaging as recommended in "
-            f"the original paper https://arxiv.org/abs/1704.02030."
+            f"Use 'stacking' for robust model averaging as recommended in the original paper "
+            f"https://arxiv.org/abs/1704.02030."
         )
 
     ics = pd.DataFrame.from_dict(ics_dict, orient="index")
@@ -268,7 +268,7 @@ def _calculate_ics(
             if elpd_data.elpd_i is None:
                 raise ValueError(
                     f"Model '{name}' is missing pointwise ELPD values. "
-                    f"Recalculate with: loo(model, pointwise=True)"
+                    f"Recalculate with loo(model, pointwise=True)."
                 )
             if elpd_data.kind != first_kind:
                 raise ValueError(
