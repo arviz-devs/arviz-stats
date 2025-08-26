@@ -139,8 +139,25 @@ def test_compare_different(centered_eight, non_centered_eight, method):
 def test_compare_different_size(centered_eight):
     centered_eight_subset = centered_eight.sel(school="Choate")
     model_dict = {"centered": centered_eight, "centered__subset": centered_eight_subset}
-    with pytest.raises(ValueError, match="Model .* has .* observations but expected .*"):
+    with pytest.raises(ValueError, match="Models have inconsistent observation counts"):
         compare(model_dict)
+
+
+def test_compare_multiple_different_sizes(centered_eight):
+    centered_eight_subset1 = centered_eight.sel(school=["Choate"])
+    centered_eight_subset2 = centered_eight.sel(school=["Choate", "Deerfield"])
+    model_dict = {
+        "model_a": centered_eight,
+        "model_b": centered_eight_subset1,
+        "model_c": centered_eight,
+        "model_d": centered_eight_subset2,
+    }
+    with pytest.raises(ValueError) as exc_info:
+        compare(model_dict)
+    error_msg = str(exc_info.value)
+    assert "Models have inconsistent observation counts" in error_msg
+    assert "(8)" in error_msg and "(2)" in error_msg
+    assert "model_" in error_msg
 
 
 def test_compare_multiple_obs(multivariable_log_likelihood, centered_eight, non_centered_eight):
@@ -179,17 +196,60 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
         _calculate_ics(in_dict)
 
 
-def test_calculate_ics_mixed_methods_error(centered_eight):
+def test_calculate_ics_mixed_methods_warning(centered_eight):
     loo_result = loo(centered_eight, pointwise=True)
-    waic_result = copy.deepcopy(loo_result)
-    waic_result.kind = "waic"
+    kfold_result = copy.deepcopy(loo_result)
+    kfold_result.kind = "loo_kfold"
 
     in_dict = {
         "model1": loo_result,
-        "model2": waic_result,
+        "model2": kfold_result,
     }
-    with pytest.raises(ValueError, match="All ELPD values must be computed using the same method"):
-        _calculate_ics(in_dict)
+
+    with pytest.warns(UserWarning, match="Comparing LOO-CV to K-fold-CV"):
+        result = _calculate_ics(in_dict)
+
+    assert "model1" in result
+    assert "model2" in result
+    assert result["model1"].kind == "loo"
+    assert result["model2"].kind == "loo_kfold"
+
+
+def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+    kfold_result = loo(non_centered_eight, pointwise=True)
+    kfold_result = copy.deepcopy(kfold_result)
+    kfold_result.kind = "loo_kfold"
+
+    compare_dict = {
+        "loo_model": loo_result,
+        "kfold_model": kfold_result,
+    }
+
+    with pytest.warns(UserWarning, match="Comparing LOO-CV to K-fold-CV"):
+        result = compare(compare_dict)
+
+    assert len(result) == 2
+    assert "loo_model" in result.index
+    assert "kfold_model" in result.index
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_unsupported_mixed_methods(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+
+    waic_result = copy.deepcopy(loo_result)
+    waic_result.kind = "waic"
+
+    compare_dict = {
+        "loo_model": loo_result,
+        "waic_model": waic_result,
+    }
+
+    with pytest.raises(
+        ValueError, match="Cannot compare models with incompatible cross-validation methods.*waic"
+    ):
+        compare(compare_dict)
 
 
 @pytest.mark.parametrize(

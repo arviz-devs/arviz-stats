@@ -1,6 +1,7 @@
 """Compare PSIS-LOO-CV results."""
 
 import itertools
+import warnings
 from copy import deepcopy
 
 import numpy as np
@@ -220,18 +221,23 @@ def _ic_matrix(ics):
     rows = len(ics["elpd_i"].iloc[0])
     ic_i_val = np.zeros((rows, cols))
 
+    first_model = ics.index[0]
+    mismatches = []
+    for val in ics.index:
+        ic_len = len(ics.loc[val]["elpd_i"])
+        if ic_len != rows:
+            mismatches.append((val, ic_len))
+
+    if mismatches:
+        mismatch_details = ", ".join([f"'{name}' ({count})" for name, count in mismatches])
+        raise ValueError(
+            f"Models have inconsistent observation counts. "
+            f"Model '{first_model}' has {rows} observations, but these models differ: "
+            f"{mismatch_details}. All models must have the same number of observations."
+        )
+
     for idx, val in enumerate(ics.index):
         ic = ics.loc[val]["elpd_i"]
-
-        if len(ic) != rows:
-            expected_count = rows
-            model_count = len(ic)
-            raise ValueError(
-                f"Model '{val}' has {model_count} observations but expected {expected_count}. "
-                f"All models must have the same number of observations. "
-                f"First model has {expected_count} observations."
-            )
-
         ic_i_val[:, idx] = ic
 
     return rows, cols, ic_i_val
@@ -263,18 +269,37 @@ def _calculate_ics(
         if isinstance(elpd_data, ELPDData)
     }
     if precomputed_elpds:
-        first_kind = list(precomputed_elpds.values())[0].kind
         for name, elpd_data in precomputed_elpds.items():
             if elpd_data.elpd_i is None:
                 raise ValueError(
                     f"Model '{name}' is missing pointwise ELPD values. "
                     f"Recalculate with loo(model, pointwise=True)."
                 )
-            if elpd_data.kind != first_kind:
+
+        methods_used = {}
+        for name, elpd_data in precomputed_elpds.items():
+            kind = elpd_data.kind
+            if kind not in methods_used:
+                methods_used[kind] = []
+            methods_used[kind].append(name)
+
+        if len(methods_used) > 1:
+            has_loo = "loo" in methods_used
+            has_kfold = "loo_kfold" in methods_used
+
+            if has_loo and has_kfold and len(methods_used) == 2:
+                warnings.warn(
+                    "Comparing LOO-CV to K-fold-CV. "
+                    "For a more accurate comparison use the same number of folds "
+                    "or loo for all models compared.",
+                    UserWarning,
+                )
+            else:
+                method_list = sorted(methods_used.keys())
                 raise ValueError(
-                    f"All ELPD values must be computed using the same method. "
-                    f"Found mixed methods: '{first_kind}' and '{elpd_data.kind}'. "
-                    f"Please recalculate all models using the same method (e.g., all using 'loo')."
+                    f"Cannot compare models with incompatible cross-validation methods: "
+                    f"{method_list}. Only comparisons between 'loo' and 'loo_kfold' methods "
+                    f"are supported."
                 )
 
     compare_dict = deepcopy(compare_dict)
