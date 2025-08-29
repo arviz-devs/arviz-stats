@@ -78,9 +78,10 @@ def log_densities(centered_eight):
 
 @pytest.fixture(scope="module")
 def log_lik_fn():
-    def _log_likelihood_eight_schools(data, theta):
+    def _log_likelihood_eight_schools(obs_da, posterior_ds):
+        theta = posterior_ds["theta"]
         sigma = 12.5
-        log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((data - theta) / sigma) ** 2
+        log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
         return log_lik
 
     return _log_likelihood_eight_schools

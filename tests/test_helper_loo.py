@@ -1,4 +1,4 @@
-# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name, unused-argument
 
 import warnings
 
@@ -49,9 +49,10 @@ def log_likelihood_dataset(centered_eight):
 
 @pytest.fixture(scope="module")
 def log_lik_fn():
-    def _log_likelihood_eight_schools(data, theta):
+    def _log_likelihood_eight_schools(obs_da, posterior_ds):
+        theta = posterior_ds["theta"]
         sigma = 12.5
-        log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((data - theta) / sigma) ** 2
+        log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
         return log_lik
 
     return _log_likelihood_eight_schools
@@ -285,21 +286,19 @@ def test_plpd_approx_errors(centered_eight):
     with pytest.raises(TypeError, match="log_lik_fn must be a callable function"):
         _plpd_approx(centered_eight, var_name="obs", log_lik_fn="not_callable")
 
-    def invalid_fn():
+    def invalid_fn(obs_da, posterior_ds):
         return 0.0
 
-    with pytest.raises(ValueError, match="Parameters .* not found in posterior group"):
+    with pytest.raises(KeyError):
         _plpd_approx(
             centered_eight, var_name="obs", log_lik_fn=invalid_fn, param_names=["missing_param"]
         )
 
-    def bad_return_fn():
-        return "not_numeric"
+    def bad_shape_fn(obs_da, posterior_ds):
+        return xr.DataArray([1.0, 2.0], dims=["wrong_dim"])
 
-    with pytest.raises(RuntimeError):
-        _plpd_approx(
-            centered_eight, var_name="obs", log_lik_fn=bad_return_fn, param_names=["theta"]
-        )
+    with pytest.raises(ValueError, match="must return DataArray with same shape"):
+        _plpd_approx(centered_eight, var_name="obs", log_lik_fn=bad_shape_fn, param_names=["theta"])
 
 
 def test_thin_draws(log_likelihood_dataset):

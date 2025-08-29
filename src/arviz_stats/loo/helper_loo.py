@@ -2,7 +2,6 @@
 
 import warnings
 from collections import namedtuple
-from numbers import Number
 
 import numpy as np
 import xarray as xr
@@ -17,6 +16,7 @@ __all__ = [
     "_shift_and_cov",
     "_get_log_likelihood_i",
     "_get_log_weights_i",
+    "_compute_loo_approximation",
     "_plpd_approx",
     "_diff_srs_estimator",
     "_srs_estimator",
@@ -223,6 +223,103 @@ def _get_log_weights_i(log_weights, i, obs_dims):
     return log_weights_i
 
 
+def _compute_loo_approximation(
+    data,
+    var_name,
+    log_lik_fn=None,
+    param_names=None,
+    method="lpd",
+    log=True,
+):
+    """Compute LOO approximation.
+
+    Parameters
+    ----------
+    data : DataTree or InferenceData
+        Input data with posterior and observed_data groups
+    var_name : str
+        Variable name in observed_data
+    log_lik_fn : callable, optional
+        Function that computes the log-likelihood for observations given posterior parameters.
+        The function receives observed data as a DataArray and posterior parameters as a Dataset.
+        For method="plpd", the posterior contains means without chain/draw dimensions.
+        For method="lpd", the posterior contains the full samples with chain/draw dimensions.
+        Returns a DataArray with the same shape as the observations.
+    param_names : list of str, optional
+        Subset of posterior variables to pass to log_lik_fn.
+        If None, all posterior variables are included.
+    method : {"lpd", "plpd"}
+        Approximation method to use:
+
+        - "lpd": Log predictive density (integrates over posterior)
+        - "plpd": Point log predictive density (uses posterior means)
+    log : bool, optional
+        Whether log_lik_fn returns log-likelihood (True) or likelihood (False).
+        Default is True. If False, the output will be log-transformed.
+
+    Returns
+    -------
+    DataArray
+        Approximated log predictive density with same shape as observations
+    """
+    if not hasattr(data, "observed_data"):
+        raise ValueError("No observed_data group found in the data")
+    if var_name not in data.observed_data:
+        raise ValueError(f"Variable {var_name} not found in observed_data")
+
+    observed = data.observed_data[var_name]
+
+    if method == "lpd":
+        if log_lik_fn is None:
+            log_likelihood = get_log_likelihood(data, var_name=var_name)
+            sample_dims = ["chain", "draw"]
+            n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+            return logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
+
+        posterior = extract(data, group="posterior", combined=False)
+
+        if param_names:
+            posterior = posterior[param_names]
+
+        log_likelihood = log_lik_fn(observed, posterior)
+
+        if not log:
+            log_likelihood = xr.ufuncs.log(xr.ufuncs.maximum(log_likelihood, np.finfo(float).tiny))
+
+        sample_dims = ["chain", "draw"]
+        n_samples = posterior.chain.size * posterior.draw.size
+        return logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).rename("lpd")
+
+    if method == "plpd":
+        if log_lik_fn is None:
+            raise ValueError("log_lik_fn required for plpd method")
+        if not callable(log_lik_fn):
+            raise TypeError("log_lik_fn must be a callable function.")
+
+        posterior = extract(data, group="posterior", combined=False)
+
+        if param_names:
+            posterior = posterior[param_names]
+
+        posterior_means = posterior.mean(dim=["chain", "draw"])
+        result = log_lik_fn(observed, posterior_means)
+
+        if not isinstance(result, xr.DataArray):
+            result = xr.DataArray(result, coords=observed.coords, dims=observed.dims)
+
+        if not log:
+            result = xr.ufuncs.log(xr.ufuncs.maximum(result, np.finfo(float).tiny))
+
+        if result.shape != observed.shape:
+            raise ValueError(
+                f"log_lik_fn must return DataArray with same shape as observed data. "
+                f"Expected {observed.shape}, got {result.shape}"
+            )
+
+        return result.rename("plpd")
+    raise ValueError(f"Unknown method: {method}. Must be 'lpd' or 'plpd'")
+
+
 def _plpd_approx(
     data,
     var_name,
@@ -230,7 +327,7 @@ def _plpd_approx(
     param_names=None,
     log=True,
 ):
-    """Compute the Point Log Predictive Density (PLPD) approximation.
+    """Compute the point log predictive density (PLPD) approximation.
 
     Parameters
     ----------
@@ -239,18 +336,14 @@ def _plpd_approx(
     var_name : str
         Name of the variable in `observed_data` for which to compute the PLPD approximation.
     log_lik_fn : callable
-        A function that computes the log-likelihood for a single observation given the
-        mean values of posterior parameters. Required only when ``method="plpd"``.
-        The function must accept the observed data value for a single point as its
-        first argument (scalar). Subsequent arguments must correspond to the mean
-        values of the posterior parameters specified by ``param_names``, passed in the
-        same order. It should return a single scalar log-likelihood value.
+        Function that computes the log-likelihood for observations given posterior parameters.
+        The function receives observed data as a DataArray and posterior means as a Dataset
+        without chain/draw dimensions. Returns a DataArray with the same shape as the observations.
     param_names : list[str], optional
-        An ordered list of parameter names from the posterior group whose mean values
-        will be passed as positional arguments (after the data point value) to `log_lik_fn`.
-        If None, all parameters from the posterior group are used in alphabetical order.
+        Subset of posterior variables to pass to log_lik_fn.
+        If None, all posterior variables are included.
     log : bool, optional
-        Whether the log_likelihood_fn returns log-likelihood (True) or likelihood (False).
+        Whether the log_lik_fn returns log-likelihood (True) or likelihood (False).
         Default is True. If False, the output will be log-transformed.
 
     Returns
@@ -258,55 +351,14 @@ def _plpd_approx(
     DataArray
         DataArray containing PLPD values with the same dimensions as observed data.
     """
-    if not callable(log_lik_fn):
-        raise TypeError("log_lik_fn must be a callable function.")
-    if not hasattr(data, "observed_data"):
-        raise ValueError("No observed_data group found in the data")
-    if var_name not in data.observed_data:
-        raise ValueError(f"Variable {var_name} not found in observed_data")
-
-    observed = data.observed_data[var_name]
-    posterior = extract(data, group="posterior", combined=True)
-
-    if param_names is None:
-        param_keys = sorted(list(posterior.data_vars.keys()))
-    else:
-        missing_params = [p for p in param_names if p not in posterior.data_vars]
-        if missing_params:
-            raise ValueError(f"Parameters {missing_params} not found in posterior group.")
-        param_keys = param_names
-
-    param_means = [float(posterior[key].mean()) for key in param_keys]
-    plpd_values = np.empty_like(observed.values, dtype=float)
-
-    for idx, value in np.ndenumerate(observed.values):
-        try:
-            result = log_lik_fn(value, *param_means)
-            if not log:
-                result = np.log(np.maximum(result, np.finfo(float).tiny))
-
-            if not isinstance(result, Number):
-                raise TypeError(
-                    f"log_lik_fn must return a numeric scalar. Got type: {type(result)}"
-                )
-            plpd_values[idx] = result
-        except Exception as e:
-            coord_info = ", ".join(
-                [f"{dim}: {observed[idx].coords[dim].values.item()}" for dim in observed.coords]
-            )
-            raise RuntimeError(
-                f"Error computing log-likelihood with log_lik_fn for data point "
-                f"with coordinates ({coord_info}) "
-                f"at index {idx} (value: {value}): {e}"
-            ) from e
-
-    plpd_da = xr.DataArray(
-        plpd_values,
-        dims=observed.dims,
-        coords=observed.coords,
-        name="plpd",
+    return _compute_loo_approximation(
+        data=data,
+        var_name=var_name,
+        log_lik_fn=log_lik_fn,
+        param_names=param_names,
+        method="plpd",
+        log=log,
     )
-    return plpd_da
 
 
 def _diff_srs_estimator(

@@ -94,12 +94,11 @@ def loo_subsample(
         every 2nd draw. If None (default), all posterior draws are used. This value is stored
         in the returned ELPDData object and will be automatically used by ``update_subsample``.
     log_lik_fn : callable, optional
-        A function that computes the log-likelihood for a single observation given the
-        mean values of posterior parameters. Required only when ``method="plpd"``.
-        The function must accept the observed data value for a single point as its
-        first argument (scalar). Subsequent arguments must correspond to the mean
-        values of the posterior parameters specified by ``param_names``, passed in the
-        same order. It should return a single scalar log-likelihood value.
+        Function that computes the log-likelihood for observations given posterior parameters.
+        Required only when ``method="plpd"``. The function receives the observed data as a
+        DataArray and posterior parameters as a Dataset (with means when method="plpd" or
+        full posterior when method="lpd"), and returns log-likelihood values as a DataArray.
+
     param_names : list, optional
         Only used when ``method="plpd"``. List of parameter names to extract from
         the posterior. If None, all parameters are used.
@@ -152,29 +151,33 @@ def loo_subsample(
         In [2]: loo_results.elpd_i
 
     We can also use the PLPD approximation method with a custom log-likelihood function.
-    We need to define a function that computes the log-likelihood for a single observation
-    given the mean values of posterior parameters. For the Eight Schools model, we define a
-    function that computes the likelihood for each observation using the *global mean* of the
-    parameters (e.g., the overall mean `theta`):
+    For the Eight Schools model, we define a DataArray-aware function that properly handles
+    the school-specific parameters and measurement errors:
 
     .. ipython::
 
         In [1]: import numpy as np
+           ...: import xarray as xr
+           ...: from scipy import stats
            ...: from arviz_stats import loo_subsample
            ...: from arviz_base import load_arviz_data
-           ...: from scipy.stats import norm
            ...: data = load_arviz_data("centered_eight")
            ...:
-           ...: def log_lik_fn(y, theta):
-           ...:     sigma = 12.5  # Using a fixed sigma for simplicity
-           ...:     return norm.logpdf(y, loc=theta, scale=sigma)
+           ...: def log_lik_eight_schools(obs_da, posterior_ds):
+           ...:     theta = posterior_ds["theta"]
+           ...:     sigma = xr.DataArray(
+           ...:         [15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0],
+           ...:         dims=["school"],
+           ...:         coords={"school": obs_da.coords["school"]}
+           ...:     )
+           ...:     return stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
            ...:
            ...: loo_results = loo_subsample(
            ...:     data,
            ...:     observations=4,
            ...:     var_name="obs",
            ...:     method="plpd",
-           ...:     log_lik_fn=log_lik_fn,
+           ...:     log_lik_fn=log_lik_eight_schools,
            ...:     param_names=["theta"],
            ...:     pointwise=True
            ...: )
@@ -419,12 +422,10 @@ def update_subsample(
         - 'lpd': Use standard log predictive density approximation (default)
         - 'plpd': Use Point Log Predictive Density approximation which requires a ``log_lik_fn``.
     log_lik_fn : callable, optional
-        A function that computes the log-likelihood for a single observation given the
-        mean values of posterior parameters. Required only when ``method="plpd"``.
-        The function must accept the observed data value for a single point as its
-        first argument (scalar). Subsequent arguments must correspond to the mean
-        values of the posterior parameters specified by ``param_names``, passed in the
-        same order. It should return a single scalar log-likelihood value.
+        Function that computes the log-likelihood for observations given posterior parameters.
+        Required only when ``method="plpd"``. The function receives the observed data as a
+        DataArray and posterior parameters as a Dataset with means, and returns log-likelihood
+        values as a DataArray with the same shape as the observations.
     param_names: list, optional
         Only used when ``method="plpd"``. List of parameter names to extract from
         the posterior. If None, all parameters are used.
