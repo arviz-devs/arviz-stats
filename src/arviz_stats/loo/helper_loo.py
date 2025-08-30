@@ -281,12 +281,59 @@ def _compute_loo_approximation(
         if param_names:
             posterior = posterior[param_names]
 
-        log_likelihood = log_lik_fn(observed, posterior)
+        try:
+            log_likelihood = log_lik_fn(observed, posterior)
+        except KeyError as e:
+            available_vars = list(posterior.data_vars)
+            if "missing_param" in str(e) or "No variable named" in str(e):
+                raise KeyError(
+                    f"Variable not found in posterior. "
+                    f"Available posterior variables: {available_vars}"
+                ) from e
+            raise
+        except Exception as e:
+            raise ValueError(f"Error in log_lik_fn: {type(e).__name__}: {str(e)}") from e
+
+        if not isinstance(log_likelihood, xr.DataArray):
+            if isinstance(log_likelihood, np.ndarray):
+                expected_shape = (posterior.chain.size, posterior.draw.size) + observed.shape
+                if log_likelihood.shape == expected_shape:
+                    coords = {
+                        "chain": posterior.chain,
+                        "draw": posterior.draw,
+                        **dict(observed.coords.items()),
+                    }
+                    dims = ["chain", "draw"] + list(observed.dims)
+                    log_likelihood = xr.DataArray(log_likelihood, coords=coords, dims=dims)
+                else:
+                    raise ValueError(
+                        f"log_lik_fn returned array with shape {log_likelihood.shape}, "
+                        f"expected {expected_shape}"
+                    )
+            else:
+                raise TypeError(
+                    f"log_lik_fn must return xr.DataArray or numpy array. "
+                    f"Got {type(log_likelihood).__name__}"
+                )
 
         if not log:
             log_likelihood = xr.ufuncs.log(xr.ufuncs.maximum(log_likelihood, np.finfo(float).tiny))
 
         sample_dims = ["chain", "draw"]
+        expected_dims = set(sample_dims) | set(observed.dims)
+        if set(log_likelihood.dims) != expected_dims:
+            raise ValueError(
+                f"log_lik_fn must return DataArray with dims {list(expected_dims)}. "
+                f"Got {list(log_likelihood.dims)}"
+            )
+
+        for dim in observed.dims:
+            if log_likelihood.sizes[dim] != observed.sizes[dim]:
+                raise ValueError(
+                    f"log_lik_fn must return DataArray with {dim} size {observed.sizes[dim]}. "
+                    f"Got {log_likelihood.sizes[dim]}"
+                )
+
         n_samples = posterior.chain.size * posterior.draw.size
         return logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).rename("lpd")
 
@@ -302,10 +349,27 @@ def _compute_loo_approximation(
             posterior = posterior[param_names]
 
         posterior_means = posterior.mean(dim=["chain", "draw"])
-        result = log_lik_fn(observed, posterior_means)
+
+        try:
+            result = log_lik_fn(observed, posterior_means)
+        except KeyError as e:
+            available_vars = list(posterior_means.data_vars)
+            if "missing_param" in str(e) or "No variable named" in str(e):
+                raise KeyError(
+                    f"Variable not found in posterior. "
+                    f"Available posterior variables: {available_vars}"
+                ) from e
+            raise
+        except Exception as e:
+            raise ValueError(f"Error in log_lik_fn: {type(e).__name__}: {str(e)}") from e
 
         if not isinstance(result, xr.DataArray):
-            result = xr.DataArray(result, coords=observed.coords, dims=observed.dims)
+            try:
+                result = xr.DataArray(result, coords=observed.coords, dims=observed.dims)
+            except Exception as e:
+                raise TypeError(
+                    f"log_lik_fn must return xr.DataArray. Got {type(result).__name__}"
+                ) from e
 
         if not log:
             result = xr.ufuncs.log(xr.ufuncs.maximum(result, np.finfo(float).tiny))
@@ -689,7 +753,17 @@ def _prepare_subsample(
     indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
 
     if method == "lpd":
-        lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples)
+        if log_lik_fn is None:
+            lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples)
+        else:
+            lpd_approx_all = _compute_loo_approximation(
+                data=data,
+                var_name=var_name,
+                log_lik_fn=log_lik_fn,
+                param_names=param_names,
+                method="lpd",
+                log=log,
+            )
     else:  # method == "plpd"
         lpd_approx_all = _plpd_approx(
             data=data, var_name=var_name, log_lik_fn=log_lik_fn, param_names=param_names, log=log
@@ -761,9 +835,19 @@ def _prepare_update_subsample(
             raise ValueError(f"New indices {overlap} overlap with existing indices.")
 
     if method == "lpd":
-        lpd_approx_all = logsumexp(
-            log_likelihood, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
-        )
+        if log_lik_fn is None:
+            lpd_approx_all = logsumexp(
+                log_likelihood, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
+            )
+        else:
+            lpd_approx_all = _compute_loo_approximation(
+                data=data,
+                var_name=loo_inputs.var_name,
+                log_lik_fn=log_lik_fn,
+                param_names=param_names,
+                method="lpd",
+                log=log,
+            )
     else:  # method == "plpd"
         lpd_approx_all = _plpd_approx(
             data,

@@ -1,4 +1,4 @@
-# pylint: disable=redefined-outer-name, unused-import
+# pylint: disable=redefined-outer-name, unused-import, unused-argument
 # ruff: noqa: F811
 import numpy as np
 import pytest
@@ -468,6 +468,100 @@ def test_loo_subsample(centered_eight, pointwise, method, log_lik_fn):
 
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_loo_subsample_errors(centered_eight, method):
+    def log_lik_fn_missing_param(obs_da, posterior_ds):
+        _ = posterior_ds["missing_param"]
+        if method == "lpd":
+            return obs_da.expand_dims({"chain": posterior_ds.chain, "draw": posterior_ds.draw}) * 0
+        return obs_da * 0
+
+    with pytest.raises(KeyError, match="Variable not found in posterior"):
+        loo_subsample(
+            centered_eight,
+            observations=4,
+            var_name="obs",
+            method=method,
+            log_lik_fn=log_lik_fn_missing_param,
+            param_names=["theta"],
+        )
+
+    def log_lik_fn_wrong_shape(obs_da, posterior_ds):
+        return xr.DataArray(0.0)
+
+    error_pattern = (
+        "must return DataArray with dims" if method == "lpd" else "Expected .*, got \\(\\)"
+    )
+    with pytest.raises(ValueError, match=error_pattern):
+        loo_subsample(
+            centered_eight,
+            observations=4,
+            var_name="obs",
+            method=method,
+            log_lik_fn=log_lik_fn_wrong_shape,
+            param_names=["theta"],
+        )
+
+    if method == "lpd":
+
+        def log_lik_fn_wrong_size(obs_da, posterior_ds):
+            return xr.DataArray(
+                np.zeros((posterior_ds.chain.size, posterior_ds.draw.size, 2)),
+                dims=["chain", "draw", "school"],
+                coords={
+                    "chain": posterior_ds.chain,
+                    "draw": posterior_ds.draw,
+                    "school": ["A", "B"],
+                },
+            )
+
+        with pytest.raises(ValueError, match="must return DataArray with school size"):
+            loo_subsample(
+                centered_eight,
+                observations=4,
+                var_name="obs",
+                method=method,
+                log_lik_fn=log_lik_fn_wrong_size,
+                param_names=["theta"],
+            )
+
+    if method == "lpd":
+
+        def log_lik_fn_returns_numpy(obs_da, posterior_ds):
+            _ = posterior_ds["theta"]
+            n_chains = posterior_ds.chain.size
+            n_draws = posterior_ds.draw.size
+            n_obs = len(obs_da)
+            return np.zeros((n_chains, n_draws, n_obs))
+
+        result = loo_subsample(
+            centered_eight,
+            observations=4,
+            var_name="obs",
+            method=method,
+            log_lik_fn=log_lik_fn_returns_numpy,
+            param_names=["theta"],
+            pointwise=False,
+        )
+    else:
+
+        def log_lik_fn_returns_list(obs_da, posterior_ds):
+            _ = posterior_ds["theta"]
+            return [0.0] * len(obs_da)
+
+        result = loo_subsample(
+            centered_eight,
+            observations=4,
+            var_name="obs",
+            method=method,
+            log_lik_fn=log_lik_fn_returns_list,
+            param_names=["theta"],
+            pointwise=False,
+        )
+
+    assert isinstance(result, ELPDData)
+
+
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
 def test_update_loo_subsample(centered_eight, method, log_lik_fn):
     initial_observations = 3
     initial_loo = loo_subsample(
@@ -509,7 +603,7 @@ def test_update_loo_subsample(centered_eight, method, log_lik_fn):
     assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == updated_loo.subsample_size
 
 
-def test_loo_subsample_errors(centered_eight):
+def test_loo_subsample_validation_errors(centered_eight):
     n_total = centered_eight.observed_data.obs.size
     with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
         loo_subsample(centered_eight, observations=0, var_name="obs")
