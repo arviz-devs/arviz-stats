@@ -136,13 +136,6 @@ def test_compare_different(centered_eight, non_centered_eight, method):
     assert_allclose(np.sum(weight), 1.0)
 
 
-def test_compare_different_size(centered_eight):
-    centered_eight_subset = centered_eight.sel(school="Choate")
-    model_dict = {"centered": centered_eight, "centered__subset": centered_eight_subset}
-    with pytest.raises(ValueError, match="Models have inconsistent observation counts"):
-        compare(model_dict)
-
-
 def test_compare_multiple_different_sizes(centered_eight):
     centered_eight_subset1 = centered_eight.sel(school=["Choate"])
     centered_eight_subset2 = centered_eight.sel(school=["Choate", "Deerfield"])
@@ -155,9 +148,11 @@ def test_compare_multiple_different_sizes(centered_eight):
     with pytest.raises(ValueError) as exc_info:
         compare(model_dict)
     error_msg = str(exc_info.value)
-    assert "Models have inconsistent observation counts" in error_msg
-    assert "(8)" in error_msg and "(2)" in error_msg
-    assert "model_" in error_msg
+    expected_msg = (
+        "All models must have the same number of observations, but models have inconsistent "
+        "observation counts: 'model_b' (1), 'model_d' (2), 'model_a' (8), 'model_c' (8)"
+    )
+    assert error_msg == expected_msg
 
 
 def test_compare_multiple_obs(multivariable_log_likelihood, centered_eight, non_centered_eight):

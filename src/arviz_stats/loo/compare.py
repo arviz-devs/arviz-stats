@@ -221,7 +221,6 @@ def _ic_matrix(ics):
     rows = len(ics["elpd_i"].iloc[0])
     ic_i_val = np.zeros((rows, cols))
 
-    first_model = ics.index[0]
     mismatches = []
     for val in ics.index:
         ic_len = len(ics.loc[val]["elpd_i"])
@@ -229,11 +228,12 @@ def _ic_matrix(ics):
             mismatches.append((val, ic_len))
 
     if mismatches:
-        mismatch_details = ", ".join([f"'{name}' ({count})" for name, count in mismatches])
+        obs_counts = {name: len(ics.loc[name]["elpd_i"]) for name in ics.index}
+        sorted_counts = sorted(obs_counts.items(), key=lambda item: (item[1], item[0]))
+        mismatch_details = ", ".join([f"'{name}' ({count})" for name, count in sorted_counts])
         raise ValueError(
-            f"Models have inconsistent observation counts. "
-            f"Model '{first_model}' has {rows} observations, but these models differ: "
-            f"{mismatch_details}. All models must have the same number of observations."
+            "All models must have the same number of observations, but models have inconsistent "
+            f"observation counts: {mismatch_details}"
         )
 
     for idx, val in enumerate(ics.index):
@@ -273,7 +273,7 @@ def _calculate_ics(
             if elpd_data.elpd_i is None:
                 raise ValueError(
                     f"Model '{name}' is missing pointwise ELPD values. "
-                    f"Recalculate with loo(model, pointwise=True)."
+                    f"Recalculate with pointwise=True."
                 )
 
         methods_used = {}
@@ -299,7 +299,7 @@ def _calculate_ics(
                 raise ValueError(
                     f"Cannot compare models with incompatible cross-validation methods: "
                     f"{method_list}. Only comparisons between 'loo' and 'loo_kfold' methods "
-                    f"are supported."
+                    f"are supported currently."
                 )
 
     compare_dict = deepcopy(compare_dict)
