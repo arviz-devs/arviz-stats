@@ -191,25 +191,6 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
         _calculate_ics(in_dict)
 
 
-def test_calculate_ics_mixed_methods_warning(centered_eight):
-    loo_result = loo(centered_eight, pointwise=True)
-    kfold_result = copy.deepcopy(loo_result)
-    kfold_result.kind = "loo_kfold"
-
-    in_dict = {
-        "model1": loo_result,
-        "model2": kfold_result,
-    }
-
-    with pytest.warns(UserWarning, match="Comparing LOO-CV to K-fold-CV"):
-        result = _calculate_ics(in_dict)
-
-    assert "model1" in result
-    assert "model2" in result
-    assert result["model1"].kind == "loo"
-    assert result["model2"].kind == "loo_kfold"
-
-
 def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
     loo_result = loo(centered_eight, pointwise=True)
     kfold_result = loo(non_centered_eight, pointwise=True)
