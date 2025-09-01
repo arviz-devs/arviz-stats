@@ -182,6 +182,7 @@ def _shift_and_cov(upars, lwi):
 
 
 def _get_log_likelihood_i(log_likelihood, i, obs_dims):
+    """Extract the log likelihood for a specific observation index `i`."""
     if not obs_dims:
         raise ValueError("log_likelihood must have observation dimensions.")
 
