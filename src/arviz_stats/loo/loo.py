@@ -310,7 +310,6 @@ def loo_i(
        In [8]: mask = (data.observed_data["obs"].coords["school"] == "Choate")
           ...: loo_i(mask, data)
 
-
     See Also
     --------
     :func:`loo` : Compute LOO for all observations
