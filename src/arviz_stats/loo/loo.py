@@ -1,6 +1,5 @@
 """Pareto-smoothed importance sampling LOO (PSIS-LOO-CV)."""
 
-import numpy as np
 from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
@@ -185,9 +184,17 @@ def loo_i(
 
     Parameters
     ----------
-    i : int
-        Index of the observation for which to compute LOO. Must be between
-        0 and N-1 where N is the total number of observations.
+    i : int, dict, tuple, list, or DataArray
+        Observation selector using xarray-style indexing. Must be one of:
+
+        - **int**: Positional index in flattened observation order.
+          For multi-dimensional observations, indices are flattened.
+        - **dict**: Label or index mapping ``{dim: label_or_index}`` for each observation dimension.
+          Supports both ``.sel()`` style labels and ``.isel()`` style indices.
+        - **tuple/list**: Values in the order of observation dimensions.
+          For single-dim observations, use a 1-element tuple like ``("label",)``.
+        - **DataArray (boolean)**: Boolean mask aligned to observation dimensions
+          with exactly one True value selecting the desired observation
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
     var_name : str, optional
@@ -233,21 +240,76 @@ def loo_i(
 
     Examples
     --------
-    Compute LOO for a single observation:
+    Calculate LOO for a single observation using the school name:
 
     .. ipython::
+       :okwarning:
 
-        In [1]: from arviz_stats import loo_i
-           ...: from arviz_base import load_arviz_data
-           ...: data = load_arviz_data("centered_eight")
-           ...: loo_data_i = loo_i(0, data)
-           ...: loo_data_i
+       In [1]: from arviz_stats import loo_i
+          ...: from arviz_base import load_arviz_data
+          ...: import xarray as xr
+          ...: data = load_arviz_data("centered_eight")
+          ...: loo_i({"school": "Choate"}, data)
 
-    Check the Pareto shape diagnostics for a specific observation:
+    You can also select by position if you know the index:
 
     .. ipython::
+       :okwarning:
 
-        In [2]: loo_data_i.pareto_k
+       In [2]: loo_i({"school": 0}, data)
+
+    For multi-dimensional data, specify all observation dimensions. For example,
+    with data that has two observation dimensions (y_dim_0 and y_dim_1), you can select by index:
+
+    .. ipython::
+       :okwarning:
+
+       In [3]: import arviz_base as azb
+          ...: import numpy as np
+          ...: np.random.seed(0)
+          ...: idata = azb.from_dict({
+          ...:     "posterior": {"theta": np.random.randn(2, 100, 3, 4)},
+          ...:     "log_likelihood": {"y": np.random.randn(2, 100, 3, 4)},
+          ...:     "observed_data": {"y": np.random.randn(3, 4)},
+          ...: })
+          ...: loo_i({"y_dim_0": 1, "y_dim_1": 2}, idata)
+
+    When you know the order of dimensions, you can use a tuple for convenience:
+
+    .. ipython::
+       :okwarning:
+
+       In [4]: loo_i((1, 2), idata)
+
+    For single-dimensional data, we need to use a 1-element tuple:
+
+    .. ipython::
+       :okwarning:
+
+       In [5]: loo_i(("Choate",), data)
+
+    Lists work the same way as tuples:
+
+    .. ipython::
+       :okwarning:
+
+       In [6]: loo_i(["Choate"], data)
+
+    If you prefer simple integer indexing across flattened observations, you can use the index:
+
+    .. ipython::
+       :okwarning:
+
+       In [7]: loo_i(0, data)
+
+    For more complex selections, you can use a boolean mask to select the desired observation:
+
+    .. ipython::
+       :okwarning:
+
+       In [8]: mask = (data.observed_data["obs"].coords["school"] == "Choate")
+          ...: loo_i(mask, data)
+
 
     See Also
     --------
@@ -265,14 +327,7 @@ def loo_i(
        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
        arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    if not isinstance(i, int | np.integer):
-        raise TypeError(f"i must be an integer, got {type(i)}")
-
     loo_inputs = _prepare_loo_inputs(data, var_name)
-
-    i = int(i)
-    if i < 0 or i >= loo_inputs.n_data_points:
-        raise ValueError(f"Index i must be between 0 and {loo_inputs.n_data_points - 1}, got {i}")
 
     if reff is None:
         reff = _get_r_eff(data, loo_inputs.n_samples)
@@ -292,7 +347,6 @@ def loo_i(
         pareto_k_i = pareto_k
 
     log_weights_sum = log_weights_i + log_lik_i
-
     elpd_i = logsumexp(log_weights_sum, dims=loo_inputs.sample_dims).item()
     lppd_i = logsumexp(log_lik_i, b=1 / loo_inputs.n_samples, dims=loo_inputs.sample_dims).item()
     p_loo_i = lppd_i - elpd_i
