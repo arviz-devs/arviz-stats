@@ -233,6 +233,7 @@ def loo_subsample(
         loo_inputs.sample_dims,
         loo_inputs.n_data_points,
         loo_inputs.n_samples,
+        thin,
     )
 
     sample_ds = xr.Dataset({loo_inputs.var_name: subsample_data.log_likelihood_sample})
@@ -500,7 +501,7 @@ def update_subsample(
     thin = getattr(loo_orig, "thin_factor", None)
     loo_inputs = _prepare_loo_inputs(data, var_name, thin)
     update_data = _prepare_update_subsample(
-        loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log
+        loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log, thin
     )
 
     if reff is None:

@@ -748,9 +748,18 @@ def _prepare_subsample(
     sample_dims,
     n_data_points,
     n_samples,
+    thin_factor=None,
 ):
     """Prepare inputs for PSIS-LOO-CV with sub-sampling."""
     indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
+
+    if thin_factor is not None and log_lik_fn is not None:
+        from arviz_stats.manipulation import thin
+
+        data = data.copy(deep=True)
+        if hasattr(data, "posterior"):
+            thinned_posterior = thin(data.posterior, factor=thin_factor)
+            data["posterior"] = thinned_posterior
 
     if method == "lpd":
         if log_lik_fn is None:
@@ -806,9 +815,10 @@ def _prepare_update_subsample(
     log_lik_fn,
     param_names,
     log,
+    thin_factor=None,
 ):
     """Prepare inputs for updating PSIS-LOO-CV with additional observations."""
-    loo_inputs = _prepare_loo_inputs(data, var_name)
+    loo_inputs = _prepare_loo_inputs(data, var_name, thin_factor)
     old_elpd_i_da, old_pareto_k_da = _extract_loo_data(loo_orig)
 
     log_likelihood = loo_inputs.log_likelihood
@@ -833,6 +843,14 @@ def _prepare_update_subsample(
         overlap = np.intersect1d(new_indices, old_indices)
         if len(overlap) > 0:
             raise ValueError(f"New indices {overlap} overlap with existing indices.")
+
+    if thin_factor is not None and log_lik_fn is not None:
+        from arviz_stats.manipulation import thin
+
+        data = data.copy(deep=True)
+        if hasattr(data, "posterior"):
+            thinned_posterior = thin(data.posterior, factor=thin_factor)
+            data["posterior"] = thinned_posterior
 
     if method == "lpd":
         if log_lik_fn is None:
