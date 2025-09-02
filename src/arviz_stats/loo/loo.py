@@ -184,17 +184,14 @@ def loo_i(
 
     Parameters
     ----------
-    i : int, dict, tuple, list, or DataArray
-        Observation selector using xarray-style indexing. Must be one of:
+    i : int | dict | scalar
+        Observation selector. Must be one of:
 
-        - **int**: Positional index in flattened observation order.
-          For multi-dimensional observations, indices are flattened.
-        - **dict**: Label or index mapping ``{dim: label_or_index}`` for each observation dimension.
-          Supports both ``.sel()`` style labels and ``.isel()`` style indices.
-        - **tuple/list**: Values in the order of observation dimensions.
-          For single-dim observations, use a 1-element tuple like ``("label",)``.
-        - **DataArray (boolean)**: Boolean mask aligned to observation dimensions
-          with exactly one True value selecting the desired observation
+        - **int**: Positional index in flattened observation order across all observation
+          dimensions.
+        - **dict**: Label-based mapping ``{obs_dim: coord_value}`` for all observation
+          dimensions. Uses ``.sel`` semantics.
+        - **scalar label**: Only when there is exactly one observation dimension.
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
     var_name : str, optional
@@ -251,12 +248,12 @@ def loo_i(
           ...: data = load_arviz_data("centered_eight")
           ...: loo_i({"school": "Choate"}, data)
 
-    You can also select by position if you know the index:
+    If you prefer simple integer indexing across flattened observations, you can use the index:
 
     .. ipython::
        :okwarning:
 
-       In [2]: loo_i({"school": 0}, data)
+       In [2]: loo_i(0, data)
 
     For multi-dimensional data, specify all observation dimensions. For example,
     with data that has two observation dimensions (y_dim_0 and y_dim_1), you can select by index:
@@ -274,41 +271,12 @@ def loo_i(
           ...: })
           ...: loo_i({"y_dim_0": 1, "y_dim_1": 2}, idata)
 
-    When you know the order of dimensions, you can use a tuple for convenience:
+    With a single observation dimension, you can pass a single label directly:
 
     .. ipython::
        :okwarning:
 
-       In [4]: loo_i((1, 2), idata)
-
-    For single-dimensional data, we need to use a 1-element tuple:
-
-    .. ipython::
-       :okwarning:
-
-       In [5]: loo_i(("Choate",), data)
-
-    Lists work the same way as tuples:
-
-    .. ipython::
-       :okwarning:
-
-       In [6]: loo_i(["Choate"], data)
-
-    If you prefer simple integer indexing across flattened observations, you can use the index:
-
-    .. ipython::
-       :okwarning:
-
-       In [7]: loo_i(0, data)
-
-    For more complex selections, you can use a boolean mask to select the desired observation:
-
-    .. ipython::
-       :okwarning:
-
-       In [8]: mask = (data.observed_data["obs"].coords["school"] == "Choate")
-          ...: loo_i(mask, data)
+       In [3]: loo_i("Choate", data)
 
     See Also
     --------

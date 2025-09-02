@@ -2,6 +2,7 @@
 
 import warnings
 from collections import namedtuple
+from collections.abc import Mapping
 from numbers import Number
 
 import numpy as np
@@ -182,113 +183,48 @@ def _shift_and_cov(upars, lwi):
 
 
 def _get_log_likelihood_i(log_likelihood, i, obs_dims):
-    """Extract the log likelihood for a specific observation index `i`."""
+    """Extract the log-likelihood for one observation `i`."""
     if not obs_dims:
         raise ValueError("log_likelihood must have observation dimensions.")
 
+    # flattened integer positional selection
     if isinstance(i, int | np.integer):
         if len(obs_dims) == 1:
             dim = obs_dims[0]
-            if i < 0 or i >= log_likelihood.sizes[dim]:
-                raise IndexError(f"Index {i} is out of bounds for dimension '{dim}'.")
-            return log_likelihood.isel({dim: slice(i, i + 1)}, drop=False)
+            idx = int(i)
+            return log_likelihood.isel({dim: slice(idx, idx + 1)}, drop=False)
 
-        shape = tuple(log_likelihood.sizes[d] for d in obs_dims)
-        total = int(np.prod(shape))
+        # multi-dim: stack, isel one, then unstack to preserve obs dims
+        stacked_dim = "__obs__"
+        stacked = log_likelihood.stack({stacked_dim: obs_dims})
+        idx = int(i)
+        selected = stacked.isel({stacked_dim: slice(idx, idx + 1)}, drop=False)
+        return selected.unstack(stacked_dim)
 
-        if i < 0 or i >= total:
-            raise IndexError(f"Index {i} is out of bounds for flattened observation size {total}.")
-
-        unr = np.unravel_index(int(i), shape, order="C")
-        isel_map = {d: slice(idx, idx + 1) for d, idx in zip(obs_dims, unr)}
-        return log_likelihood.isel(isel_map, drop=False)
-
-    if isinstance(i, dict):
+    # mapping of labels for all obs dims
+    if isinstance(i, Mapping):
         if set(i.keys()) != set(obs_dims):
             raise ValueError(f"Provide selections for all observation dims: {tuple(obs_dims)}")
 
-        sel_map = {}
-        isel_map = {}
-        for dim in obs_dims:
-            v = i[dim]
-            idx = log_likelihood.indexes.get(dim, None)
-
-            if isinstance(v, slice):
-                start = 0 if v.start is None else v.start
-                stop = log_likelihood.sizes[dim] if v.stop is None else v.stop
-
-                if not 0 <= start < stop <= log_likelihood.sizes[dim]:
-                    raise IndexError(f"Slice {v} is out of bounds for dimension '{dim}'.")
-                if stop - start != 1:
-                    raise ValueError(
-                        f"Slice {v} must select exactly one index for dimension '{dim}'."
-                    )
-                isel_map[dim] = slice(start, start + 1)
-                continue
-
-            if idx is not None and np.ndim(v) == 0:
-                try:
-                    loc = idx.get_loc(v)
-                except KeyError as exc:
-                    if isinstance(v, int | np.integer):
-                        if v < 0 or v >= log_likelihood.sizes[dim]:
-                            raise IndexError(
-                                f"Index {v} is out of bounds for dimension '{dim}'."
-                            ) from exc
-                        isel_map[dim] = slice(v, v + 1)
-                    else:
-                        raise KeyError(
-                            f"Label {v!r} not found in coordinates for '{dim}'."
-                        ) from exc
-                else:
-                    if isinstance(loc, slice | np.ndarray | list):
-                        raise ValueError(f"Label {v!r} is not unique for dimension '{dim}'.")
-                    sel_map[dim] = v
-                continue
-
-            if isinstance(v, int | np.integer):
-                if v < 0 or v >= log_likelihood.sizes[dim]:
-                    raise IndexError(f"Index {v} is out of bounds for dimension '{dim}'.")
-                isel_map[dim] = slice(v, v + 1)
-            else:
-                sel_map[dim] = v
-
-        da = log_likelihood
-        if sel_map:
-            da = da.sel(sel_map, drop=False)
-        if isel_map:
-            da = da.isel(isel_map, drop=False)
+        da = log_likelihood.sel(i, drop=False)
 
         remaining_obs_dims = [d for d in obs_dims if d in da.dims]
         if any(da.sizes[d] != 1 for d in remaining_obs_dims):
             raise ValueError("Selection must reduce each observation dimension to length 1.")
         return da
 
-    if isinstance(i, tuple | list):
-        if len(i) != len(obs_dims):
-            raise ValueError(
-                f"Tuple/list length {len(i)} must match observation dims {len(obs_dims)}"
-            )
-        return _get_log_likelihood_i(log_likelihood, dict(zip(obs_dims, i)), obs_dims)
-
-    if isinstance(i, xr.DataArray) and np.issubdtype(i.dtype, bool):
-        mask, ll = xr.align(i, log_likelihood, join="exact")
-        missing = [d for d in obs_dims if d not in mask.dims]
-
-        if missing:
-            raise ValueError(f"Boolean mask must include observation dims {tuple(obs_dims)}")
-        if int(mask.sum().values) != 1:
-            raise ValueError("Boolean mask must select exactly one observation.")
-
-        pos = np.argwhere(
-            mask.transpose(*obs_dims, *[d for d in mask.dims if d not in obs_dims]).values
-        )[0][: len(obs_dims)]
-        isel_map = {d: slice(int(p), int(p) + 1) for d, p in zip(obs_dims, pos)}
-        return ll.isel(isel_map, drop=False)
+    # single scalar label when there is exactly one obs dim
+    if len(obs_dims) == 1:
+        obs_dim = obs_dims[0]
+        da = log_likelihood.sel({obs_dim: i}, drop=False)
+        if obs_dim in da.sizes and da.sizes[obs_dim] != 1:
+            raise ValueError("Selection must select exactly one element.")
+        return da
 
     raise TypeError(
-        "i must be an int, a dict of {dim: label/index}, a tuple/list in obs_dims order, "
-        "or a boolean DataArray mask."
+        "i must be either a flattened integer index, a mapping of {obs_dim: coord_value} "
+        "for all observation dims, or a single scalar label when there is exactly one "
+        "observation dimension."
     )
 
 

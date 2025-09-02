@@ -853,22 +853,17 @@ def test_loo_i(centered_eight):
     assert_almost_equal(result_label.elpd, loo_full.elpd_i[0].item(), decimal=10)
     assert_almost_equal(result_label.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
 
-    result_tuple = loo_i((label0,), centered_eight)
-    assert_almost_equal(result_tuple.elpd, loo_full.elpd_i[0].item(), decimal=10)
-    assert_almost_equal(result_tuple.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
+    result_scalar = loo_i(label0, centered_eight)
+    assert_almost_equal(result_scalar.elpd, loo_full.elpd_i[0].item(), decimal=10)
+    assert_almost_equal(result_scalar.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
 
-    mask = xr.DataArray(schools == label0, dims=("school",), coords={"school": schools})
-    result_mask = loo_i(mask, centered_eight)
-    assert_almost_equal(result_mask.elpd, loo_full.elpd_i[0].item(), decimal=10)
-    assert_almost_equal(result_mask.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
-
-    with pytest.raises(IndexError, match="out of bounds"):
+    with pytest.raises(IndexError):
         loo_i(-1, centered_eight)
 
-    with pytest.raises(IndexError, match="out of bounds"):
+    with pytest.raises(IndexError):
         loo_i(len(schools), centered_eight)
 
-    with pytest.raises(TypeError, match="i must be an int, a dict"):
+    with pytest.raises(KeyError):
         loo_i(3.5, centered_eight)
 
     with pytest.raises(ValueError, match=r"Provide selections for all observation dims:.*"):
@@ -877,7 +872,7 @@ def test_loo_i(centered_eight):
     with pytest.raises(ValueError, match=r"Provide selections for all observation dims:.*"):
         loo_i({"school": label0, "student": 123}, centered_eight)
 
-    with pytest.raises(ValueError, match="Tuple/list length.*"):
+    with pytest.raises(KeyError):
         loo_i((), centered_eight)
 
 
