@@ -5,7 +5,7 @@ from collections import namedtuple
 
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_datatree, extract, rcParams
+from arviz_base import convert_to_datatree, extract, ndarray_to_dataarray, rcParams
 from xarray_einstats.stats import logsumexp
 
 from arviz_stats.utils import ELPDData, get_log_likelihood
@@ -242,9 +242,12 @@ def _compute_loo_approximation(
     log_lik_fn : callable, optional
         Function that computes the log-likelihood for observations given posterior parameters.
         The function receives observed data as a DataArray and posterior parameters as a Dataset.
-        For method="plpd", the posterior contains means without chain/draw dimensions.
-        For method="lpd", the posterior contains the full samples with chain/draw dimensions.
-        Returns a DataArray with the same shape as the observations.
+        What the posterior Dataset contains depends on the method:
+
+        - For ``method="lpd"``: full posterior samples with chain/draw dimensions
+        - For ``method="plpd"``: posterior means (computed automatically)
+
+        The function can return any array-like object or a :class:`~xarray.DataArray`.
     param_names : list of str, optional
         Subset of posterior variables to pass to log_lik_fn.
         If None, all posterior variables are included.
@@ -297,22 +300,22 @@ def _compute_loo_approximation(
         if not isinstance(log_likelihood, xr.DataArray):
             if isinstance(log_likelihood, np.ndarray):
                 expected_shape = (posterior.chain.size, posterior.draw.size) + observed.shape
-                if log_likelihood.shape == expected_shape:
-                    coords = {
-                        "chain": posterior.chain,
-                        "draw": posterior.draw,
-                        **dict(observed.coords.items()),
-                    }
-                    dims = ["chain", "draw"] + list(observed.dims)
-                    log_likelihood = xr.DataArray(log_likelihood, coords=coords, dims=dims)
-                else:
+                if log_likelihood.shape != expected_shape:
                     raise ValueError(
                         f"log_lik_fn returned array with shape {log_likelihood.shape}, "
                         f"expected {expected_shape}"
                     )
+
+                log_likelihood = ndarray_to_dataarray(
+                    log_likelihood,
+                    var_name,
+                    sample_dims=["chain", "draw"],
+                    dims=list(observed.dims),
+                    coords={**posterior.coords, **observed.coords},
+                )
             else:
                 raise TypeError(
-                    f"log_lik_fn must return xr.DataArray or numpy array. "
+                    f"log_lik_fn must return DataArray or numpy array. "
                     f"Got {type(log_likelihood).__name__}"
                 )
 
@@ -321,16 +324,17 @@ def _compute_loo_approximation(
 
         sample_dims = ["chain", "draw"]
         expected_dims = set(sample_dims) | set(observed.dims)
+
         if set(log_likelihood.dims) != expected_dims:
             raise ValueError(
-                f"log_lik_fn must return DataArray with dims {list(expected_dims)}. "
+                f"log_lik_fn must return an object with dims {list(expected_dims)}. "
                 f"Got {list(log_likelihood.dims)}"
             )
 
         for dim in observed.dims:
             if log_likelihood.sizes[dim] != observed.sizes[dim]:
                 raise ValueError(
-                    f"log_lik_fn must return DataArray with {dim} size {observed.sizes[dim]}. "
+                    f"log_lik_fn must return an object with {dim} size {observed.sizes[dim]}. "
                     f"Got {log_likelihood.sizes[dim]}"
                 )
 
@@ -364,19 +368,20 @@ def _compute_loo_approximation(
             raise ValueError(f"Error in log_lik_fn: {type(e).__name__}: {str(e)}") from e
 
         if not isinstance(result, xr.DataArray):
-            try:
-                result = xr.DataArray(result, coords=observed.coords, dims=observed.dims)
-            except Exception as e:
-                raise TypeError(
-                    f"log_lik_fn must return xr.DataArray. Got {type(result).__name__}"
-                ) from e
+            result = ndarray_to_dataarray(
+                np.asarray(result),
+                var_name,
+                dims=list(observed.dims),
+                coords=observed.coords,
+                sample_dims=[],
+            )
 
         if not log:
             result = xr.ufuncs.log(xr.ufuncs.maximum(result, np.finfo(float).tiny))
 
         if result.shape != observed.shape:
             raise ValueError(
-                f"log_lik_fn must return DataArray with same shape as observed data. "
+                f"log_lik_fn must return an object with the same shape as the observed data. "
                 f"Expected {observed.shape}, got {result.shape}"
             )
 
@@ -402,7 +407,8 @@ def _plpd_approx(
     log_lik_fn : callable
         Function that computes the log-likelihood for observations given posterior parameters.
         The function receives observed data as a DataArray and posterior means as a Dataset
-        without chain/draw dimensions. Returns a DataArray with the same shape as the observations.
+        without chain/draw dimensions. It can return any array-like object or a
+        :class:`~xarray.DataArray` with the same shape as the observations.
     param_names : list[str], optional
         Subset of posterior variables to pass to log_lik_fn.
         If None, all posterior variables are included.
@@ -413,7 +419,7 @@ def _plpd_approx(
     Returns
     -------
     DataArray
-        DataArray containing PLPD values with the same dimensions as observed data.
+        :class:`~xarray.DataArray` containing PLPD values with the same dimensions as observed data.
     """
     return _compute_loo_approximation(
         data=data,

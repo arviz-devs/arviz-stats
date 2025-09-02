@@ -86,8 +86,8 @@ def loo_subsample(
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
-        - 'lpd': Use standard log predictive density approximation (default)
-        - 'plpd': Use Point Log Predictive Density approximation which requires a ``log_lik_fn``.
+        - ``lpd``: Use standard log predictive density approximation (default)
+        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
     thin: int, optional
         Thinning factor for posterior draws. If specified, the posterior will be thinned
         by this factor to reduce computation time. For example, using thin=2 will use
@@ -95,16 +95,14 @@ def loo_subsample(
         in the returned ELPDData object and will be automatically used by ``update_subsample``.
     log_lik_fn : callable, optional
         Function that computes the log-likelihood for observations given posterior parameters.
-        Required only when ``method="plpd"``. The function receives the observed data as a
-        DataArray and posterior parameters as a Dataset (with means when method="plpd" or
-        full posterior when method="lpd"), and returns log-likelihood values as a DataArray.
-
+        Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
+        The function receives the observed data as a :class:`~xarray.DataArray` and posterior
+        parameters as a :class:`~xarray.Dataset`.
     param_names : list, optional
-        Only used when ``method="plpd"``. List of parameter names to extract from
-        the posterior. If None, all parameters are used.
+        List of parameter names to extract from the posterior. If None, all parameters are used.
     log: bool, optional
-        Only used when ``method="plpd"``. Whether the ``log_lik_fn`` returns
-        log-likelihood (True) or likelihood (False). Default is True.
+        Whether the ``log_lik_fn`` returns log-likelihood (True) or likelihood (False).
+        Default is True.
 
     Returns
     -------
@@ -150,9 +148,12 @@ def loo_subsample(
 
         In [2]: loo_results.elpd_i
 
-    We can also use the PLPD approximation method with a custom log-likelihood function.
-    For the Eight Schools model, we define a DataArray-aware function that properly handles
-    the school-specific parameters and measurement errors:
+    We can also use custom log-likelihood functions with both LPD and PLPD methods. Passing a
+    custom log-likelihood function is required for the PLPD method and optional for the LPD
+    method.
+
+    For the PLPD method, we can use a DataArray-aware function that properly handles the
+    school-specific parameters and measurement errors:
 
     .. ipython::
 
@@ -163,7 +164,7 @@ def loo_subsample(
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data("centered_eight")
            ...:
-           ...: def log_lik_eight_schools(obs_da, posterior_ds):
+           ...: def log_lik_eight_schools_plpd(obs_da, posterior_ds):
            ...:     theta = posterior_ds["theta"]
            ...:     sigma = xr.DataArray(
            ...:         [15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0],
@@ -177,11 +178,37 @@ def loo_subsample(
            ...:     observations=4,
            ...:     var_name="obs",
            ...:     method="plpd",
-           ...:     log_lik_fn=log_lik_eight_schools,
+           ...:     log_lik_fn=log_lik_eight_schools_plpd,
            ...:     param_names=["theta"],
            ...:     pointwise=True
            ...: )
            ...: loo_results
+
+    We can also use the LPD approximation (receives full posterior samples). This should
+    match the results from the default method using the full, pre-computed log-likelihood.
+    Passing a custom log-likelihood function is optional for the LPD method, but it
+    is recommended in the large data case so that we can compute the log-likelihood on the fly:
+
+    .. ipython::
+
+        In [2]: def log_lik_eight_schools_lpd(obs_da, posterior_ds):
+           ...:     theta = posterior_ds["theta"]
+           ...:     sigma = xr.DataArray(
+           ...:         [15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0],
+           ...:         dims=["school"],
+           ...:         coords={"school": obs_da.coords["school"]}
+           ...:     )
+           ...:     return stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
+           ...:
+           ...: loo_results_lpd = loo_subsample(
+           ...:     data,
+           ...:     observations=4,
+           ...:     var_name="obs",
+           ...:     method="lpd",
+           ...:     log_lik_fn=log_lik_eight_schools_lpd,
+           ...:     pointwise=True
+           ...: )
+           ...: loo_results_lpd
 
     See Also
     --------
@@ -411,7 +438,7 @@ def update_subsample(
     log_weights : DataArray or ELPDData, optional
         Smoothed log weights. Can be either:
 
-        - A DataArray with the same shape as the log likelihood data
+        - A :class:`~xarray.DataArray` with the same shape as the log likelihood data
         - An ELPDData object from a previous :func:`arviz_stats.loo` call.
 
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
@@ -420,19 +447,18 @@ def update_subsample(
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
-        - 'lpd': Use standard log predictive density approximation (default)
-        - 'plpd': Use Point Log Predictive Density approximation which requires a ``log_lik_fn``.
+        - ``lpd``: Use standard log predictive density approximation (default)
+        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
     log_lik_fn : callable, optional
         Function that computes the log-likelihood for observations given posterior parameters.
-        Required only when ``method="plpd"``. The function receives the observed data as a
-        DataArray and posterior parameters as a Dataset with means, and returns log-likelihood
-        values as a DataArray with the same shape as the observations.
+        Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
+        The function receives the observed data as a :class:`~xarray.DataArray` and posterior
+        parameters as a :class:`~xarray.Dataset`.
     param_names: list, optional
-        Only used when ``method="plpd"``. List of parameter names to extract from
-        the posterior. If None, all parameters are used.
+        List of parameter names to extract from the posterior. If None, all parameters are used.
     log: bool, optional
-        Only used when ``method="plpd"``. Whether the ``log_lik_fn`` returns
-        log-likelihood (True) or likelihood (False). Default is True.
+        Whether the ``log_lik_fn`` returns log-likelihood (True) or likelihood (False).
+        Default is True.
 
     Returns
     -------
