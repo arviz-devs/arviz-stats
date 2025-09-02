@@ -2,6 +2,7 @@
 
 import warnings
 from collections import namedtuple
+from collections.abc import Mapping
 from numbers import Number
 
 import numpy as np
@@ -182,24 +183,49 @@ def _shift_and_cov(upars, lwi):
 
 
 def _get_log_likelihood_i(log_likelihood, i, obs_dims):
-    """Extract the log likelihood for a specific observation index `i`."""
+    """Extract the log-likelihood for one observation `i`."""
     if not obs_dims:
         raise ValueError("log_likelihood must have observation dimensions.")
 
+    # flattened integer positional selection
+    if isinstance(i, int | np.integer):
+        if len(obs_dims) == 1:
+            dim = obs_dims[0]
+            idx = int(i)
+            return log_likelihood.isel({dim: slice(idx, idx + 1)}, drop=False)
+
+        # multi-dim: stack, isel one, then unstack to preserve obs dims
+        stacked_dim = "__obs__"
+        stacked = log_likelihood.stack({stacked_dim: obs_dims})
+        idx = int(i)
+        selected = stacked.isel({stacked_dim: slice(idx, idx + 1)}, drop=False)
+        return selected.unstack(stacked_dim)
+
+    # mapping of labels for all obs dims
+    if isinstance(i, Mapping):
+        if set(i.keys()) != set(obs_dims):
+            raise ValueError(f"Provide selections for all observation dims: {tuple(obs_dims)}")
+
+        da = log_likelihood.sel(i, drop=False)
+
+        remaining_obs_dims = [d for d in obs_dims if d in da.dims]
+        if any(da.sizes[d] != 1 for d in remaining_obs_dims):
+            raise ValueError("Selection must reduce each observation dimension to length 1.")
+        return da
+
+    # single scalar label when there is exactly one obs dim
     if len(obs_dims) == 1:
         obs_dim = obs_dims[0]
-        if i < 0 or i >= log_likelihood.sizes[obs_dim]:
-            raise IndexError(f"Index {i} is out of bounds for dimension '{obs_dim}'.")
-        log_lik_i = log_likelihood.isel({obs_dim: i})
-    else:
-        stacked_obs_dim = "__obs__"
-        log_lik_stacked = log_likelihood.stack({stacked_obs_dim: obs_dims})
-        if i < 0 or i >= log_lik_stacked.sizes[stacked_obs_dim]:
-            raise IndexError(
-                f"Index {i} is out of bounds for stacked dimension '{stacked_obs_dim}'."
-            )
-        log_lik_i = log_lik_stacked.isel({stacked_obs_dim: i})
-    return log_lik_i
+        da = log_likelihood.sel({obs_dim: i}, drop=False)
+        if obs_dim in da.sizes and da.sizes[obs_dim] != 1:
+            raise ValueError("Selection must select exactly one element.")
+        return da
+
+    raise TypeError(
+        "i must be either a flattened integer index, a mapping of {obs_dim: coord_value} "
+        "for all observation dims, or a single scalar label when there is exactly one "
+        "observation dimension."
+    )
 
 
 def _get_log_weights_i(log_weights, i, obs_dims):

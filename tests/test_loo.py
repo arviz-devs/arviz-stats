@@ -16,6 +16,7 @@ from arviz_stats import (
     loo,
     loo_approximate_posterior,
     loo_expectations,
+    loo_i,
     loo_metrics,
     loo_moment_match,
     loo_pit,
@@ -882,6 +883,51 @@ def test_log_weights_reuse(centered_eight):
     metrics = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result.log_weights)
     assert metrics is not None
     assert hasattr(metrics, "mean")
+
+
+def test_loo_i(centered_eight):
+    loo_full = loo(centered_eight, pointwise=True)
+
+    result_0 = loo_i(0, centered_eight)
+    assert isinstance(result_0, ELPDData)
+    assert result_0.kind == "loo"
+    assert result_0.n_data_points == 1
+    assert result_0.n_samples == 2000
+    assert_almost_equal(result_0.elpd, loo_full.elpd_i[0].item(), decimal=10)
+    assert_almost_equal(result_0.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
+
+    result_7 = loo_i(7, centered_eight)
+    assert_almost_equal(result_7.elpd, loo_full.elpd_i[7].item(), decimal=10)
+    assert_almost_equal(result_7.pareto_k.item(), loo_full.pareto_k[7].item(), decimal=10)
+
+    schools = centered_eight.observed_data["obs"].coords["school"].values
+    label0 = schools[0].item() if hasattr(schools[0], "item") else schools[0]
+
+    result_label = loo_i({"school": label0}, centered_eight)
+    assert_almost_equal(result_label.elpd, loo_full.elpd_i[0].item(), decimal=10)
+    assert_almost_equal(result_label.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
+
+    result_scalar = loo_i(label0, centered_eight)
+    assert_almost_equal(result_scalar.elpd, loo_full.elpd_i[0].item(), decimal=10)
+    assert_almost_equal(result_scalar.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
+
+    with pytest.raises(IndexError):
+        loo_i(-1, centered_eight)
+
+    with pytest.raises(IndexError):
+        loo_i(len(schools), centered_eight)
+
+    with pytest.raises(KeyError):
+        loo_i(3.5, centered_eight)
+
+    with pytest.raises(ValueError, match=r"Provide selections for all observation dims:.*"):
+        loo_i({"student": 1}, centered_eight)
+
+    with pytest.raises(ValueError, match=r"Provide selections for all observation dims:.*"):
+        loo_i({"school": label0, "student": 123}, centered_eight)
+
+    with pytest.raises(KeyError):
+        loo_i((), centered_eight)
 
 
 def test_loo_jacobian(centered_eight):

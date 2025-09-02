@@ -1,12 +1,16 @@
 """Pareto-smoothed importance sampling LOO (PSIS-LOO-CV)."""
 
 from arviz_base import rcParams
+from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.helper_loo import (
     _compute_loo_results,
+    _get_log_likelihood_i,
     _get_r_eff,
     _prepare_loo_inputs,
+    _warn_pareto_k,
 )
+from arviz_stats.utils import ELPDData
 
 
 def loo(
@@ -161,4 +165,174 @@ def loo(
         pareto_k=pareto_k,
         approx_posterior=False,
         log_jacobian=log_jacobian,
+    )
+
+
+def loo_i(
+    i,
+    data,
+    var_name=None,
+    reff=None,
+    log_weights=None,
+    pareto_k=None,
+):
+    r"""Compute PSIS-LOO-CV for a single observation.
+
+    Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
+    importance sampling leave-one-out cross-validation (PSIS-LOO-CV) for a single observation.
+    The method is described in [1]_ and [2]_.
+
+    Parameters
+    ----------
+    i : int | dict | scalar
+        Observation selector. Must be one of:
+
+        - **int**: Positional index in flattened observation order across all observation
+          dimensions.
+        - **dict**: Label-based mapping ``{obs_dim: coord_value}`` for all observation
+          dimensions. Uses ``.sel`` semantics.
+        - **scalar label**: Only when there is exactly one observation dimension.
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior and the log_likelihood groups.
+    var_name : str, optional
+        The name of the variable in log_likelihood groups storing the pointwise log
+        likelihood data to use for loo computation.
+    reff : float, optional
+        Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
+        of actual samples. Computed from trace by default.
+    log_weights : DataArray, optional
+        Smoothed log weights for observation i. If not provided, will be computed using PSIS.
+        Must be provided together with pareto_k or both must be None.
+    pareto_k : float, optional
+        Pareto shape value for observation i. If not provided, will be computed using PSIS.
+        Must be provided together with log_weights or both must be None.
+
+    Returns
+    -------
+    ELPDData
+        Object with the following attributes:
+
+        - **elpd**: expected log pointwise predictive density for observation i
+        - **se**: standard error (set to 0.0 as SE is undefined for a single observation)
+        - **p**: effective number of parameters for observation i
+        - **n_samples**: number of samples
+        - **n_data_points**: 1 (single observation)
+        - **warning**: True if the estimated shape parameter of Pareto distribution is greater
+          than ``good_k``
+        - **elpd_i**: :class:`~xarray.DataArray` with single value
+        - **pareto_k**: :class:`~xarray.DataArray` with single Pareto shape value
+        - **good_k**: For a sample size S, the threshold is computed as
+          ``min(1 - 1/log10(S), 0.7)``
+        - **log_weights**: Smoothed log weights for observation i
+
+    Notes
+    -----
+    This function is useful for testing log-likelihood functions and getting detailed diagnostics
+    for individual observations. It's particularly helpful when debugging PSIS-LOO-CV computations
+    for large datasets using :func:`loo_subsample` with the PLPD approximation method, or when
+    verifying log-likelihood implementations with :func:`loo_moment_match`.
+
+    Since this computes PSIS-LOO-CV for a single observation, the standard error is set to 0.0 as
+    variance cannot be computed from a single value.
+
+    Examples
+    --------
+    Calculate LOO for a single observation using the school name:
+
+    .. ipython::
+       :okwarning:
+
+       In [1]: from arviz_stats import loo_i
+          ...: from arviz_base import load_arviz_data
+          ...: import xarray as xr
+          ...: data = load_arviz_data("centered_eight")
+          ...: loo_i({"school": "Choate"}, data)
+
+    If you prefer simple integer indexing across flattened observations, you can use the index:
+
+    .. ipython::
+       :okwarning:
+
+       In [2]: loo_i(0, data)
+
+    For multi-dimensional data, specify all observation dimensions. For example,
+    with data that has two observation dimensions (y_dim_0 and y_dim_1), you can select by index:
+
+    .. ipython::
+       :okwarning:
+
+       In [3]: import arviz_base as azb
+          ...: import numpy as np
+          ...: np.random.seed(0)
+          ...: idata = azb.from_dict({
+          ...:     "posterior": {"theta": np.random.randn(2, 100, 3, 4)},
+          ...:     "log_likelihood": {"y": np.random.randn(2, 100, 3, 4)},
+          ...:     "observed_data": {"y": np.random.randn(3, 4)},
+          ...: })
+          ...: loo_i({"y_dim_0": 1, "y_dim_1": 2}, idata)
+
+    With a single observation dimension, you can pass a single label directly:
+
+    .. ipython::
+       :okwarning:
+
+       In [3]: loo_i("Choate", data)
+
+    See Also
+    --------
+    :func:`loo` : Compute LOO for all observations
+    :func:`compare` : Compare models based on their ELPD.
+
+    References
+    ----------
+
+    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+       and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+       arXiv preprint https://arxiv.org/abs/1507.04544.
+
+    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+       Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+       arXiv preprint https://arxiv.org/abs/1507.02646
+    """
+    loo_inputs = _prepare_loo_inputs(data, var_name)
+
+    if reff is None:
+        reff = _get_r_eff(data, loo_inputs.n_samples)
+
+    log_lik_i = _get_log_likelihood_i(loo_inputs.log_likelihood, i, loo_inputs.obs_dims)
+
+    if (log_weights is None) != (pareto_k is None):
+        raise ValueError(
+            "Both log_weights and pareto_k must be provided together or both must be None. "
+            "Only one was provided."
+        )
+
+    if log_weights is None and pareto_k is None:
+        log_weights_i, pareto_k_i = log_lik_i.azstats.psislw(r_eff=reff, dim=loo_inputs.sample_dims)
+    else:
+        log_weights_i = log_weights
+        pareto_k_i = pareto_k
+
+    log_weights_sum = log_weights_i + log_lik_i
+    elpd_i = logsumexp(log_weights_sum, dims=loo_inputs.sample_dims).item()
+    lppd_i = logsumexp(log_lik_i, b=1 / loo_inputs.n_samples, dims=loo_inputs.sample_dims).item()
+    p_loo_i = lppd_i - elpd_i
+    elpd_se = 0.0
+
+    warn_mg, good_k = _warn_pareto_k(pareto_k_i, loo_inputs.n_samples)
+
+    return ELPDData(
+        kind="loo",
+        elpd=elpd_i,
+        se=elpd_se,
+        p=p_loo_i,
+        n_samples=loo_inputs.n_samples,
+        n_data_points=1,
+        scale="log",
+        warning=warn_mg,
+        good_k=good_k,
+        elpd_i=elpd_i,
+        pareto_k=pareto_k_i,
+        approx_posterior=False,
+        log_weights=log_weights_i,
     )
