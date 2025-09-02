@@ -152,8 +152,8 @@ def loo_subsample(
     custom log-likelihood function is required for the PLPD method and optional for the LPD
     method.
 
-    For the PLPD method, we can use a DataArray-aware function that properly handles the
-    school-specific parameters and measurement errors:
+    For the PLPD method, we can use a function that properly handles the school-specific
+    parameters and measurement errors:
 
     .. ipython::
 
@@ -184,7 +184,7 @@ def loo_subsample(
            ...: )
            ...: loo_results
 
-    We can also use the LPD approximation (receives full posterior samples). This should
+    We can also use the LPD approximation, which receives full posterior samples. This should
     match the results from the default method using the full, pre-computed log-likelihood.
     Passing a custom log-likelihood function is optional for the LPD method, but it
     is recommended in the large data case so that we can compute the log-likelihood on the fly:
@@ -213,7 +213,6 @@ def loo_subsample(
     See Also
     --------
     loo : Standard PSIS-LOO-CV.
-    loo_approximate_posterior : PSIS-LOO-CV for approximate posteriors.
     compare : Compare models based on ELPD.
     update_subsample : Update a previously computed sub-sampled LOO-CV.
 
@@ -288,21 +287,11 @@ def loo_subsample(
                 if loo_inputs.var_name in log_weights:
                     log_weights = log_weights[loo_inputs.var_name]
 
-            if len(loo_inputs.obs_dims) > 1:
-                stacked_obs_dim = "__obs__"
-                log_weights_stacked = log_weights.stack({stacked_obs_dim: loo_inputs.obs_dims})
-                log_weights_sample = _select_obs_by_indices(
-                    log_weights_stacked, subsample_data.indices, [stacked_obs_dim], stacked_obs_dim
-                )
-                log_weights_sample = log_weights_sample.unstack(stacked_obs_dim)
-            else:
-                obs_dim = loo_inputs.obs_dims[0]
-                log_weights_sample = _select_obs_by_indices(
-                    log_weights, subsample_data.indices, loo_inputs.obs_dims, obs_dim
-                )
+            log_weights_sample = _select_obs_by_indices(
+                log_weights, subsample_data.indices, loo_inputs.obs_dims, "__obs__"
+            )
 
             log_weights_sample_ds = xr.Dataset({loo_inputs.var_name: log_weights_sample})
-
             _, pareto_k_ds = sample_ds.azstats.psislw(r_eff=reff, dim=loo_inputs.sample_dims)
 
             log_weights_ds = log_weights_sample_ds + sample_ds
@@ -549,18 +538,9 @@ def update_subsample(
             if loo_inputs.var_name in log_weights:
                 log_weights = log_weights[loo_inputs.var_name]
 
-        if len(loo_inputs.obs_dims) > 1:
-            stacked_obs_dim = "__obs__"
-            log_weights_stacked = log_weights.stack({stacked_obs_dim: loo_inputs.obs_dims})
-            log_weights_new = _select_obs_by_indices(
-                log_weights_stacked, update_data.new_indices, [stacked_obs_dim], stacked_obs_dim
-            )
-            log_weights_new = log_weights_new.unstack(stacked_obs_dim)
-        else:
-            obs_dim = loo_inputs.obs_dims[0]
-            log_weights_new = _select_obs_by_indices(
-                log_weights, update_data.new_indices, loo_inputs.obs_dims, obs_dim
-            )
+        log_weights_new = _select_obs_by_indices(
+            log_weights, update_data.new_indices, loo_inputs.obs_dims, "__obs__"
+        )
 
     if log_weights_new is None:
         log_weights_new_ds, _ = update_data.log_likelihood_new.azstats.psislw(

@@ -751,23 +751,8 @@ def _prepare_subsample(
             data=data, var_name=var_name, log_lik_fn=log_lik_fn, param_names=param_names, log=log
         )
 
-    stacked_obs_dim = "__obs__"
-    if len(obs_dims) > 1:
-        log_likelihood_stacked = log_likelihood_da.stack({stacked_obs_dim: obs_dims})
-        lpd_approx_all_stacked = lpd_approx_all.stack({stacked_obs_dim: obs_dims})
-
-        log_likelihood_sample = _select_obs_by_indices(
-            log_likelihood_stacked, indices, [stacked_obs_dim], stacked_obs_dim
-        )
-        lpd_approx_sample = _select_obs_by_indices(
-            lpd_approx_all_stacked, indices, [stacked_obs_dim], stacked_obs_dim
-        )
-    else:
-        obs_dim_name = obs_dims[0]
-        log_likelihood_sample = _select_obs_by_indices(
-            log_likelihood_da, indices, obs_dims, obs_dim_name
-        )
-        lpd_approx_sample = _select_obs_by_indices(lpd_approx_all, indices, obs_dims, obs_dim_name)
+    log_likelihood_sample = _select_obs_by_indices(log_likelihood_da, indices, obs_dims, "__obs__")
+    lpd_approx_sample = _select_obs_by_indices(lpd_approx_all, indices, obs_dims, "__obs__")
 
     return SubsampleData(
         log_likelihood_sample,
@@ -886,9 +871,17 @@ def _prepare_full_arrays(
         xr.full_like(ref_array, fill_value=np.nan, dtype=np.float64).rename("pareto_k"),
     )
 
-    target_dim = "__obs__" if len(obs_dims) > 1 else obs_dims[0]
-    elpd_i_full[{target_dim: indices}] = pointwise_values.values
-    pareto_k_full[{target_dim: indices}] = pareto_k_values.values
+    if len(obs_dims) > 1:
+        obs_shape = [ref_array.sizes[d] for d in obs_dims]
+        multi_indices = np.unravel_index(indices, obs_shape)
+        indexers = {
+            dim: xr.DataArray(idx, dims="__obs__") for dim, idx in zip(obs_dims, multi_indices)
+        }
+        elpd_i_full.isel(indexers).values[:] = pointwise_values.values
+        pareto_k_full.isel(indexers).values[:] = pareto_k_values.values
+    else:
+        elpd_i_full[{obs_dims[0]: indices}] = pointwise_values.values
+        pareto_k_full[{obs_dims[0]: indices}] = pareto_k_values.values
 
     if elpd_loo_hat is not None:
         _warn_pointwise_loo(elpd_loo_hat, elpd_i_full.values)
@@ -940,17 +933,27 @@ def _select_obs_by_indices(data_array, indices, dims, dim_name):
         return data_array
 
     if len(dims) > 1:
-        stacked_data = data_array.stack({dim_name: dims})
-        coord = stacked_data[dim_name]
+        n_total = np.prod([data_array.sizes[d] for d in dims])
     else:
-        stacked_data = data_array
-        coord = stacked_data[dims[0]]
+        n_total = data_array.sizes[dims[0]]
 
-    valid_indices_mask = (indices >= 0) & (indices < coord.size)
+    valid_indices_mask = (indices >= 0) & (indices < n_total)
     valid_indices = indices[valid_indices_mask]
 
-    dim = dim_name if len(dims) > 1 else dims[0]
-    return stacked_data.isel({dim: valid_indices})
+    if len(valid_indices) == 0:
+        if len(dims) > 1:
+            return data_array.isel({d: [] for d in dims})
+        return data_array.isel({dims[0]: []})
+
+    if len(dims) == 1:
+        return data_array.isel({dims[0]: valid_indices})
+
+    obs_shape = [data_array.sizes[d] for d in dims]
+    multi_indices = np.unravel_index(valid_indices, obs_shape)
+
+    indexers = {dim: xr.DataArray(idx, dims=dim_name) for dim, idx in zip(dims, multi_indices)}
+
+    return data_array.isel(indexers)
 
 
 def _select_obs_by_coords(data_array, coord_array, dims, dim_name):
