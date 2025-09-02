@@ -297,7 +297,7 @@ def test_plpd_approx_errors(centered_eight):
     def bad_shape_fn(obs_da, posterior_ds):
         return xr.DataArray([1.0, 2.0], dims=["wrong_dim"])
 
-    with pytest.raises(ValueError, match="must return DataArray with same shape"):
+    with pytest.raises(ValueError, match="log_lik_fn must return an object with the same shape"):
         _plpd_approx(centered_eight, var_name="obs", log_lik_fn=bad_shape_fn, param_names=["theta"])
 
 

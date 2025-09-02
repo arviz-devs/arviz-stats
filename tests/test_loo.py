@@ -489,7 +489,9 @@ def test_loo_subsample_errors(centered_eight, method):
         return xr.DataArray(0.0)
 
     error_pattern = (
-        "must return DataArray with dims" if method == "lpd" else "Expected .*, got \\(\\)"
+        "log_lik_fn must return an object with dims"
+        if method == "lpd"
+        else "Expected .*, got \\(\\)"
     )
     with pytest.raises(ValueError, match=error_pattern):
         loo_subsample(
@@ -514,7 +516,7 @@ def test_loo_subsample_errors(centered_eight, method):
                 },
             )
 
-        with pytest.raises(ValueError, match="must return DataArray with school size"):
+        with pytest.raises(ValueError, match="log_lik_fn must return an object with school size"):
             loo_subsample(
                 centered_eight,
                 observations=4,

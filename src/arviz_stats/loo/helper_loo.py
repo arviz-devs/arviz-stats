@@ -231,40 +231,7 @@ def _compute_loo_approximation(
     method="lpd",
     log=True,
 ):
-    """Compute LOO approximation.
-
-    Parameters
-    ----------
-    data : DataTree or InferenceData
-        Input data with posterior and observed_data groups
-    var_name : str
-        Variable name in observed_data
-    log_lik_fn : callable, optional
-        Function that computes the log-likelihood for observations given posterior parameters.
-        The function receives observed data as a DataArray and posterior parameters as a Dataset.
-        What the posterior Dataset contains depends on the method:
-
-        - For ``method="lpd"``: full posterior samples with chain/draw dimensions
-        - For ``method="plpd"``: posterior means (computed automatically)
-
-        The function can return any array-like object or a :class:`~xarray.DataArray`.
-    param_names : list of str, optional
-        Subset of posterior variables to pass to log_lik_fn.
-        If None, all posterior variables are included.
-    method : {"lpd", "plpd"}
-        Approximation method to use:
-
-        - "lpd": Log predictive density (integrates over posterior)
-        - "plpd": Point log predictive density (uses posterior means)
-    log : bool, optional
-        Whether log_lik_fn returns log-likelihood (True) or likelihood (False).
-        Default is True. If False, the output will be log-transformed.
-
-    Returns
-    -------
-    DataArray
-        Approximated log predictive density with same shape as observations
-    """
+    """Compute LOO approximation."""
     if not hasattr(data, "observed_data"):
         raise ValueError("No observed_data group found in the data")
     if var_name not in data.observed_data:
