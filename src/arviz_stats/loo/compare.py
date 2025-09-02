@@ -1,6 +1,7 @@
 """Compare PSIS-LOO-CV results."""
 
 import itertools
+import warnings
 from copy import deepcopy
 
 import numpy as np
@@ -118,8 +119,14 @@ def compare(
     )
 
     method = rcParams["stats.ic_compare_method"] if method is None else method
-    if method.lower() not in ["stacking", "bb-pseudo-bma", "pseudo-bma"]:
-        raise ValueError(f"The method {method}, to compute weights, is not supported.")
+    available_methods = ["stacking", "bb-pseudo-bma", "pseudo-bma"]
+    if method.lower() not in available_methods:
+        raise ValueError(
+            f"Invalid method '{method}'. "
+            f"Available methods: {', '.join(available_methods)}. "
+            f"Use 'stacking' for robust model averaging as recommended in the original paper "
+            f"https://doi.org/10.1214/17-BA1091."
+        )
 
     ics = pd.DataFrame.from_dict(ics_dict, orient="index")
     ics.sort_values(by="elpd", inplace=True, ascending=False)
@@ -214,12 +221,23 @@ def _ic_matrix(ics):
     rows = len(ics["elpd_i"].iloc[0])
     ic_i_val = np.zeros((rows, cols))
 
+    mismatches = []
+    for val in ics.index:
+        ic_len = len(ics.loc[val]["elpd_i"])
+        if ic_len != rows:
+            mismatches.append((val, ic_len))
+
+    if mismatches:
+        obs_counts = {name: len(ics.loc[name]["elpd_i"]) for name in ics.index}
+        sorted_counts = sorted(obs_counts.items(), key=lambda item: (item[1], item[0]))
+        mismatch_details = ", ".join([f"'{name}' ({count})" for name, count in sorted_counts])
+        raise ValueError(
+            "All models must have the same number of observations, but models have inconsistent "
+            f"observation counts: {mismatch_details}"
+        )
+
     for idx, val in enumerate(ics.index):
         ic = ics.loc[val]["elpd_i"]
-
-        if len(ic) != rows:
-            raise ValueError("The number of observations should be the same across all models")
-
         ic_i_val[:, idx] = ic
 
     return rows, cols, ic_i_val
@@ -251,14 +269,38 @@ def _calculate_ics(
         if isinstance(elpd_data, ELPDData)
     }
     if precomputed_elpds:
-        first_kind = list(precomputed_elpds.values())[0].kind
-        for _, elpd_data in precomputed_elpds.items():
+        for name, elpd_data in precomputed_elpds.items():
             if elpd_data.elpd_i is None:
                 raise ValueError(
-                    "All provided ELPDData should have been calculated with pointwise=True"
+                    f"Model '{name}' is missing pointwise ELPD values. "
+                    f"Recalculate with pointwise=True."
                 )
-            if elpd_data.kind != first_kind:
-                raise ValueError("All elpd values should be computed using the same method")
+
+        methods_used = {}
+        for name, elpd_data in precomputed_elpds.items():
+            kind = elpd_data.kind
+            if kind not in methods_used:
+                methods_used[kind] = []
+            methods_used[kind].append(name)
+
+        if len(methods_used) > 1:
+            has_loo = "loo" in methods_used
+            has_kfold = "loo_kfold" in methods_used
+
+            if has_loo and has_kfold and len(methods_used) == 2:
+                warnings.warn(
+                    "Comparing LOO-CV to K-fold-CV. "
+                    "For a more accurate comparison use the same number of folds "
+                    "or loo for all models compared.",
+                    UserWarning,
+                )
+            else:
+                method_list = sorted(methods_used.keys())
+                raise ValueError(
+                    f"Cannot compare models with incompatible cross-validation methods: "
+                    f"{method_list}. Only comparisons between 'loo' and 'loo_kfold' methods "
+                    f"are supported currently."
+                )
 
     compare_dict = deepcopy(compare_dict)
     for name, dataset in compare_dict.items():
@@ -271,6 +313,6 @@ def _calculate_ics(
                 )
             except Exception as e:
                 raise e.__class__(
-                    f"Encountered error trying to compute elpd from model {name}."
+                    f"Encountered error trying to compute ELPD from model {name}."
                 ) from e
     return compare_dict

@@ -1,5 +1,7 @@
 # pylint: disable=redefined-outer-name, unused-import
 # ruff: noqa: F811
+import copy
+
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
@@ -119,7 +121,10 @@ def test_compare_same(centered_eight, method):
 
 def test_compare_unknown_method(centered_eight, non_centered_eight):
     model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match="Invalid method 'Unknown'. Available methods: stacking, bb-pseudo-bma, pseudo-bma",
+    ):
         compare(model_dict, method="Unknown")
 
 
@@ -131,11 +136,23 @@ def test_compare_different(centered_eight, non_centered_eight, method):
     assert_allclose(np.sum(weight), 1.0)
 
 
-def test_compare_different_size(centered_eight):
-    centered_eight_subset = centered_eight.sel(school="Choate")
-    model_dict = {"centered": centered_eight, "centered__subset": centered_eight_subset}
-    with pytest.raises(ValueError):
+def test_compare_multiple_different_sizes(centered_eight):
+    centered_eight_subset1 = centered_eight.sel(school=["Choate"])
+    centered_eight_subset2 = centered_eight.sel(school=["Choate", "Deerfield"])
+    model_dict = {
+        "model_a": centered_eight,
+        "model_b": centered_eight_subset1,
+        "model_c": centered_eight,
+        "model_d": centered_eight_subset2,
+    }
+    with pytest.raises(ValueError) as exc_info:
         compare(model_dict)
+    error_msg = str(exc_info.value)
+    expected_msg = (
+        "All models must have the same number of observations, but models have inconsistent "
+        "observation counts: 'model_b' (1), 'model_d' (2), 'model_a' (8), 'model_c' (8)"
+    )
+    assert error_msg == expected_msg
 
 
 def test_compare_multiple_obs(multivariable_log_likelihood, centered_eight, non_centered_eight):
@@ -170,8 +187,45 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
         "centered": loo(centered_eight, pointwise=True),
         "non_centered": loo(non_centered_eight, pointwise=False),
     }
-    with pytest.raises(ValueError, match="should have been calculated with pointwise=True"):
+    with pytest.raises(ValueError, match="Model .* is missing pointwise ELPD values"):
         _calculate_ics(in_dict)
+
+
+def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+    kfold_result = loo(non_centered_eight, pointwise=True)
+    kfold_result = copy.deepcopy(kfold_result)
+    kfold_result.kind = "loo_kfold"
+
+    compare_dict = {
+        "loo_model": loo_result,
+        "kfold_model": kfold_result,
+    }
+
+    with pytest.warns(UserWarning, match="Comparing LOO-CV to K-fold-CV"):
+        result = compare(compare_dict)
+
+    assert len(result) == 2
+    assert "loo_model" in result.index
+    assert "kfold_model" in result.index
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_unsupported_mixed_methods(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+
+    waic_result = copy.deepcopy(loo_result)
+    waic_result.kind = "waic"
+
+    compare_dict = {
+        "loo_model": loo_result,
+        "waic_model": waic_result,
+    }
+
+    with pytest.raises(
+        ValueError, match="Cannot compare models with incompatible cross-validation methods.*waic"
+    ):
+        compare(compare_dict)
 
 
 @pytest.mark.parametrize(
