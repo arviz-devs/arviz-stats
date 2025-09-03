@@ -49,8 +49,8 @@ def log_likelihood_dataset(centered_eight):
 
 @pytest.fixture(scope="module")
 def log_lik_fn():
-    def _log_likelihood_eight_schools(obs_da, posterior_ds):
-        theta = posterior_ds["theta"]
+    def _log_likelihood_eight_schools(obs_da, datatree):
+        theta = datatree.posterior["theta"]
         sigma = 12.5
         log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
         return log_lik

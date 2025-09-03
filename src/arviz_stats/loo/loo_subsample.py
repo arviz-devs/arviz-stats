@@ -96,8 +96,11 @@ def loo_subsample(
     log_lik_fn : callable, optional
         Function that computes the log-likelihood for observations given posterior parameters.
         Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
-        The function receives the observed data as a :class:`~xarray.DataArray` and posterior
-        parameters as a :class:`~xarray.Dataset`.
+        The function signature is ``log_lik_fn(observations, datatree)`` where observations
+        is a :class:`~xarray.DataArray` with the subset of observed data and datatree is a
+        :class:`~xarray.DataTree` object. For ``method="plpd"``, posterior means are computed
+        automatically and passed in the posterior group. For ``method="lpd"``, full posterior
+        samples are passed. All other groups remain unchanged for direct access.
     param_names : list, optional
         List of parameter names to extract from the posterior. If None, all parameters are used.
     log: bool, optional
@@ -164,8 +167,8 @@ def loo_subsample(
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data("centered_eight")
            ...:
-           ...: def log_lik_eight_schools_plpd(obs_da, posterior_ds):
-           ...:     theta = posterior_ds["theta"]
+           ...: def log_lik_eight_schools_plpd(obs_da, data):
+           ...:     theta = data.posterior["theta"]
            ...:     sigma = xr.DataArray(
            ...:         [15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0],
            ...:         dims=["school"],
@@ -191,8 +194,8 @@ def loo_subsample(
 
     .. ipython::
 
-        In [2]: def log_lik_eight_schools_lpd(obs_da, posterior_ds):
-           ...:     theta = posterior_ds["theta"]
+        In [2]: def log_lik_eight_schools_lpd(obs_da, data):
+           ...:     theta = data.posterior["theta"]
            ...:     sigma = xr.DataArray(
            ...:         [15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0],
            ...:         dims=["school"],
@@ -441,8 +444,11 @@ def update_subsample(
     log_lik_fn : callable, optional
         Function that computes the log-likelihood for observations given posterior parameters.
         Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
-        The function receives the observed data as a :class:`~xarray.DataArray` and posterior
-        parameters as a :class:`~xarray.Dataset`.
+        The function signature is ``log_lik_fn(observations, datatree)`` where observations
+        is a :class:`~xarray.DataArray` with the subset of observed data and datatree is a
+        :class:`~xarray.DataTree` object. For ``method="plpd"``, posterior means are computed
+        automatically and passed in the posterior group. For ``method="lpd"``, full posterior
+        samples are passed. All other groups remain unchanged for direct access.
     param_names: list, optional
         List of parameter names to extract from the posterior. If None, all parameters are used.
     log: bool, optional

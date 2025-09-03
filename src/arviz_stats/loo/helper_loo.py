@@ -2,6 +2,7 @@
 
 import warnings
 from collections import namedtuple
+from copy import deepcopy
 
 import numpy as np
 import xarray as xr
@@ -231,7 +232,7 @@ def _compute_loo_approximation(
     method="lpd",
     log=True,
 ):
-    """Compute LOO approximation."""
+    """Compute LOO approximation with LPD or PLPD method."""
     if not hasattr(data, "observed_data"):
         raise ValueError("No observed_data group found in the data")
     if var_name not in data.observed_data:
@@ -249,10 +250,30 @@ def _compute_loo_approximation(
         posterior = extract(data, group="posterior", combined=False)
 
         if param_names:
-            posterior = posterior[param_names]
+            if isinstance(posterior, xr.Dataset):
+                posterior = posterior[param_names]
+            elif isinstance(posterior, xr.DataArray):
+                if len(param_names) == 1:
+                    if posterior.name != param_names[0]:
+                        raise ValueError(
+                            f"Requested parameter '{param_names[0]}' but DataArray "
+                            f"has name '{posterior.name}'"
+                        )
+                    posterior = xr.Dataset({posterior.name: posterior})
+                else:
+                    raise ValueError(
+                        f"Cannot select multiple parameters {param_names} from a single DataArray "
+                        f"'{posterior.name}'"
+                    )
+        else:
+            if isinstance(posterior, xr.DataArray):
+                posterior = xr.Dataset({posterior.name: posterior})
+
+        data_for_fn = deepcopy(data)
+        data_for_fn.posterior = posterior
 
         try:
-            log_likelihood = log_lik_fn(observed, posterior)
+            log_likelihood = log_lik_fn(observed, data_for_fn)
         except KeyError as e:
             available_vars = list(posterior.data_vars)
             if "missing_param" in str(e) or "No variable named" in str(e):
@@ -317,12 +338,32 @@ def _compute_loo_approximation(
         posterior = extract(data, group="posterior", combined=False)
 
         if param_names:
-            posterior = posterior[param_names]
+            if isinstance(posterior, xr.Dataset):
+                posterior = posterior[param_names]
+            elif isinstance(posterior, xr.DataArray):
+                if len(param_names) == 1:
+                    if posterior.name != param_names[0]:
+                        raise ValueError(
+                            f"Requested parameter '{param_names[0]}' but DataArray "
+                            f"has name '{posterior.name}'"
+                        )
+                    posterior = xr.Dataset({posterior.name: posterior})
+                else:
+                    raise ValueError(
+                        f"Cannot select multiple parameters {param_names} from a single DataArray "
+                        f"'{posterior.name}'"
+                    )
+        else:
+            if isinstance(posterior, xr.DataArray):
+                posterior = xr.Dataset({posterior.name: posterior})
 
         posterior_means = posterior.mean(dim=["chain", "draw"])
 
+        data_for_fn = deepcopy(data)
+        data_for_fn.posterior = xr.Dataset(posterior_means.data_vars)
+
         try:
-            result = log_lik_fn(observed, posterior_means)
+            result = log_lik_fn(observed, data_for_fn)
         except KeyError as e:
             available_vars = list(posterior_means.data_vars)
             if "missing_param" in str(e) or "No variable named" in str(e):

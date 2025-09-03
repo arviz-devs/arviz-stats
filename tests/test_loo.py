@@ -78,8 +78,8 @@ def log_densities(centered_eight):
 
 @pytest.fixture(scope="module")
 def log_lik_fn():
-    def _log_likelihood_eight_schools(obs_da, posterior_ds):
-        theta = posterior_ds["theta"]
+    def _log_likelihood_eight_schools(obs_da, datatree):
+        theta = datatree.posterior["theta"]
         sigma = 12.5
         log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
         return log_lik
@@ -469,10 +469,15 @@ def test_loo_subsample(centered_eight, pointwise, method, log_lik_fn):
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
 def test_loo_subsample_errors(centered_eight, method):
-    def log_lik_fn_missing_param(obs_da, posterior_ds):
-        _ = posterior_ds["missing_param"]
+    def log_lik_fn_missing_param(obs_da, datatree):
+        _ = datatree.posterior["missing_param"]
         if method == "lpd":
-            return obs_da.expand_dims({"chain": posterior_ds.chain, "draw": posterior_ds.draw}) * 0
+            return (
+                obs_da.expand_dims(
+                    {"chain": datatree.posterior.chain, "draw": datatree.posterior.draw}
+                )
+                * 0
+            )
         return obs_da * 0
 
     with pytest.raises(KeyError, match="Variable not found in posterior"):
@@ -485,7 +490,7 @@ def test_loo_subsample_errors(centered_eight, method):
             param_names=["theta"],
         )
 
-    def log_lik_fn_wrong_shape(obs_da, posterior_ds):
+    def log_lik_fn_wrong_shape(obs_da, datatree):
         return xr.DataArray(0.0)
 
     error_pattern = (
@@ -505,13 +510,13 @@ def test_loo_subsample_errors(centered_eight, method):
 
     if method == "lpd":
 
-        def log_lik_fn_wrong_size(obs_da, posterior_ds):
+        def log_lik_fn_wrong_size(obs_da, datatree):
             return xr.DataArray(
-                np.zeros((posterior_ds.chain.size, posterior_ds.draw.size, 2)),
+                np.zeros((datatree.posterior.chain.size, datatree.posterior.draw.size, 2)),
                 dims=["chain", "draw", "school"],
                 coords={
-                    "chain": posterior_ds.chain,
-                    "draw": posterior_ds.draw,
+                    "chain": datatree.posterior.chain,
+                    "draw": datatree.posterior.draw,
                     "school": ["A", "B"],
                 },
             )
@@ -528,10 +533,10 @@ def test_loo_subsample_errors(centered_eight, method):
 
     if method == "lpd":
 
-        def log_lik_fn_returns_numpy(obs_da, posterior_ds):
-            _ = posterior_ds["theta"]
-            n_chains = posterior_ds.chain.size
-            n_draws = posterior_ds.draw.size
+        def log_lik_fn_returns_numpy(obs_da, datatree):
+            _ = datatree.posterior["theta"]
+            n_chains = datatree.posterior.chain.size
+            n_draws = datatree.posterior.draw.size
             n_obs = len(obs_da)
             return np.zeros((n_chains, n_draws, n_obs))
 
@@ -546,8 +551,8 @@ def test_loo_subsample_errors(centered_eight, method):
         )
     else:
 
-        def log_lik_fn_returns_list(obs_da, posterior_ds):
-            _ = posterior_ds["theta"]
+        def log_lik_fn_returns_list(obs_da, datatree):
+            _ = datatree.posterior["theta"]
             return [0.0] * len(obs_da)
 
         result = loo_subsample(
