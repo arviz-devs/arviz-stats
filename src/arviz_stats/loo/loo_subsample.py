@@ -97,12 +97,14 @@ def loo_subsample(
         Function that computes the log-likelihood for observations given posterior parameters.
         Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
         The function signature is ``log_lik_fn(observations, data)`` where observations
-        is a :class:`~xarray.DataArray` with the subset of observed data and data is a
+        is a :class:`~xarray.DataArray` of observed data and data is a
         :class:`~xarray.DataTree` object. For ``method="plpd"``, posterior means are computed
         automatically and passed in the posterior group. For ``method="lpd"``, full posterior
         samples are passed. All other groups remain unchanged for direct access.
     param_names : list, optional
         List of parameter names to extract from the posterior. If None, all parameters are used.
+        Recommended to pass the required parameter names from the posterior group that are
+        necessary for the log-likelihood function.
     log: bool, optional
         Whether the ``log_lik_fn`` returns log-likelihood (True) or likelihood (False).
         Default is True.
@@ -179,7 +181,9 @@ def loo_subsample(
            ...: sigma_da = xr.DataArray(sigma,
            ...:                         dims=["school"],
            ...:                         coords={"school": data.observed_data.school.values})
-           ...: data['constant_data'] = data['constant_data'].to_dataset().assign(sigma=sigma_da)
+           ...: data['constant_data'] = (
+           ...:     data['constant_data'].to_dataset().assign(sigma=sigma_da)
+           ...: )
            ...:
            ...: def log_lik_fn(obs_da, data):
            ...:     theta = data.posterior["theta"]
@@ -447,10 +451,12 @@ def update_subsample(
         Function that computes the log-likelihood for observations given posterior parameters.
         Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
         The function signature is ``log_lik_fn(observations, datatree)`` where observations
-        is a :class:`~xarray.DataArray` with the subset of observed data and datatree is a
+        is a :class:`~xarray.DataArray` of observed data and datatree is a
         :class:`~xarray.DataTree` object. For ``method="plpd"``, posterior means are computed
         automatically and passed in the posterior group. For ``method="lpd"``, full posterior
         samples are passed. All other groups remain unchanged for direct access.
+        Recommended to pass the required parameter names from the posterior group that are
+        necessary for the log-likelihood function.
     param_names: list, optional
         List of parameter names to extract from the posterior. If None, all parameters are used.
     log: bool, optional

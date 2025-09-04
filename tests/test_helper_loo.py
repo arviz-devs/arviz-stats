@@ -1,24 +1,30 @@
-# pylint: disable=redefined-outer-name, unused-argument
-
+# pylint: disable=redefined-outer-name, unused-argument, unused-import
+# ruff: noqa: F811, F401
 import warnings
 
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal
 
-from .helpers import importorskip
+from .helpers import (
+    centered_eight,
+    centered_eight_with_sigma,
+    importorskip,
+)
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
+sp = importorskip("scipy")
 
 from arviz_stats.loo.helper_loo import (
+    _align_data_to_obs,
     _check_log_density,
+    _compute_loo_approximation,
     _diff_srs_estimator,
     _extract_loo_data,
     _generate_subsample_indices,
     _get_log_weights_i,
     _get_r_eff,
-    _plpd_approx,
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
@@ -37,25 +43,22 @@ from arviz_stats.manipulation import thin
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
-@pytest.fixture(name="centered_eight", scope="session")
-def fixture_centered_eight():
-    return azb.load_arviz_data("centered_eight")
-
-
 @pytest.fixture(scope="module")
 def log_likelihood_dataset(centered_eight):
     return get_log_likelihood_dataset(centered_eight, var_names="obs")
 
 
-@pytest.fixture(scope="module")
-def log_lik_fn():
-    def _log_likelihood_eight_schools(obs_da, datatree):
-        theta = datatree.posterior["theta"]
-        sigma = 12.5
-        log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
-        return log_lik
+def log_lik_fn(obs_da, datatree):
+    theta = datatree.posterior["theta"]
+    sigma = 12.5
+    log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
+    return log_lik
 
-    return _log_likelihood_eight_schools
+
+def log_lik_fn_subsample(obs_da, datatree):
+    theta = datatree.posterior["theta"]
+    sigma = datatree.constant_data["sigma"]
+    return sp.stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
 
 
 @pytest.fixture(scope="module")
@@ -271,36 +274,6 @@ def test_warn_pointwise_loo():
         assert len(record) == 0
 
 
-def test_plpd_approx(centered_eight, log_lik_fn):
-    result = _plpd_approx(
-        data=centered_eight, var_name="obs", log_lik_fn=log_lik_fn, param_names=["theta"], log=True
-    )
-
-    assert isinstance(result, xr.DataArray)
-    assert result.dims == centered_eight.observed_data.obs.dims
-    assert result.shape == centered_eight.observed_data.obs.shape
-    assert result.name == "plpd"
-
-
-def test_plpd_approx_errors(centered_eight):
-    with pytest.raises(TypeError, match="log_lik_fn must be a callable function"):
-        _plpd_approx(centered_eight, var_name="obs", log_lik_fn="not_callable")
-
-    def invalid_fn(obs_da, posterior_ds):
-        return 0.0
-
-    with pytest.raises(KeyError):
-        _plpd_approx(
-            centered_eight, var_name="obs", log_lik_fn=invalid_fn, param_names=["missing_param"]
-        )
-
-    def bad_shape_fn(obs_da, posterior_ds):
-        return xr.DataArray([1.0, 2.0], dims=["wrong_dim"])
-
-    with pytest.raises(ValueError, match="log_lik_fn must return an object with the same shape"):
-        _plpd_approx(centered_eight, var_name="obs", log_lik_fn=bad_shape_fn, param_names=["theta"])
-
-
 def test_thin_draws(log_likelihood_dataset):
     log_likelihood = log_likelihood_dataset["obs"]
     original_draws = log_likelihood.draw.size
@@ -350,7 +323,7 @@ def test_select_obs_by_coords():
 
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
-def test_prepare_subsample(centered_eight, log_lik_fn, method):
+def test_prepare_subsample(centered_eight, method):
     log_likelihood_ds = get_log_likelihood_dataset(centered_eight, var_names="obs")
     log_likelihood_da = log_likelihood_ds["obs"]
 
@@ -392,7 +365,7 @@ def test_prepare_subsample(centered_eight, log_lik_fn, method):
 
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
-def test_prepare_update_subsample(centered_eight, log_lik_fn, method):
+def test_prepare_update_subsample(centered_eight, method):
     var_name = "obs"
     seed = 42
     observations = 2
@@ -688,3 +661,91 @@ def test_get_log_weights_i():
 
     with pytest.raises(IndexError, match="Index 8 is out of bounds"):
         _get_log_weights_i(log_weights, 8, obs_dims=["school"])
+
+
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_compute_loo_approximation(centered_eight_with_sigma, method):
+    result = _compute_loo_approximation(
+        data=centered_eight_with_sigma,
+        var_name="obs",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        method=method,
+        log=True,
+    )
+
+    assert isinstance(result, xr.DataArray)
+    assert result.name in ["lpd", "plpd"]
+    assert result.dims == ("school",)
+    assert result.shape == (8,)
+    assert np.all(np.isfinite(result.values))
+
+
+def test_compute_loo_approximation_auxiliary_data(centered_eight):
+    sigma_values = np.array([15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0])
+    sigma_da = xr.DataArray(
+        sigma_values,
+        dims=["school"],
+        coords={"school": centered_eight.observed_data.school.values},
+    )
+
+    centered_eight_aux = centered_eight.copy()
+    centered_eight_aux["constant_data"] = (
+        centered_eight_aux["constant_data"].to_dataset().assign(sigma=sigma_da)
+    )
+
+    def log_lik_fn(obs_da, datatree):
+        theta = datatree.posterior["theta"]
+        sigma = datatree.constant_data["sigma"]
+        return -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
+
+    subset_schools = centered_eight_aux.observed_data["obs"].isel(school=[1, 3, 5])
+    aligned_data = _align_data_to_obs(centered_eight_aux, subset_schools)
+
+    assert "constant_data" in aligned_data
+    assert "sigma" in aligned_data.constant_data
+    assert aligned_data.constant_data["sigma"].shape == (3,)
+    assert_allclose(aligned_data.constant_data["sigma"].values, sigma_values[[1, 3, 5]])
+
+    result = _compute_loo_approximation(
+        data=centered_eight_aux,
+        var_name="obs",
+        log_lik_fn=log_lik_fn,
+        param_names=["theta"],
+        method="lpd",
+        log=True,
+    )
+
+    assert np.all(np.isfinite(result.values))
+
+
+def test_compute_loo_approximation_errors(centered_eight_with_sigma):
+    def log_lik_fn(obs_da, datatree):
+        theta = datatree.posterior["theta"]
+        sigma = datatree.constant_data["sigma"]
+        result = sp.stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
+        return result.expand_dims({"extra": [1, 2]})
+
+    with pytest.raises(ValueError, match="dims|dimensions"):
+        _compute_loo_approximation(
+            data=centered_eight_with_sigma,
+            var_name="obs",
+            log_lik_fn=log_lik_fn,
+            param_names=["theta"],
+            method="lpd",
+            log=True,
+        )
+
+    def log_lik_fn_missing_param(obs_da, datatree):
+        _ = datatree.posterior["missing_param"]
+        return obs_da * 0
+
+    with pytest.raises(KeyError, match="Variable not found in posterior"):
+        _compute_loo_approximation(
+            data=centered_eight_with_sigma,
+            var_name="obs",
+            log_lik_fn=log_lik_fn_missing_param,
+            param_names=["theta"],
+            method="lpd",
+            log=True,
+        )

@@ -681,7 +681,17 @@ def _compute_loo_approximation(
                 )
         n_samples = posterior.chain.size * posterior.draw.size
         return logsumexp(result, dims=sample_dims, b=1 / n_samples).rename("lpd")
-    # plpd
+    # plpd validation
+    if set(result.dims) != set(observed.dims) or any(
+        result.sizes[dim] != observed.sizes[dim] for dim in observed.dims
+    ):
+        got_sizes = {dim: result.sizes.get(dim, "missing") for dim in observed.dims}
+        exp_sizes = {dim: observed.sizes[dim] for dim in observed.dims}
+        raise ValueError(
+            f"For method='plpd', log_lik_fn must return an object with dims "
+            f"{list(observed.dims)} and matching sizes. Got dims={list(result.dims)}, "
+            f"sizes={got_sizes}, expected sizes={exp_sizes}"
+        )
     return result.rename("plpd")
 
 

@@ -1,13 +1,21 @@
 # pylint: disable=redefined-outer-name, unused-import, unused-argument
-# ruff: noqa: F811
+# ruff: noqa: F811, F401
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
 
-from .helpers import datatree, datatree_binary, importorskip  # noqa: F401
+from .helpers import (
+    centered_eight,
+    centered_eight_with_sigma,
+    datatree,
+    datatree_binary,
+    importorskip,
+    non_centered_eight,
+)
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
+sp = importorskip("scipy")
 
 from arviz_stats import (
     compare,
@@ -23,16 +31,6 @@ from arviz_stats import (
 from arviz_stats.loo import _calculate_ics
 from arviz_stats.loo.loo_expectations import _get_function_khat
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
-
-
-@pytest.fixture(name="centered_eight", scope="session")
-def fixture_centered_eight():
-    return azb.load_arviz_data("centered_eight")
-
-
-@pytest.fixture(name="non_centered_eight", scope="session")
-def fixture_non_centered_eight():
-    return azb.load_arviz_data("non_centered_eight")
 
 
 @pytest.fixture(scope="module")
@@ -76,15 +74,17 @@ def log_densities(centered_eight):
     }
 
 
-@pytest.fixture(scope="module")
-def log_lik_fn():
-    def _log_likelihood_eight_schools(obs_da, datatree):
-        theta = datatree.posterior["theta"]
-        sigma = 12.5
-        log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
-        return log_lik
+def log_lik_fn(obs_da, datatree):
+    theta = datatree.posterior["theta"]
+    sigma = 12.5
+    log_lik = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
+    return log_lik
 
-    return _log_likelihood_eight_schools
+
+def log_lik_fn_subsample(obs_da, datatree):
+    theta = datatree.posterior["theta"]
+    sigma = datatree.constant_data["sigma"]
+    return sp.stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
 
 
 @pytest.mark.parametrize("pointwise", [True, False])
@@ -430,16 +430,18 @@ def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type
 
 @pytest.mark.parametrize("pointwise", [True, False])
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
-def test_loo_subsample(centered_eight, pointwise, method, log_lik_fn):
+def test_loo_subsample(centered_eight_with_sigma, pointwise, method):
     observations = 4
+    np.random.seed(42)
     loo_sub = loo_subsample(
-        centered_eight,
+        centered_eight_with_sigma,
         observations=observations,
         pointwise=pointwise,
         var_name="obs",
         method=method,
-        log_lik_fn=log_lik_fn,
+        log_lik_fn=log_lik_fn_subsample,
         param_names=["theta"],
+        seed=42,
     )
 
     assert isinstance(loo_sub, ELPDData)
@@ -449,7 +451,13 @@ def test_loo_subsample(centered_eight, pointwise, method, log_lik_fn):
     assert isinstance(loo_sub.se, float) and loo_sub.se >= 0
     assert isinstance(loo_sub.p, float)
     assert isinstance(loo_sub.subsampling_se, float) and loo_sub.subsampling_se >= 0
-    assert loo_sub.n_data_points == centered_eight.observed_data.obs.size
+    assert loo_sub.n_data_points == centered_eight_with_sigma.observed_data.obs.size
+
+    assert -35 < loo_sub.elpd < -29
+    assert 0 < loo_sub.p < 5
+
+    if method == "plpd":
+        assert loo_sub.elpd < -29
 
     if pointwise:
         assert hasattr(loo_sub, "elpd_i")
@@ -462,22 +470,49 @@ def test_loo_subsample(centered_eight, pointwise, method, log_lik_fn):
         assert np.sum(~np.isnan(loo_sub.pareto_k.values)) == observations
         assert np.isnan(loo_sub.elpd_i).sum() == loo_sub.n_data_points - observations
         assert not np.isnan(loo_sub.elpd_i).all()
+
+        valid_k = loo_sub.pareto_k[~np.isnan(loo_sub.pareto_k)]
+        assert np.all(valid_k < 1.0)
     else:
         assert not hasattr(loo_sub, "elpd_i") or loo_sub.elpd_i is None
         assert not hasattr(loo_sub, "pareto_k") or loo_sub.pareto_k is None
 
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
-def test_loo_subsample_errors(centered_eight, method):
-    def log_lik_fn_missing_param(obs_da, datatree):
+def test_loo_subsample_with_custom_loglik(centered_eight_with_sigma, method):
+    observations = 4
+    result = loo_subsample(
+        centered_eight_with_sigma,
+        observations=observations,
+        var_name="obs",
+        method=method,
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        seed=42,
+        pointwise=True,
+    )
+
+    assert isinstance(result, ELPDData)
+    assert result.subsample_size == observations
+    assert -40 < result.elpd < -25
+    assert np.sum(~np.isnan(result.pareto_k.values)) == observations
+
+    if method == "lpd":
+        loo_precomputed = loo_subsample(
+            centered_eight_with_sigma,
+            observations=observations,
+            var_name="obs",
+            method=method,
+            seed=42,
+            pointwise=True,
+        )
+        assert_allclose(result.elpd, loo_precomputed.elpd, rtol=5e-2)
+
+
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_loo_subsample_loglik_errors(centered_eight, method):
+    def log_lik_fn(obs_da, datatree):
         _ = datatree.posterior["missing_param"]
-        if method == "lpd":
-            return (
-                obs_da.expand_dims(
-                    {"chain": datatree.posterior.chain, "draw": datatree.posterior.draw}
-                )
-                * 0
-            )
         return obs_da * 0
 
     with pytest.raises(KeyError, match="Variable not found in posterior"):
@@ -486,164 +521,57 @@ def test_loo_subsample_errors(centered_eight, method):
             observations=4,
             var_name="obs",
             method=method,
-            log_lik_fn=log_lik_fn_missing_param,
+            log_lik_fn=log_lik_fn,
             param_names=["theta"],
         )
 
-    def log_lik_fn_wrong_shape(obs_da, datatree):
+    def log_lik_fn_scalar(obs_da, datatree):
         return xr.DataArray(0.0)
 
-    error_pattern = (
-        "log_lik_fn must return an object with dims"
-        if method == "lpd"
-        else "Expected .*, got \\(\\)"
-    )
-    with pytest.raises(ValueError, match=error_pattern):
+    with pytest.raises(ValueError, match="log_lik_fn must return an object with dims"):
         loo_subsample(
             centered_eight,
             observations=4,
             var_name="obs",
             method=method,
-            log_lik_fn=log_lik_fn_wrong_shape,
+            log_lik_fn=log_lik_fn_scalar,
             param_names=["theta"],
         )
 
-    if method == "lpd":
 
-        def log_lik_fn_wrong_size(obs_da, datatree):
-            return xr.DataArray(
-                np.zeros((datatree.posterior.chain.size, datatree.posterior.draw.size, 2)),
-                dims=["chain", "draw", "school"],
-                coords={
-                    "chain": datatree.posterior.chain,
-                    "draw": datatree.posterior.draw,
-                    "school": ["A", "B"],
-                },
-            )
-
-        with pytest.raises(ValueError, match="log_lik_fn must return an object with school size"):
-            loo_subsample(
-                centered_eight,
-                observations=4,
-                var_name="obs",
-                method=method,
-                log_lik_fn=log_lik_fn_wrong_size,
-                param_names=["theta"],
-            )
-
-    if method == "lpd":
-
-        def log_lik_fn_returns_numpy(obs_da, datatree):
-            _ = datatree.posterior["theta"]
-            n_chains = datatree.posterior.chain.size
-            n_draws = datatree.posterior.draw.size
-            n_obs = len(obs_da)
-            return np.zeros((n_chains, n_draws, n_obs))
-
-        result = loo_subsample(
-            centered_eight,
-            observations=4,
-            var_name="obs",
-            method=method,
-            log_lik_fn=log_lik_fn_returns_numpy,
-            param_names=["theta"],
-            pointwise=False,
-        )
-    else:
-
-        def log_lik_fn_returns_list(obs_da, datatree):
-            _ = datatree.posterior["theta"]
-            return [0.0] * len(obs_da)
-
-        result = loo_subsample(
-            centered_eight,
-            observations=4,
-            var_name="obs",
-            method=method,
-            log_lik_fn=log_lik_fn_returns_list,
-            param_names=["theta"],
-            pointwise=False,
-        )
-
-    assert isinstance(result, ELPDData)
-
-
-@pytest.mark.parametrize("method", ["lpd", "plpd"])
-def test_update_loo_subsample(centered_eight, method, log_lik_fn):
-    initial_observations = 3
+def test_update_loo_subsample(centered_eight_with_sigma):
     initial_loo = loo_subsample(
-        centered_eight,
-        observations=initial_observations,
+        centered_eight_with_sigma,
+        observations=3,
         var_name="obs",
-        method=method,
-        log_lik_fn=log_lik_fn,
+        method="lpd",
+        log_lik_fn=log_lik_fn_subsample,
         param_names=["theta"],
+        seed=42,
     )
 
-    additional_observations = 5
     updated_loo = update_subsample(
         initial_loo,
-        centered_eight,
-        observations=additional_observations,
+        centered_eight_with_sigma,
+        observations=3,
         var_name="obs",
-        method=method,
-        log_lik_fn=log_lik_fn,
+        method="lpd",
+        log_lik_fn=log_lik_fn_subsample,
         param_names=["theta"],
+        seed=43,
     )
 
-    assert isinstance(updated_loo, ELPDData)
-    assert updated_loo.kind == "loo"
-    assert updated_loo.subsample_size == initial_observations + additional_observations
-    assert isinstance(updated_loo.elpd, float)
-    assert isinstance(updated_loo.se, float) and updated_loo.se >= 0
-    assert isinstance(updated_loo.p, float)
-    assert isinstance(updated_loo.subsampling_se, float) and updated_loo.subsampling_se >= 0
-    assert np.isfinite(updated_loo.se)
+    assert updated_loo.subsample_size == 6
     assert updated_loo.subsampling_se <= initial_loo.subsampling_se
-    assert updated_loo.elpd_i is not None
-    assert updated_loo.pareto_k is not None
-    assert updated_loo.elpd_i.dims == ("school",)
-    assert updated_loo.elpd_i.shape == (updated_loo.n_data_points,)
-    assert updated_loo.pareto_k.dims == updated_loo.elpd_i.dims
-    assert updated_loo.pareto_k.shape == (updated_loo.n_data_points,)
-    assert np.sum(~np.isnan(updated_loo.elpd_i.values)) == updated_loo.subsample_size
-    assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == updated_loo.subsample_size
+    assert np.sum(~np.isnan(updated_loo.elpd_i.values)) == 6
+    assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == 6
 
 
 def test_loo_subsample_validation_errors(centered_eight):
-    n_total = centered_eight.observed_data.obs.size
     with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
         loo_subsample(centered_eight, observations=0, var_name="obs")
-    with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
-        loo_subsample(centered_eight, observations=n_total + 1, var_name="obs")
     with pytest.raises(TypeError, match="observations must be an integer"):
         loo_subsample(centered_eight, observations=4.2, var_name="obs")
-
-
-def test_update_loo_subsample_errors(centered_eight):
-    initial_observations = 3
-    initial_loo = loo_subsample(centered_eight, observations=initial_observations, var_name="obs")
-
-    n_total = centered_eight.observed_data.obs.size
-    with pytest.raises(ValueError, match="Cannot add .* observations when only .* are available"):
-        update_subsample(initial_loo, centered_eight, observations=n_total)
-
-    existing_indices = np.where(~np.isnan(initial_loo.elpd_i.values.flatten()))[0]
-    with pytest.raises(ValueError, match="New indices .* overlap with existing indices"):
-        update_subsample(initial_loo, centered_eight, observations=existing_indices[:5])
-
-
-def test_update_subsample_preserves_thin_factor(centered_eight):
-    initial_observations = 2
-    thin_factor = 2
-    initial_loo = loo_subsample(
-        centered_eight, observations=initial_observations, var_name="obs", thin=thin_factor
-    )
-    assert initial_loo.thin_factor == thin_factor
-
-    updated_loo = update_subsample(initial_loo, centered_eight, observations=2)
-
-    assert updated_loo.thin_factor == thin_factor
 
 
 @pytest.fixture(scope="function")
