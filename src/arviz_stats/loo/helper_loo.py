@@ -18,7 +18,6 @@ __all__ = [
     "_get_log_likelihood_i",
     "_get_log_weights_i",
     "_compute_loo_approximation",
-    "_plpd_approx",
     "_diff_srs_estimator",
     "_srs_estimator",
     "_compute_loo_results",
@@ -35,6 +34,7 @@ __all__ = [
     "_select_obs_by_indices",
     "_select_obs_by_coords",
     "_prepare_full_arrays",
+    "_align_data_to_obs",
 ]
 
 LooInputs = namedtuple(
@@ -63,6 +63,196 @@ UpdateSubsampleData = namedtuple(
 ShiftResult = namedtuple("ShiftResult", ["upars", "shift"])
 ShiftAndScaleResult = namedtuple("ShiftAndScaleResult", ["upars", "shift", "scaling"])
 ShiftAndCovResult = namedtuple("ShiftAndCovResult", ["upars", "shift", "mapping"])
+
+
+def _compute_loo_results(
+    log_likelihood,
+    var_name,
+    sample_dims,
+    n_samples,
+    n_data_points,
+    pointwise=None,
+    log_weights=None,
+    pareto_k=None,
+    reff=None,
+    log_p=None,
+    log_q=None,
+    approx_posterior=False,
+    return_pointwise=False,
+    log_jacobian=None,
+):
+    """Compute PSIS-LOO-CV results."""
+    if isinstance(log_likelihood, xr.Dataset):
+        if var_name is None:
+            raise ValueError("var_name must be specified when log_likelihood is a Dataset")
+        if var_name not in log_likelihood:
+            raise ValueError(f"Variable '{var_name}' not found in log_likelihood Dataset")
+        log_likelihood_da = log_likelihood[var_name]
+    else:
+        log_likelihood_da = log_likelihood
+
+    obs_dims = [dim for dim in log_likelihood_da.dims if dim not in sample_dims]
+
+    if log_p is not None and log_q is not None:
+        from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
+
+        data = xr.DataTree()
+        data["log_likelihood"] = log_likelihood
+
+        loo_results = loo_approximate_posterior(
+            data=data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
+        )
+
+        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+
+        if jacobian_da is not None:
+            loo_results.elpd_i = loo_results.elpd_i + jacobian_da
+            loo_results.elpd = loo_results.elpd_i.sum().item()
+
+        if return_pointwise:
+            return loo_results.elpd_i, loo_results.pareto_k, True
+        return loo_results
+
+    if log_weights is not None:
+        if isinstance(log_weights, xr.Dataset):
+            if var_name is None:
+                raise ValueError("var_name must be specified when log_weights is a Dataset")
+            log_weights = log_weights[var_name]
+        for dim in sample_dims:
+            if dim not in log_weights.dims:
+                raise ValueError(f"log_weights must have sample dimension '{dim}'")
+
+    if pareto_k is not None:
+        if isinstance(pareto_k, xr.Dataset):
+            if var_name is None:
+                raise ValueError("var_name must be specified when pareto_k is a Dataset")
+            pareto_k = pareto_k[var_name]
+        if set(pareto_k.dims) != set(obs_dims):
+            raise ValueError(
+                f"pareto_k dimensions {list(pareto_k.dims)} must match "
+                f"observation dimensions {obs_dims}"
+            )
+        for dim in pareto_k.dims:
+            if pareto_k.sizes[dim] != log_likelihood_da.sizes[dim]:
+                raise ValueError(
+                    f"pareto_k size for dimension '{dim}' ({pareto_k.sizes[dim]}) "
+                    f"must match log_likelihood size ({log_likelihood_da.sizes[dim]})"
+                )
+
+    if log_weights is None or pareto_k is None:
+        log_weights, pareto_k = log_likelihood_da.azstats.psislw(r_eff=reff, dim=sample_dims)
+
+    warn_mg, good_k = _warn_pareto_k(pareto_k, n_samples)
+
+    log_weights_sum = log_weights + log_likelihood_da
+    elpd_i = logsumexp(log_weights_sum, dims=sample_dims)
+
+    jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+    if jacobian_da is not None:
+        elpd_i = elpd_i + jacobian_da
+
+    elpd = elpd_i.sum().item()
+
+    lppd_da = logsumexp(log_likelihood_da, b=1 / n_samples, dims=sample_dims)
+    if jacobian_da is not None:
+        lppd_da = lppd_da + jacobian_da
+    lppd = lppd_da.sum().item()
+
+    p_loo = lppd - elpd
+
+    if return_pointwise:
+        return elpd_i, pareto_k, approx_posterior
+
+    elpd_se = (n_data_points * np.var(elpd_i.values)) ** 0.5
+
+    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
+    if pointwise:
+        _warn_pointwise_loo(elpd, elpd_i.values)
+
+    return ELPDData(
+        "loo",
+        elpd,
+        elpd_se,
+        p_loo,
+        n_samples,
+        n_data_points,
+        "log",
+        warn_mg,
+        good_k,
+        elpd_i if pointwise else None,
+        pareto_k if pointwise else None,
+        approx_posterior=approx_posterior,
+        log_weights=log_weights,
+    )
+
+
+def _prepare_loo_inputs(data, var_name, thin_factor=None):
+    """Prepare inputs for PSIS-LOO-CV."""
+    data = convert_to_datatree(data)
+
+    log_likelihood = get_log_likelihood(data, var_name=var_name)
+    if var_name is None and log_likelihood.name is not None:
+        var_name = log_likelihood.name
+
+    if thin_factor is not None:
+        # Avoid circular import
+        from arviz_stats.manipulation import thin
+
+        log_likelihood = thin(log_likelihood, factor=thin_factor)
+
+    sample_dims = ["chain", "draw"]
+    obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
+    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+    n_data_points = np.prod(
+        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
+    )
+    return LooInputs(
+        log_likelihood,
+        var_name,
+        sample_dims,
+        obs_dims,
+        n_samples,
+        n_data_points,
+    )
+
+
+def _extract_loo_data(loo_orig):
+    """Extract pointwise DataArrays from original PSIS-LOO-CV object."""
+    elpd_values = loo_orig.elpd_i
+    pareto_values = loo_orig.pareto_k
+
+    valid_mask = ~np.isnan(elpd_values.values.flatten())
+    valid_indices = np.where(valid_mask)[0]
+
+    sample_dims = ["chain", "draw"]
+    obs_dims = [dim for dim in elpd_values.dims if dim not in sample_dims]
+    stacked_obs_dim = "__obs__"
+
+    if len(obs_dims) == 1:
+        obs_dim = obs_dims[0]
+        extracted_elpd = elpd_values.isel({obs_dim: valid_indices})
+    else:
+        is_already_stacked = stacked_obs_dim in elpd_values.dims
+        stacked_elpd = (
+            elpd_values if is_already_stacked else elpd_values.stack({stacked_obs_dim: obs_dims})
+        )
+        extracted_elpd = stacked_elpd.isel({stacked_obs_dim: valid_indices})
+
+    if pareto_values is not None:
+        if len(obs_dims) == 1:
+            obs_dim = obs_dims[0]
+            extracted_pareto = pareto_values.isel({obs_dim: valid_indices})
+        else:
+            is_already_stacked = stacked_obs_dim in pareto_values.dims
+            stacked_pareto = (
+                pareto_values
+                if is_already_stacked
+                else pareto_values.stack({stacked_obs_dim: obs_dims})
+            )
+            extracted_pareto = stacked_pareto.isel({stacked_obs_dim: valid_indices})
+    else:
+        extracted_pareto = xr.full_like(extracted_elpd, np.nan)
+    return extracted_elpd, extracted_pareto
 
 
 def _shift(upars, lwi):
@@ -224,6 +414,157 @@ def _get_log_weights_i(log_weights, i, obs_dims):
     return log_weights_i
 
 
+def _prepare_subsample(
+    data,
+    log_likelihood_da,
+    var_name,
+    observations,
+    seed,
+    method,
+    log_lik_fn,
+    param_names,
+    log,
+    obs_dims,
+    sample_dims,
+    n_data_points,
+    n_samples,
+    thin_factor=None,
+):
+    """Prepare inputs for PSIS-LOO-CV with sub-sampling."""
+    indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
+
+    if thin_factor is not None and log_lik_fn is not None:
+        from arviz_stats.manipulation import thin
+
+        data = data.copy(deep=True)
+        if hasattr(data, "posterior"):
+            thinned_posterior = thin(data.posterior, factor=thin_factor)
+            data["posterior"] = thinned_posterior
+
+    if method == "lpd":
+        if log_lik_fn is None:
+            lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples)
+        else:
+            lpd_approx_all = _compute_loo_approximation(
+                data=data,
+                var_name=var_name,
+                log_lik_fn=log_lik_fn,
+                param_names=param_names,
+                method="lpd",
+                log=log,
+            )
+    else:  # method == "plpd"
+        lpd_approx_all = _compute_loo_approximation(
+            data=data,
+            var_name=var_name,
+            log_lik_fn=log_lik_fn,
+            param_names=param_names,
+            method="plpd",
+            log=log,
+        )
+
+    log_likelihood_sample = _select_obs_by_indices(log_likelihood_da, indices, obs_dims, "__obs__")
+    lpd_approx_sample = _select_obs_by_indices(lpd_approx_all, indices, obs_dims, "__obs__")
+
+    return SubsampleData(
+        log_likelihood_sample,
+        lpd_approx_sample,
+        lpd_approx_all,
+        indices,
+        subsample_size,
+    )
+
+
+def _prepare_update_subsample(
+    loo_orig,
+    data,
+    observations,
+    var_name,
+    seed,
+    method,
+    log_lik_fn,
+    param_names,
+    log,
+    thin_factor=None,
+):
+    """Prepare inputs for updating PSIS-LOO-CV with additional observations."""
+    loo_inputs = _prepare_loo_inputs(data, var_name, thin_factor)
+    old_elpd_i_da, old_pareto_k_da = _extract_loo_data(loo_orig)
+
+    log_likelihood = loo_inputs.log_likelihood
+    concat_dim = old_elpd_i_da.dims[0]
+    old_indices = np.where(~np.isnan(loo_orig.elpd_i.values.flatten()))[0]
+
+    if isinstance(observations, int):
+        # Filter out existing indices before generating new ones
+        available_indices = np.setdiff1d(np.arange(loo_inputs.n_data_points), old_indices)
+        if observations > len(available_indices):
+            raise ValueError(
+                f"Cannot add {observations} observations when only {len(available_indices)} "
+                "are available."
+            )
+        temp_indices, _ = _generate_subsample_indices(len(available_indices), observations, seed)
+        new_indices = available_indices[temp_indices]
+    else:
+        new_indices = np.asarray(observations, dtype=int)
+        if np.any(new_indices < 0) or np.any(new_indices >= loo_inputs.n_data_points):
+            raise ValueError("New indices contain out-of-bounds values.")
+        # Check for overlap with old indices
+        overlap = np.intersect1d(new_indices, old_indices)
+        if len(overlap) > 0:
+            raise ValueError(f"New indices {overlap} overlap with existing indices.")
+
+    if thin_factor is not None and log_lik_fn is not None:
+        from arviz_stats.manipulation import thin
+
+        data = data.copy(deep=True)
+        if hasattr(data, "posterior"):
+            thinned_posterior = thin(data.posterior, factor=thin_factor)
+            data["posterior"] = thinned_posterior
+
+    if method == "lpd":
+        if log_lik_fn is None:
+            lpd_approx_all = logsumexp(
+                log_likelihood, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
+            )
+        else:
+            lpd_approx_all = _compute_loo_approximation(
+                data=data,
+                var_name=loo_inputs.var_name,
+                log_lik_fn=log_lik_fn,
+                param_names=param_names,
+                method="lpd",
+                log=log,
+            )
+    else:  # method == "plpd"
+        lpd_approx_all = _compute_loo_approximation(
+            data=data,
+            var_name=loo_inputs.var_name,
+            log_lik_fn=log_lik_fn,
+            param_names=param_names,
+            method="plpd",
+            log=log,
+        )
+
+    log_likelihood_new_da = _select_obs_by_indices(
+        log_likelihood, new_indices, loo_inputs.obs_dims, "__obs__"
+    )
+
+    log_likelihood_new_ds = xr.Dataset({loo_inputs.var_name: log_likelihood_new_da})
+    combined_size = len(old_indices) + len(new_indices)
+
+    return UpdateSubsampleData(
+        log_likelihood_new_ds,
+        lpd_approx_all,
+        old_elpd_i_da,
+        old_pareto_k_da,
+        new_indices,
+        old_indices,
+        concat_dim,
+        combined_size,
+    )
+
+
 def _compute_loo_approximation(
     data,
     var_name,
@@ -237,206 +578,111 @@ def _compute_loo_approximation(
         raise ValueError("No observed_data group found in the data")
     if var_name not in data.observed_data:
         raise ValueError(f"Variable {var_name} not found in observed_data")
+    if method not in ["lpd", "plpd"]:
+        raise ValueError(f"Unknown method: {method}. Must be 'lpd' or 'plpd'")
 
     observed = data.observed_data[var_name]
+    sample_dims = ["chain", "draw"]
 
-    if method == "lpd":
-        if log_lik_fn is None:
-            log_likelihood = get_log_likelihood(data, var_name=var_name)
-            sample_dims = ["chain", "draw"]
-            n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-            return logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
+    # early return for simple LPD case
+    if method == "lpd" and log_lik_fn is None:
+        log_likelihood = get_log_likelihood(data, var_name=var_name)
+        n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+        return logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
 
-        posterior = extract(data, group="posterior", combined=False)
+    if log_lik_fn is None:
+        raise ValueError(f"log_lik_fn required for {method} method")
+    if not callable(log_lik_fn):
+        raise TypeError("log_lik_fn must be a callable function.")
 
-        if param_names:
-            if isinstance(posterior, xr.Dataset):
-                posterior = posterior[param_names]
-            elif isinstance(posterior, xr.DataArray):
-                if len(param_names) == 1:
-                    if posterior.name != param_names[0]:
-                        raise ValueError(
-                            f"Requested parameter '{param_names[0]}' but DataArray "
-                            f"has name '{posterior.name}'"
-                        )
-                    posterior = xr.Dataset({posterior.name: posterior})
-                else:
-                    raise ValueError(
-                        f"Cannot select multiple parameters {param_names} from a single DataArray "
-                        f"'{posterior.name}'"
-                    )
-        else:
-            if isinstance(posterior, xr.DataArray):
-                posterior = xr.Dataset({posterior.name: posterior})
+    posterior = extract(data, group="posterior", combined=False)
 
-        data_for_fn = deepcopy(data)
-        data_for_fn.posterior = posterior
-
-        try:
-            log_likelihood = log_lik_fn(observed, data_for_fn)
-        except KeyError as e:
-            available_vars = list(posterior.data_vars)
-            if "missing_param" in str(e) or "No variable named" in str(e):
-                raise KeyError(
-                    f"Variable not found in posterior. "
-                    f"Available posterior variables: {available_vars}"
-                ) from e
-            raise
-        except Exception as e:
-            raise ValueError(f"Error in log_lik_fn: {type(e).__name__}: {str(e)}") from e
-
-        if not isinstance(log_likelihood, xr.DataArray):
-            if isinstance(log_likelihood, np.ndarray):
-                expected_shape = (posterior.chain.size, posterior.draw.size) + observed.shape
-                if log_likelihood.shape != expected_shape:
-                    raise ValueError(
-                        f"log_lik_fn returned array with shape {log_likelihood.shape}, "
-                        f"expected {expected_shape}"
-                    )
-
-                log_likelihood = ndarray_to_dataarray(
-                    log_likelihood,
-                    var_name,
-                    sample_dims=["chain", "draw"],
-                    dims=list(observed.dims),
-                    coords={**posterior.coords, **observed.coords},
-                )
-            else:
-                raise TypeError(
-                    f"log_lik_fn must return DataArray or numpy array. "
-                    f"Got {type(log_likelihood).__name__}"
-                )
-
-        if not log:
-            log_likelihood = xr.ufuncs.log(xr.ufuncs.maximum(log_likelihood, np.finfo(float).tiny))
-
-        sample_dims = ["chain", "draw"]
-        expected_dims = set(sample_dims) | set(observed.dims)
-
-        if set(log_likelihood.dims) != expected_dims:
+    if isinstance(posterior, xr.DataArray):
+        if param_names and len(param_names) == 1 and posterior.name != param_names[0]:
             raise ValueError(
-                f"log_lik_fn must return an object with dims {list(expected_dims)}. "
-                f"Got {list(log_likelihood.dims)}"
+                f"Requested parameter '{param_names[0]}' but DataArray has "
+                f"name {posterior.name}"
             )
+        if param_names and len(param_names) > 1:
+            raise ValueError(
+                f"Cannot select multiple parameters {param_names} from a single "
+                f"DataArray {posterior.name}"
+            )
+        posterior = xr.Dataset({posterior.name: posterior})
+    elif param_names:
+        posterior = posterior[param_names]
 
-        for dim in observed.dims:
-            if log_likelihood.sizes[dim] != observed.sizes[dim]:
-                raise ValueError(
-                    f"log_lik_fn must return an object with {dim} size {observed.sizes[dim]}. "
-                    f"Got {log_likelihood.sizes[dim]}"
-                )
-
-        n_samples = posterior.chain.size * posterior.draw.size
-        return logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).rename("lpd")
+    data_for_fn = _align_data_to_obs(data, observed)
 
     if method == "plpd":
-        if log_lik_fn is None:
-            raise ValueError("log_lik_fn required for plpd method")
-        if not callable(log_lik_fn):
-            raise TypeError("log_lik_fn must be a callable function.")
-
-        posterior = extract(data, group="posterior", combined=False)
-
-        if param_names:
-            if isinstance(posterior, xr.Dataset):
-                posterior = posterior[param_names]
-            elif isinstance(posterior, xr.DataArray):
-                if len(param_names) == 1:
-                    if posterior.name != param_names[0]:
-                        raise ValueError(
-                            f"Requested parameter '{param_names[0]}' but DataArray "
-                            f"has name '{posterior.name}'"
-                        )
-                    posterior = xr.Dataset({posterior.name: posterior})
-                else:
-                    raise ValueError(
-                        f"Cannot select multiple parameters {param_names} from a single DataArray "
-                        f"'{posterior.name}'"
-                    )
-        else:
-            if isinstance(posterior, xr.DataArray):
-                posterior = xr.Dataset({posterior.name: posterior})
-
-        posterior_means = posterior.mean(dim=["chain", "draw"])
-
-        data_for_fn = deepcopy(data)
+        posterior_means = posterior.mean(dim=sample_dims)
         data_for_fn.posterior = xr.Dataset(posterior_means.data_vars)
+        available_vars = list(posterior_means.data_vars)
+    else:
+        data_for_fn.posterior = posterior
+        available_vars = list(posterior.data_vars)
 
-        try:
-            result = log_lik_fn(observed, data_for_fn)
-        except KeyError as e:
-            available_vars = list(posterior_means.data_vars)
-            if "missing_param" in str(e) or "No variable named" in str(e):
-                raise KeyError(
-                    f"Variable not found in posterior. "
-                    f"Available posterior variables: {available_vars}"
-                ) from e
-            raise
-        except Exception as e:
-            raise ValueError(f"Error in log_lik_fn: {type(e).__name__}: {str(e)}") from e
+    try:
+        result = log_lik_fn(observed, data_for_fn)
+    except KeyError as e:
+        if "missing_param" in str(e) or "No variable named" in str(e):
+            raise KeyError(
+                f"Variable not found in posterior. Available posterior variables: "
+                f"{available_vars}"
+            ) from e
+        raise
+    except Exception as e:
+        raise ValueError(f"Error in log_lik_fn: {type(e).__name__}: {str(e)}") from e
 
-        if not isinstance(result, xr.DataArray):
-            result = ndarray_to_dataarray(
-                np.asarray(result),
-                var_name,
-                dims=list(observed.dims),
-                coords=observed.coords,
-                sample_dims=[],
-            )
+    if not isinstance(result, xr.DataArray):
+        result = np.asarray(result) if not isinstance(result, np.ndarray) else result
 
-        if not log:
-            result = xr.ufuncs.log(xr.ufuncs.maximum(result, np.finfo(float).tiny))
+        if method == "lpd":
+            expected_shape = (posterior.chain.size, posterior.draw.size) + observed.shape
+            if result.shape != expected_shape:
+                raise ValueError(
+                    f"log_lik_fn returned array with shape {result.shape}, "
+                    f"expected {expected_shape}"
+                )
+            coords = {**posterior.coords, **observed.coords}
+        else:  # plpd
+            expected_shape = observed.shape
+            if result.shape != expected_shape:
+                raise ValueError(
+                    f"log_lik_fn returned array with shape {result.shape}, "
+                    f"expected {expected_shape}"
+                )
+            coords = observed.coords
 
-        if result.shape != observed.shape:
+        result = ndarray_to_dataarray(
+            result,
+            var_name,
+            sample_dims=sample_dims if method == "lpd" else [],
+            dims=list(observed.dims),
+            coords=coords,
+        )
+
+    if not log:
+        result = xr.ufuncs.log(xr.ufuncs.maximum(result, np.finfo(float).tiny))
+
+    # validation
+    if method == "lpd":
+        expected_dims = set(sample_dims) | set(observed.dims)
+        if set(result.dims) != expected_dims:
             raise ValueError(
-                f"log_lik_fn must return an object with the same shape as the observed data. "
-                f"Expected {observed.shape}, got {result.shape}"
+                f"log_lik_fn must return an object with dims {list(expected_dims)}. "
+                f"Got {list(result.dims)}"
             )
-
-        return result.rename("plpd")
-    raise ValueError(f"Unknown method: {method}. Must be 'lpd' or 'plpd'")
-
-
-def _plpd_approx(
-    data,
-    var_name,
-    log_lik_fn,
-    param_names=None,
-    log=True,
-):
-    """Compute the point log predictive density (PLPD) approximation.
-
-    Parameters
-    ----------
-    data : DataTree or InferenceData
-        Input data containing `posterior` and `observed_data` groups.
-    var_name : str
-        Name of the variable in `observed_data` for which to compute the PLPD approximation.
-    log_lik_fn : callable
-        Function that computes the log-likelihood for observations given posterior parameters.
-        The function receives observed data as a DataArray and posterior means as a Dataset
-        without chain/draw dimensions. It can return any array-like object or a
-        :class:`~xarray.DataArray` with the same shape as the observations.
-    param_names : list[str], optional
-        Subset of posterior variables to pass to log_lik_fn.
-        If None, all posterior variables are included.
-    log : bool, optional
-        Whether the log_lik_fn returns log-likelihood (True) or likelihood (False).
-        Default is True. If False, the output will be log-transformed.
-
-    Returns
-    -------
-    DataArray
-        :class:`~xarray.DataArray` containing PLPD values with the same dimensions as observed data.
-    """
-    return _compute_loo_approximation(
-        data=data,
-        var_name=var_name,
-        log_lik_fn=log_lik_fn,
-        param_names=param_names,
-        method="plpd",
-        log=log,
-    )
+        for dim in observed.dims:
+            if result.sizes[dim] != observed.sizes[dim]:
+                raise ValueError(
+                    f"log_lik_fn must return an object with {dim} size {observed.sizes[dim]}. "
+                    f"Got {result.sizes[dim]}"
+                )
+        n_samples = posterior.chain.size * posterior.draw.size
+        return logsumexp(result, dims=sample_dims, b=1 / n_samples).rename("lpd")
+    # plpd
+    return result.rename("plpd")
 
 
 def _diff_srs_estimator(
@@ -554,125 +800,38 @@ def _srs_estimator(
     return y_hat, var_y_hat, hat_var_y
 
 
-def _compute_loo_results(
-    log_likelihood,
-    var_name,
-    sample_dims,
-    n_samples,
-    n_data_points,
-    pointwise=None,
-    log_weights=None,
-    pareto_k=None,
-    reff=None,
-    log_p=None,
-    log_q=None,
-    approx_posterior=False,
-    return_pointwise=False,
-    log_jacobian=None,
-):
-    """Compute PSIS-LOO-CV results."""
-    if isinstance(log_likelihood, xr.Dataset):
-        if var_name is None:
-            raise ValueError("var_name must be specified when log_likelihood is a Dataset")
-        if var_name not in log_likelihood:
-            raise ValueError(f"Variable '{var_name}' not found in log_likelihood Dataset")
-        log_likelihood_da = log_likelihood[var_name]
-    else:
-        log_likelihood_da = log_likelihood
+def _align_group(group, observed, primary_obs_dim):
+    """Align all variables in a data group."""
+    if primary_obs_dim not in observed.coords:
+        return group.copy()
 
-    obs_dims = [dim for dim in log_likelihood_da.dims if dim not in sample_dims]
-
-    if log_p is not None and log_q is not None:
-        from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
-
-        data = xr.DataTree()
-        data["log_likelihood"] = log_likelihood
-
-        loo_results = loo_approximate_posterior(
-            data=data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
-        )
-
-        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
-
-        if jacobian_da is not None:
-            loo_results.elpd_i = loo_results.elpd_i + jacobian_da
-            loo_results.elpd = loo_results.elpd_i.sum().item()
-
-        if return_pointwise:
-            return loo_results.elpd_i, loo_results.pareto_k, True
-        return loo_results
-
-    if log_weights is not None:
-        if isinstance(log_weights, xr.Dataset):
-            if var_name is None:
-                raise ValueError("var_name must be specified when log_weights is a Dataset")
-            log_weights = log_weights[var_name]
-        for dim in sample_dims:
-            if dim not in log_weights.dims:
-                raise ValueError(f"log_weights must have sample dimension '{dim}'")
-
-    if pareto_k is not None:
-        if isinstance(pareto_k, xr.Dataset):
-            if var_name is None:
-                raise ValueError("var_name must be specified when pareto_k is a Dataset")
-            pareto_k = pareto_k[var_name]
-        if set(pareto_k.dims) != set(obs_dims):
-            raise ValueError(
-                f"pareto_k dimensions {list(pareto_k.dims)} must match "
-                f"observation dimensions {obs_dims}"
+    aligned_vars = {}
+    for var_name, var_data in group.data_vars.items():
+        if primary_obs_dim in var_data.dims:
+            aligned_vars[var_name] = var_data.sel(
+                {primary_obs_dim: observed.coords[primary_obs_dim]}
             )
-        for dim in pareto_k.dims:
-            if pareto_k.sizes[dim] != log_likelihood_da.sizes[dim]:
-                raise ValueError(
-                    f"pareto_k size for dimension '{dim}' ({pareto_k.sizes[dim]}) "
-                    f"must match log_likelihood size ({log_likelihood_da.sizes[dim]})"
-                )
+        else:
+            aligned_vars[var_name] = var_data
+    return xr.Dataset(aligned_vars)
 
-    if log_weights is None or pareto_k is None:
-        log_weights, pareto_k = log_likelihood_da.azstats.psislw(r_eff=reff, dim=sample_dims)
 
-    warn_mg, good_k = _warn_pareto_k(pareto_k, n_samples)
+def _align_data_to_obs(data, observed):
+    """Align auxiliary data groups to match the subset of observations."""
+    obs_dims = [dim for dim in observed.dims if dim not in ["chain", "draw"]]
+    if not obs_dims:
+        return deepcopy(data)
 
-    log_weights_sum = log_weights + log_likelihood_da
-    elpd_i = logsumexp(log_weights_sum, dims=sample_dims)
+    primary_obs_dim = obs_dims[0]
+    aligned_data = data.copy()
 
-    jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
-    if jacobian_da is not None:
-        elpd_i = elpd_i + jacobian_da
+    for group_name in ["constant_data"]:
+        if hasattr(data, group_name):
+            group = getattr(data, group_name)
+            aligned_group = _align_group(group, observed, primary_obs_dim)
+            setattr(aligned_data, group_name, aligned_group)
 
-    elpd = elpd_i.sum().item()
-
-    lppd_da = logsumexp(log_likelihood_da, b=1 / n_samples, dims=sample_dims)
-    if jacobian_da is not None:
-        lppd_da = lppd_da + jacobian_da
-    lppd = lppd_da.sum().item()
-
-    p_loo = lppd - elpd
-
-    if return_pointwise:
-        return elpd_i, pareto_k, approx_posterior
-
-    elpd_se = (n_data_points * np.var(elpd_i.values)) ** 0.5
-
-    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
-    if pointwise:
-        _warn_pointwise_loo(elpd, elpd_i.values)
-
-    return ELPDData(
-        "loo",
-        elpd,
-        elpd_se,
-        p_loo,
-        n_samples,
-        n_data_points,
-        "log",
-        warn_mg,
-        good_k,
-        elpd_i if pointwise else None,
-        pareto_k if pointwise else None,
-        approx_posterior=approx_posterior,
-        log_weights=log_weights,
-    )
+    return aligned_data
 
 
 def _generate_subsample_indices(n_data_points, observations, seed):
@@ -718,181 +877,6 @@ def _get_r_eff(data, n_samples):
     return reff
 
 
-def _prepare_loo_inputs(data, var_name, thin_factor=None):
-    """Prepare inputs for PSIS-LOO-CV."""
-    data = convert_to_datatree(data)
-
-    log_likelihood = get_log_likelihood(data, var_name=var_name)
-    if var_name is None and log_likelihood.name is not None:
-        var_name = log_likelihood.name
-
-    if thin_factor is not None:
-        # Avoid circular import
-        from arviz_stats.manipulation import thin
-
-        log_likelihood = thin(log_likelihood, factor=thin_factor)
-
-    sample_dims = ["chain", "draw"]
-    obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = np.prod(
-        [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
-    )
-    return LooInputs(
-        log_likelihood,
-        var_name,
-        sample_dims,
-        obs_dims,
-        n_samples,
-        n_data_points,
-    )
-
-
-def _prepare_subsample(
-    data,
-    log_likelihood_da,
-    var_name,
-    observations,
-    seed,
-    method,
-    log_lik_fn,
-    param_names,
-    log,
-    obs_dims,
-    sample_dims,
-    n_data_points,
-    n_samples,
-    thin_factor=None,
-):
-    """Prepare inputs for PSIS-LOO-CV with sub-sampling."""
-    indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
-
-    if thin_factor is not None and log_lik_fn is not None:
-        from arviz_stats.manipulation import thin
-
-        data = data.copy(deep=True)
-        if hasattr(data, "posterior"):
-            thinned_posterior = thin(data.posterior, factor=thin_factor)
-            data["posterior"] = thinned_posterior
-
-    if method == "lpd":
-        if log_lik_fn is None:
-            lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples)
-        else:
-            lpd_approx_all = _compute_loo_approximation(
-                data=data,
-                var_name=var_name,
-                log_lik_fn=log_lik_fn,
-                param_names=param_names,
-                method="lpd",
-                log=log,
-            )
-    else:  # method == "plpd"
-        lpd_approx_all = _plpd_approx(
-            data=data, var_name=var_name, log_lik_fn=log_lik_fn, param_names=param_names, log=log
-        )
-
-    log_likelihood_sample = _select_obs_by_indices(log_likelihood_da, indices, obs_dims, "__obs__")
-    lpd_approx_sample = _select_obs_by_indices(lpd_approx_all, indices, obs_dims, "__obs__")
-
-    return SubsampleData(
-        log_likelihood_sample,
-        lpd_approx_sample,
-        lpd_approx_all,
-        indices,
-        subsample_size,
-    )
-
-
-def _prepare_update_subsample(
-    loo_orig,
-    data,
-    observations,
-    var_name,
-    seed,
-    method,
-    log_lik_fn,
-    param_names,
-    log,
-    thin_factor=None,
-):
-    """Prepare inputs for updating PSIS-LOO-CV with additional observations."""
-    loo_inputs = _prepare_loo_inputs(data, var_name, thin_factor)
-    old_elpd_i_da, old_pareto_k_da = _extract_loo_data(loo_orig)
-
-    log_likelihood = loo_inputs.log_likelihood
-    concat_dim = old_elpd_i_da.dims[0]
-    old_indices = np.where(~np.isnan(loo_orig.elpd_i.values.flatten()))[0]
-
-    if isinstance(observations, int):
-        # Filter out existing indices before generating new ones
-        available_indices = np.setdiff1d(np.arange(loo_inputs.n_data_points), old_indices)
-        if observations > len(available_indices):
-            raise ValueError(
-                f"Cannot add {observations} observations when only {len(available_indices)} "
-                "are available."
-            )
-        temp_indices, _ = _generate_subsample_indices(len(available_indices), observations, seed)
-        new_indices = available_indices[temp_indices]
-    else:
-        new_indices = np.asarray(observations, dtype=int)
-        if np.any(new_indices < 0) or np.any(new_indices >= loo_inputs.n_data_points):
-            raise ValueError("New indices contain out-of-bounds values.")
-        # Check for overlap with old indices
-        overlap = np.intersect1d(new_indices, old_indices)
-        if len(overlap) > 0:
-            raise ValueError(f"New indices {overlap} overlap with existing indices.")
-
-    if thin_factor is not None and log_lik_fn is not None:
-        from arviz_stats.manipulation import thin
-
-        data = data.copy(deep=True)
-        if hasattr(data, "posterior"):
-            thinned_posterior = thin(data.posterior, factor=thin_factor)
-            data["posterior"] = thinned_posterior
-
-    if method == "lpd":
-        if log_lik_fn is None:
-            lpd_approx_all = logsumexp(
-                log_likelihood, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
-            )
-        else:
-            lpd_approx_all = _compute_loo_approximation(
-                data=data,
-                var_name=loo_inputs.var_name,
-                log_lik_fn=log_lik_fn,
-                param_names=param_names,
-                method="lpd",
-                log=log,
-            )
-    else:  # method == "plpd"
-        lpd_approx_all = _plpd_approx(
-            data,
-            loo_inputs.var_name,
-            log_lik_fn,
-            param_names,
-            log,
-        )
-
-    log_likelihood_new_da = _select_obs_by_indices(
-        log_likelihood, new_indices, loo_inputs.obs_dims, "__obs__"
-    )
-
-    log_likelihood_new_ds = xr.Dataset({loo_inputs.var_name: log_likelihood_new_da})
-    combined_size = len(old_indices) + len(new_indices)
-
-    return UpdateSubsampleData(
-        log_likelihood_new_ds,
-        lpd_approx_all,
-        old_elpd_i_da,
-        old_pareto_k_da,
-        new_indices,
-        old_indices,
-        concat_dim,
-        combined_size,
-    )
-
-
 def _prepare_full_arrays(
     pointwise_values,
     pareto_k_values,
@@ -927,45 +911,6 @@ def _prepare_full_arrays(
     if elpd_loo_hat is not None:
         _warn_pointwise_loo(elpd_loo_hat, elpd_i_full.values)
     return elpd_i_full, pareto_k_full
-
-
-def _extract_loo_data(loo_orig):
-    """Extract pointwise DataArrays from original PSIS-LOO-CV object."""
-    elpd_values = loo_orig.elpd_i
-    pareto_values = loo_orig.pareto_k
-
-    valid_mask = ~np.isnan(elpd_values.values.flatten())
-    valid_indices = np.where(valid_mask)[0]
-
-    sample_dims = ["chain", "draw"]
-    obs_dims = [dim for dim in elpd_values.dims if dim not in sample_dims]
-    stacked_obs_dim = "__obs__"
-
-    if len(obs_dims) == 1:
-        obs_dim = obs_dims[0]
-        extracted_elpd = elpd_values.isel({obs_dim: valid_indices})
-    else:
-        is_already_stacked = stacked_obs_dim in elpd_values.dims
-        stacked_elpd = (
-            elpd_values if is_already_stacked else elpd_values.stack({stacked_obs_dim: obs_dims})
-        )
-        extracted_elpd = stacked_elpd.isel({stacked_obs_dim: valid_indices})
-
-    if pareto_values is not None:
-        if len(obs_dims) == 1:
-            obs_dim = obs_dims[0]
-            extracted_pareto = pareto_values.isel({obs_dim: valid_indices})
-        else:
-            is_already_stacked = stacked_obs_dim in pareto_values.dims
-            stacked_pareto = (
-                pareto_values
-                if is_already_stacked
-                else pareto_values.stack({stacked_obs_dim: obs_dims})
-            )
-            extracted_pareto = stacked_pareto.isel({stacked_obs_dim: valid_indices})
-    else:
-        extracted_pareto = xr.full_like(extracted_elpd, np.nan)
-    return extracted_elpd, extracted_pareto
 
 
 def _select_obs_by_indices(data_array, indices, dims, dim_name):
