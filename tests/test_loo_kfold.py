@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from scipy import stats
 
-from .helpers import datatree, importorskip  # noqa: F401
+from .helpers import centered_eight, datatree, importorskip  # noqa: F401
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
@@ -14,11 +14,6 @@ xr = importorskip("xarray")
 from arviz_stats import loo_kfold
 from arviz_stats.loo import SamplingWrapper
 from arviz_stats.utils import ELPDData
-
-
-@pytest.fixture(name="centered_eight", scope="session")
-def fixture_centered_eight():
-    return azb.load_arviz_data("centered_eight")
 
 
 @pytest.fixture
