@@ -2,9 +2,8 @@
 
 import warnings
 from collections import namedtuple
-from copy import deepcopy
 from collections.abc import Mapping
-from numbers import Number
+from copy import deepcopy
 
 import numpy as np
 import xarray as xr
