@@ -187,13 +187,33 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     log_q: object = None
     thin_factor: object = None
     log_weights: DataArray = None
+    n_folds: int = None
 
     def __str__(self):
         """Print elpd data in a user friendly way."""
         kind = self.kind
         scale_str = SCALE_DICT[self["scale"]]
+
+        # loo_kfold
+        if kind == "loo_kfold" and self.n_folds is not None:
+            display_kind = "kfold"
+            padding = len(scale_str) + len(display_kind) + 1
+            base = f"Computed from {self.n_folds}-fold cross validation.\n\n"
+            base += f"{{0:{padding}}} Estimate       SE\n"
+            base += f"{scale_str}_{display_kind} {{ic_value:8.2f}}  {{ic_se:7.2f}}\n"
+            base += f"p_{display_kind:{padding-2}} {{p_value:8.2f}}        -"
+            base = base.format(
+                "",
+                ic_value=self.elpd,
+                ic_se=self.se,
+                p_value=self.p,
+            )
+
+            return base
+
         padding = len(scale_str) + len(kind) + 1
 
+        # loo_subsample
         if self.subsample_size:
             base = (
                 f"Computed from {self.n_samples} by {self.subsample_size} "
@@ -229,6 +249,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
         if self.warning:
             base += "\n\nThere has been a warning during the calculation. Please check the results."
 
+        # loo
         if kind == "loo" and self.pareto_k is not None:
             bins = np.asarray([-np.inf, self.good_k, 1, np.inf])
             counts, *_ = np.histogram(self.pareto_k, bins=bins, density=False)

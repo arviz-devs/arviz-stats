@@ -6,6 +6,7 @@ try:
     from arviz_stats.accessors import *
     from arviz_stats.loo import (
         loo,
+        loo_i,
         loo_expectations,
         loo_metrics,
         loo_pit,

@@ -50,24 +50,17 @@ def loo_kfold(
         The number of folds for cross-validation. The data will be partitioned into k subsets
         of equal (or approximately equal) size.
     folds : array or DataArray, optional
-        An optional integer array or DataArray with one element per observation in the data.
-        Each element should be an integer from 1 to k indicating which fold the observation
-        belongs to. For example, with k=4 and 8 observations, one possible assignment is
-        [1,1,2,2,3,3,4,4] to put the first two observations in fold 1, next two in fold 2, etc.
-        If not provided, data will be randomly partitioned into k folds of approximately
-        equal size. DataArray inputs will be automatically flattened to 1D.
+        Manual fold assignments (1 to k) for each observation. For example, [1,1,2,2,3,3,4,4]
+        assigns first two obs to fold 1, next two to fold 2, etc. If not provided, creates k
+        random folds of equal size. Cannot be used together with `stratify_by` and `group_by`.
     stratify_by : array or DataArray, optional
-        A categorical variable to use for stratified K-fold splitting. For example, with
-        8 observations where [0,0,1,1,0,0,1,1] indicates two categories (0 and 1), the
-        algorithm ensures each fold contains approximately the same 50/50 split of 0s and 1s
-        as the full dataset. Cannot be used together with `folds` or `group_by`. DataArray
-        inputs will be automatically flattened to 1D.
+        Maintains class proportions across folds. For example, [0,0,1,1,0,0,1,1] ensures each
+        fold has 50% class 0 and 50% class 1. Cannot be used together with `folds` and `group_by`.
     group_by : array or DataArray, optional
-        A grouping variable to use for grouped K-fold splitting. For example, with
-        [1,1,2,2,3,3,4,4] representing 4 subjects with 2 observations each, all observations
-        from subject 1 will be placed in the same fold, all from subject 2 in the same fold,
-        etc. This ensures related observations stay together. Cannot be used together with
-        `folds` or `stratify_by`. DataArray inputs will be automatically flattened to 1D.
+        Grouping variable to keep related observations together in the same fold. For example,
+        [1,1,2,2,3,3] keeps all obs from group 1 in one fold, group 2 in another, etc. Useful
+        for repeated measures or clustered data. Cannot be used together with `folds` and
+        `stratify_by`.
     save_fits : bool, default=False
         If True, store the fitted models and fold indices in the returned object.
 
@@ -237,6 +230,7 @@ def loo_kfold(
         good_k=None,
         elpd_i=kfold_results.elpd_i if pointwise else None,
         pareto_k=None,
+        n_folds=k,
     )
 
     if save_fits:

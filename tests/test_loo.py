@@ -1,5 +1,7 @@
 # pylint: disable=redefined-outer-name, unused-import, unused-argument
 # ruff: noqa: F811, F401
+import copy
+
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
@@ -22,6 +24,7 @@ from arviz_stats import (
     loo,
     loo_approximate_posterior,
     loo_expectations,
+    loo_i,
     loo_metrics,
     loo_moment_match,
     loo_pit,
@@ -120,7 +123,10 @@ def test_compare_same(centered_eight, method):
 
 def test_compare_unknown_method(centered_eight, non_centered_eight):
     model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match="Invalid method 'Unknown'. Available methods: stacking, bb-pseudo-bma, pseudo-bma",
+    ):
         compare(model_dict, method="Unknown")
 
 
@@ -132,11 +138,23 @@ def test_compare_different(centered_eight, non_centered_eight, method):
     assert_allclose(np.sum(weight), 1.0)
 
 
-def test_compare_different_size(centered_eight):
-    centered_eight_subset = centered_eight.sel(school="Choate")
-    model_dict = {"centered": centered_eight, "centered__subset": centered_eight_subset}
-    with pytest.raises(ValueError):
+def test_compare_multiple_different_sizes(centered_eight):
+    centered_eight_subset1 = centered_eight.sel(school=["Choate"])
+    centered_eight_subset2 = centered_eight.sel(school=["Choate", "Deerfield"])
+    model_dict = {
+        "model_a": centered_eight,
+        "model_b": centered_eight_subset1,
+        "model_c": centered_eight,
+        "model_d": centered_eight_subset2,
+    }
+    with pytest.raises(ValueError) as exc_info:
         compare(model_dict)
+    error_msg = str(exc_info.value)
+    expected_msg = (
+        "All models must have the same number of observations, but models have inconsistent "
+        "observation counts: 'model_b' (1), 'model_d' (2), 'model_a' (8), 'model_c' (8)"
+    )
+    assert error_msg == expected_msg
 
 
 def test_compare_multiple_obs(multivariable_log_likelihood, centered_eight, non_centered_eight):
@@ -171,8 +189,45 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
         "centered": loo(centered_eight, pointwise=True),
         "non_centered": loo(non_centered_eight, pointwise=False),
     }
-    with pytest.raises(ValueError, match="should have been calculated with pointwise=True"):
+    with pytest.raises(ValueError, match="Model .* is missing pointwise ELPD values"):
         _calculate_ics(in_dict)
+
+
+def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+    kfold_result = loo(non_centered_eight, pointwise=True)
+    kfold_result = copy.deepcopy(kfold_result)
+    kfold_result.kind = "loo_kfold"
+
+    compare_dict = {
+        "loo_model": loo_result,
+        "kfold_model": kfold_result,
+    }
+
+    with pytest.warns(UserWarning, match="Comparing LOO-CV to K-fold-CV"):
+        result = compare(compare_dict)
+
+    assert len(result) == 2
+    assert "loo_model" in result.index
+    assert "kfold_model" in result.index
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_unsupported_mixed_methods(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+
+    waic_result = copy.deepcopy(loo_result)
+    waic_result.kind = "waic"
+
+    compare_dict = {
+        "loo_model": loo_result,
+        "waic_model": waic_result,
+    }
+
+    with pytest.raises(
+        ValueError, match="Cannot compare models with incompatible cross-validation methods.*waic"
+    ):
+        compare(compare_dict)
 
 
 @pytest.mark.parametrize(
@@ -858,6 +913,51 @@ def test_log_weights_reuse(centered_eight):
     metrics = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result.log_weights)
     assert metrics is not None
     assert hasattr(metrics, "mean")
+
+
+def test_loo_i(centered_eight):
+    loo_full = loo(centered_eight, pointwise=True)
+
+    result_0 = loo_i(0, centered_eight)
+    assert isinstance(result_0, ELPDData)
+    assert result_0.kind == "loo"
+    assert result_0.n_data_points == 1
+    assert result_0.n_samples == 2000
+    assert_almost_equal(result_0.elpd, loo_full.elpd_i[0].item(), decimal=10)
+    assert_almost_equal(result_0.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
+
+    result_7 = loo_i(7, centered_eight)
+    assert_almost_equal(result_7.elpd, loo_full.elpd_i[7].item(), decimal=10)
+    assert_almost_equal(result_7.pareto_k.item(), loo_full.pareto_k[7].item(), decimal=10)
+
+    schools = centered_eight.observed_data["obs"].coords["school"].values
+    label0 = schools[0].item() if hasattr(schools[0], "item") else schools[0]
+
+    result_label = loo_i({"school": label0}, centered_eight)
+    assert_almost_equal(result_label.elpd, loo_full.elpd_i[0].item(), decimal=10)
+    assert_almost_equal(result_label.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
+
+    result_scalar = loo_i(label0, centered_eight)
+    assert_almost_equal(result_scalar.elpd, loo_full.elpd_i[0].item(), decimal=10)
+    assert_almost_equal(result_scalar.pareto_k.item(), loo_full.pareto_k[0].item(), decimal=10)
+
+    with pytest.raises(IndexError):
+        loo_i(-1, centered_eight)
+
+    with pytest.raises(IndexError):
+        loo_i(len(schools), centered_eight)
+
+    with pytest.raises(KeyError):
+        loo_i(3.5, centered_eight)
+
+    with pytest.raises(ValueError, match=r"Provide selections for all observation dims:.*"):
+        loo_i({"student": 1}, centered_eight)
+
+    with pytest.raises(ValueError, match=r"Provide selections for all observation dims:.*"):
+        loo_i({"school": label0, "student": 123}, centered_eight)
+
+    with pytest.raises(KeyError):
+        loo_i((), centered_eight)
 
 
 def test_loo_jacobian(centered_eight):

@@ -67,6 +67,7 @@ you should jump to {ref}`array_stats_api` and read forward.
 
    arviz_stats.compare
    arviz_stats.loo
+   arviz_stats.loo_i
    arviz_stats.loo_approximate_posterior
    arviz_stats.loo_kfold
    arviz_stats.loo_moment_match
