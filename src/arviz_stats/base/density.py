@@ -792,6 +792,23 @@ class _DensityBase(_CoreBase):
 
         return x, y, radius
 
+    def _ecdf(self, ary, npoints, pit):
+        """Compute empirical cumulative distribution function (ECDF)."""
+        ary = ary[np.isfinite(ary)]
+        total_points = len(ary)
+        if npoints is None:
+            npoints = min(total_points, 200)
+
+        eval_points = np.linspace(np.min(ary), np.max(ary), npoints)
+
+        ary = np.sort(ary)
+        ecdf = np.searchsorted(ary, eval_points, side="right") / total_points
+
+        if pit:
+            eval_points = eval_points / eval_points.max()
+            ecdf -= eval_points
+        return eval_points, ecdf
+
     def _compute_quantiles_and_binwidth(self, values, nquantiles, binwidth=None):
         """
         Compute evenly spaced quantile values and binwidth.

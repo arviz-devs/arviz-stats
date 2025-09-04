@@ -561,6 +561,41 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
+    def ecdf(self, ary, npoints=200, pit=False, axis=-1, **kwargs):
+        """Compute empirical cumulative distribution function (ECDF).
+
+        Parameters
+        ----------
+        ary : array-like
+        npoints : int, default 200
+            Maximun number of evaluation points to use.
+        pit : bool
+            If True compute the difference between the ecdf and the uniform ecdf
+            and the x values will be normalized to the [0, 1] range.
+        axis : int, sequence of int or None, default -1
+        **kwargs
+
+        Returns
+        -------
+        x, y : array-like
+            Both `x` and `y` will have the same shape: the same as `ary` minus the dimensions
+            in `axis` plus an extra dimension of lenght `npoints`.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        ecdf_ufunc = make_ufunc(
+            self._ecdf,
+            n_output=2,
+            n_input=1,
+            n_dims=len(axes),
+        )
+        return ecdf_ufunc(
+            ary,
+            out_shape=((npoints,), (npoints,)),
+            npoints=npoints,
+            pit=pit,
+            **kwargs,
+        )
+
     def r2_score(self, y_true, y_pred):
         """Compute R² for Bayesian regression models."""
         r2_ufunc = make_ufunc(

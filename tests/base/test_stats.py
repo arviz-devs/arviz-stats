@@ -250,14 +250,14 @@ def test_ecdf(centered_eight):
     accessor = centered_eight.posterior.ds.azstats
     result = accessor.ecdf()
     assert isinstance(result, xr.Dataset)
-    assert result.sizes == {"plot_axis": 2, "quantile": 200}
+    assert result.sizes == {"plot_axis": 2, "ecdf_dim": 200, "school": 8}
 
 
 def test_ecdf_idata_varnames(centered_eight):
     accessor = centered_eight.posterior.ds.azstats
     result = accessor.filter_vars(var_names=["mu", "theta"]).ecdf()
     assert isinstance(result, xr.Dataset)
-    assert result.sizes == {"plot_axis": 2, "quantile": 200}
+    assert result.sizes == {"plot_axis": 2, "ecdf_dim": 200, "school": 8}
     assert list(result.data_vars.keys()) == ["mu", "theta"]
 
 

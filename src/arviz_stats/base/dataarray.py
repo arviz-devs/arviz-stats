@@ -262,6 +262,24 @@ class BaseDataArray:
         out = concat((x, y), dim=plot_axis)
         return out.assign_coords({"radius" if da.name is None else f"radius_{da.name}": radius})
 
+    def ecdf(self, da, npoints=200, pit=False, dim=None, **kwargs):
+        """Compute empirical cumulative distribution function on DataArray input."""
+        dims = validate_dims(dim)
+        x, y = apply_ufunc(
+            self.array_class.ecdf,
+            da,
+            kwargs={
+                "npoints": npoints,
+                "pit": pit,
+                "axis": np.arange(-len(dims), 0, 1),
+                **kwargs,
+            },
+            input_core_dims=[dims],
+            output_core_dims=[["ecdf_dim"], ["ecdf_dim"]],
+        )
+        plot_axis = DataArray(["x", "y"], dims="plot_axis")
+        return concat((x, y), dim=plot_axis)
+
     def thin_factor(self, da, target_ess=None, reduce_func="mean"):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
 
