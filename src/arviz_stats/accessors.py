@@ -6,8 +6,8 @@ from collections.abc import Hashable
 import numpy as np
 import xarray as xr
 from arviz_base.utils import _var_names
-from xarray_einstats.numba import ecdf
 
+# from xarray_einstats.numba import ecdf
 from arviz_stats.utils import get_function
 
 __all__ = ["AzStatsDsAccessor", "AzStatsDaAccessor", "AzStatsDtAccessor"]
@@ -135,18 +135,9 @@ class _BaseAccessor:
         """Compute ranks for all variables in the dataset."""
         return self._apply("compute_ranks", dim=dim, relative=relative, **kwargs)
 
-    def ecdf(self, dim=None, pit=False, **kwargs):
+    def ecdf(self, dim=None, **kwargs):
         """Compute the ecdf for all variables in the dataset."""
-        # TODO: implement ecdf here so it doesn't depend on numba
-        dt_ecdf = self._apply(ecdf, dims=dim, **kwargs).rename(ecdf_axis="plot_axis")
-        if pit:
-            x_values = dt_ecdf.sel(plot_axis="x")
-            normalized_x = x_values / x_values.max()
-            dt_ecdf = dt_ecdf.where(dt_ecdf.plot_axis != "x", normalized_x)
-            # Compute difference
-            diff_y = dt_ecdf.sel(plot_axis="y") - dt_ecdf.sel(plot_axis="x")
-            dt_ecdf = dt_ecdf.where(dt_ecdf.plot_axis != "y", diff_y)
-        return dt_ecdf
+        return self._apply("ecdf", dim=dim, **kwargs)
 
     def pareto_min_ss(self, sample_dims=None, **kwargs):
         """Compute the min sample size for all variables in the dataset."""
