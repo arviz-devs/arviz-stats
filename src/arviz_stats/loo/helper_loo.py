@@ -35,7 +35,6 @@ __all__ = [
     "_select_obs_by_indices",
     "_select_obs_by_coords",
     "_prepare_full_arrays",
-    "_extract_crps_inputs",
     "_validate_crps_input",
 ]
 
@@ -1002,16 +1001,10 @@ def _reconstruct_upars(upars_new_values, props):
     )
 
 
-def _extract_crps_inputs(data, var_name):
-    """Extract data groups."""
-    data = convert_to_datatree(data)
-    loo_inputs = _prepare_loo_inputs(data, var_name)
-    var_name = loo_inputs.var_name
-    log_likelihood = loo_inputs.log_likelihood
-
-    y_pred = extract(data, group="posterior_predictive", var_names=var_name, combined=False)
-    y_obs = extract(data, group="observed_data", var_names=var_name, combined=False)
-    return data, var_name, log_likelihood, y_pred, y_obs
+def _has_nan_slice(da, dim):
+    """Check if DataArray has NaN slices along a dimension."""
+    other = tuple(dd for dd in da.dims if dd != dim)
+    return bool(da.isnull().all(dim=other).any()) if other else bool(da.isnull().any())
 
 
 def _validate_crps_input(y_pred, y_obs, log_likelihood, *, sample_dims, obs_dims):
@@ -1028,10 +1021,6 @@ def _validate_crps_input(y_pred, y_obs, log_likelihood, *, sample_dims, obs_dims
     if missing_obs:
         raise ValueError(f"Missing observation dimension '{missing_obs[0]}' in inputs")
 
-    def _has_nan_slice_along(da, dim):
-        other = tuple(dd for dd in da.dims if dd != dim)
-        return bool(da.isnull().all(dim=other).any()) if other else bool(da.isnull().any())
-
     ypred_obs_aligned, yobs_aligned = xr.align(y_pred, y_obs, join="inner")
     obs_size_mismatch = [
         d
@@ -1043,7 +1032,7 @@ def _validate_crps_input(y_pred, y_obs, log_likelihood, *, sample_dims, obs_dims
     if obs_size_mismatch:
         raise ValueError(f"Size mismatch in observation dim '{obs_size_mismatch[0]}'")
 
-    nan_padded_obs = [d for d in obs_dims if _has_nan_slice_along(y_obs, d)]
+    nan_padded_obs = [d for d in obs_dims if _has_nan_slice(y_obs, d)]
     if nan_padded_obs:
         raise ValueError(f"Size mismatch in observation dim '{nan_padded_obs[0]}'")
 
@@ -1063,6 +1052,6 @@ def _validate_crps_input(y_pred, y_obs, log_likelihood, *, sample_dims, obs_dims
             raise ValueError(f"Size mismatch in sample dimension '{d0}'")
         raise ValueError(f"Size mismatch in observation dim '{d0}'")
 
-    nan_padded_sample = [d for d in sample_dims if _has_nan_slice_along(log_likelihood, d)]
+    nan_padded_sample = [d for d in sample_dims if _has_nan_slice(log_likelihood, d)]
     if nan_padded_sample:
         raise ValueError(f"Size mismatch in sample dimension '{nan_padded_sample[0]}'")

@@ -4,10 +4,10 @@ from collections import namedtuple
 
 import numpy as np
 import xarray as xr
+from arviz_base import convert_to_datatree, extract
 from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.helper_loo import (
-    _extract_crps_inputs,
     _get_r_eff,
     _prepare_loo_inputs,
     _validate_crps_input,
@@ -167,9 +167,15 @@ def loo_score(
     if kind not in {"crps", "scrps"}:
         raise ValueError(f"kind must be either 'crps' or 'scrps'. Got {kind}")
 
-    data, var_name, log_likelihood, y_pred, y_obs = _extract_crps_inputs(data, var_name)
+    data = convert_to_datatree(data)
 
     loo_inputs = _prepare_loo_inputs(data, var_name)
+    var_name = loo_inputs.var_name
+    log_likelihood = loo_inputs.log_likelihood
+
+    y_pred = extract(data, group="posterior_predictive", var_names=var_name, combined=False)
+    y_obs = extract(data, group="observed_data", var_names=var_name, combined=False)
+
     n_samples = loo_inputs.n_samples
     sample_dims = loo_inputs.sample_dims
     obs_dims = loo_inputs.obs_dims
