@@ -32,8 +32,17 @@ def loo_score(
     weights, but returns its negative as a maximization score (larger is better). This assumes
     that the PSIS-LOO-CV approximation is working well.
 
-    The scoring rules are described in [1]_, [2]_. The PSIS-LOO-CV method is described in
-    [3]_, [4]_.
+    Specifically, the PWM identity used here is
+
+    .. math::
+
+        \operatorname{CRPS}_{\text{loo}}(F, y)
+        = E_{\text{loo}}\left[|X - y|\right]
+        + E_{\text{loo}}[X]
+        - 2\cdot E_{\text{loo}} \left[X\,F_{\text{loo}}(X-) \right].
+
+    The PWM identity is described in [3]_, traditional CRPS and SCRPS are described in
+    [1]_ and [2]_, and the PSIS-LOO-CV method is described in [4]_ and [5]_.
 
     Parameters
     ----------
@@ -156,11 +165,14 @@ def loo_score(
     .. [2] Gneiting, T., & Raftery, A. E. (2007). *Strictly Proper Scoring Rules,
        Prediction, and Estimation*. Journal of the American Statistical Association,
        102(477), 359–378. https://doi.org/10.1198/016214506000001437
-    .. [3] Vehtari, A., Gelman, A., & Gabry, J. (2017). *Practical Bayesian model
+    .. [3] Taillardat M, Mestre O, Zamo M, Naveau P (2016). *Calibrated ensemble forecasts using
+       quantile regression forests and ensemble model output statistics*. Mon Weather Rev
+       144(6):2375–2393. https://doi.org/10.1175/MWR-D-15-0260.1
+    .. [4] Vehtari, A., Gelman, A., & Gabry, J. (2017). *Practical Bayesian model
        evaluation using leave-one-out cross-validation and WAIC*. Statistics and Computing,
        27(5), 1413–1432. https://doi.org/10.1007/s11222-016-9696-4
        arXiv preprint https://arxiv.org/abs/1507.04544
-    .. [4] Vehtari, A., et al. (2024). *Pareto Smoothed Importance Sampling*. Journal of
+    .. [5] Vehtari, A., et al. (2024). *Pareto Smoothed Importance Sampling*. Journal of
        Machine Learning Research, 25(72). https://jmlr.org/papers/v25/19-556.html
        arXiv preprint https://arxiv.org/abs/1507.02646
     """
