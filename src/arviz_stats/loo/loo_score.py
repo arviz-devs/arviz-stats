@@ -39,7 +39,7 @@ def loo_score(
         \operatorname{CRPS}_{\text{loo}}(F, y)
         = E_{\text{loo}}\left[|X - y|\right]
         + E_{\text{loo}}[X]
-        - 2\cdot E_{\text{loo}} \left[X\,F_{\text{loo}}(X-) \right].
+        - 2\cdot E_{\text{loo}} \left[X\,F_{\text{loo}}(X') \right].
 
     The PWM identity is described in [3]_, traditional CRPS and SCRPS are described in
     [1]_ and [2]_, and the PSIS-LOO-CV method is described in [4]_ and [5]_.
@@ -61,6 +61,11 @@ def loo_score(
         Pareto tail indices corresponding to the PSIS smoothing. Same shape as the log-likelihood
         data. If not provided, they will be computed via PSIS-LOO-CV. Must be provided together with
         ``log_weights`` or both must be None.
+    kind : str, default "crps"
+        The kind of score to compute. Available options are:
+
+        - 'crps': continuous ranked probability score. Default.
+        - 'scrps': scale-invariant continuous ranked probability score.
     pointwise : bool, default False
         If True, include per-observation score values in the return object.
     round_to : int or str, default "2g"
@@ -112,11 +117,11 @@ def loo_score(
 
     .. math::
 
-        E_{\text{loo}}[g(X)] := \sum_{i=1}^S w_i\, g(x_i), \qquad
-        F_{\text{loo}}(x-) := \sum_{i: x_i < x} w_i.
+        E_{\text{loo}}[g(X)] := \sum_{i=1}^S w_i\, g(x_i), \quad
+        F_{\text{loo}}(x') := \sum_{i: x_i < x} w_i.
 
     The first probability-weighted moment is
-    :math:`b_1 := E_{\text{loo}}\left[X\,F_{\text{loo}}(X-)\right]`.
+    :math:`b_1 := E_{\text{loo}}\left[X\,F_{\text{loo}}(X')\right]`.
     With this, the nonnegative CRPS under PSIS-LOO-CV is
 
     .. math::
@@ -132,7 +137,7 @@ def loo_score(
     .. math::
 
         \Delta_{\text{loo}} =
-        2\,E_{\text{loo}}\left[\,X\,\left(2F_{\text{loo}}(X-) - 1\right)\,\right].
+        2\,E_{\text{loo}}\left[\,X\,\left(2F_{\text{loo}}(X') - 1\right)\,\right].
 
     A finite-sample weighted order-statistic version of this is used in the function and is given by
 
@@ -233,8 +238,8 @@ def loo_score(
     _warn_pareto_k(khat_da, n_samples)
 
     n_pts = int(np.prod([pointwise_scores.sizes[d] for d in pointwise_scores.dims]))
-    mean = float(pointwise_scores.mean().values)
-    se = float(pointwise_scores.std(ddof=0).values / (n_pts**0.5))
+    mean = pointwise_scores.mean().values.item()
+    se = (pointwise_scores.std(ddof=0).values / (n_pts**0.5)).item()
     name = "SCRPS" if kind == "scrps" else "CRPS"
 
     if pointwise:
@@ -254,7 +259,7 @@ def _compute_pwm_first_moment_b1(values_sorted, weights):
     values_sorted, weights_sorted = _sort_values_and_normalize_weights(values_sorted, weights)
     cumulative_weights = np.cumsum(weights_sorted)
     f_minus = cumulative_weights - weights_sorted
-    return float(np.sum(weights_sorted * values_sorted * f_minus))
+    return np.sum(weights_sorted * values_sorted * f_minus).item()
 
 
 def _compute_weighted_gini_mean_difference(values, weights):
@@ -263,7 +268,7 @@ def _compute_weighted_gini_mean_difference(values, weights):
     cumulative_weights = np.cumsum(weights_sorted)
     cumulative_before = cumulative_weights - weights_sorted
     bracket = 2.0 * cumulative_before + weights_sorted - 1.0
-    return float(2.0 * np.sum(weights_sorted * values_sorted * bracket))
+    return (2.0 * np.sum(weights_sorted * values_sorted * bracket)).item()
 
 
 def _loo_weighted_mean(values, log_weights, dim):
