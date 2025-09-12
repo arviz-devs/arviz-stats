@@ -9,6 +9,7 @@ try:
         loo_i,
         loo_expectations,
         loo_metrics,
+        loo_score,
         loo_pit,
         loo_approximate_posterior,
         loo_subsample,

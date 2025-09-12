@@ -35,6 +35,7 @@ __all__ = [
     "_select_obs_by_indices",
     "_select_obs_by_coords",
     "_prepare_full_arrays",
+    "_validate_crps_input",
 ]
 
 LooInputs = namedtuple(
@@ -998,3 +999,59 @@ def _reconstruct_upars(upars_new_values, props):
         dims=props["dims"],
         coords=props["coords"],
     )
+
+
+def _has_nan_slice(da, dim):
+    """Check if DataArray has NaN slices along a dimension."""
+    other = tuple(dd for dd in da.dims if dd != dim)
+    return bool(da.isnull().all(dim=other).any()) if other else bool(da.isnull().any())
+
+
+def _validate_crps_input(y_pred, y_obs, log_likelihood, *, sample_dims, obs_dims):
+    """Shape and dimension checks."""
+    missing_sample = [d for d in sample_dims if d not in y_pred.dims]
+    if missing_sample:
+        raise ValueError(f"y_pred must include sample dimension '{missing_sample[0]}'")
+
+    missing_obs = [
+        d
+        for d in obs_dims
+        if (d not in y_pred.dims or d not in y_obs.dims or d not in log_likelihood.dims)
+    ]
+    if missing_obs:
+        raise ValueError(f"Missing observation dimension '{missing_obs[0]}' in inputs")
+
+    ypred_obs_aligned, yobs_aligned = xr.align(y_pred, y_obs, join="inner")
+    obs_size_mismatch = [
+        d
+        for d in obs_dims
+        if (
+            ypred_obs_aligned.sizes[d] != y_pred.sizes[d] or yobs_aligned.sizes[d] != y_obs.sizes[d]
+        )
+    ]
+    if obs_size_mismatch:
+        raise ValueError(f"Size mismatch in observation dim '{obs_size_mismatch[0]}'")
+
+    nan_padded_obs = [d for d in obs_dims if _has_nan_slice(y_obs, d)]
+    if nan_padded_obs:
+        raise ValueError(f"Size mismatch in observation dim '{nan_padded_obs[0]}'")
+
+    ypred_ll_aligned, ll_aligned = xr.align(y_pred, log_likelihood, join="inner")
+    dims_to_check = (*sample_dims, *obs_dims)
+    ll_size_mismatch = [
+        d
+        for d in dims_to_check
+        if (
+            ypred_ll_aligned.sizes[d] != y_pred.sizes[d]
+            or ll_aligned.sizes[d] != log_likelihood.sizes[d]
+        )
+    ]
+    if ll_size_mismatch:
+        d0 = ll_size_mismatch[0]
+        if d0 in sample_dims:
+            raise ValueError(f"Size mismatch in sample dimension '{d0}'")
+        raise ValueError(f"Size mismatch in observation dim '{d0}'")
+
+    nan_padded_sample = [d for d in sample_dims if _has_nan_slice(log_likelihood, d)]
+    if nan_padded_sample:
+        raise ValueError(f"Size mismatch in sample dimension '{nan_padded_sample[0]}'")
