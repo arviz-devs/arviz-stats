@@ -981,6 +981,55 @@ def test_loo_i(centered_eight):
         loo_i((), centered_eight)
 
 
+def test_loo_i_with_log_lik_fn(centered_eight):
+    sigma = np.array([15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0])
+    sigma_da = xr.DataArray(
+        sigma, dims=["school"], coords={"school": centered_eight.observed_data.school.values}
+    )
+    centered_eight["constant_data"] = (
+        centered_eight["constant_data"].to_dataset().assign(sigma=sigma_da)
+    )
+
+    def custom_log_lik(observed_i, data):
+        school_coord = observed_i.coords["school"].values.item()
+        y_value = observed_i.values.item()
+        theta_samples = data.posterior["theta"].sel(school=school_coord)
+        obs_sd = data.constant_data["sigma"].sel(school=school_coord).values
+
+        return xr.DataArray(
+            sp.stats.norm.logpdf(y_value, theta_samples.values, obs_sd),
+            dims=["chain", "draw"],
+            coords={"chain": theta_samples.chain, "draw": theta_samples.draw},
+        )
+
+    result_standard = loo_i(0, centered_eight, var_name="obs")
+    result_custom = loo_i(0, centered_eight, var_name="obs", log_lik_fn=custom_log_lik)
+    assert_almost_equal(result_standard.elpd, result_custom.elpd, decimal=10)
+    assert_almost_equal(result_standard.pareto_k, result_custom.pareto_k, decimal=10)
+
+    result_standard = loo_i({"school": "Choate"}, centered_eight, var_name="obs")
+    result_custom = loo_i(
+        {"school": "Choate"}, centered_eight, var_name="obs", log_lik_fn=custom_log_lik
+    )
+    assert_almost_equal(result_standard.elpd, result_custom.elpd, decimal=10)
+    assert_almost_equal(result_standard.pareto_k, result_custom.pareto_k, decimal=10)
+
+    def bad_log_lik_wrong_type(observed_i, data):
+        return np.array([1, 2, 3])
+
+    with pytest.raises(TypeError, match="log_lik_fn must return an xarray.DataArray"):
+        loo_i(0, centered_eight, var_name="obs", log_lik_fn=bad_log_lik_wrong_type)
+
+    def bad_log_lik_wrong_dims(observed_i, data):
+        return xr.DataArray(np.ones((10, 20)), dims=["wrong1", "wrong2"])
+
+    with pytest.raises(ValueError, match="log_lik_fn must return DataArray with dimensions"):
+        loo_i(0, centered_eight, var_name="obs", log_lik_fn=bad_log_lik_wrong_dims)
+
+    with pytest.raises(TypeError, match="log_lik_fn must be a callable"):
+        loo_i(0, centered_eight, var_name="obs", log_lik_fn="not a function")
+
+
 def test_loo_jacobian(centered_eight):
     loo_no_jacobian = loo(centered_eight, pointwise=True)
 

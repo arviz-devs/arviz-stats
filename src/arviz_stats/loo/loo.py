@@ -1,5 +1,6 @@
 """Pareto-smoothed importance sampling LOO (PSIS-LOO-CV)."""
 
+import xarray as xr
 from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
@@ -173,6 +174,7 @@ def loo_i(
     data,
     var_name=None,
     reff=None,
+    log_lik_fn=None,
     log_weights=None,
     pareto_k=None,
 ):
@@ -193,13 +195,20 @@ def loo_i(
           dimensions. Uses ``.sel`` semantics.
         - **scalar label**: Only when there is exactly one observation dimension.
     data : DataTree or InferenceData
-        Input data. It should contain the posterior and the log_likelihood groups.
+        Input data. It should contain the posterior and the ``log_likelihood`` group.
     var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
     reff : float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
+    log_lik_fn : callable, optional
+        Custom log-likelihood function for a single observation. The signature must be
+        ``log_lik_fn(observed, data)`` where ``observed`` is the observed data and ``data``
+        is the full :class:`~arviz_base.DataTree` or :class:`~arviz_base.InferenceData`.
+        The function must return an :class:`~xarray.DataArray` with dimensions ``("chain", "draw")``
+        containing the per-draw log-likelihood values for that single observation. When provided,
+        ``loo_i`` uses this function instead of the ``log_likelihood`` group.
     log_weights : DataArray, optional
         Smoothed log weights for observation i. If not provided, will be computed using PSIS.
         Must be provided together with pareto_k or both must be None.
@@ -299,7 +308,55 @@ def loo_i(
     if reff is None:
         reff = _get_r_eff(data, loo_inputs.n_samples)
 
-    log_lik_i = _get_log_likelihood_i(loo_inputs.log_likelihood, i, loo_inputs.obs_dims)
+    if log_lik_fn is None:
+        log_lik_i = _get_log_likelihood_i(loo_inputs.log_likelihood, i, loo_inputs.obs_dims)
+    else:
+        if not callable(log_lik_fn):
+            raise TypeError("log_lik_fn must be a callable function")
+
+        if not hasattr(data, "observed_data"):
+            raise ValueError("data must have an observed_data group when using log_lik_fn")
+
+        if loo_inputs.var_name not in data.observed_data:
+            raise ValueError(f"Variable '{loo_inputs.var_name}' not found in observed_data")
+
+        observed_full = data.observed_data[loo_inputs.var_name]
+        observed_i = _get_log_likelihood_i(observed_full, i, loo_inputs.obs_dims)
+
+        try:
+            log_lik_i = log_lik_fn(observed_i, data)
+        except Exception as e:
+            coord_info = []
+            for dim in loo_inputs.obs_dims:
+                if dim in observed_i.coords:
+                    coord_info.append(f"{dim}={observed_i.coords[dim].values}")
+            coord_str = ", ".join(coord_info) if coord_info else f"index {i}"
+            raise RuntimeError(
+                f"Error calling log_lik_fn for observation at {coord_str}: {e}"
+            ) from e
+
+        if not isinstance(log_lik_i, xr.DataArray):
+            raise TypeError(
+                f"log_lik_fn must return an xarray.DataArray, got {type(log_lik_i).__name__}"
+            )
+
+        expected_dims = set(loo_inputs.sample_dims)
+        actual_dims = set(log_lik_i.dims)
+        if actual_dims != expected_dims:
+            raise ValueError(
+                f"log_lik_fn must return DataArray with dimensions "
+                f"{tuple(loo_inputs.sample_dims)}, "
+                f"got {tuple(log_lik_i.dims)}"
+            )
+
+        for dim in loo_inputs.sample_dims:
+            expected_size = loo_inputs.log_likelihood.sizes[dim]
+            actual_size = log_lik_i.sizes[dim]
+            if actual_size != expected_size:
+                raise ValueError(
+                    f"log_lik_fn returned DataArray with {dim} size {actual_size}, "
+                    f"expected {expected_size}"
+                )
 
     if (log_weights is None) != (pareto_k is None):
         raise ValueError(
