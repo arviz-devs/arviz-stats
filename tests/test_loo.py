@@ -623,6 +623,26 @@ def test_update_loo_subsample(centered_eight_with_sigma):
     assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == 6
 
 
+@pytest.mark.parametrize("thin", [None, 2, "auto"])
+def test_loo_subsample_thin_parameter(centered_eight_with_sigma, thin):
+    result = loo_subsample(
+        centered_eight_with_sigma,
+        observations=4,
+        var_name="obs",
+        thin=thin,
+        seed=42,
+    )
+
+    assert isinstance(result, ELPDData)
+    assert result.kind == "loo"
+    assert -40 < result.elpd < -25
+    assert result.subsample_size == 4
+
+    if thin is not None:
+        assert hasattr(result, "thin_factor")
+        assert result.thin_factor == thin
+
+
 def test_loo_subsample_validation_errors(centered_eight):
     with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
         loo_subsample(centered_eight, observations=0, var_name="obs")

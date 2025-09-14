@@ -88,11 +88,11 @@ def loo_subsample(
 
         - ``lpd``: Use standard log predictive density approximation (default)
         - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
-    thin: int, optional
-        Thinning factor for posterior draws. If specified, the posterior will be thinned
-        by this factor to reduce computation time. If None (default), all posterior draws are used.
-        This value is stored in the returned ``ELPDData`` object and will be automatically used by
-        ``update_subsample``.
+    thin: int or str, optional
+        Thinning factor for posterior draws. Can be an integer to thin by that factor,
+        "auto" to automatically determine thinning based on bulk and tail ESS, or None
+        (default) to use all posterior draws. This value is stored in the returned
+        ``ELPDData`` object and will be automatically used by ``update_subsample``.
     log_lik_fn : callable, optional
         Function that computes the log-likelihood for observations given posterior parameters.
         Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
