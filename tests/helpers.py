@@ -1,3 +1,4 @@
+# pylint: disable=redefined-outer-name
 """Test related helper functions."""
 
 import os
@@ -238,3 +239,27 @@ def datatree_binary():
 def fake_dt():
     """Fixture for a fake posterior."""
     return azb.testing.fake_dt()
+
+
+@pytest.fixture(scope="session")
+def centered_eight():
+    """Fixture for centered_eight data."""
+    return azb.load_arviz_data("centered_eight")
+
+
+@pytest.fixture(scope="session")
+def non_centered_eight():
+    """Fixture for non_centered_eight data."""
+    return azb.load_arviz_data("non_centered_eight")
+
+
+@pytest.fixture(scope="module")
+def centered_eight_with_sigma(centered_eight):
+    """Fixture for centered_eight data with sigma values."""
+    sigma_values = np.array([15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0])
+    sigma_da = importorskip("xarray").DataArray(
+        sigma_values, dims=["school"], coords={"school": centered_eight.observed_data.school.values}
+    )
+    data = centered_eight.copy()
+    data["constant_data"] = data["constant_data"].to_dataset().assign(sigma=sigma_da)
+    return data

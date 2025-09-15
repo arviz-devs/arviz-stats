@@ -86,26 +86,40 @@ def loo_subsample(
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
-        - 'lpd': Use standard log predictive density approximation (default)
-        - 'plpd': Use Point Log Predictive Density approximation which requires a ``log_lik_fn``.
-    thin: int, optional
-        Thinning factor for posterior draws. If specified, the posterior will be thinned
-        by this factor to reduce computation time. For example, using thin=2 will use
-        every 2nd draw. If None (default), all posterior draws are used. This value is stored
-        in the returned ELPDData object and will be automatically used by ``update_subsample``.
+        - ``lpd``: Use standard log predictive density approximation (default)
+        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
+    thin: int or str, optional
+        Thinning factor for posterior draws. Can be an integer to thin by that factor,
+        "auto" to automatically determine thinning based on bulk and tail ESS, or None
+        (default) to use all posterior draws. This value is stored in the returned
+        ``ELPDData`` object and will be automatically used by ``update_subsample``.
     log_lik_fn : callable, optional
-        A function that computes the log-likelihood for a single observation given the
-        mean values of posterior parameters. Required only when ``method="plpd"``.
-        The function must accept the observed data value for a single point as its
-        first argument (scalar). Subsequent arguments must correspond to the mean
-        values of the posterior parameters specified by ``param_names``, passed in the
-        same order. It should return a single scalar log-likelihood value.
+        Function that computes the log-likelihood for observations given posterior parameters.
+        Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
+        The function signature is ``log_lik_fn(observations, data)`` where observations
+        is a :class:`~xarray.DataArray` of observed data and data is a
+        :class:`~xarray.DataTree` object. For ``method="plpd"``, posterior means are computed
+        automatically and passed in the posterior group. For ``method="lpd"``, full posterior
+        samples are passed. All other groups remain unchanged for direct access.
     param_names : list, optional
-        Only used when ``method="plpd"``. List of parameter names to extract from
-        the posterior. If None, all parameters are used.
+        List of parameter names to extract from the posterior. If None, all parameters are used.
+        Recommended to pass the required parameter names from the posterior group that are
+        necessary for the log-likelihood function.
     log: bool, optional
-        Only used when ``method="plpd"``. Whether the ``log_lik_fn`` returns
-        log-likelihood (True) or likelihood (False). Default is True.
+        Whether the ``log_lik_fn`` returns log-likelihood (True) or likelihood (False).
+        Default is True.
+
+    Warnings
+    --------
+    When using custom log-likelihood functions with auxiliary data (e.g., measurement errors,
+    covariates, or any observation-specific parameters), that data must be stored in
+    the ``constant_data`` group of your DataTree/InferenceData object. During sub-sampling,
+    data from this group is automatically aligned with the subset of observations being evaluated.
+    This ensures that when computing the log-likelihood for observation `i`, the corresponding
+    auxiliary data is correctly matched.
+
+    If auxiliary data is not properly placed in this group, indexing mismatches can occur,
+    leading to incorrect likelihood calculations.
 
     Returns
     -------
@@ -151,23 +165,30 @@ def loo_subsample(
 
         In [2]: loo_results.elpd_i
 
-    We can also use the PLPD approximation method with a custom log-likelihood function.
-    We need to define a function that computes the log-likelihood for a single observation
-    given the mean values of posterior parameters. For the Eight Schools model, we define a
-    function that computes the likelihood for each observation using the *global mean* of the
-    parameters (e.g., the overall mean `theta`):
+    We can also use custom log-likelihood functions with both `lpd` and `plpd` methods. Passing a
+    custom log-likelihood function is required for the `plpd` method and optional for the `lpd`
+    method. Note that in this example, the constant_data group already exists in this data object
+    so we can add the sigma data array to it. In other cases, you may need to create the
+    constant_data group to store your auxiliary data:
 
     .. ipython::
 
         In [1]: import numpy as np
-           ...: from arviz_stats import loo_subsample
-           ...: from arviz_base import load_arviz_data
-           ...: from scipy.stats import norm
-           ...: data = load_arviz_data("centered_eight")
+           ...: import xarray as xr
+           ...: from scipy import stats
            ...:
-           ...: def log_lik_fn(y, theta):
-           ...:     sigma = 12.5  # Using a fixed sigma for simplicity
-           ...:     return norm.logpdf(y, loc=theta, scale=sigma)
+           ...: sigma = np.array([15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0])
+           ...: sigma_da = xr.DataArray(sigma,
+           ...:                         dims=["school"],
+           ...:                         coords={"school": data.observed_data.school.values})
+           ...: data['constant_data'] = (
+           ...:     data['constant_data'].to_dataset().assign(sigma=sigma_da)
+           ...: )
+           ...:
+           ...: def log_lik_fn(obs_da, data):
+           ...:     theta = data.posterior["theta"]
+           ...:     sigma = data.constant_data["sigma"]
+           ...:     return stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
            ...:
            ...: loo_results = loo_subsample(
            ...:     data,
@@ -180,11 +201,28 @@ def loo_subsample(
            ...: )
            ...: loo_results
 
+    We can also use the `lpd` approximation with a custom log-likelihood function, which receives
+    full posterior samples. This should match the results from the default method using the full,
+    pre-computed log-likelihood.
+
+    Passing a custom log-likelihood function is optional for the `lpd` method, but it is recommended
+    in the large data case so that we can compute the log-likelihood on the fly:
+
+    .. ipython::
+
+        In [2]: loo_results_lpd = loo_subsample(
+           ...:     data,
+           ...:     observations=4,
+           ...:     var_name="obs",
+           ...:     method="lpd",
+           ...:     log_lik_fn=log_lik_fn,
+           ...:     pointwise=True
+           ...: )
+           ...: loo_results_lpd
+
     See Also
     --------
     loo : Standard PSIS-LOO-CV.
-    loo_approximate_posterior : PSIS-LOO-CV for approximate posteriors.
-    compare : Compare models based on ELPD.
     update_subsample : Update a previously computed sub-sampled LOO-CV.
 
     References
@@ -230,6 +268,7 @@ def loo_subsample(
         loo_inputs.sample_dims,
         loo_inputs.n_data_points,
         loo_inputs.n_samples,
+        thin,
     )
 
     sample_ds = xr.Dataset({loo_inputs.var_name: subsample_data.log_likelihood_sample})
@@ -257,21 +296,11 @@ def loo_subsample(
                 if loo_inputs.var_name in log_weights:
                     log_weights = log_weights[loo_inputs.var_name]
 
-            if len(loo_inputs.obs_dims) > 1:
-                stacked_obs_dim = "__obs__"
-                log_weights_stacked = log_weights.stack({stacked_obs_dim: loo_inputs.obs_dims})
-                log_weights_sample = _select_obs_by_indices(
-                    log_weights_stacked, subsample_data.indices, [stacked_obs_dim], stacked_obs_dim
-                )
-                log_weights_sample = log_weights_sample.unstack(stacked_obs_dim)
-            else:
-                obs_dim = loo_inputs.obs_dims[0]
-                log_weights_sample = _select_obs_by_indices(
-                    log_weights, subsample_data.indices, loo_inputs.obs_dims, obs_dim
-                )
+            log_weights_sample = _select_obs_by_indices(
+                log_weights, subsample_data.indices, loo_inputs.obs_dims, "__obs__"
+            )
 
             log_weights_sample_ds = xr.Dataset({loo_inputs.var_name: log_weights_sample})
-
             _, pareto_k_ds = sample_ds.azstats.psislw(r_eff=reff, dim=loo_inputs.sample_dims)
 
             log_weights_ds = log_weights_sample_ds + sample_ds
@@ -407,7 +436,7 @@ def update_subsample(
     log_weights : DataArray or ELPDData, optional
         Smoothed log weights. Can be either:
 
-        - A DataArray with the same shape as the log likelihood data
+        - A :class:`~xarray.DataArray` with the same shape as the log likelihood data
         - An ELPDData object from a previous :func:`arviz_stats.loo` call.
 
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
@@ -416,21 +445,35 @@ def update_subsample(
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
-        - 'lpd': Use standard log predictive density approximation (default)
-        - 'plpd': Use Point Log Predictive Density approximation which requires a ``log_lik_fn``.
+        - ``lpd``: Use standard log predictive density approximation (default)
+        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
     log_lik_fn : callable, optional
-        A function that computes the log-likelihood for a single observation given the
-        mean values of posterior parameters. Required only when ``method="plpd"``.
-        The function must accept the observed data value for a single point as its
-        first argument (scalar). Subsequent arguments must correspond to the mean
-        values of the posterior parameters specified by ``param_names``, passed in the
-        same order. It should return a single scalar log-likelihood value.
+        Function that computes the log-likelihood for observations given posterior parameters.
+        Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
+        The function signature is ``log_lik_fn(observations, datatree)`` where observations
+        is a :class:`~xarray.DataArray` of observed data and datatree is a
+        :class:`~xarray.DataTree` object. For ``method="plpd"``, posterior means are computed
+        automatically and passed in the posterior group. For ``method="lpd"``, full posterior
+        samples are passed. All other groups remain unchanged for direct access.
+        Recommended to pass the required parameter names from the posterior group that are
+        necessary for the log-likelihood function.
     param_names: list, optional
-        Only used when ``method="plpd"``. List of parameter names to extract from
-        the posterior. If None, all parameters are used.
+        List of parameter names to extract from the posterior. If None, all parameters are used.
     log: bool, optional
-        Only used when ``method="plpd"``. Whether the ``log_lik_fn`` returns
-        log-likelihood (True) or likelihood (False). Default is True.
+        Whether the ``log_lik_fn`` returns log-likelihood (True) or likelihood (False).
+        Default is True.
+
+    Warnings
+    --------
+    When using custom log-likelihood functions with auxiliary data (e.g., measurement errors,
+    covariates, or any observation-specific parameters), that data must be stored in
+    the ``constant_data`` group of your DataTree/InferenceData object. During subsampling,
+    data from this group is automatically aligned with the subset of observations being evaluated.
+    This ensures that when computing the log-likelihood for observation i, the corresponding
+    auxiliary data is correctly matched.
+
+    If auxiliary data is not properly placed in this group, indexing mismatches will occur,
+    leading to incorrect likelihood calculations.
 
     Returns
     -------
@@ -476,7 +519,6 @@ def update_subsample(
     --------
     loo : Exact PSIS-LOO cross-validation.
     loo_subsample : PSIS-LOO-CV with subsampling.
-    compare : Compare models based on ELPD.
 
     References
     ----------
@@ -499,7 +541,7 @@ def update_subsample(
     thin = getattr(loo_orig, "thin_factor", None)
     loo_inputs = _prepare_loo_inputs(data, var_name, thin)
     update_data = _prepare_update_subsample(
-        loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log
+        loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log, thin
     )
 
     if reff is None:
@@ -521,18 +563,9 @@ def update_subsample(
             if loo_inputs.var_name in log_weights:
                 log_weights = log_weights[loo_inputs.var_name]
 
-        if len(loo_inputs.obs_dims) > 1:
-            stacked_obs_dim = "__obs__"
-            log_weights_stacked = log_weights.stack({stacked_obs_dim: loo_inputs.obs_dims})
-            log_weights_new = _select_obs_by_indices(
-                log_weights_stacked, update_data.new_indices, [stacked_obs_dim], stacked_obs_dim
-            )
-            log_weights_new = log_weights_new.unstack(stacked_obs_dim)
-        else:
-            obs_dim = loo_inputs.obs_dims[0]
-            log_weights_new = _select_obs_by_indices(
-                log_weights, update_data.new_indices, loo_inputs.obs_dims, obs_dim
-            )
+        log_weights_new = _select_obs_by_indices(
+            log_weights, update_data.new_indices, loo_inputs.obs_dims, "__obs__"
+        )
 
     if log_weights_new is None:
         log_weights_new_ds, _ = update_data.log_likelihood_new.azstats.psislw(
