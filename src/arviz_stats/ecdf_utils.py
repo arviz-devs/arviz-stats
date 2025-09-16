@@ -209,26 +209,34 @@ def ln_binomial(n, k):
 def hypergeometric_cdf(x_val, population, draws, successes):
     """Compute the hypergeometric cumulative distribution function."""
     k_min = max(0, draws + successes - population)
+    k_max = min(successes, draws)
 
     if x_val < k_min:
         return 0.0
-    if x_val >= min(successes, draws):
+    if x_val >= k_max:
         return 1.0
 
-    cdf = np.exp(
+    log_p = (
         ln_binomial(successes, k_min)
         + ln_binomial(population - successes, draws - k_min)
         - ln_binomial(population, draws)
     )
+    log_cdf = log_p
 
-    current_prob = cdf
-    if cdf > 0.0:
-        for k in range(k_min + 1, x_val + 1):
-            if k <= successes and k <= draws and (population - successes - draws + k) > 0:
-                ratio = ((successes - k + 1) * (draws - k + 1)) / (
-                    k * (population - successes - draws + k)
-                )
-                current_prob *= ratio
-                cdf += current_prob
-        return min(cdf, 1.0)
-    return np.nan
+    for k in range(k_min + 1, x_val + 1):
+        denom = k * (population - successes - draws + k)
+        if denom > 0:
+            log_ratio = np.log(successes - k + 1) + np.log(draws - k + 1) - np.log(denom)
+            log_p += log_ratio
+
+        if log_cdf > log_p:
+            log_cdf = log_cdf + np.log1p(np.exp(log_p - log_cdf))
+        else:
+            log_cdf = log_p + np.log1p(np.exp(log_cdf - log_p))
+
+    cdf = np.exp(log_cdf)
+    if cdf < 0.0:
+        return 0.0
+    if cdf > 1.0:
+        return 1.0
+    return cdf
