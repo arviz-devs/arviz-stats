@@ -17,7 +17,7 @@ __all__ = [
     "_shift_and_scale",
     "_shift_and_cov",
     "_get_log_likelihood_i",
-    "_get_log_weights_i",
+    "_get_weights_and_k_i",
     "_compute_loo_approximation",
     "_diff_srs_estimator",
     "_srs_estimator",
@@ -37,6 +37,8 @@ __all__ = [
     "_prepare_full_arrays",
     "_align_data_to_obs",
     "_validate_crps_input",
+    "_log_lik_i",
+    "_validate_sample_dims",
 ]
 
 LooInputs = namedtuple(
@@ -216,6 +218,94 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None):
         n_samples,
         n_data_points,
     )
+
+
+def _log_lik_i(i, data, var_name, log_lik_fn):
+    """Construct single-observation log-likelihood from a user function."""
+    data = convert_to_datatree(data)
+
+    if log_lik_fn is None:
+        loo_inputs = _prepare_loo_inputs(data, var_name)
+        log_lik_i = _get_log_likelihood_i(loo_inputs.log_likelihood, i, loo_inputs.obs_dims)
+        return log_lik_i, loo_inputs.sample_dims, loo_inputs.obs_dims, loo_inputs.n_samples
+
+    if not callable(log_lik_fn):
+        raise TypeError("log_lik_fn must be a callable function")
+    if not hasattr(data, "observed_data"):
+        raise ValueError(
+            "Must be able to extract an observed_data group from data when using log_lik_fn."
+        )
+
+    try:
+        loo_inputs = _prepare_loo_inputs(data, var_name)
+        obs_var = loo_inputs.var_name
+        sample_dims = loo_inputs.sample_dims
+        obs_dims = loo_inputs.obs_dims
+    except TypeError as exc:
+        obs_vars = list(data.observed_data.data_vars)
+        if var_name is None:
+            if len(obs_vars) != 1:
+                raise ValueError(
+                    "Multiple observed variables found; please specify var_name explicitly."
+                ) from exc
+            obs_var = obs_vars[0]
+        else:
+            if var_name not in data.observed_data:
+                raise ValueError(f"Variable '{var_name}' not found in observed_data") from exc
+            obs_var = var_name
+
+        sample_dims = ["chain", "draw"]
+        obs_dims = [d for d in data.observed_data[obs_var].dims if d not in sample_dims]
+        loo_inputs = None
+
+    observed_i = _get_log_likelihood_i(data.observed_data[obs_var], i, obs_dims)
+    data_for_fn = _align_data_to_obs(data, observed_i)
+
+    try:
+        log_lik_i = log_lik_fn(observed_i, data_for_fn)
+    except Exception as e:
+        coord_str = (
+            ", ".join(
+                f"{dim}={observed_i.coords[dim].values}"
+                for dim in obs_dims
+                if dim in observed_i.coords
+            )
+            or f"index {i}"
+        )
+        raise RuntimeError(f"Error calling log_lik_fn for observation at {coord_str}: {e}") from e
+
+    if not isinstance(log_lik_i, xr.DataArray):
+        raise TypeError(
+            f"log_lik_fn must return an xarray.DataArray, got {type(log_lik_i).__name__}"
+        )
+
+    obs_in_result = [d for d in obs_dims if d in log_lik_i.dims]
+    if obs_in_result and any(log_lik_i.sizes[d] != 1 for d in obs_in_result):
+        log_lik_i = _get_log_likelihood_i(log_lik_i, i, obs_dims)
+        obs_in_result = [d for d in obs_dims if d in log_lik_i.dims]
+    if obs_in_result:
+        log_lik_i = log_lik_i.squeeze(dim=obs_in_result, drop=True)
+
+    try:
+        log_lik_i = _validate_sample_dims(
+            log_lik_i,
+            sample_dims=tuple(sample_dims),
+            ref_sizes=loo_inputs.log_likelihood if loo_inputs else None,
+            obs_dims=obs_dims,
+        )
+    except ValueError as e:
+        raise ValueError(
+            f"log_lik_fn must return DataArray with dimensions {tuple(sample_dims)}, "
+            f"got {tuple(log_lik_i.dims)}"
+        ) from e
+
+    n_samples = (
+        loo_inputs.n_samples
+        if loo_inputs
+        else int(log_lik_i.sizes["chain"] * log_lik_i.sizes["draw"])
+    )
+
+    return log_lik_i, sample_dims, obs_dims, n_samples
 
 
 def _extract_loo_data(loo_orig):
@@ -420,25 +510,54 @@ def _get_log_likelihood_i(log_likelihood, i, obs_dims):
     )
 
 
-def _get_log_weights_i(log_weights, i, obs_dims):
-    """Extract the log weights for a specific observation index `i`."""
-    if not obs_dims:
-        raise ValueError("log_weights must have observation dimensions.")
+def _get_weights_and_k_i(
+    log_weights, pareto_k, i, obs_dims, sample_dims, data, n_samples, reff, log_lik_i, var_name
+):
+    """Get log weights and Pareto k for a specific observation."""
+    if (log_weights is None) != (pareto_k is None):
+        raise ValueError(
+            "Both log_weights and pareto_k must be provided together or both must be None. "
+            "Only one was provided."
+        )
 
-    if len(obs_dims) == 1:
-        obs_dim = obs_dims[0]
-        if i < 0 or i >= log_weights.sizes[obs_dim]:
-            raise IndexError(f"Index {i} is out of bounds for dimension '{obs_dim}'.")
-        log_weights_i = log_weights.isel({obs_dim: i})
-    else:
-        stacked_obs_dim = "__obs__"
-        log_weights_stacked = log_weights.stack({stacked_obs_dim: obs_dims})
-        if i < 0 or i >= log_weights_stacked.sizes[stacked_obs_dim]:
-            raise IndexError(
-                f"Index {i} is out of bounds for stacked dimension '{stacked_obs_dim}'."
-            )
-        log_weights_i = log_weights_stacked.isel({stacked_obs_dim: i})
-    return log_weights_i
+    if log_weights is None and pareto_k is None:
+        if reff is None:
+            try:
+                reff = _get_r_eff(data, n_samples)
+            except (AttributeError, TypeError, ValueError):
+                reff = 1.0
+        return log_lik_i.azstats.psislw(r_eff=reff, dim=sample_dims)
+
+    lw = log_weights
+    if isinstance(lw, xr.Dataset):
+        if var_name is None:
+            raise ValueError("var_name must be specified when log_weights is a Dataset")
+        lw = lw[var_name]
+
+    if isinstance(lw, xr.DataArray):
+        lw_dims = set(lw.dims)
+        if any(d in lw_dims for d in obs_dims):
+            lw = _get_log_likelihood_i(lw, i, obs_dims)
+            squeeze_dims = [d for d in obs_dims if d in lw.dims]
+            if squeeze_dims:
+                lw = lw.squeeze(squeeze_dims, drop=True)
+        for dim in sample_dims:
+            if dim not in lw.dims:
+                raise ValueError(f"log_weights must have sample dimension '{dim}'")
+
+    pk = pareto_k
+    if isinstance(pk, xr.Dataset):
+        if var_name is None:
+            raise ValueError("var_name must be specified when pareto_k is a Dataset")
+        pk = pk[var_name]
+
+    if isinstance(pk, xr.DataArray):
+        pk_dims = set(pk.dims)
+        if any(d in pk_dims for d in obs_dims):
+            pk_i_da = _get_log_likelihood_i(pk, i, obs_dims)
+            pk = pk_i_da.squeeze().item()
+
+    return lw, pk
 
 
 def _prepare_subsample(
@@ -1181,3 +1300,43 @@ def _validate_crps_input(y_pred, y_obs, log_likelihood, *, sample_dims, obs_dims
     nan_padded_sample = [d for d in sample_dims if _has_nan_slice(log_likelihood, d)]
     if nan_padded_sample:
         raise ValueError(f"Size mismatch in sample dimension '{nan_padded_sample[0]}'")
+
+
+def _validate_sample_dims(
+    data,
+    *,
+    sample_dims=None,
+    ref_sizes=None,
+    obs_dims=None,
+):
+    """Validate sample dimensions."""
+    if sample_dims is None:
+        sample_dims = ["chain", "draw"]
+    if not isinstance(data, xr.DataArray):
+        raise TypeError(f"Expected DataArray, got {type(data).__name__}")
+
+    if obs_dims:
+        present_obs = [d for d in obs_dims if d in data.dims]
+        if present_obs:
+            bad = [d for d in present_obs if data.sizes[d] != 1]
+            if bad:
+                raise ValueError(
+                    f"DataArray has observation dimensions with size > 1: {bad}. "
+                    "Select a single observation or drop these dimensions before returning."
+                )
+            data = data.squeeze()
+
+    data_dims = tuple(data.dims)
+    if set(data_dims) != set(sample_dims):
+        raise ValueError(
+            f"DataArray must have exactly sample dimensions {tuple(sample_dims)}, got {data_dims}"
+        )
+
+    if ref_sizes is not None:
+        sizes = ref_sizes.sizes if hasattr(ref_sizes, "sizes") else ref_sizes
+        for d in sample_dims:
+            if data.sizes[d] != sizes[d]:
+                raise ValueError(
+                    f"DataArray has size {data.sizes[d]} for dimension '{d}', expected {sizes[d]}"
+                )
+    return data

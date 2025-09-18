@@ -94,13 +94,14 @@ def loo_subsample(
         (default) to use all posterior draws. This value is stored in the returned
         ``ELPDData`` object and will be automatically used by ``update_subsample``.
     log_lik_fn : callable, optional
-        Function that computes the log-likelihood for observations given posterior parameters.
-        Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
-        The function signature is ``log_lik_fn(observations, data)`` where observations
-        is a :class:`~xarray.DataArray` of observed data and data is a
-        :class:`~xarray.DataTree` object. For ``method="plpd"``, posterior means are computed
-        automatically and passed in the posterior group. For ``method="lpd"``, full posterior
-        samples are passed. All other groups remain unchanged for direct access.
+        Custom log-likelihood function. The signature must be ``log_lik_fn(observed, data)``
+        where ``observed`` is an :class:`~xarray.DataArray` containing one or more observations
+        and ``data`` is the full :class:`~arviz_base.DataTree` or
+        :class:`~arviz_base.InferenceData`. The function must return a
+        :class:`~xarray.DataArray`. For ``method="lpd"`` it must include dimensions
+        ``("chain", "draw", *obs_dims)`` and contain the per-draw log-likelihood values. For
+        ``method="plpd"`` it must have dimensions matching the observation dimensions
+        ``obs_dims`` and provide the pointwise log predictive density.
     param_names : list, optional
         List of parameter names to extract from the posterior. If None, all parameters are used.
         Recommended to pass the required parameter names from the posterior group that are
@@ -448,15 +449,16 @@ def update_subsample(
         - ``lpd``: Use standard log predictive density approximation (default)
         - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
     log_lik_fn : callable, optional
-        Function that computes the log-likelihood for observations given posterior parameters.
-        Required when ``method="plpd"`` or when ``method="lpd"`` and custom likelihood is needed.
-        The function signature is ``log_lik_fn(observations, datatree)`` where observations
-        is a :class:`~xarray.DataArray` of observed data and datatree is a
-        :class:`~xarray.DataTree` object. For ``method="plpd"``, posterior means are computed
-        automatically and passed in the posterior group. For ``method="lpd"``, full posterior
-        samples are passed. All other groups remain unchanged for direct access.
-        Recommended to pass the required parameter names from the posterior group that are
-        necessary for the log-likelihood function.
+        Custom log-likelihood function. The signature must be ``log_lik_fn(observed, data)``
+        where ``observed`` is an :class:`~xarray.DataArray` containing one or more observations
+        and ``data`` is the full :class:`~arviz_base.DataTree` or
+        :class:`~arviz_base.InferenceData`.
+        The function must return an :class:`~xarray.DataArray`. For ``method="lpd"`` it must
+        include dimensions ``("chain", "draw", *obs_dims)`` and contain the per-draw
+        log-likelihood values. For ``method="plpd"`` it must have dimensions matching the
+        observation dimensions ``obs_dims`` and provide the pointwise log predictive density.
+        Posterior draws (full or mean-reduced) are provided in the ``posterior`` group depending
+        on the chosen method, while auxiliary groups remain aligned for direct access.
     param_names: list, optional
         List of parameter names to extract from the posterior. If None, all parameters are used.
     log: bool, optional

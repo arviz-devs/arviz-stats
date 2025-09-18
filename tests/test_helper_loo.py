@@ -23,7 +23,6 @@ from arviz_stats.loo.helper_loo import (
     _diff_srs_estimator,
     _extract_loo_data,
     _generate_subsample_indices,
-    _get_log_weights_i,
     _get_r_eff,
     _prepare_loo_inputs,
     _prepare_subsample,
@@ -616,51 +615,6 @@ def test_split_moment_match_errors():
             log_prob_upars_fn=lambda x: x,
             log_lik_i_upars_fn=lambda x, _i: x,
         )
-
-
-def test_get_log_weights_i():
-    chain_size, draw_size, obs_size = 2, 100, 8
-    log_weights = xr.DataArray(
-        np.random.randn(chain_size, draw_size, obs_size),
-        dims=["chain", "draw", "school"],
-        coords={
-            "chain": np.arange(chain_size),
-            "draw": np.arange(draw_size),
-            "school": np.arange(obs_size),
-        },
-    )
-
-    i = 3
-    result = _get_log_weights_i(log_weights, i, obs_dims=["school"])
-    assert result.dims == ("chain", "draw")
-    assert result.shape == (chain_size, draw_size)
-    xr.testing.assert_equal(result, log_weights.isel(school=i))
-
-    obs_size_2 = 4
-    log_weights_2d = xr.DataArray(
-        np.random.randn(chain_size, draw_size, obs_size, obs_size_2),
-        dims=["chain", "draw", "school", "subject"],
-        coords={
-            "chain": np.arange(chain_size),
-            "draw": np.arange(draw_size),
-            "school": np.arange(obs_size),
-            "subject": np.arange(obs_size_2),
-        },
-    )
-
-    i = 10
-    result_2d = _get_log_weights_i(log_weights_2d, i, obs_dims=["school", "subject"])
-    assert result_2d.dims == ("chain", "draw")
-    assert result_2d.shape == (chain_size, draw_size)
-
-    with pytest.raises(ValueError, match="log_weights must have observation dimensions"):
-        _get_log_weights_i(log_weights, 0, obs_dims=[])
-
-    with pytest.raises(IndexError, match="Index -1 is out of bounds"):
-        _get_log_weights_i(log_weights, -1, obs_dims=["school"])
-
-    with pytest.raises(IndexError, match="Index 8 is out of bounds"):
-        _get_log_weights_i(log_weights, 8, obs_dims=["school"])
 
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])

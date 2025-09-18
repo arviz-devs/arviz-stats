@@ -5,9 +5,12 @@ from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.helper_loo import (
+    _check_log_jacobian,
     _compute_loo_results,
     _get_log_likelihood_i,
     _get_r_eff,
+    _get_weights_and_k_i,
+    _log_lik_i,
     _prepare_loo_inputs,
     _warn_pareto_k,
 )
@@ -177,6 +180,7 @@ def loo_i(
     log_lik_fn=None,
     log_weights=None,
     pareto_k=None,
+    log_jacobian=None,
 ):
     r"""Compute PSIS-LOO-CV for a single observation.
 
@@ -210,11 +214,19 @@ def loo_i(
         containing the per-draw log-likelihood values for that single observation. When provided,
         ``loo_i`` uses this function instead of the ``log_likelihood`` group.
     log_weights : DataArray, optional
-        Smoothed log weights for observation i. If not provided, will be computed using PSIS.
+        Smoothed log weights. It must have the same shape as the log likelihood data.
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
         Must be provided together with pareto_k or both must be None.
-    pareto_k : float, optional
-        Pareto shape value for observation i. If not provided, will be computed using PSIS.
+    pareto_k : DataArray, optional
+        Pareto shape values. It must have the same shape as the log likelihood data.
+        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
         Must be provided together with log_weights or both must be None.
+    log_jacobian : DataArray, optional
+        Log-Jacobian adjustment for variable transformations. Required when the model was fitted
+        on transformed response data :math:`z = T(y)` but you want to compute ELPD on the
+        original response scale :math:`y`. The value should be :math:`\log|\frac{dz}{dy}|`
+        (the log absolute value of the derivative of the transformation). Must be a DataArray
+        with dimensions matching the observation dimensions.
 
     Returns
     -------
@@ -285,7 +297,29 @@ def loo_i(
     .. ipython::
        :okwarning:
 
-       In [3]: loo_i("Choate", data)
+       In [4]: loo_i("Choate", data)
+
+    We can also use a custom log-likelihood function:
+
+    .. ipython::
+       :okwarning:
+
+       In [5]: from scipy import stats
+          ...: sigma = np.array([15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0])
+          ...: sigma_da = xr.DataArray(sigma,
+          ...:                         dims=["school"],
+          ...:                         coords={"school": data.observed_data.school.values})
+          ...: data['constant_data'] = (
+          ...:     data['constant_data'].to_dataset().assign(sigma=sigma_da)
+          ...: )
+          ...:
+          ...: def log_lik_fn(obs_da, data):
+          ...:     theta = data.posterior["theta"]
+          ...:     sigma = data.constant_data["sigma"]
+          ...:     ll = stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
+          ...:     return xr.DataArray(ll, dims=theta.dims, coords=theta.coords)
+          ...:
+          ...: loo_i({"school": "Choate"}, data, log_lik_fn=log_lik_fn)
 
     See Also
     --------
@@ -303,87 +337,39 @@ def loo_i(
        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
        arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    loo_inputs = _prepare_loo_inputs(data, var_name)
+    log_lik_i, sample_dims, obs_dims, n_samples = _log_lik_i(i, data, var_name, log_lik_fn)
 
-    if reff is None:
-        reff = _get_r_eff(data, loo_inputs.n_samples)
-
-    if log_lik_fn is None:
-        log_lik_i = _get_log_likelihood_i(loo_inputs.log_likelihood, i, loo_inputs.obs_dims)
-    else:
-        if not callable(log_lik_fn):
-            raise TypeError("log_lik_fn must be a callable function")
-
-        if not hasattr(data, "observed_data"):
-            raise ValueError("data must have an observed_data group when using log_lik_fn")
-
-        if loo_inputs.var_name not in data.observed_data:
-            raise ValueError(f"Variable '{loo_inputs.var_name}' not found in observed_data")
-
-        observed_full = data.observed_data[loo_inputs.var_name]
-        observed_i = _get_log_likelihood_i(observed_full, i, loo_inputs.obs_dims)
-
-        try:
-            log_lik_i = log_lik_fn(observed_i, data)
-        except Exception as e:
-            coord_info = []
-            for dim in loo_inputs.obs_dims:
-                if dim in observed_i.coords:
-                    coord_info.append(f"{dim}={observed_i.coords[dim].values}")
-            coord_str = ", ".join(coord_info) if coord_info else f"index {i}"
-            raise RuntimeError(
-                f"Error calling log_lik_fn for observation at {coord_str}: {e}"
-            ) from e
-
-        if not isinstance(log_lik_i, xr.DataArray):
-            raise TypeError(
-                f"log_lik_fn must return an xarray.DataArray, got {type(log_lik_i).__name__}"
-            )
-
-        expected_dims = set(loo_inputs.sample_dims)
-        actual_dims = set(log_lik_i.dims)
-        if actual_dims != expected_dims:
-            raise ValueError(
-                f"log_lik_fn must return DataArray with dimensions "
-                f"{tuple(loo_inputs.sample_dims)}, "
-                f"got {tuple(log_lik_i.dims)}"
-            )
-
-        for dim in loo_inputs.sample_dims:
-            expected_size = loo_inputs.log_likelihood.sizes[dim]
-            actual_size = log_lik_i.sizes[dim]
-            if actual_size != expected_size:
-                raise ValueError(
-                    f"log_lik_fn returned DataArray with {dim} size {actual_size}, "
-                    f"expected {expected_size}"
-                )
-
-    if (log_weights is None) != (pareto_k is None):
-        raise ValueError(
-            "Both log_weights and pareto_k must be provided together or both must be None. "
-            "Only one was provided."
-        )
-
-    if log_weights is None and pareto_k is None:
-        log_weights_i, pareto_k_i = log_lik_i.azstats.psislw(r_eff=reff, dim=loo_inputs.sample_dims)
-    else:
-        log_weights_i = log_weights
-        pareto_k_i = pareto_k
+    log_weights_i, pareto_k_i = _get_weights_and_k_i(
+        log_weights, pareto_k, i, obs_dims, sample_dims, data, n_samples, reff, log_lik_i, var_name
+    )
 
     log_weights_sum = log_weights_i + log_lik_i
-    elpd_i = logsumexp(log_weights_sum, dims=loo_inputs.sample_dims).item()
-    lppd_i = logsumexp(log_lik_i, b=1 / loo_inputs.n_samples, dims=loo_inputs.sample_dims).item()
+    elpd_i = logsumexp(log_weights_sum, dims=sample_dims).item()
+    lppd_i = logsumexp(log_lik_i, b=1 / n_samples, dims=sample_dims).item()
+
+    if log_jacobian is None:
+        jac_value = 0.0
+    elif isinstance(log_jacobian, xr.DataArray):
+        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+        jacobian_i = _get_log_likelihood_i(jacobian_da, i, obs_dims)
+        jac_value = jacobian_i.squeeze().item()
+    else:
+        jac_value = log_jacobian.item()
+
+    if jac_value:
+        elpd_i += jac_value
+        lppd_i += jac_value
     p_loo_i = lppd_i - elpd_i
     elpd_se = 0.0
 
-    warn_mg, good_k = _warn_pareto_k(pareto_k_i, loo_inputs.n_samples)
+    warn_mg, good_k = _warn_pareto_k(pareto_k_i, n_samples)
 
     return ELPDData(
         kind="loo",
         elpd=elpd_i,
         se=elpd_se,
         p=p_loo_i,
-        n_samples=loo_inputs.n_samples,
+        n_samples=n_samples,
         n_data_points=1,
         scale="log",
         warning=warn_mg,
