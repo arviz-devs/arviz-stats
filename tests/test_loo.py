@@ -5,7 +5,6 @@ import copy
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
-from xarray_einstats.stats import logsumexp
 
 from .helpers import (
     centered_eight,
@@ -19,6 +18,7 @@ from .helpers import (
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 sp = importorskip("scipy")
+xre = importorskip("xarray_einstats")
 
 from arviz_stats import (
     compare,
@@ -1051,7 +1051,9 @@ def test_loo_i_numpy_log_lik_without_log_likelihood(centered_eight):
         coords={"chain": theta.coords["chain"], "draw": theta.coords["draw"]},
     )
 
-    expected_elpd = logsumexp(result.log_weights + log_lik_da, dims=["chain", "draw"]).item()
+    expected_elpd = xre.stats.logsumexp(
+        result.log_weights + log_lik_da, dims=["chain", "draw"]
+    ).item()
 
     assert_almost_equal(result.elpd, expected_elpd, decimal=10)
 

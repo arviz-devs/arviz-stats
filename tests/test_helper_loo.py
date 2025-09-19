@@ -23,7 +23,9 @@ from arviz_stats.loo.helper_loo import (
     _diff_srs_estimator,
     _extract_loo_data,
     _generate_subsample_indices,
+    _get_log_likelihood_i,
     _get_r_eff,
+    _get_weights_and_k_i,
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
@@ -187,6 +189,39 @@ def test_prepare_loo_inputs(centered_eight):
     assert "school" in result.obs_dims
     assert result.n_samples > 0
     assert result.n_data_points > 0
+
+
+def test_get_weights_and_k_i(centered_eight):
+    loo_inputs = _prepare_loo_inputs(centered_eight, var_name="obs")
+    log_lik_i = _get_log_likelihood_i(loo_inputs.log_likelihood, 0, loo_inputs.obs_dims)
+
+    log_weights_i, pareto_k_i = _get_weights_and_k_i(
+        None,
+        None,
+        0,
+        loo_inputs.obs_dims,
+        loo_inputs.sample_dims,
+        centered_eight,
+        loo_inputs.n_samples,
+        None,
+        log_lik_i,
+        loo_inputs.var_name,
+    )
+
+    assert isinstance(log_weights_i, xr.DataArray)
+    assert all(dim in log_weights_i.dims for dim in loo_inputs.sample_dims)
+
+    for dim in loo_inputs.sample_dims:
+        assert log_weights_i.sizes[dim] == loo_inputs.log_likelihood.sizes[dim]
+    for obs_dim in loo_inputs.obs_dims:
+        if obs_dim in log_weights_i.dims:
+            assert log_weights_i.sizes[obs_dim] == 1
+
+    assert isinstance(pareto_k_i, xr.DataArray)
+    assert all(dim in loo_inputs.obs_dims for dim in pareto_k_i.dims)
+
+    for dim in pareto_k_i.dims:
+        assert pareto_k_i.sizes[dim] == 1
 
 
 def test_extract_loo_data(elpd_data):
