@@ -1027,7 +1027,7 @@ def test_loo_i_with_log_lik_fn(centered_eight):
         loo_i(0, centered_eight, var_name="obs", log_lik_fn="not a function")
 
 
-def test_loo_i_numpy_log_lik_without_log_likelihood(centered_eight):
+def test_loo_i_numpy(centered_eight):
     data = centered_eight.copy(deep=True)
     del data["log_likelihood"]
 
