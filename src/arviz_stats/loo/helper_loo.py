@@ -530,10 +530,7 @@ def _get_weights_and_k_i(
 
     if log_weights is None and pareto_k is None:
         if reff is None:
-            try:
-                reff = _get_r_eff(data, n_samples)
-            except (AttributeError, TypeError, ValueError):
-                reff = 1.0
+            reff = _get_r_eff(data, n_samples)
         return log_lik_i.azstats.psislw(r_eff=reff, dim=sample_dims)
 
     lw = log_weights
@@ -547,6 +544,7 @@ def _get_weights_and_k_i(
         if any(d in lw_dims for d in obs_dims):
             lw = _get_log_likelihood_i(lw, i, obs_dims)
             squeeze_dims = [d for d in obs_dims if d in lw.dims]
+
             if squeeze_dims:
                 lw = lw.squeeze(squeeze_dims, drop=True)
         for dim in sample_dims:
