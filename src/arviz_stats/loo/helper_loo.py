@@ -264,16 +264,26 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
 
     try:
         log_lik_i = log_lik_fn(observed_i, data_for_fn)
-    except Exception as e:
-        coord_str = (
-            ", ".join(
-                f"{dim}={observed_i.coords[dim].values}"
-                for dim in obs_dims
-                if dim in observed_i.coords
-            )
-            or f"index {i}"
+    except Exception as err:
+        err_parts = []
+        for dim in obs_dims:
+            if dim not in observed_i.coords:
+                continue
+            coord = observed_i.coords[dim]
+            if coord.size == 1:
+                value = coord.values.item()
+            else:
+                value = coord.values.tolist()
+            err_parts.append(f"{dim}={value!r}")
+
+        err_parts = ", ".join(err_parts) or f"index {i}"
+        func_name = getattr(log_lik_fn, "__name__", "<callable>")
+        msg = (
+            f"{func_name} failed for observation ({err_parts}) due to "
+            f"{err.__class__.__name__}: {err}. "
+            "Check your custom log-likelihood function."
         )
-        raise RuntimeError(f"Error calling log_lik_fn for observation at {coord_str}: {e}") from e
+        raise RuntimeError(msg) from err
 
     if not isinstance(log_lik_i, xr.DataArray):
         log_lik_array = np.asarray(log_lik_i)
