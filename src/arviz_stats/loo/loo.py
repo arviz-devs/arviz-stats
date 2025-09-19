@@ -210,9 +210,11 @@ def loo_i(
         Custom log-likelihood function for a single observation. The signature must be
         ``log_lik_fn(observed, data)`` where ``observed`` is the observed data and ``data``
         is the full :class:`~arviz_base.DataTree` or :class:`~arviz_base.InferenceData`.
-        The function must return an :class:`~xarray.DataArray` with dimensions ``("chain", "draw")``
-        containing the per-draw log-likelihood values for that single observation. When provided,
-        ``loo_i`` uses this function instead of the ``log_likelihood`` group.
+        The function must return either a :class:`~xarray.DataArray` or a :class:`~numpy.ndarray`
+        with dimensions ``("chain", "draw")`` containing the per-draw log-likelihood values for
+        that single observation. Array outputs are automatically wrapped in a DataArray before
+        further validation. When provided, ``loo_i`` uses this function instead of the
+        ``log_likelihood`` group.
     log_weights : DataArray, optional
         Smoothed log weights. It must have the same shape as the log likelihood data.
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.

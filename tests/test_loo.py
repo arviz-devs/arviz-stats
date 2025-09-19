@@ -5,6 +5,7 @@ import copy
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
+from xarray_einstats.stats import logsumexp
 
 from .helpers import (
     centered_eight,
@@ -996,11 +997,7 @@ def test_loo_i_with_log_lik_fn(centered_eight):
         theta_samples = data.posterior["theta"].sel(school=school_coord)
         obs_sd = data.constant_data["sigma"].sel(school=school_coord).values
 
-        return xr.DataArray(
-            sp.stats.norm.logpdf(y_value, theta_samples.values, obs_sd),
-            dims=["chain", "draw"],
-            coords={"chain": theta_samples.chain, "draw": theta_samples.draw},
-        )
+        return sp.stats.norm.logpdf(y_value, theta_samples.values, obs_sd)
 
     result_standard = loo_i(0, centered_eight, var_name="obs")
     result_custom = loo_i(0, centered_eight, var_name="obs", log_lik_fn=custom_log_lik)
@@ -1017,7 +1014,7 @@ def test_loo_i_with_log_lik_fn(centered_eight):
     def bad_log_lik_wrong_type(observed_i, data):
         return np.array([1, 2, 3])
 
-    with pytest.raises(TypeError, match="log_lik_fn must return an xarray.DataArray"):
+    with pytest.raises(ValueError, match="dims and shape should match"):
         loo_i(0, centered_eight, var_name="obs", log_lik_fn=bad_log_lik_wrong_type)
 
     def bad_log_lik_wrong_dims(observed_i, data):
@@ -1028,6 +1025,35 @@ def test_loo_i_with_log_lik_fn(centered_eight):
 
     with pytest.raises(TypeError, match="log_lik_fn must be a callable"):
         loo_i(0, centered_eight, var_name="obs", log_lik_fn="not a function")
+
+
+def test_loo_i_numpy_log_lik_without_log_likelihood(centered_eight):
+    data = centered_eight.copy(deep=True)
+    del data["log_likelihood"]
+
+    def numpy_log_lik(observed_i, datatree):
+        school = observed_i.coords["school"].values.item()
+        theta = datatree.posterior["theta"].sel(school=school)
+        y_val = observed_i.values.item()
+        return sp.stats.norm.logpdf(y_val, theta.values, scale=12.5)
+
+    result = loo_i({"school": "Choate"}, data, var_name="obs", log_lik_fn=numpy_log_lik)
+
+    assert isinstance(result, ELPDData)
+    assert result.log_weights.dims == ("chain", "draw")
+
+    observed = data.observed_data["obs"].sel({"school": "Choate"})
+    theta = data.posterior["theta"].sel({"school": "Choate"})
+    log_lik_array = numpy_log_lik(observed, data)
+    log_lik_da = xr.DataArray(
+        log_lik_array,
+        dims=("chain", "draw"),
+        coords={"chain": theta.coords["chain"], "draw": theta.coords["draw"]},
+    )
+
+    expected_elpd = logsumexp(result.log_weights + log_lik_da, dims=["chain", "draw"]).item()
+
+    assert_almost_equal(result.elpd, expected_elpd, decimal=10)
 
 
 def test_loo_jacobian(centered_eight):

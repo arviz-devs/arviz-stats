@@ -39,6 +39,7 @@ __all__ = [
     "_validate_crps_input",
     "_log_lik_i",
     "_validate_sample_dims",
+    "_get_sample_coords",
 ]
 
 LooInputs = namedtuple(
@@ -275,8 +276,15 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
         raise RuntimeError(f"Error calling log_lik_fn for observation at {coord_str}: {e}") from e
 
     if not isinstance(log_lik_i, xr.DataArray):
-        raise TypeError(
-            f"log_lik_fn must return an xarray.DataArray, got {type(log_lik_i).__name__}"
+        log_lik_array = np.asarray(log_lik_i)
+        coords = _get_sample_coords(sample_dims, loo_inputs, data_for_fn)
+
+        log_lik_i = ndarray_to_dataarray(
+            log_lik_array,
+            obs_var or observed_i.name or "log_likelihood",
+            sample_dims=sample_dims,
+            dims=[],
+            coords=coords,
         )
 
     obs_in_result = [d for d in obs_dims if d in log_lik_i.dims]
@@ -1340,3 +1348,38 @@ def _validate_sample_dims(
                     f"DataArray has size {data.sizes[d]} for dimension '{d}', expected {sizes[d]}"
                 )
     return data
+
+
+def _get_sample_coords(sample_dims, loo_inputs, data_for_fn):
+    """Collect sample dimension coordinates."""
+    if loo_inputs is not None:
+        source = loo_inputs.log_likelihood
+        return {dim: source.coords[dim] for dim in sample_dims if dim in source.coords}
+
+    coords = {}
+    posterior = getattr(data_for_fn, "posterior", None)
+    if posterior is None:
+        return coords
+
+    if isinstance(posterior, xr.Dataset):
+        coords.update(
+            {dim: posterior.coords[dim] for dim in sample_dims if dim in posterior.coords}
+        )
+        missing = [dim for dim in sample_dims if dim not in coords]
+        if missing:
+            for var in posterior.data_vars.values():
+                found = [dim for dim in missing if dim in var.coords]
+                for dim in found:
+                    coords[dim] = var.coords[dim]
+                if not found:
+                    continue
+                missing = [dim for dim in missing if dim not in coords]
+                if not missing:
+                    break
+        return coords
+
+    if isinstance(posterior, xr.DataArray):
+        coords.update(
+            {dim: posterior.coords[dim] for dim in sample_dims if dim in posterior.coords}
+        )
+    return coords

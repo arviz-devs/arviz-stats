@@ -450,13 +450,12 @@ def update_subsample(
         - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
     log_lik_fn : callable, optional
         Custom log-likelihood function. The signature must be ``log_lik_fn(observed, data)``
-        where ``observed`` is an :class:`~xarray.DataArray` containing one or more observations
+        where ``observed`` is a :class:`~xarray.DataArray` containing one or more observations
         and ``data`` is the full :class:`~arviz_base.DataTree` or
-        :class:`~arviz_base.InferenceData`.
-        The function must return an :class:`~xarray.DataArray`. For ``method="lpd"`` it must
-        include dimensions ``("chain", "draw", *obs_dims)`` and contain the per-draw
-        log-likelihood values. For ``method="plpd"`` it must have dimensions matching the
-        observation dimensions ``obs_dims`` and provide the pointwise log predictive density.
+        :class:`~arviz_base.InferenceData`. The function must return a :class:`~xarray.DataArray`.
+        For ``method="lpd"`` it must include dimensions ``("chain", "draw", *obs_dims)`` and contain
+        the per-draw log-likelihood values. For ``method="plpd"`` it must have dimensions matching
+        the observation dimensions ``obs_dims`` and provide the pointwise log predictive density.
         Posterior draws (full or mean-reduced) are provided in the ``posterior`` group depending
         on the chosen method, while auxiliary groups remain aligned for direct access.
     param_names: list, optional
