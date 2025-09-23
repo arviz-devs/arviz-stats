@@ -69,7 +69,7 @@ def compare(
         - **dSE**: Standard error of the difference in ELPD between each model
           and the top-ranked model. It's always 0 for the top-ranked model.
         - **warning**: A value of 1 indicates that the computation of the ELPD may not be reliable.
-          This could be indication of WAIC/LOO starting to fail see
+          This could be indication of LOO starting to fail see
           http://arxiv.org/abs/1507.04544 for details.
 
     Examples
