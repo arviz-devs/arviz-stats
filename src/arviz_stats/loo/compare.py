@@ -53,6 +53,7 @@ def compare(
 
         - **rank**: The rank-order of the models. 0 is the best.
         - **elpd**: ELPD estimated either using (PSIS-LOO-CV `elpd_loo` or WAIC `elpd_waic`).
+        - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`).
           Higher ELPD indicates higher out-of-sample predictive fit ("better" model).
         - **pIC**: Estimated effective number of parameters.
         - **elpd_diff**: The difference in ELPD between two models.
