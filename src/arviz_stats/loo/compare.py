@@ -50,7 +50,7 @@ def compare(
         A DataFrame, ordered from best to worst model (measured by the ELPD).
         The index reflects the key with which the models are passed to this function.
         The columns are:
-        
+
         - **rank**: The rank-order of the models. 0 is the best.
         - **elpd**: ELPD estimated either using (PSIS-LOO-CV `elpd_loo` or WAIC `elpd_waic`).
           Higher ELPD indicates higher out-of-sample predictive fit ("better" model).
@@ -59,13 +59,14 @@ def compare(
           If more than two models are compared, the difference is computed relative to the
           top-ranked model, that always has an `elpd_diff` of 0.
         - **weight**: Relative weight for each model.
-          This can be loosely interpreted as the probability of each model (among the compared models)
+          This can be loosely interpreted as the probability of each model
+          (among the compared models)
           given the data. By default the uncertainty in the weights estimation is considered using
           Bayesian bootstrap.
         - **SE**: Standard error of the ELPD estimate.
           If method = BB-pseudo-BMA these values are estimated using Bayesian bootstrap.
-        - **dSE**: Standard error of the difference in ELPD between each model and the top-ranked model.
-          It's always 0 for the top-ranked model.
+        - **dSE**: Standard error of the difference in ELPD between each model
+          and the top-ranked model. It's always 0 for the top-ranked model.
         - **warning**: A value of 1 indicates that the computation of the ELPD may not be reliable.
           This could be indication of WAIC/LOO starting to fail see
           http://arxiv.org/abs/1507.04544 for details.
