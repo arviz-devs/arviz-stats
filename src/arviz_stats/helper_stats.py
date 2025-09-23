@@ -160,10 +160,10 @@ def point_interval_unique(dt, var_names, group, ci_prob):
     ----------
     dt: DataTree
         DataTree with "posterior_predictive" and "observed_data" groups
-    group : str
-        The group from which to get the unique values.
     var_names : list of str, optional
         The variables to compute the unique values.
+    group : str
+        The group from which to get the unique values.
     ci_prob : float, optional
         The probability for the credible interval.
     """

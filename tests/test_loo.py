@@ -18,6 +18,7 @@ from .helpers import (
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 sp = importorskip("scipy")
+xre = importorskip("xarray_einstats")
 
 from arviz_stats import (
     compare,
@@ -979,6 +980,82 @@ def test_loo_i(centered_eight):
 
     with pytest.raises(KeyError):
         loo_i((), centered_eight)
+
+
+def test_loo_i_with_log_lik_fn(centered_eight):
+    sigma = np.array([15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0])
+    sigma_da = xr.DataArray(
+        sigma, dims=["school"], coords={"school": centered_eight.observed_data.school.values}
+    )
+    centered_eight["constant_data"] = (
+        centered_eight["constant_data"].to_dataset().assign(sigma=sigma_da)
+    )
+
+    def custom_log_lik(observed_i, data):
+        school_coord = observed_i.coords["school"].values.item()
+        y_value = observed_i.values.item()
+        theta_samples = data.posterior["theta"].sel(school=school_coord)
+        obs_sd = data.constant_data["sigma"].sel(school=school_coord).values
+
+        return sp.stats.norm.logpdf(y_value, theta_samples.values, obs_sd)
+
+    result_standard = loo_i(0, centered_eight, var_name="obs")
+    result_custom = loo_i(0, centered_eight, var_name="obs", log_lik_fn=custom_log_lik)
+    assert_almost_equal(result_standard.elpd, result_custom.elpd, decimal=10)
+    assert_almost_equal(result_standard.pareto_k, result_custom.pareto_k, decimal=10)
+
+    result_standard = loo_i({"school": "Choate"}, centered_eight, var_name="obs")
+    result_custom = loo_i(
+        {"school": "Choate"}, centered_eight, var_name="obs", log_lik_fn=custom_log_lik
+    )
+    assert_almost_equal(result_standard.elpd, result_custom.elpd, decimal=10)
+    assert_almost_equal(result_standard.pareto_k, result_custom.pareto_k, decimal=10)
+
+    def bad_log_lik_wrong_type(observed_i, data):
+        return np.array([1, 2, 3])
+
+    with pytest.raises(ValueError, match="dims and shape should match"):
+        loo_i(0, centered_eight, var_name="obs", log_lik_fn=bad_log_lik_wrong_type)
+
+    def bad_log_lik_wrong_dims(observed_i, data):
+        return xr.DataArray(np.ones((10, 20)), dims=["wrong1", "wrong2"])
+
+    with pytest.raises(ValueError, match="log_lik_fn must return DataArray with dimensions"):
+        loo_i(0, centered_eight, var_name="obs", log_lik_fn=bad_log_lik_wrong_dims)
+
+    with pytest.raises(TypeError, match="log_lik_fn must be a callable"):
+        loo_i(0, centered_eight, var_name="obs", log_lik_fn="not a function")
+
+
+def test_loo_i_numpy(centered_eight):
+    data = centered_eight.copy(deep=True)
+    del data["log_likelihood"]
+
+    def numpy_log_lik(observed_i, datatree):
+        school = observed_i.coords["school"].values.item()
+        theta = datatree.posterior["theta"].sel(school=school)
+        y_val = observed_i.values.item()
+        return sp.stats.norm.logpdf(y_val, theta.values, scale=12.5)
+
+    result = loo_i({"school": "Choate"}, data, var_name="obs", log_lik_fn=numpy_log_lik)
+
+    assert isinstance(result, ELPDData)
+    assert result.log_weights.dims == ("chain", "draw")
+
+    observed = data.observed_data["obs"].sel({"school": "Choate"})
+    theta = data.posterior["theta"].sel({"school": "Choate"})
+    log_lik_array = numpy_log_lik(observed, data)
+    log_lik_da = xr.DataArray(
+        log_lik_array,
+        dims=("chain", "draw"),
+        coords={"chain": theta.coords["chain"], "draw": theta.coords["draw"]},
+    )
+
+    expected_elpd = xre.stats.logsumexp(
+        result.log_weights + log_lik_da, dims=["chain", "draw"]
+    ).item()
+
+    assert_almost_equal(result.elpd, expected_elpd, decimal=10)
 
 
 def test_loo_jacobian(centered_eight):
