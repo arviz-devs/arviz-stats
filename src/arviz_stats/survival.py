@@ -25,7 +25,7 @@ def kaplan_meier(
     var_names = list(var_names)
     pp = extract(dt, group=group, var_names=var_names, keep_dataset=True, combined=False)
     try:
-        constant_data = dt["constant_data"].to_dataset()
+        constant_data = dt["constant_data"].dataset
     except KeyError:
         warnings.warn(
             "No 'constant_data' group found in DataTree. Assuming all events are observed."
@@ -102,7 +102,7 @@ def generate_survival_curves(
     var_names = list(var_names)
     # Extract predictive data
     pp = extract(dt, group=group, var_names=var_names, num_samples=num_samples, keep_dataset=True)
-    obs_data = dt["observed_data"].to_dataset()
+    obs_data = dt["observed_data"].dataset
 
     dictio = {}
 
