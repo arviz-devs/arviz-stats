@@ -88,14 +88,6 @@ background
 ```
 
 ```{toctree}
-:hidden:
-:caption: Tutorials
-
-ArviZ in Context <https://arviz-devs.github.io/EABM/>
-```
-
-
-```{toctree}
 :caption: Contributing
 :hidden:
 
