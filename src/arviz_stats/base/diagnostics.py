@@ -351,7 +351,10 @@ class _DiagnosticsBase(_CoreBase):
 
         _, kappa = self._pareto_khat(ary_flatten, r_eff=r_eff, tail="both", log_weights=False)
 
-        if kappa < 1:
+        # This should be 1, but to avoid overflow we use 0.99
+        # we could even use a lower value as this will give
+        # a ridiculously large number of samples needed
+        if kappa < 0.99:
             return 10 ** (1 / (1 - max(0, kappa)))
 
         return np.inf
@@ -548,7 +551,7 @@ class _DiagnosticsBase(_CoreBase):
 
         k_ary = np.log1p(-b_ary[:, None] * ary).mean(axis=1)  # pylint: disable=no-member
         len_scale = n * (np.log(-(b_ary / k_ary)) - k_ary - 1)
-        weights = 1 / np.exp(len_scale - len_scale[:, None]).sum(axis=1)
+        weights = np.exp(len_scale - logsumexp(len_scale))
 
         # remove negligible weights
         real_idxs = weights >= 10 * np.finfo(float).eps
