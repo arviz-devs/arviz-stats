@@ -4,7 +4,6 @@ import logging
 from collections.abc import Sequence
 
 import numpy as np
-from scipy.interpolate import CubicSpline
 
 __all__ = ["make_ufunc"]
 
@@ -291,16 +290,3 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
             _log.info(error_msg)
 
     return nan_error | chain_error | draw_error
-
-
-def smooth_data(obs_vals, pp_vals):
-    """Smooth data, helper function for discrete data in plot_pbv, loo_pit and plot_loo_pit."""
-    x = np.linspace(0, 1, len(obs_vals))
-    csi = CubicSpline(x, obs_vals)
-    obs_vals = csi(np.linspace(0.01, 0.99, len(obs_vals)))
-
-    x = np.linspace(0, 1, pp_vals.shape[1])
-    csi = CubicSpline(x, pp_vals, axis=1)
-    pp_vals = csi(np.linspace(0.01, 0.99, pp_vals.shape[1]))
-
-    return obs_vals, pp_vals
