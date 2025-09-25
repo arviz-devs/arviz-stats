@@ -147,11 +147,9 @@ class _BaseAccessor:
         """Pareto smoothed importance sampling."""
         return self._apply("psislw", dim=dim, **kwargs)
 
-    def pareto_khat(self, dims=None, r_eff=1.0, tail="both", log_weights=False, **kwargs):
+    def pareto_khat(self, sample_dims=None, **kwargs):
         """Compute Pareto k-hat diagnostic."""
-        return self._apply(
-            "pareto_khat", dims=dims, r_eff=r_eff, tail=tail, log_weights=log_weights, **kwargs
-        )
+        return self._apply("pareto_khat", sample_dims=sample_dims, **kwargs)
 
     def power_scale_lw(self, dim=None, **kwargs):
         """Compute log weights for power-scaling of the DataTree."""
