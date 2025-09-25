@@ -345,11 +345,9 @@ class _DiagnosticsBase(_CoreBase):
             )
             return np.nan
 
-        ary_flatten = ary.flatten()
-
         r_eff = self._ess_tail(ary, prob=0.05, relative=True)
 
-        _, kappa = self._pareto_khat(ary_flatten, r_eff=r_eff, tail="both", log_weights=False)
+        _, kappa = self._pareto_khat(ary, r_eff=r_eff, tail="both", log_weights=False)
 
         # This should be 1, but to avoid overflow we use 0.99
         # we could even use a lower value as this will give
@@ -395,6 +393,7 @@ class _DiagnosticsBase(_CoreBase):
         if log_weights:
             tail = "right"
 
+        ary = ary.flatten()
         n_draws = len(ary)
 
         n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail=tail)

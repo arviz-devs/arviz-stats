@@ -257,7 +257,9 @@ def _get_function_khat(
 
     # Get right tail khat
     try:
-        khat_r_da = r_theta_da.azstats.pareto_khat(dims="sample", tail="right", log_weights=False)
+        khat_r_da = r_theta_da.azstats.pareto_khat(
+            sample_dims="sample", tail="right", log_weights=False
+        )
         khat_r = khat_r_da.item()
     except ValueError:
         khat_r = np.nan
@@ -279,7 +281,9 @@ def _get_function_khat(
     hr_theta_da = xr.DataArray(h_theta_values * r_theta_da.values, dims=["sample"])
 
     try:
-        khat_hr_da = hr_theta_da.azstats.pareto_khat(dims="sample", tail="both", log_weights=False)
+        khat_hr_da = hr_theta_da.azstats.pareto_khat(
+            sample_dims="sample", tail="both", log_weights=False
+        )
         khat_hr = khat_hr_da.item()
     except ValueError:
         khat_hr = np.nan
