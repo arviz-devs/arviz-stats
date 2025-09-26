@@ -1,18 +1,11 @@
 """Utility functions for computing the PIT ECDF and the simultaneous confidence bands."""
 
-import math
-import warnings
+from functools import lru_cache
 
 import numpy as np
 from arviz_base import dict_to_dataset
 from scipy.special import bdtr, bdtrik  # pylint: disable=no-name-in-module
-
-try:
-    from numba import vectorize
-
-    NUMBA_FLAG = True
-except ImportError:
-    NUMBA_FLAG = False
+from scipy.special._ufuncs import _hypergeom_cdf
 
 
 def difference_ecdf_pit(dt, data_pairs, group, ci_prob, coverage, randomized, n_simulations):
@@ -159,17 +152,6 @@ def simulate_confidence_bands(n_draws, n_chains, eval_points, prob, n_simulation
     if n_chains > 1:
         total_draws = n_draws * n_chains
         evaluated_counts = np.linspace(1, total_draws, n_draws - 1, dtype=int, endpoint=False)
-        if NUMBA_FLAG:
-            func = hypergeometric_cdf
-        else:
-            warnings.warn(
-                "Numba is not available, using slower implementation for hypergeometric CDF."
-                " Please consider installing numba for better performance.",
-            )
-            from scipy.special._ufuncs import _hypergeom_cdf
-
-            def func(x, population, draws, successes):
-                return _hypergeom_cdf(x, draws, successes, population)
 
         gamma = np.empty(n_simulations)
         for i in range(n_simulations):
@@ -178,10 +160,15 @@ def simulate_confidence_bands(n_draws, n_chains, eval_points, prob, n_simulation
                 sample = rng.uniform(0, 1, size=n_draws)
                 ecdf_at_eval_points = (compute_ecdf(sample, eval_points) * n_draws).astype(int)
                 prob_lower_tail = np.nanmin(
-                    func(ecdf_at_eval_points, total_draws, n_draws, evaluated_counts)
+                    _hypergeometric_cdf_lookup(
+                        ecdf_at_eval_points, total_draws, n_draws, evaluated_counts
+                    )
                 )
                 prob_upper_tail = np.nanmin(
-                    1 - func(ecdf_at_eval_points - 1, total_draws, n_draws, evaluated_counts)
+                    1
+                    - _hypergeometric_cdf_lookup(
+                        ecdf_at_eval_points - 1, total_draws, n_draws, evaluated_counts
+                    )
                 )
                 gamma_chains[j] = 1 - 2 * min(prob_lower_tail, prob_upper_tail)
 
@@ -199,44 +186,27 @@ def simulate_confidence_bands(n_draws, n_chains, eval_points, prob, n_simulation
     return np.quantile(gamma, prob)
 
 
-@vectorize()
-def ln_binomial(n, k):
-    """Compute the natural logarithm of the binomial coefficient."""
-    return math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
+@lru_cache(maxsize=2000)
+def _build_hypergeom_lookup_table(population, draws, successes):
+    """Build lookup table for hypergeometric CDF values."""
+    max_x = min(draws, successes, population)
+    x_values = np.arange(max_x + 1)
+    cdf_values = _hypergeom_cdf(x_values, draws, successes, population)
+    return dict(zip(x_values, cdf_values))
 
 
-@vectorize(["float64(int64, int64, int64, int64)"], target="parallel", cache=True)
-def hypergeometric_cdf(x_val, population, draws, successes):
-    """Compute the hypergeometric cumulative distribution function."""
-    k_min = max(0, draws + successes - population)
-    k_max = min(successes, draws)
-
-    if x_val < k_min:
+def _scalar_lookup(x_val, population, draws, successes):
+    """Lookup CDF value for a single x value."""
+    if x_val < 0:
         return 0.0
-    if x_val >= k_max:
+    if x_val >= min(draws, successes, population):
         return 1.0
 
-    log_p = (
-        ln_binomial(successes, k_min)
-        + ln_binomial(population - successes, draws - k_min)
-        - ln_binomial(population, draws)
-    )
-    log_cdf = log_p
+    lookup_table = _build_hypergeom_lookup_table(population, draws, successes)
+    return lookup_table.get(x_val)
 
-    for k in range(k_min + 1, x_val + 1):
-        denom = k * (population - successes - draws + k)
-        if denom > 0:
-            log_ratio = np.log(successes - k + 1) + np.log(draws - k + 1) - np.log(denom)
-            log_p += log_ratio
 
-        if log_cdf > log_p:
-            log_cdf = log_cdf + np.log1p(np.exp(log_p - log_cdf))
-        else:
-            log_cdf = log_p + np.log1p(np.exp(log_cdf - log_p))
-
-    cdf = np.exp(log_cdf)
-    if cdf < 0.0:
-        return 0.0
-    if cdf > 1.0:
-        return 1.0
-    return cdf
+def _hypergeometric_cdf_lookup(x_val, population, draws, successes):
+    """Vectorized hypergeometric CDF lookup."""
+    vectorized_lookup = np.vectorize(_scalar_lookup, otypes=[float])
+    return vectorized_lookup(x_val, population, draws, successes)
