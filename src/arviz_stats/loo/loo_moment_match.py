@@ -85,7 +85,7 @@ def loo_moment_match(
         dimension. If not provided, will attempt to use the ``unconstrained_posterior``
         group from the input data if available.
     var_name : str, optional
-        The name of the variable in log_likelihood groups storing the pointwise log
+        The name of the variable in log_likelihood group storing the pointwise log
         likelihood data to use for loo computation.
     reff: float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
@@ -641,8 +641,8 @@ def _split_moment_match(
             dims=upars_trans.dims,
         )
 
+    # Inverse Transformation
     upars_trans = upars_trans + (xr.DataArray(total_shift, dims=param_dim) + mean_original)
-    # Inverse transformation
     upars_trans_inv = upars_stacked - (xr.DataArray(total_shift, dims=param_dim) + mean_original)
 
     if cov and dim > 0:
@@ -697,7 +697,6 @@ def _split_moment_match(
     except Exception as e:
         raise ValueError(f"Could not compute log likelihood for observation {i}: {e}") from e
 
-    # Jacobian adjustment
     log_jacobian_det = 0.0
     if dim > 0:
         log_jacobian_det = -np.sum(np.log(total_scaling))
@@ -739,7 +738,6 @@ def _split_moment_match(
     if n_chains == 1:
         reff_updated = reff
     else:
-        # Calculate ESS for each half of the data
         log_liki_half_1 = log_liki_half.isel(
             chain=slice(None), draw=slice(0, n_samples_half // n_chains)
         )
