@@ -1,6 +1,5 @@
 """Pareto-smoothed importance sampling LOO (PSIS-LOO-CV)."""
 
-import xarray as xr
 from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
@@ -349,18 +348,17 @@ def loo_i(
     elpd_i = logsumexp(log_weights_sum, dims=sample_dims).item()
     lppd_i = logsumexp(log_lik_i, b=1 / n_samples, dims=sample_dims).item()
 
-    if log_jacobian is None:
-        jac_value = 0.0
-    elif isinstance(log_jacobian, xr.DataArray):
-        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+    jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+    if jacobian_da is not None:
         jacobian_i = _get_log_likelihood_i(jacobian_da, i, obs_dims)
         jac_value = jacobian_i.squeeze().item()
     else:
-        jac_value = log_jacobian.item()
+        jac_value = 0.0
 
     if jac_value:
         elpd_i += jac_value
         lppd_i += jac_value
+
     p_loo_i = lppd_i - elpd_i
     elpd_se = 0.0
 
