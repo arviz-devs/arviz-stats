@@ -42,7 +42,6 @@ funding = "https://opencollective.com/arviz"
 xarray = [
   "arviz-base @ git+https://github.com/arviz-devs/arviz-base",
   "xarray-einstats",
-  "numba<=0.62.1",
 ]
 test = [
     "pytest",
@@ -66,7 +65,7 @@ doc = [
     "sphinx_autosummary_accessors",
 ]
 numba = [
-  "numba<=0.62.1",
+  "numba",
   "xarray_einstats[einops]",
 ]
 
