@@ -12,7 +12,9 @@ from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.helper_loo import (
     _get_log_likelihood_i,
+    _get_log_weights_i,
     _get_r_eff,
+    _get_r_eff_i,
     _prepare_loo_inputs,
     _shift,
     _shift_and_cov,
@@ -62,21 +64,25 @@ def loo_moment_match(
     loo_orig : ELPDData
         An existing ELPDData object from a previous `loo` result. Must contain
         pointwise Pareto k values (`pointwise=True` must have been used).
-    log_prob_upars_fn : Callable[[DataArray], DataArray]
-        A function that takes the unconstrained parameter draws and returns a
-        :class:`~xarray.DataArray` containing the log probability density of the full posterior
-        distribution evaluated at each unconstrained parameter draw. The returned DataArray must
-        have dimensions `chain`, `draw`.
-    log_lik_i_upars_fn : Callable[[DataArray, int], DataArray]
-        A function that takes the unconstrained parameter draws and the integer index `i`
-        of the left-out observation. It should return a :class:`~xarray.DataArray` containing the
-        log-likelihood of the left-out observation `i` evaluated at each unconstrained parameter
-        draw. The returned DataArray must have dimensions `chain`, `draw`.
+    log_prob_upars_fn : callable
+        Function that computes the log probability density of the full posterior
+        distribution evaluated at unconstrained parameter draws.
+        The function signature is ``log_prob_upars_fn(upars)`` where ``upars``
+        is a :class:`~xarray.DataArray` of unconstrained parameter draws with dimensions
+        ``chain``, ``draw``, and a parameter dimension. It should return a
+        :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
+    log_lik_i_upars_fn : callable
+        Function that computes the log-likelihood of a single left-out observation
+        evaluated at unconstrained parameter draws.
+        The function signature is ``log_lik_i_upars_fn(upars, i)`` where ``upars``
+        is a :class:`~xarray.DataArray` of unconstrained parameter draws and ``i``
+        is the integer index of the left-out observation. It should return a
+        :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
     upars : DataArray, optional
         Posterior draws transformed to the unconstrained parameter space. Must have
-        `chain` and `draw` dimensions, plus one additional dimension containing all
+        ``chain`` and ``draw`` dimensions, plus one additional dimension containing all
         parameters. Parameter names can be provided as coordinate values on this
-        dimension. If not provided, will attempt to use the `unconstrained_posterior`
+        dimension. If not provided, will attempt to use the ``unconstrained_posterior``
         group from the input data if available.
     var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
@@ -98,7 +104,7 @@ def loo_moment_match(
     pointwise: bool, optional
         If True, the pointwise predictive accuracy will be returned. Defaults to
         ``rcParams["stats.ic_pointwise"]``. Moment matching always requires
-        pointwise data from `loo_orig`. This argument controls whether the returned
+        pointwise data from ``loo_orig``. This argument controls whether the returned
         object includes pointwise data.
 
     Returns
@@ -124,99 +130,146 @@ def loo_moment_match(
     --------
     Moment matching can improve PSIS-LOO-CV estimates for observations with high Pareto k values
     without having to refit the model for each problematic observation. We will use the non-centered
-    eight schools data which has 1 problematic observation:
+    eight schools data which has 1 problematic observation. In practice, moment matching is useful
+    when you have a potentially large number of problematic observations:
 
     .. ipython::
         :okwarning:
 
-        In [1]: import arviz_base as az
-           ...: from arviz_stats import loo, loo_moment_match
+        In [1]: import arviz_base as azb
            ...: import numpy as np
            ...: import xarray as xr
            ...: from scipy import stats
+           ...: from arviz_stats import loo
            ...:
-           ...: idata = az.load_arviz_data("non_centered_eight")
+           ...: idata = azb.load_arviz_data("non_centered_eight")
+           ...: posterior = idata.posterior
+           ...: schools = posterior.theta_t.coords["school"].values
+           ...: y_obs = idata.observed_data.obs
+           ...: obs_dim = y_obs.dims[0]
+           ...:
            ...: loo_orig = loo(idata, pointwise=True, var_name="obs")
            ...: loo_orig
 
-    For moment matching, we need the unconstrained parameters and two functions
-    for the log probability and pointwise log-likelihood computations:
-
-    .. ipython::
-
-        In [3]: posterior = idata.posterior
-           ...: theta_t = posterior.theta_t.values
-           ...: mu = posterior.mu.values[:, :, np.newaxis]
-           ...: log_tau = np.log(posterior.tau.values)[:, :, np.newaxis]
-           ...:
-           ...: upars = np.concatenate([theta_t, mu, log_tau], axis=2)
-           ...: param_names = [f"theta_t_{i}" for i in range(8)] + ["mu", "log_tau"]
-           ...:
-           ...: upars = xr.DataArray(
-           ...:     upars,
-           ...:     dims=["chain", "draw", "upars_dim"],
-           ...:     coords={
-           ...:         "chain": posterior.chain,
-           ...:         "draw": posterior.draw,
-           ...:         "upars_dim": param_names
-           ...:     }
-           ...: )
-           ...:
-           ...: def log_prob_upars(upars):
-           ...:     theta_tilde = upars.sel(upars_dim=[f"theta_t_{i}" for i in range(8)])
-           ...:     mu = upars.sel(upars_dim="mu")
-           ...:     log_tau = upars.sel(upars_dim="log_tau")
-           ...:     tau = np.exp(log_tau)
-           ...:
-           ...:     log_prob = stats.norm(0, 5).logpdf(mu.values)
-           ...:     log_prob += stats.halfcauchy(0, 5).logpdf(tau.values)
-           ...:     log_prob += log_tau.values
-           ...:     log_prob += stats.norm(0, 1).logpdf(theta_tilde.values).sum(axis=-1)
-           ...:
-           ...:     return xr.DataArray(
-           ...:         log_prob,
-           ...:         dims=["chain", "draw"],
-           ...:         coords={"chain": upars.chain, "draw": upars.draw}
-           ...:     )
-           ...:
-           ...: def log_lik_i_upars(upars, i):
-           ...:     sigmas = [15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0]
-           ...:     theta_tilde_i = upars.sel(upars_dim=f"theta_t_{i}")
-           ...:     mu = upars.sel(upars_dim="mu")
-           ...:     tau = np.exp(upars.sel(upars_dim="log_tau"))
-           ...:     theta_i = mu + tau * theta_tilde_i
-           ...:     y_i = idata.observed_data.obs.values[i]
-           ...:     log_lik = stats.norm(theta_i.values, sigmas[i]).logpdf(y_i)
-           ...:
-           ...:     return xr.DataArray(
-           ...:         log_lik,
-           ...:         dims=["chain", "draw"],
-           ...:         coords={"chain": upars.chain, "draw": upars.draw}
-           ...:     )
-
-    We can now apply moment matching using the split transformation and covariance matching.
-    We can see that all Pareto :math:`k` values are now below the threshold and the ELPD is slightly
-    improved:
+    The moment matching algorithm applies affine transformations to posterior draws in
+    unconstrained parameter space. To enable this, we need to collect the posterior
+    parameters from their original space, transform them to unconstrained space if
+    needed, and stack them into a single :class:`xarray.DataArray` that matches the
+    expected ``(chain, draw, param)`` structure. Some parameters may already be in
+    unconstrained space, so we don't need to transform them. This will depend on the
+    model and the choice of parameterization:
 
     .. ipython::
         :okwarning:
 
-        In [4]: loo_mm = loo_moment_match(
+        In [2]: upars_ds = xr.Dataset(
+           ...:     {
+           ...:         **{
+           ...:             f"theta_t_{school}": posterior.theta_t.sel(school=school, drop=True)
+           ...:             for school in schools
+           ...:         },
+           ...:         "mu": posterior.mu,
+           ...:         "log_tau": xr.apply_ufunc(np.log, posterior.tau),
+           ...:     }
+           ...: )
+           ...: upars = azb.dataset_to_dataarray(
+           ...:     upars_ds, sample_dims=["chain", "draw"], new_dim="upars_dim"
+           ...: )
+
+    Moment matching requires two functions: one for the joint log probability (likelihood + priors)
+    and another for the pointwise log-likelihood of a single observation. We first define functions
+    that accept the data they need as keyword-only arguments:
+
+    .. ipython::
+        :okwarning:
+
+        In [3]: sigmas = xr.DataArray(
+           ...:     [15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0],
+           ...:     dims=[obs_dim],
+           ...: )
+           ...:
+           ...: def log_prob_upars(upars, *, sigmas, y, schools, obs_dim):
+           ...:     theta_t = xr.concat(
+           ...:         [upars.sel(upars_dim=f"theta_t_{school}") for school in schools],
+           ...:         dim=obs_dim,
+           ...:     )
+           ...:     mu = upars.sel(upars_dim="mu")
+           ...:     log_tau = upars.sel(upars_dim="log_tau")
+           ...:     tau = xr.apply_ufunc(np.exp, log_tau)
+           ...:     theta = mu + tau * theta_t
+           ...:
+           ...:     log_prior = xr.apply_ufunc(stats.norm(0, 5).logpdf, mu)
+           ...:     log_prior = log_prior + xr.apply_ufunc(
+           ...:         stats.halfcauchy(0, 5).logpdf,
+           ...:         tau,
+           ...:     )
+           ...:     log_prior = log_prior + log_tau
+           ...:     log_prior = log_prior + xr.apply_ufunc(
+           ...:         stats.norm(0, 1).logpdf,
+           ...:         theta_t,
+           ...:     ).sum(obs_dim)
+           ...:
+           ...:     const = -0.5 * np.log(2 * np.pi)
+           ...:     log_like = const - np.log(sigmas) - 0.5 * ((y - theta) / sigmas) ** 2
+           ...:     log_like = log_like.sum(obs_dim)
+           ...:     return log_prior + log_like
+           ...:
+           ...: def log_lik_i_upars(upars, i, *, sigmas, y, schools, obs_dim):
+           ...:     mu = upars.sel(upars_dim="mu")
+           ...:     log_tau = upars.sel(upars_dim="log_tau")
+           ...:     tau = xr.apply_ufunc(np.exp, log_tau)
+           ...:
+           ...:     theta_t_i = upars.sel(upars_dim=f"theta_t_{schools[i]}")
+           ...:     theta_i = mu + tau * theta_t_i
+           ...:
+           ...:     sigma_i = sigmas.isel({obs_dim: i})
+           ...:     y_i = y.isel({obs_dim: i})
+           ...:     const = -0.5 * np.log(2 * np.pi)
+           ...:     return const - np.log(sigma_i) - 0.5 * ((y_i - theta_i) / sigma_i) ** 2
+
+    Now, we can specialise these functions with :func:`functools.partial` so the resulting functions
+    match the signature expected by :func:`loo_moment_match()`:
+
+    .. ipython::
+        :okwarning:
+
+        In [4]: from functools import partial
+           ...: log_prob_fn = partial(
+           ...:     log_prob_upars,
+           ...:     sigmas=sigmas,
+           ...:     y=y_obs,
+           ...:     schools=schools,
+           ...:     obs_dim=obs_dim,
+           ...: )
+           ...: log_lik_i_fn = partial(
+           ...:     log_lik_i_upars,
+           ...:     sigmas=sigmas,
+           ...:     y=y_obs,
+           ...:     schools=schools,
+           ...:     obs_dim=obs_dim,
+           ...: )
+
+    Finally, we can run moment matching using the prepared inputs. Now, we
+    have no problematic observations anymore:
+
+    .. ipython::
+        :okwarning:
+
+        In [5]: from arviz_stats import loo_moment_match
+           ...: loo_mm = loo_moment_match(
            ...:     idata,
            ...:     loo_orig,
            ...:     upars=upars,
-           ...:     log_prob_upars_fn=log_prob_upars,
-           ...:     log_lik_i_upars_fn=log_lik_i_upars,
+           ...:     log_prob_upars_fn=log_prob_fn,
+           ...:     log_lik_i_upars_fn=log_lik_i_fn,
            ...:     var_name="obs",
-           ...:     k_threshold=0.7,
            ...:     split=True,
-           ...:     cov=False,
            ...: )
            ...: loo_mm
 
     Notes
     -----
-    The moment matching algorithm considers three affine transformations of the posterior draws.
+    The moment matching algorithm considers three affine transformations of the posterior draws:
     For a specific draw :math:`\theta^{(s)}`, a generic affine transformation includes a square
     matrix :math:`\mathbf{A}` representing a linear map and a vector :math:`\mathbf{b}`
     representing a translation such that
@@ -370,6 +423,8 @@ def loo_moment_match(
     lpd = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
     loo_data.p_loo_i = lpd - loo_data.elpd_i
     kfs = np.zeros(n_data_points)
+    log_weights = getattr(loo_data, "log_weights", None)
+    r_eff_data = getattr(loo_data, "r_eff", reff)
 
     # Moment matching algorithm
     for i in bad_obs_indices:
@@ -385,6 +440,8 @@ def loo_moment_match(
             cov=cov,
             orig_log_prob=orig_log_prob,
             ks=ks,
+            log_weights=log_weights,
+            r_eff=r_eff_data,
             sample_dims=sample_dims,
             obs_dims=obs_dims,
             n_samples=n_samples,
@@ -501,14 +558,19 @@ def _split_moment_match(
     reff : float
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples.
-    log_prob_upars_fn : Callable[[DataArray], DataArray]
-        A function that computes the log probability density of the *full posterior*
-        distribution evaluated at given unconstrained parameter values (as a DataArray).
-        Input and Output must have dimensions `chain` and `draw`.
-    log_lik_i_upars_fn : Callable[[DataArray, int], DataArray]
-        A function that computes the log-likelihood of the *left-out observation* `i`
-        evaluated at given unconstrained parameter values (as a DataArray).
-        Input and Output must have dimensions `chain` and `draw`.
+    log_prob_upars_fn : callable
+        Function that computes the log probability density of the *full posterior*
+        distribution evaluated at unconstrained parameter draws.
+        The function signature is ``log_prob_upars_fn(upars)`` where ``upars``
+        is a :class:`~xarray.DataArray` of unconstrained parameter draws.
+        It should return a :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
+    log_lik_i_upars_fn : callable
+        Function that computes the log-likelihood of the *left-out observation* ``i``
+        evaluated at unconstrained parameter draws.
+        The function signature is ``log_lik_i_upars_fn(upars, i)`` where ``upars``
+        is a :class:`~xarray.DataArray` of unconstrained parameter draws and ``i``
+        is the integer index of the observation.
+        It should return a :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
 
     Returns
     -------
@@ -550,10 +612,13 @@ def _split_moment_match(
         )
 
     dim = upars.sizes[param_dim]
-    n_samples = upars.sizes["chain"] * upars.sizes["draw"]
+    n_chains = upars.sizes["chain"]
+    n_draws = upars.sizes["draw"]
+    n_samples = n_chains * n_draws
     n_samples_half = n_samples // 2
 
-    upars_stacked = upars.stack(__sample__=sample_dims).transpose("__sample__", param_dim)
+    stack_dims = ("draw", "chain")
+    upars_stacked = upars.stack(__sample__=stack_dims).transpose("__sample__", param_dim)
     mean_original = upars_stacked.mean(dim="__sample__")
 
     if total_shift is None or total_shift.size == 0:
@@ -592,17 +657,17 @@ def _split_moment_match(
     upars_trans_inv = upars_trans_inv / xr.DataArray(total_scaling, dims=param_dim)
     upars_trans_inv = upars_trans_inv + (mean_original - xr.DataArray(total_shift, dims=param_dim))
 
-    upars_trans_half = upars_stacked.copy(deep=True).unstack("__sample__")
-    upars_trans_half = upars_trans_half.transpose(*sample_dims, param_dim)
-    upars_trans_half.values.reshape(-1, dim)[:n_samples_half] = upars_trans.values.reshape(-1, dim)[
-        :n_samples_half
-    ]
+    upars_trans_half_stacked = upars_stacked.copy(deep=True)
+    upars_trans_half_stacked.data[:n_samples_half, :] = upars_trans.data[:n_samples_half, :]
+    upars_trans_half = upars_trans_half_stacked.unstack("__sample__").transpose(
+        *reversed(stack_dims), param_dim
+    )
 
-    upars_trans_half_inv = upars_stacked.copy(deep=True).unstack("__sample__")
-    upars_trans_half_inv = upars_trans_half_inv.transpose(*sample_dims, param_dim)
-    upars_trans_half_inv.values.reshape(-1, dim)[n_samples_half:] = upars_trans_inv.values.reshape(
-        -1, dim
-    )[n_samples_half:]
+    upars_trans_half_inv_stacked = upars_stacked.copy(deep=True)
+    upars_trans_half_inv_stacked.data[n_samples_half:, :] = upars_trans_inv.data[n_samples_half:, :]
+    upars_trans_half_inv = upars_trans_half_inv_stacked.unstack("__sample__").transpose(
+        *reversed(stack_dims), param_dim
+    )
 
     try:
         log_prob_half_trans = log_prob_upars_fn(upars_trans_half)
@@ -633,13 +698,9 @@ def _split_moment_match(
     # Jacobian adjustment
     log_jacobian_det = 0.0
     if dim > 0:
-        log_jacobian_det = -np.sum(np.log(np.abs(total_scaling)))
+        log_jacobian_det = -np.sum(np.log(total_scaling))
         try:
-            det_val = np.linalg.det(total_mapping)
-            if det_val > 0:
-                log_jacobian_det -= np.log(det_val)
-            else:
-                log_jacobian_det -= np.inf
+            log_jacobian_det -= np.log(np.linalg.det(total_mapping))
         except np.linalg.LinAlgError:
             log_jacobian_det -= np.inf
 
@@ -664,13 +725,13 @@ def _split_moment_match(
     )
 
     # PSIS smoothing for half posterior
-    lwi_psis_da, _ = raw_log_weights_half.azstats.psislw(r_eff=reff, dim=sample_dims)
+    lwi_psis_da, _ = _wrap__psislw(raw_log_weights_half, sample_dims, reff)
 
     lr_full = lwi_psis_da + log_liki_half
     lr_full = xr.where(np.isnan(lr_full) | (np.isinf(lr_full) & (lr_full > 0)), -np.inf, lr_full)
 
     # PSIS smoothing for full posterior
-    lwfi_psis_da, _ = lr_full.azstats.psislw(r_eff=reff, dim=sample_dims)
+    lwfi_psis_da, _ = _wrap__psislw(lr_full, sample_dims, reff)
     n_chains = upars.sizes["chain"]
 
     if n_chains == 1:
@@ -690,8 +751,8 @@ def _split_moment_match(
         ess_1 = liki_half_1.azstats.ess(method="mean")
         ess_2 = liki_half_2.azstats.ess(method="mean")
 
-        ess_1_value = float(ess_1.values) if hasattr(ess_1, "values") else float(ess_1)
-        ess_2_value = float(ess_2.values) if hasattr(ess_2, "values") else float(ess_2)
+        ess_1_value = ess_1.values if hasattr(ess_1, "values") else ess_1
+        ess_2_value = ess_2.values if hasattr(ess_2, "values") else ess_2
 
         n_samples_1 = log_liki_half_1.size
         n_samples_2 = log_liki_half_2.size
@@ -721,6 +782,8 @@ def _loo_moment_match_i(
     cov,
     orig_log_prob,
     ks,
+    log_weights,
+    r_eff,
     sample_dims,
     obs_dims,
     n_samples,
@@ -731,17 +794,27 @@ def _loo_moment_match_i(
     n_chains = upars.sizes["chain"]
     n_draws = upars.sizes["draw"]
 
-    log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
-    liki = np.exp(log_liki)
-    liki_reshaped = liki.values.reshape(n_chains, n_draws).T
+    log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims).squeeze(drop=True)
 
-    ess_val = ess(liki_reshaped, method="mean").item()
-    reff_i = ess_val / n_samples if n_samples > 0 else 1.0
+    if isinstance(r_eff, xr.DataArray):
+        reff_i = _get_r_eff_i(r_eff, i, obs_dims)
+    elif r_eff is not None:
+        reff_i = r_eff
+    else:
+        liki = np.exp(log_liki)
+        liki_reshaped = liki.values.reshape(n_chains, n_draws).T
+        ess_val = ess(liki_reshaped, method="mean").item()
+        reff_i = ess_val / n_samples if n_samples > 0 else 1.0
 
-    log_ratio_i_init = -log_liki
-    lwi, ki_tuple = log_ratio_i_init.azstats.psislw(r_eff=reff_i, dim=sample_dims)
-    ki = ki_tuple[0].item() if isinstance(ki_tuple, tuple) else ki_tuple.item()
     original_ki = ks[i]
+
+    if log_weights is not None:
+        log_weights_i = _get_log_weights_i(log_weights, i, obs_dims).squeeze(drop=True)
+        lwi = log_weights_i.transpose(*sample_dims).astype(np.float64)
+        ki = original_ki
+    else:
+        log_ratio_i_init = -log_liki
+        lwi, ki = _wrap__psislw(log_ratio_i_init, sample_dims, reff_i)
 
     upars_i = upars.copy(deep=True)
     total_shift = np.zeros(upars_i.sizes[param_dim_name])
@@ -879,26 +952,8 @@ def _loo_moment_match_i(
 
             final_log_liki = split_res.log_liki
             final_lwi = split_res.lwi
-            _, ki_split_tuple = split_res.lwi.azstats.psislw(r_eff=split_res.reff, dim=sample_dims)
-
-            ki_split = (
-                ki_split_tuple[0].item()
-                if isinstance(ki_split_tuple, tuple)
-                else ki_split_tuple.item()
-            )
-            final_ki = ki_split
-
-            _, kf_tuple = split_res.lwfi.azstats.psislw(r_eff=split_res.reff, dim=sample_dims)
-            kfs_i = kf_tuple[0].item() if isinstance(kf_tuple, tuple) else kf_tuple.item()
+            final_ki = ki
             reff_i = split_res.reff
-
-            if ki_split > ki and ki <= k_threshold:
-                warnings.warn(
-                    f"Split transformation increased Pareto k for observation {i} "
-                    f"({ki:.2f} -> {ki_split:.2f}). This may indicate numerical issues.",
-                    UserWarning,
-                    stacklevel=2,
-                )
 
         except RuntimeError as e:
             warnings.warn(
@@ -989,12 +1044,10 @@ def _update_quantities_i(
     log_liki_new = log_lik_i_upars_fn(upars, i)
 
     log_ratio_i = -log_liki_new + log_prob_new - orig_log_prob
-    lwi_new, ki_new_tuple = log_ratio_i.azstats.psislw(r_eff=reff_i, dim=sample_dims)
-    ki_new = ki_new_tuple[0].item() if isinstance(ki_new_tuple, tuple) else ki_new_tuple.item()
+    lwi_new, ki_new = _wrap__psislw(log_ratio_i, sample_dims, reff_i)
 
     log_ratio_full = log_prob_new - orig_log_prob
-    lwfi_new, kfi_new_tuple = log_ratio_full.azstats.psislw(r_eff=reff_i, dim=sample_dims)
-    kfi_new = kfi_new_tuple[0].item() if isinstance(kfi_new_tuple, tuple) else kfi_new_tuple.item()
+    lwfi_new, kfi_new = _wrap__psislw(log_ratio_full, sample_dims, reff_i)
 
     return UpdateQuantities(
         lwi=lwi_new,
@@ -1003,3 +1056,56 @@ def _update_quantities_i(
         kfi=kfi_new,
         log_liki=log_liki_new,
     )
+
+
+def _wrap__psislw(log_weights, sample_dims, r_eff):
+    """Apply PSIS smoothing over sample dimensions."""
+    if not isinstance(log_weights, xr.DataArray):
+        raise TypeError("log_weights must be an xarray.DataArray")
+
+    missing_dims = [dim for dim in sample_dims if dim not in log_weights.dims]
+
+    if missing_dims:
+        raise ValueError(
+            f"All sample dimensions must be present in the input; missing {missing_dims}."
+        )
+
+    other_dims = [dim for dim in log_weights.dims if dim not in sample_dims]
+    if other_dims:
+        raise ValueError(
+            "_wrap__psislw expects `log_weights` to include only sample dimensions; "
+            f"found extra dims {other_dims}."
+        )
+
+    stacked = log_weights.stack(__sample__=sample_dims)
+    stacked_for_psis = -stacked
+
+    try:
+        lw_stacked, k = stacked_for_psis.azstats.psislw(dim="__sample__", r_eff=r_eff)
+    except ValueError as err:
+        err_message = str(err)
+        fallback_errors = ("All tail values are the same", "n_draws_tail must be at least 5")
+        if not any(msg in err_message for msg in fallback_errors):
+            raise
+
+        log_norm = logsumexp(stacked, dims="__sample__")
+        lw_stacked = stacked - log_norm
+
+        k = np.inf
+
+    lw = lw_stacked.unstack("__sample__").transpose(*log_weights.dims)
+
+    if isinstance(k, xr.DataArray):
+        if k.dims:
+            raise ValueError("Unexpected dimensions on Pareto k output; expected scalar result.")
+        k_val = k.item()
+    elif isinstance(k, np.ndarray):
+        if k.ndim != 0:
+            raise ValueError("Unexpected array shape for Pareto k; expected scalar result.")
+        k_val = k.item()
+    else:
+        try:
+            k_val = k
+        except (TypeError, ValueError) as exc:
+            raise TypeError("Unable to convert PSIS tail index to float") from exc
+    return lw, float(k_val)
