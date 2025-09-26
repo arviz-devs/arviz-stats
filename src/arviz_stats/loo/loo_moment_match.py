@@ -619,7 +619,7 @@ def _split_moment_match(
     n_samples = n_chains * n_draws
     n_samples_half = n_samples // 2
 
-    stack_dims = ("draw", "chain")
+    stack_dims = ["draw", "chain"]
     upars_stacked = upars.stack(__sample__=stack_dims).transpose("__sample__", param_dim)
     mean_original = upars_stacked.mean(dim="__sample__")
 
