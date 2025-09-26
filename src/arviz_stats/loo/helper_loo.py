@@ -577,27 +577,6 @@ def _get_weights_and_k_i(
     return lw, pk
 
 
-def _get_r_eff_i(r_eff, i, obs_dims):
-    """Return scalar r_eff for observation i."""
-    if not isinstance(r_eff, xr.DataArray):
-        raise TypeError("r_eff must be an xarray.DataArray")
-    if not obs_dims:
-        raise ValueError("r_eff must have observation dimensions.")
-
-    missing_dims = [dim for dim in obs_dims if dim not in r_eff.dims]
-    if missing_dims:
-        raise ValueError(
-            f"r_eff must include observation dimensions {tuple(obs_dims)}; missing {missing_dims}."
-        )
-
-    selected = _get_log_likelihood_i(r_eff, i, obs_dims)
-    values = np.asarray(selected.values).reshape(-1)
-
-    if values.size != 1:
-        raise ValueError("Selection must correspond to a single scalar r_eff value.")
-    return float(values[0])
-
-
 def _prepare_subsample(
     data,
     log_likelihood_da,
@@ -1069,6 +1048,27 @@ def _get_r_eff(data, n_samples):
         # this mean is over all data variables
         reff = np.hstack([ess_p[v].values.flatten() for v in ess_p.data_vars]).mean() / n_samples
     return reff
+
+
+def _get_r_eff_i(r_eff, i, obs_dims):
+    """Return scalar r_eff for observation i."""
+    if not isinstance(r_eff, xr.DataArray):
+        raise TypeError("r_eff must be an xarray.DataArray")
+    if not obs_dims:
+        raise ValueError("r_eff must have observation dimensions.")
+
+    missing_dims = [dim for dim in obs_dims if dim not in r_eff.dims]
+    if missing_dims:
+        raise ValueError(
+            f"r_eff must include observation dimensions {tuple(obs_dims)}; missing {missing_dims}."
+        )
+
+    selected = _get_log_likelihood_i(r_eff, i, obs_dims)
+    values = np.asarray(selected.values).reshape(-1)
+
+    if values.size != 1:
+        raise ValueError("Selection must correspond to a single scalar r_eff value.")
+    return float(values[0])
 
 
 def _prepare_full_arrays(
