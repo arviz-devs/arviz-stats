@@ -12,9 +12,9 @@ from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.helper_loo import (
     _get_log_likelihood_i,
-    _get_log_weights_i,
     _get_r_eff,
     _get_r_eff_i,
+    _get_weights_and_k_i,
     _prepare_loo_inputs,
     _shift,
     _shift_and_cov,
@@ -441,12 +441,14 @@ def loo_moment_match(
             orig_log_prob=orig_log_prob,
             ks=ks,
             log_weights=log_weights,
+            pareto_k=loo_data.pareto_k,
             r_eff=r_eff_data,
             sample_dims=sample_dims,
             obs_dims=obs_dims,
             n_samples=n_samples,
             n_params=n_params,
             param_dim_name=param_dim_name,
+            var_name=var_name,
         )
 
         kfs[i] = mm_result.kfs_i
@@ -783,12 +785,14 @@ def _loo_moment_match_i(
     orig_log_prob,
     ks,
     log_weights,
+    pareto_k,
     r_eff,
     sample_dims,
     obs_dims,
     n_samples,
     n_params,
     param_dim_name,
+    var_name,
 ):
     """Compute moment matching for a single observation."""
     n_chains = upars.sizes["chain"]
@@ -809,9 +813,19 @@ def _loo_moment_match_i(
     original_ki = ks[i]
 
     if log_weights is not None:
-        log_weights_i = _get_log_weights_i(log_weights, i, obs_dims).squeeze(drop=True)
-        lwi = log_weights_i.transpose(*sample_dims).astype(np.float64)
-        ki = original_ki
+        log_weights_i, ki = _get_weights_and_k_i(
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+            i=i,
+            obs_dims=obs_dims,
+            sample_dims=sample_dims,
+            data=log_likelihood,
+            n_samples=n_samples,
+            reff=reff_i,
+            log_lik_i=log_liki,
+            var_name=var_name,
+        )
+        lwi = log_weights_i.squeeze(drop=True).transpose(*sample_dims).astype(np.float64)
     else:
         log_ratio_i_init = -log_liki
         lwi, ki = _wrap__psislw(log_ratio_i_init, sample_dims, reff_i)
