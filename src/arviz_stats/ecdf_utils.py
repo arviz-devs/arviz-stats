@@ -5,7 +5,7 @@ from functools import lru_cache
 import numpy as np
 from arviz_base import dict_to_dataset
 from scipy.special import bdtr, bdtrik  # pylint: disable=no-name-in-module
-from scipy.stats import hypergeom
+from scipy.special._ufuncs import _hypergeom_cdf
 
 
 def difference_ecdf_pit(dt, data_pairs, group, ci_prob, coverage, randomized, n_simulations):
@@ -191,7 +191,7 @@ def _build_hypergeom_lookup_table(population, draws, successes):
     """Build lookup table for hypergeometric CDF values."""
     max_x = min(draws, successes, population)
     x_values = np.arange(max_x + 1)
-    cdf_values = hypergeom.cdf(x_values, population, successes, draws)
+    cdf_values = _hypergeom_cdf(x_values, draws, successes, population)
     return dict(zip(x_values, cdf_values))
 
 
