@@ -1120,4 +1120,4 @@ def _wrap__psislw(log_weights, sample_dims, r_eff):
             k_val = k
         except (TypeError, ValueError) as exc:
             raise TypeError("Unable to convert PSIS tail index to float") from exc
-    return lw, float(k_val)
+    return lw, k_val
