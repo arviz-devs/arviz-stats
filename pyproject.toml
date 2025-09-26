@@ -42,6 +42,7 @@ funding = "https://opencollective.com/arviz"
 xarray = [
   "arviz-base @ git+https://github.com/arviz-devs/arviz-base",
   "xarray-einstats",
+  "numba",
 ]
 test = [
     "pytest",
