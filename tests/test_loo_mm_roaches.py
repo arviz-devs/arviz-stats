@@ -3,11 +3,9 @@
 
 import pytest
 
-from arviz_stats.loo import loo, loo_moment_match
-from arviz_stats.loo.loo_moment_match import _split_moment_match
-
 from .helpers import importorskip
 
+importorskip("arviz_base")
 js = importorskip("json")
 np = importorskip("numpy")
 xr = importorskip("xarray")
@@ -18,6 +16,9 @@ atexit = importorskip("atexit")
 lzma = importorskip("lzma")
 shutil = importorskip("shutil")
 tempfile = importorskip("tempfile")
+
+from arviz_stats.loo import loo, loo_moment_match
+from arviz_stats.loo.loo_moment_match import _split_moment_match
 
 
 @ft.lru_cache(maxsize=1)
