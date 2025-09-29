@@ -70,8 +70,8 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
     --------
     To calculate PSIS-LOO-CV for posterior approximations, we need to provide the log-densities
     of the target and proposal distributions. Here we use dummy log-densities. In practice, the
-    log-densities would typically be computed by variational inference such as Laplace Approximation
-    or Automatic Differentiation Variational Inference (ADVI):
+    log-densities would typically be computed by a posterior approximation method such as the
+    Laplace approximation or automatic differentiation variational inference (ADVI):
 
     .. ipython::
 
