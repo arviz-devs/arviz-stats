@@ -638,6 +638,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         reduce_func : {"mean", "min"}, default "mean"
         chain_axis : int, default -2
         draw_axis : int, default -1
+
+        Returns
+        -------
+        int
+            Thinning factor
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         n_samples = ary.shape[chain_axis] * ary.shape[draw_axis]
