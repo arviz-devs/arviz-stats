@@ -68,11 +68,10 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
 
     Examples
     --------
-    Calculate LOO for posterior approximations. The following example is intentionally minimal
-    to demonstrate basic usage. The approximate posterior created below may not accurately
-    represent the data and lead to less meaningful LOO results.
-
-    Create dummy log-densities:
+    To calculate PSIS-LOO-CV for posterior approximations, we need to provide the log-densities
+    of the target and proposal distributions. Here we use dummy log-densities. In practice, the
+    log-densities would typically be computed by a posterior approximation method such as the
+    Laplace approximation or automatic differentiation variational inference (ADVI):
 
     .. ipython::
 
@@ -99,7 +98,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
            ...:     coords={"chain": log_lik.chain, "draw": log_lik.draw}
            ...: )
 
-    Calculate approximate pointwise LOO:
+    Now we can calculate pointwise PSIS-LOO-CV for posterior approximations:
 
     .. ipython::
 
@@ -111,6 +110,22 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
            ...:     pointwise=True
            ...: )
            ...: loo_approx
+
+    We can also calculate the PSIS-LOO-CV for posterior approximations with subsampling
+    for large datasets:
+
+    .. ipython::
+
+        In [3]: from arviz_stats import loo_subsample
+           ...: loo_approx_subsample = loo_subsample(
+           ...:     data,
+           ...:     observations=4,
+           ...:     var_name="obs",
+           ...:     log_p=log_p,
+           ...:     log_q=log_q,
+           ...:     pointwise=True
+           ...: )
+           ...: loo_approx_subsample
 
     See Also
     --------
@@ -159,9 +174,8 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
     corrected_log_ratios = corrected_log_ratios - log_ratio_max
 
     # ignore r_eff here, set to r_eff=1.0
-    log_weights, pareto_k = corrected_log_ratios.azstats.psislw(
-        r_eff=1.0, dim=loo_inputs.sample_dims
-    )
+    psis_input = -corrected_log_ratios
+    log_weights, pareto_k = psis_input.azstats.psislw(r_eff=1.0, dim=loo_inputs.sample_dims)
 
     return _compute_loo_results(
         log_likelihood=loo_inputs.log_likelihood,
