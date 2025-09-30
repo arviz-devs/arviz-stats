@@ -3,6 +3,7 @@ repos:
   rev: v5.0.0
   hooks:
   - id: check-added-large-files
+    exclude: ^tests/roaches\.nc\.xz$
   - id: check-toml
   - id: check-merge-conflict
   - id: end-of-file-fixer
