@@ -195,3 +195,10 @@ def test_pareto_min_ss_no_chain(data_c0d1):
     assert pareto_min_ss.shape == (4, 3)
     assert np.all(pareto_min_ss > 9.9)
     assert np.all(pareto_min_ss < 15)
+
+
+def test_thin(data_c0d1):
+    thinned = array_stats.thin(data_c0d1, chain_axis=0, draw_axis=1)
+    assert thinned.shape == (4, 100, 3)
+    thinned = array_stats.thin(data_c0d1, chain_axis=0, draw_axis=1, factor=10)
+    assert thinned.shape == (4, 20, 3)
