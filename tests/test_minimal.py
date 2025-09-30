@@ -203,6 +203,7 @@ def test_thin(data_c0d1):
     thinned = array_stats.thin(data_c0d1, chain_axis=0, draw_axis=1, factor=10)
     assert thinned.shape == (4, 20, 3)
 
+
 def test_pareto_khat():
     norm = np.random.normal(size=(4, 1000, 200))
     np.testing.assert_almost_equal(array_stats.pareto_khat(norm, tail="both").mean(), 0, decimal=0)
