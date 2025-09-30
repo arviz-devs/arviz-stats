@@ -345,9 +345,7 @@ class _DiagnosticsBase(_CoreBase):
             )
             return np.nan
 
-        r_eff = self._ess_tail(ary, prob=0.05, relative=True)
-
-        _, kappa = self._pareto_khat(ary, r_eff=r_eff, tail="both", log_weights=False)
+        _, kappa = self._pareto_khat(ary, tail="both", log_weights=False)
 
         # This should be 1, but to avoid overflow we use 0.99
         # we could even use a lower value as this will give
@@ -369,7 +367,7 @@ class _DiagnosticsBase(_CoreBase):
 
         return ary.reshape(ary_shape), khat
 
-    def _pareto_khat(self, ary, r_eff=1, tail="both", log_weights=False):
+    def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
         """
         Compute Pareto k-hat diagnostic.
 
@@ -392,6 +390,9 @@ class _DiagnosticsBase(_CoreBase):
         """
         if log_weights:
             tail = "right"
+
+        if r_eff is None:
+            r_eff = self._ess_tail(ary, prob=0.05, relative=True)
 
         ary = ary.flatten()
         n_draws = len(ary)
@@ -548,8 +549,8 @@ class _DiagnosticsBase(_CoreBase):
         b_ary /= prior_bs * ary[int(n / 4 + 0.5) - 1]
         b_ary += 1 / ary[-1]
 
-        k_ary = np.log1p(-b_ary[:, None] * ary).mean(axis=1)  # pylint: disable=no-member
-        len_scale = n * (np.log(-(b_ary / k_ary)) - k_ary - 1)
+        k_ary = np.mean(np.log1p(-b_ary[:, None] * ary), axis=1)
+        len_scale = n * (np.log(-b_ary / k_ary) - k_ary - 1)
         weights = np.exp(len_scale - logsumexp(len_scale))
 
         # remove negligible weights
@@ -563,7 +564,7 @@ class _DiagnosticsBase(_CoreBase):
         # posterior mean for b
         b_post = np.sum(b_ary * weights)
         # estimate for k
-        kappa = np.log1p(-b_post * ary).mean()  # pylint: disable=invalid-unary-operand-type,no-member
+        kappa = np.mean(np.log1p(-b_post * ary))
         # add prior for kappa
         sigma = -kappa / b_post
         kappa = (n * kappa + prior_k * 0.5) / (n + prior_k)

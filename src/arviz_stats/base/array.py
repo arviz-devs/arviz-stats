@@ -285,7 +285,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return psl_ufunc(ary, out_shape=[(ary.shape[i] for i in axes), []], r_eff=r_eff)
 
     def pareto_khat(
-        self, ary, chain_axis=-2, draw_axis=-1, r_eff=1, tail="both", log_weights=False
+        self, ary, chain_axis=-2, draw_axis=-1, r_eff=None, tail="both", log_weights=False
     ):
         """Compute Pareto k-hat diagnostic.
 

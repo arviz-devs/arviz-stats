@@ -367,7 +367,7 @@ class BaseDataArray:
             kwargs={"axis": np.arange(-len(dims), 0, 1)},
         )
 
-    def pareto_khat(self, da, sample_dims=None, r_eff=1.0, tail="both", log_weights=False):
+    def pareto_khat(self, da, sample_dims=None, r_eff=None, tail="both", log_weights=False):
         """Compute Pareto k-hat diagnostic on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
