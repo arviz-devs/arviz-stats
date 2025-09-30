@@ -4,6 +4,8 @@
 batching as necessary.
 """
 
+import warnings
+
 import numpy as np
 
 from arviz_stats.base.density import _DensityBase
@@ -622,6 +624,90 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             ravel=False,
         )
         return metrics_ufunc(observed, predicted)
+
+    def thin_factor(self, ary, target_ess=None, reduce_func="mean", chain_axis=-2, draw_axis=-1):
+        """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
+
+        Parameters
+        ----------
+        ary : array-like
+        target_ess : int, optional
+            By default, the ESS target will be preserving the ESS of all available samples.
+            If an integer value is passed, it must be lower than the average ESS of the input
+            samples.
+        reduce_func : {"mean", "min"}, default "mean"
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+
+        Returns
+        -------
+        int
+            Thinning factor
+        """
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
+        n_samples = ary.shape[chain_axis] * ary.shape[draw_axis]
+
+        bulk_ess = self.ess(ary, chain_axis=chain_axis, draw_axis=draw_axis, method="bulk")
+        tail_ess = self.ess(
+            ary, chain_axis=chain_axis, draw_axis=draw_axis, method="tail", prob=0.95
+        )
+        ess = np.minimum(bulk_ess, tail_ess)
+
+        if reduce_func == "mean":
+            ess_ave = np.mean(ess)
+        elif reduce_func == "min":
+            ess_ave = np.min(ess)
+        else:
+            raise ValueError(
+                f"`reduce_func` {reduce_func} not recognized. Valid values are 'mean' or 'min'"
+            )
+
+        if target_ess is None:
+            target_ess = ess_ave
+        if target_ess > ess_ave:
+            warnings.warn(
+                f"ESS not high enough to reach requested {target_ess} ESS. "
+                "Returning 1 so no thinning is applied and "
+                f"current ESS average at {ess_ave} is preserved."
+            )
+            return 1
+        if reduce_func == "min":
+            return int(np.floor(n_samples / target_ess))
+        return int(np.ceil(n_samples / target_ess))
+
+    def thin(self, ary, factor="auto", chain_axis=-2, draw_axis=-1):
+        """Perform thinning on array input.
+
+        Parameters
+        ----------
+        ary : array-like
+        factor : str or int, default "auto"
+            The thinning factor. If "auto", the thinning factor is computed based on bulk and tail
+            effective sample size. If an integer, the thinning factor is set to that value.
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+
+        Returns
+        -------
+        array-like
+            Thinned array
+        """
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
+
+        if factor == "auto":
+            factor = self.thin_factor(ary, chain_axis=chain_axis, draw_axis=draw_axis)
+
+        elif isinstance(factor, (float | int)):
+            factor = int(factor)
+            if factor == 1:
+                return ary
+            if factor < 1:
+                raise ValueError("factor must be greater than 1")
+
+        slices = [slice(None)] * ary.ndim
+        slices[draw_axis] = slice(None, None, factor)
+
+        return ary[tuple(slices)]
 
     def mode(self, ary, axis=None):
         """Compute mode of values along the specified axis.

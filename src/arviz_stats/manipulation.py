@@ -78,7 +78,6 @@ def thin(
     """
     if isinstance(data, list | tuple | np.ndarray):
         data = np.array(data)
-        # This will not work, as the thin function is not implemented in the array layer
         return get_array_function("thin")(
             data,
             factor=factor,
