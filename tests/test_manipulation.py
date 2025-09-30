@@ -1,9 +1,11 @@
+# pylint: disable=redefined-outer-name, unused-import
+# ruff: noqa: F811
 """Test for thinning function."""
 
 import numpy as np
 import pytest
 
-from .helpers import importorskip
+from .helpers import datatree, importorskip  # noqa: F401
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
