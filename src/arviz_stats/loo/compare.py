@@ -220,7 +220,12 @@ def compare(
                 subsampling_d_std_err = 0.0 if has_subsampling else None
             else:
                 diff_result = _compute_elpd_diff_subsampled(
-                    best_elpd_data, current_elpd_data, min_ic_i_val, res["elpd_i"]
+                    best_elpd_data,
+                    current_elpd_data,
+                    min_ic_i_val,
+                    res["elpd_i"],
+                    best_model_name,
+                    val,
                 )
 
                 d_ic = diff_result["elpd_diff"]
@@ -250,7 +255,7 @@ def compare(
     return df_comp.sort_values(by="elpd", ascending=False)
 
 
-def _compute_elpd_diff_subsampled(elpd_a, elpd_b, elpd_i_a, elpd_i_b):
+def _compute_elpd_diff_subsampled(elpd_a, elpd_b, elpd_i_a, elpd_i_b, name_a=None, name_b=None):
     """Compute ELPD difference for models with subsampling."""
     has_subsample_a = (
         getattr(elpd_a, "loo_subsample_observations", None) is not None
@@ -287,8 +292,11 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b, elpd_i_a, elpd_i_b):
     intersect_idx = set(elpd_a.loo_subsample_observations) & set(elpd_b.loo_subsample_observations)
 
     if not intersect_idx:
+        model_names = ""
+        if name_a and name_b:
+            model_names = f" in '{name_a}' and '{name_b}'"
         warnings.warn(
-            "Different subsamples used in compared models. Naive diff SE is used.", UserWarning
+            f"Different subsamples used{model_names}. Naive diff SE is used.", UserWarning
         )
         return {
             "elpd_diff": elpd_a.elpd - elpd_b.elpd,
