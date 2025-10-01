@@ -90,6 +90,26 @@ def compare(
            ...: compare_dict = {"non centered": data1, "centered": data2}
            ...: compare(compare_dict)
 
+    Compare models using subsampled LOO:
+
+    .. ipython::  python
+        :okwarning:
+
+        In [1]: from arviz_stats import loo_subsample
+           ...: from arviz_base import load_arviz_data
+           ...: data1 = load_arviz_data("non_centered_eight")
+           ...: data2 = load_arviz_data("centered_eight")
+           ...: loo_sub1 = loo_subsample(data1, observations=6, pointwise=True, seed=42)
+           ...: loo_sub2 = loo_subsample(data2, observations=6, pointwise=True, seed=42)
+           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2})
+
+    When using subsampled LOO, the ``subsampling_dse`` column quantifies the additional
+    uncertainty from using subsamples instead of all observations. The ``elpd_diff`` values
+    are computed using a difference-of-estimators approach on overlapping observations, which
+    can differ from simple subtraction of ELPD values. Using the same seed across models
+    ensures overlapping observations for more accurate paired comparisons with smaller
+    standard errors.
+
     See Also
     --------
     :func:`loo` : Compute the ELPD using the Pareto smoothed importance sampling Leave-one-out
