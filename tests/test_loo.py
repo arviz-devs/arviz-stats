@@ -1169,3 +1169,38 @@ def test_loo_score_validation_errors(centered_eight, kind, scenario, pattern):
 
     with pytest.raises(ValueError, match=pattern):
         loo_score(broken, kind=kind)
+
+
+def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
+    loo_sub1 = loo_subsample(
+        centered_eight_with_sigma,
+        observations=4,
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        pointwise=True,
+        seed=42,
+    )
+
+    loo_sub2 = loo_subsample(
+        centered_eight_with_sigma,
+        observations=4,
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        pointwise=True,
+        seed=42,
+    )
+
+    loo_full = loo(centered_eight, pointwise=True)
+
+    comparison_subsampled = compare({"model1": loo_sub1, "model2": loo_sub2})
+    assert "subsampling_dse" in comparison_subsampled.columns
+    assert not np.isnan(comparison_subsampled["subsampling_dse"].values).any()
+    assert_almost_equal(comparison_subsampled["elpd_diff"].iloc[0], 0.0, decimal=4)
+
+    comparison_regular = compare({"model1": loo_full, "model2": loo_full})
+    assert "subsampling_dse" not in comparison_regular.columns
+    assert_almost_equal(comparison_regular["elpd_diff"].iloc[0], 0.0, decimal=4)

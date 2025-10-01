@@ -356,6 +356,9 @@ def loo_subsample(
             log_q,
             thin,
             stored_log_weights,
+            None,
+            subsample_data.indices,
+            subsample_data.lpd_approx_all,
         )
 
     elpd_i_full, pareto_k_full = _prepare_full_arrays(
@@ -391,6 +394,9 @@ def loo_subsample(
         log_q,
         thin,
         log_weights_full,
+        None,
+        subsample_data.indices,
+        subsample_data.lpd_approx_all,
     )
 
 
@@ -661,4 +667,7 @@ def update_subsample(
         log_q,
         thin,
         log_weights_full,
+        None,
+        combined_indices,
+        update_data.lpd_approx_all,
     )
