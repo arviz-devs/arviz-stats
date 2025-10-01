@@ -147,6 +147,8 @@ def loo_subsample(
         - **log_q**: Log density of the proposal posterior.
         - **thin**: Thinning factor for posterior draws.
         - **log_weights**: Smoothed log weights.
+        - **loo_subsample_observations**: Indices of subsampled observations.
+        - **elpd_loo_approx**: Approximation for all N observations.
 
     Examples
     --------
@@ -507,6 +509,8 @@ def update_subsample(
         - **log_q**: Log density of the proposal posterior.
         - **thin**: Thinning factor for posterior draws.
         - **log_weights**: Smoothed log weights.
+        - **loo_subsample_observations**: Indices of subsampled observations.
+        - **elpd_loo_approx**: Approximation for all N observations.
 
     Examples
     --------
