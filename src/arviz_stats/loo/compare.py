@@ -101,7 +101,7 @@ def compare(
            ...: data2 = load_arviz_data("centered_eight")
            ...: loo_sub1 = loo_subsample(data1, observations=6, pointwise=True, seed=42)
            ...: loo_sub2 = loo_subsample(data2, observations=6, pointwise=True, seed=42)
-           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2})
+           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2}).round(2)
 
     When using subsampled LOO, the ``subsampling_dse`` column quantifies the additional
     uncertainty from using subsamples instead of all observations. The ``elpd_diff`` values
