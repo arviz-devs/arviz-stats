@@ -188,6 +188,8 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     thin_factor: object = None
     log_weights: DataArray = None
     n_folds: int = None
+    loo_subsample_observations: np.ndarray = None
+    elpd_loo_approx: DataArray = None
 
     def __str__(self):
         """Print elpd data in a user friendly way."""

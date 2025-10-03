@@ -6,11 +6,13 @@ from copy import deepcopy
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 from arviz_base import rcParams
 from scipy.optimize import minimize
 from scipy.stats import dirichlet
 
 from arviz_stats.loo import loo
+from arviz_stats.loo.helper_loo import _diff_srs_estimator
 from arviz_stats.utils import ELPDData
 
 
@@ -67,6 +69,9 @@ def compare(
           If method = BB-pseudo-BMA these values are estimated using Bayesian bootstrap.
         - **dSE**: Standard error of the difference in ELPD between each model
           and the top-ranked model. It's always 0 for the top-ranked model.
+        - **subsampling_dSE**: (Only when subsampling is used) The subsampling component
+          of the standard error of the ELPD difference. This quantifies the uncertainty due to
+          using a subsample rather than all observations.
         - **warning**: A value of 1 indicates that the computation of the ELPD may not be reliable.
           This could be indication of LOO starting to fail see
           http://arxiv.org/abs/1507.04544 for details.
@@ -84,6 +89,26 @@ def compare(
            ...: data2 = load_arviz_data("centered_eight")
            ...: compare_dict = {"non centered": data1, "centered": data2}
            ...: compare(compare_dict)
+
+    Compare models using subsampled LOO:
+
+    .. ipython::  python
+        :okwarning:
+
+        In [1]: from arviz_stats import loo_subsample
+           ...: from arviz_base import load_arviz_data
+           ...: data1 = load_arviz_data("non_centered_eight")
+           ...: data2 = load_arviz_data("centered_eight")
+           ...: loo_sub1 = loo_subsample(data1, observations=6, pointwise=True, seed=42)
+           ...: loo_sub2 = loo_subsample(data2, observations=6, pointwise=True, seed=42)
+           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2}).round(2)
+
+    When using subsampled LOO, the ``subsampling_dse`` column quantifies the additional
+    uncertainty from using subsamples instead of all observations. The ``elpd_diff`` values
+    are computed using a difference-of-estimators approach on overlapping observations, which
+    can differ from simple subtraction of ELPD values. Using the same seed across models
+    ensures overlapping observations for more accurate paired comparisons with smaller
+    standard errors.
 
     See Also
     --------
@@ -109,18 +134,24 @@ def compare(
     ics_dict = _calculate_ics(compare_dict, var_name=var_name)
     names = list(ics_dict.keys())
 
-    df_comp = pd.DataFrame(
-        {
-            "rank": pd.Series(index=names, dtype="int"),
-            "elpd": pd.Series(index=names, dtype="float"),
-            "p": pd.Series(index=names, dtype="float"),
-            "elpd_diff": pd.Series(index=names, dtype="float"),
-            "weight": pd.Series(index=names, dtype="float"),
-            "se": pd.Series(index=names, dtype="float"),
-            "dse": pd.Series(index=names, dtype="float"),
-            "warning": pd.Series(index=names, dtype="boolean"),
-        }
+    has_subsampling = any(
+        getattr(elpd, "subsample_size", None) is not None for elpd in ics_dict.values()
     )
+
+    df_cols = {
+        "rank": pd.Series(index=names, dtype="int"),
+        "elpd": pd.Series(index=names, dtype="float"),
+        "p": pd.Series(index=names, dtype="float"),
+        "elpd_diff": pd.Series(index=names, dtype="float"),
+        "weight": pd.Series(index=names, dtype="float"),
+        "se": pd.Series(index=names, dtype="float"),
+        "dse": pd.Series(index=names, dtype="float"),
+        "warning": pd.Series(index=names, dtype="boolean"),
+    }
+    if has_subsampling:
+        df_cols["subsampling_dse"] = pd.Series(index=names, dtype="float")
+
+    df_comp = pd.DataFrame(df_cols)
 
     method = rcParams["stats.ic_compare_method"] if method is None else method
     available_methods = ["stacking", "bb-pseudo-bma", "pseudo-bma"]
@@ -195,15 +226,36 @@ def compare(
         weights = (z_rv / np.sum(z_rv)).to_numpy()
 
     if np.any(weights):
+        best_model_name = ics.index[0]
+        best_elpd_data = ics_dict[best_model_name]
         min_ic_i_val = ics["elpd_i"].iloc[0]
+
         for idx, val in enumerate(ics.index):
             res = ics.loc[val]
-            diff = min_ic_i_val - res["elpd_i"]
-            d_ic = np.sum(diff)
-            d_std_err = np.sqrt(len(diff) * np.var(diff))
+            current_elpd_data = ics_dict[val]
+
+            if idx == 0:
+                d_ic = 0.0
+                d_std_err = 0.0
+                subsampling_d_std_err = 0.0 if has_subsampling else None
+            else:
+                diff_result = _compute_elpd_diff_subsampled(
+                    best_elpd_data,
+                    current_elpd_data,
+                    min_ic_i_val,
+                    res["elpd_i"],
+                    best_model_name,
+                    val,
+                )
+
+                d_ic = diff_result["elpd_diff"]
+                d_std_err = diff_result["se_diff"]
+                subsampling_d_std_err = diff_result.get("subsampling_dse")
+
             std_err = ses.loc[val]
             weight = weights[idx]
-            df_comp.loc[val] = (
+
+            row_data = [
                 idx,
                 res["elpd"],
                 res["p"],
@@ -212,11 +264,94 @@ def compare(
                 std_err,
                 d_std_err,
                 res["warning"],
-            )
+            ]
+            if has_subsampling:
+                row_data.append(subsampling_d_std_err)
+
+            df_comp.loc[val] = row_data
 
     df_comp["rank"] = df_comp["rank"].astype(int)
     df_comp["warning"] = df_comp["warning"].astype(bool)
     return df_comp.sort_values(by="elpd", ascending=False)
+
+
+def _compute_elpd_diff_subsampled(elpd_a, elpd_b, elpd_i_a, elpd_i_b, name_a=None, name_b=None):
+    """Compute ELPD difference for models with subsampling."""
+    has_subsample_a = (
+        getattr(elpd_a, "loo_subsample_observations", None) is not None
+        and getattr(elpd_a, "elpd_loo_approx", None) is not None
+    )
+    has_subsample_b = (
+        getattr(elpd_b, "loo_subsample_observations", None) is not None
+        and getattr(elpd_b, "elpd_loo_approx", None) is not None
+    )
+
+    if not (has_subsample_a and has_subsample_b):
+        diff = elpd_i_a - elpd_i_b
+        valid_diff = diff[~np.isnan(diff)]
+        if len(valid_diff) > 0:
+            d_ic = np.nansum(diff)
+            d_std_err = np.sqrt(len(valid_diff) * np.var(valid_diff))
+            if has_subsample_a or has_subsample_b:
+                warnings.warn(
+                    "Estimated elpd_diff using observations included in loo calculations "
+                    "for all models.",
+                    UserWarning,
+                )
+        else:
+            d_ic = elpd_a.elpd - elpd_b.elpd
+            d_std_err = np.sqrt(elpd_a.se**2 + elpd_b.se**2)
+
+        result = {"elpd_diff": d_ic, "se_diff": d_std_err}
+        if has_subsample_a or has_subsample_b:
+            subsampling_se_a = getattr(elpd_a, "subsampling_se", 0.0) or 0.0
+            subsampling_se_b = getattr(elpd_b, "subsampling_se", 0.0) or 0.0
+            result["subsampling_dse"] = np.sqrt(subsampling_se_a**2 + subsampling_se_b**2)
+        return result
+
+    intersect_idx = set(elpd_a.loo_subsample_observations) & set(elpd_b.loo_subsample_observations)
+
+    if not intersect_idx:
+        model_names = ""
+        if name_a and name_b:
+            model_names = f" in '{name_a}' and '{name_b}'"
+        warnings.warn(
+            f"Different subsamples used{model_names}. Naive diff SE is used.", UserWarning
+        )
+        return {
+            "elpd_diff": elpd_a.elpd - elpd_b.elpd,
+            "se_diff": np.sqrt(elpd_a.se**2 + elpd_b.se**2),
+            "subsampling_dse": np.sqrt(elpd_a.subsampling_se**2 + elpd_b.subsampling_se**2),
+        }
+
+    diff_approx_all = elpd_a.elpd_loo_approx - elpd_b.elpd_loo_approx
+    overlapping_indices = np.array(sorted(intersect_idx))
+    diff = elpd_i_a[overlapping_indices] - elpd_i_b[overlapping_indices]
+    valid_mask = ~np.isnan(diff)
+
+    if not valid_mask.any():
+        return {
+            "elpd_diff": elpd_a.elpd - elpd_b.elpd,
+            "se_diff": np.sqrt(elpd_a.se**2 + elpd_b.se**2),
+            "subsampling_dse": np.sqrt(elpd_a.subsampling_se**2 + elpd_b.subsampling_se**2),
+        }
+
+    diff_sample = xr.DataArray(diff[valid_mask])
+    diff_approx_sample = xr.DataArray(diff_approx_all.values[overlapping_indices[valid_mask]])
+
+    d_ic, subsampling_dse, d_std_err = _diff_srs_estimator(
+        diff_sample,
+        diff_approx_sample,
+        diff_approx_all,
+        elpd_a.n_data_points,
+        valid_mask.sum(),
+    )
+
+    return {
+        "elpd_diff": d_ic,
+        "se_diff": d_std_err,
+        "subsampling_dse": subsampling_dse,
+    }
 
 
 def _ic_matrix(ics):
