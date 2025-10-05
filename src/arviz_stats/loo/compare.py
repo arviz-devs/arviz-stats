@@ -311,7 +311,8 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b, elpd_i_a, elpd_i_b, name_a=Non
 
     intersect_idx = set(elpd_a.loo_subsample_observations) & set(elpd_b.loo_subsample_observations)
 
-    if not intersect_idx:
+    # Need at least 2 overlapping observations to compute variance for difference estimator
+    if len(intersect_idx) < 2:
         model_names = ""
         if name_a and name_b:
             model_names = f" in '{name_a}' and '{name_b}'"
