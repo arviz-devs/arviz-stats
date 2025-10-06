@@ -869,11 +869,11 @@ def _diff_srs_estimator(
 
     Parameters
     ----------
-    elpd_loo_i_sample : DataArray
+    elpd_loo_i_sample : DataArray or array-like
         Pointwise ELPD values for the subsample.
-    lpd_approx_sample : DataArray
+    lpd_approx_sample : DataArray or array-like
         LPD approximation values for the subsample.
-    lpd_approx_all : DataArray
+    lpd_approx_all : DataArray or array-like
         LPD approximation values for the full dataset.
     n_data_points : int
         Total number of data points (N).
@@ -889,43 +889,68 @@ def _diff_srs_estimator(
         - subsampling_se_val: The standard error due to subsampling uncertainty.
         - se_val: The total standard error (approximation + sampling uncertainty).
     """
-    pointwise_diff = elpd_loo_i_sample - lpd_approx_sample
-    lpd_approx_sum_all = lpd_approx_all.sum().values.item()
-    scaled_mean_pointwise_diff = n_data_points * pointwise_diff.mean().values.item()
+    elpd_sample = np.asarray(elpd_loo_i_sample, dtype=float).reshape(-1)
+    approx_sample = np.asarray(lpd_approx_sample, dtype=float).reshape(-1)
+    approx_all = np.asarray(lpd_approx_all, dtype=float).reshape(-1)
+
+    if elpd_sample.size != approx_sample.size:
+        raise ValueError("Subsampled ELPD and approximation must have matching shapes.")
+
+    finite_mask = np.isfinite(elpd_sample) & np.isfinite(approx_sample)
+    valid_count = int(np.count_nonzero(finite_mask))
+
+    if valid_count == 0:
+        return np.nan, np.inf, np.inf
+
+    elpd_valid = elpd_sample[finite_mask]
+    approx_valid = approx_sample[finite_mask]
+
+    pointwise_diff = elpd_valid - approx_valid
+
+    lpd_approx_sum_all = np.nansum(approx_all)
+    scaled_mean_pointwise_diff = n_data_points * np.nanmean(pointwise_diff)
     elpd_loo_estimate = lpd_approx_sum_all + scaled_mean_pointwise_diff
 
-    if subsample_size > 1:
-        # Subsampling variance
-        subsampling_variance = (
-            (n_data_points**2)
-            * (1 - subsample_size / n_data_points)
-            * pointwise_diff.var(ddof=1).values
-            / subsample_size
-        )
-        subsampling_se = np.sqrt(subsampling_variance) if subsampling_variance >= 0 else np.inf
+    subsampling_se = np.inf
+    total_se = np.inf
 
-        # Total variance (approximation + sampling)
-        lpd_approx_sq_sum_all = (lpd_approx_all**2).sum().values.item()
-        mean_sq_diff = ((elpd_loo_i_sample**2) - (lpd_approx_sample**2)).mean().values.item()
-        scaled_mean_sq_diff = n_data_points * mean_sq_diff
+    effective_m = min(valid_count, subsample_size)
+    if effective_m > 1 and n_data_points > 0:
+        variance = np.nanvar(pointwise_diff, ddof=1)
 
-        if n_data_points > 0:
-            total_variance_estimate = (lpd_approx_sq_sum_all + scaled_mean_sq_diff) - (
-                1 / n_data_points
-            ) * (
-                scaled_mean_pointwise_diff**2
-                - subsampling_variance
-                + 2 * lpd_approx_sum_all * elpd_loo_estimate
-                - lpd_approx_sum_all**2
+        if np.isfinite(variance):
+            finite_pop_correction = max(0.0, 1 - effective_m / n_data_points)
+            subsampling_variance = (
+                (n_data_points**2) * finite_pop_correction * variance / effective_m
             )
-            total_variance_estimate = max(0, total_variance_estimate)
-        else:
-            total_variance_estimate = np.inf
+            subsampling_variance = np.nan_to_num(subsampling_variance, nan=np.inf)
 
-        total_se = np.sqrt(total_variance_estimate) if total_variance_estimate >= 0 else np.inf
-    else:
-        subsampling_se = np.inf
-        total_se = np.inf
+            subsampling_se = (
+                np.sqrt(subsampling_variance) if np.isfinite(subsampling_variance) else np.inf
+            )
+
+            lpd_approx_sq_sum_all = np.nansum(approx_all**2)
+            mean_sq_diff = np.nanmean(elpd_valid**2 - approx_valid**2)
+            scaled_mean_sq_diff = n_data_points * mean_sq_diff
+
+            total_variance_estimate = (
+                lpd_approx_sq_sum_all
+                + scaled_mean_sq_diff
+                - (1 / n_data_points)
+                * (
+                    scaled_mean_pointwise_diff**2
+                    - subsampling_variance
+                    + 2 * lpd_approx_sum_all * elpd_loo_estimate
+                    - lpd_approx_sum_all**2
+                )
+            )
+
+            if np.isfinite(total_variance_estimate):
+                total_variance_estimate = max(0.0, total_variance_estimate)
+                total_se = np.sqrt(total_variance_estimate)
+            else:
+                total_se = np.inf
+
     return elpd_loo_estimate, subsampling_se, total_se
 
 

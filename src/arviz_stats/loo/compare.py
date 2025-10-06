@@ -6,7 +6,6 @@ from copy import deepcopy
 
 import numpy as np
 import pandas as pd
-import xarray as xr
 from arviz_base import rcParams
 from scipy.optimize import minimize
 from scipy.stats import dirichlet
@@ -228,8 +227,6 @@ def compare(
     if np.any(weights):
         best_model_name = ics.index[0]
         best_elpd_data = ics_dict[best_model_name]
-        min_ic_i_val = ics["elpd_i"].iloc[0]
-
         for idx, val in enumerate(ics.index):
             res = ics.loc[val]
             current_elpd_data = ics_dict[val]
@@ -242,8 +239,6 @@ def compare(
                 diff_result = _compute_elpd_diff_subsampled(
                     best_elpd_data,
                     current_elpd_data,
-                    min_ic_i_val,
-                    res["elpd_i"],
                     best_model_name,
                     val,
                 )
@@ -275,84 +270,150 @@ def compare(
     return df_comp.sort_values(by="elpd", ascending=False)
 
 
-def _compute_elpd_diff_subsampled(elpd_a, elpd_b, elpd_i_a, elpd_i_b, name_a=None, name_b=None):
-    """Compute ELPD difference for models with subsampling."""
-    has_subsample_a = (
-        getattr(elpd_a, "loo_subsample_observations", None) is not None
-        and getattr(elpd_a, "elpd_loo_approx", None) is not None
-    )
-    has_subsample_b = (
-        getattr(elpd_b, "loo_subsample_observations", None) is not None
-        and getattr(elpd_b, "elpd_loo_approx", None) is not None
-    )
+def _compute_elpd_diff_subsampled(elpd_a, elpd_b, name_a=None, name_b=None):
+    """Compute ELPD differences for subsampled models."""
+    subsample_a = getattr(elpd_a, "loo_subsample_observations", None)
+    subsample_b = getattr(elpd_b, "loo_subsample_observations", None)
 
-    if not (has_subsample_a and has_subsample_b):
-        diff = elpd_i_a - elpd_i_b
-        valid_diff = diff[~np.isnan(diff)]
-        if len(valid_diff) > 0:
-            d_ic = np.nansum(diff)
-            d_std_err = np.sqrt(len(valid_diff) * np.var(valid_diff))
-            if has_subsample_a or has_subsample_b:
-                warnings.warn(
-                    "Estimated elpd_diff using observations included in loo calculations "
-                    "for all models.",
-                    UserWarning,
-                )
-        else:
-            d_ic = elpd_a.elpd - elpd_b.elpd
-            d_std_err = np.sqrt(elpd_a.se**2 + elpd_b.se**2)
+    if subsample_a is None and subsample_b is None:
+        pointwise_a = elpd_a.elpd_i
+        pointwise_b = elpd_b.elpd_i
 
-        result = {"elpd_diff": d_ic, "se_diff": d_std_err}
-        if has_subsample_a or has_subsample_b:
-            subsampling_se_a = getattr(elpd_a, "subsampling_se", 0.0) or 0.0
-            subsampling_se_b = getattr(elpd_b, "subsampling_se", 0.0) or 0.0
-            result["subsampling_dse"] = np.sqrt(subsampling_se_a**2 + subsampling_se_b**2)
+        if pointwise_a is None or pointwise_b is None:
+            return _compute_naive_diff(elpd_a, elpd_b)
+
+        diff = (np.asarray(pointwise_a) - np.asarray(pointwise_b)).reshape(-1)
+        valid = diff[np.isfinite(diff)]
+
+        if valid.size == 0:
+            return _compute_naive_diff(elpd_a, elpd_b)
+
+        elpd_diff = np.nansum(valid)
+        se_diff = np.sqrt(valid.size * np.nanvar(valid))
+        result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
+
+        subsampling_a = getattr(elpd_a, "subsampling_se", None) or 0.0
+        subsampling_b = getattr(elpd_b, "subsampling_se", None) or 0.0
+        combined = np.sqrt(subsampling_a**2 + subsampling_b**2)
+
+        if combined:
+            result["subsampling_dse"] = combined
         return result
 
-    intersect_idx = set(elpd_a.loo_subsample_observations) & set(elpd_b.loo_subsample_observations)
+    indices_a = (
+        np.unique(np.asarray(subsample_a, dtype=int))
+        if subsample_a is not None
+        else np.arange(elpd_a.n_data_points, dtype=int)
+    )
+    indices_b = (
+        np.unique(np.asarray(subsample_b, dtype=int))
+        if subsample_b is not None
+        else np.arange(elpd_b.n_data_points, dtype=int)
+    )
+    shared = np.intersect1d(indices_a, indices_b)
 
-    # Need at least 2 overlapping observations to compute variance for difference estimator
-    if len(intersect_idx) < 2:
-        model_names = ""
+    if shared.size == 0:
         if name_a and name_b:
-            model_names = f" in '{name_a}' and '{name_b}'"
-        warnings.warn(
-            f"Different subsamples used{model_names}. Naive diff SE is used.", UserWarning
-        )
-        return {
-            "elpd_diff": elpd_a.elpd - elpd_b.elpd,
-            "se_diff": np.sqrt(elpd_a.se**2 + elpd_b.se**2),
-            "subsampling_dse": np.sqrt(elpd_a.subsampling_se**2 + elpd_b.subsampling_se**2),
-        }
+            warnings.warn(
+                f"Different subsamples in '{name_a}' and '{name_b}'. Naive diff SE is used.",
+                UserWarning,
+            )
+        return _compute_naive_diff(elpd_a, elpd_b)
 
-    diff_approx_all = elpd_a.elpd_loo_approx - elpd_b.elpd_loo_approx
-    overlapping_indices = np.array(sorted(intersect_idx))
-    diff = elpd_i_a[overlapping_indices] - elpd_i_b[overlapping_indices]
-    valid_mask = ~np.isnan(diff)
+    result = _difference_estimator(elpd_a, elpd_b, shared, subsample_a, subsample_b)
+    if result is not None:
+        return result
 
-    if not valid_mask.any():
-        return {
-            "elpd_diff": elpd_a.elpd - elpd_b.elpd,
-            "se_diff": np.sqrt(elpd_a.se**2 + elpd_b.se**2),
-            "subsampling_dse": np.sqrt(elpd_a.subsampling_se**2 + elpd_b.subsampling_se**2),
-        }
+    return _compute_naive_diff(elpd_a, elpd_b)
 
-    diff_sample = xr.DataArray(diff[valid_mask])
-    diff_approx_sample = xr.DataArray(diff_approx_all.values[overlapping_indices[valid_mask]])
 
-    d_ic, subsampling_dse, d_std_err = _diff_srs_estimator(
+def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subsample_b=None):
+    """Compute ELPD difference using the difference-of-estimators approach."""
+    shared = np.asarray(shared_indices, dtype=int)
+    ordered_shared = next(
+        (
+            candidate_arr[mask]
+            for candidate in (subsample_a, subsample_b)
+            if candidate is not None
+            for candidate_arr in (np.asarray(candidate, dtype=int),)
+            for mask in (np.isin(candidate_arr, shared),)
+            if np.any(mask)
+        ),
+        shared,
+    )
+
+    if ordered_shared.size < 2:
+        return None
+
+    elpd_a_values = elpd_a.elpd_i
+    elpd_b_values = elpd_b.elpd_i
+    elpd_a_full = (
+        None if elpd_a_values is None else np.asarray(elpd_a_values, dtype=float).reshape(-1)
+    )
+    elpd_b_full = (
+        None if elpd_b_values is None else np.asarray(elpd_b_values, dtype=float).reshape(-1)
+    )
+
+    approx_a_values = getattr(elpd_a, "elpd_loo_approx", None)
+    if approx_a_values is None:
+        approx_a_values = elpd_a_values
+    approx_a_full = (
+        None if approx_a_values is None else np.asarray(approx_a_values, dtype=float).reshape(-1)
+    )
+
+    approx_b_values = getattr(elpd_b, "elpd_loo_approx", None)
+    if approx_b_values is None:
+        approx_b_values = elpd_b_values
+    approx_b_full = (
+        None if approx_b_values is None else np.asarray(approx_b_values, dtype=float).reshape(-1)
+    )
+
+    if any(
+        component is None for component in (elpd_a_full, elpd_b_full, approx_a_full, approx_b_full)
+    ):
+        return None
+
+    diff_sample = elpd_a_full[ordered_shared] - elpd_b_full[ordered_shared]
+    diff_approx_sample = approx_a_full[ordered_shared] - approx_b_full[ordered_shared]
+    diff_approx_all = approx_a_full - approx_b_full
+
+    valid = np.isfinite(diff_sample) & np.isfinite(diff_approx_sample)
+    if valid.sum() < 2:
+        return None
+
+    diff_sample = diff_sample[valid]
+    diff_approx_sample = diff_approx_sample[valid]
+
+    elpd_diff, subsampling_dse, se_diff = _diff_srs_estimator(
         diff_sample,
         diff_approx_sample,
         diff_approx_all,
         elpd_a.n_data_points,
-        valid_mask.sum(),
+        diff_sample.size,
     )
 
     return {
-        "elpd_diff": d_ic,
-        "se_diff": d_std_err,
+        "elpd_diff": elpd_diff,
+        "se_diff": se_diff,
         "subsampling_dse": subsampling_dse,
     }
+
+
+def _compute_naive_diff(elpd_a, elpd_b):
+    """Compute naive ELPD difference using paired observations."""
+    elpd_diff = elpd_a.elpd - elpd_b.elpd
+    se_a = getattr(elpd_a, "se", 0.0) or 0.0
+    se_b = getattr(elpd_b, "se", 0.0) or 0.0
+    se_diff = np.sqrt(se_a**2 + se_b**2)
+
+    result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
+    subsampling_a = getattr(elpd_a, "subsampling_se", None) or 0.0
+    subsampling_b = getattr(elpd_b, "subsampling_se", None) or 0.0
+    combined = np.sqrt(subsampling_a**2 + subsampling_b**2)
+
+    if combined:
+        result["subsampling_dse"] = combined
+    return result
 
 
 def _ic_matrix(ics):
