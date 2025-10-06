@@ -274,6 +274,7 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b, name_a=None, name_b=None):
     """Compute ELPD differences for subsampled models."""
     subsample_a = getattr(elpd_a, "loo_subsample_observations", None)
     subsample_b = getattr(elpd_b, "loo_subsample_observations", None)
+    mixed_subsample = (subsample_a is None) != (subsample_b is None)
 
     if subsample_a is None and subsample_b is None:
         pointwise_a = elpd_a.elpd_i
@@ -300,6 +301,12 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b, name_a=None, name_b=None):
             result["subsampling_dse"] = combined
         return result
 
+    if mixed_subsample:
+        warnings.warn(
+            "Estimated elpd_diff using observations included in loo calculations for all models.",
+            UserWarning,
+        )
+
     indices_a = (
         np.unique(np.asarray(subsample_a, dtype=int))
         if subsample_a is not None
@@ -310,19 +317,24 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b, name_a=None, name_b=None):
         if subsample_b is not None
         else np.arange(elpd_b.n_data_points, dtype=int)
     )
+
     shared = np.intersect1d(indices_a, indices_b)
+    subsample_mismatch = (
+        subsample_a is not None
+        and subsample_b is not None
+        and not np.array_equal(indices_a, indices_b)
+    )
 
-    if shared.size == 0:
-        if name_a and name_b:
-            warnings.warn(
-                f"Different subsamples in '{name_a}' and '{name_b}'. Naive diff SE is used.",
-                UserWarning,
-            )
-        return _compute_naive_diff(elpd_a, elpd_b)
+    if shared.size >= 2:
+        result = _difference_estimator(elpd_a, elpd_b, shared, subsample_a, subsample_b)
+        if result is not None:
+            return result
 
-    result = _difference_estimator(elpd_a, elpd_b, shared, subsample_a, subsample_b)
-    if result is not None:
-        return result
+    if subsample_mismatch:
+        warnings.warn(
+            f"Different subsamples used in '{name_a}' and '{name_b}'. Naive diff SE is used.",
+            UserWarning,
+        )
 
     return _compute_naive_diff(elpd_a, elpd_b)
 

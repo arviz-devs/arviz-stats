@@ -1225,7 +1225,7 @@ def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
     assert "subsampling_dse" in comparison_updated.columns
     assert np.isfinite(comparison_updated["subsampling_dse"].values).all()
 
-    with pytest.warns(UserWarning, match="Different subsamples in 'model_a' and 'model_b'"):
+    with pytest.warns(UserWarning, match="Different subsamples used in 'model_a' and 'model_b'"):
         comparison_diff_subsample = compare({"model_a": loo_sub1, "model_b": loo_sub3})
     assert "subsampling_dse" in comparison_diff_subsample.columns
     assert np.isfinite(comparison_diff_subsample["subsampling_dse"].values).all()
