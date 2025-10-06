@@ -87,7 +87,7 @@ def compare(
            ...: data1 = load_arviz_data("non_centered_eight")
            ...: data2 = load_arviz_data("centered_eight")
            ...: compare_dict = {"non centered": data1, "centered": data2}
-           ...: compare(compare_dict)
+           ...: compare(compare_dict).round(2)
 
     Compare models using subsampled LOO:
 
