@@ -227,6 +227,9 @@ def compare(
     if np.any(weights):
         best_model_name = ics.index[0]
         best_elpd_data = ics_dict[best_model_name]
+        n_models = len(ics.index)
+        mismatched_pairs = []
+
         for idx, val in enumerate(ics.index):
             res = ics.loc[val]
             current_elpd_data = ics_dict[val]
@@ -239,13 +242,14 @@ def compare(
                 diff_result = _compute_elpd_diff_subsampled(
                     best_elpd_data,
                     current_elpd_data,
-                    best_model_name,
-                    val,
                 )
 
                 d_ic = diff_result["elpd_diff"]
                 d_std_err = diff_result["se_diff"]
                 subsampling_d_std_err = diff_result.get("subsampling_dse")
+
+                if diff_result.get("subsample_mismatch"):
+                    mismatched_pairs.append((best_model_name, val))
 
             std_err = ses.loc[val]
             weight = weights[idx]
@@ -265,12 +269,27 @@ def compare(
 
             df_comp.loc[val] = row_data
 
+        if mismatched_pairs:
+            if n_models > 2:
+                pairs_str = ", ".join([f"'{a}' and '{b}'" for a, b in mismatched_pairs])
+                warnings.warn(
+                    f"Different subsamples used in {pairs_str}. Naive diff SE is used.",
+                    UserWarning,
+                )
+            else:
+                for name_a, name_b in mismatched_pairs:
+                    warnings.warn(
+                        f"Different subsamples used in '{name_a}' and '{name_b}'. "
+                        "Naive diff SE is used.",
+                        UserWarning,
+                    )
+
     df_comp["rank"] = df_comp["rank"].astype(int)
     df_comp["warning"] = df_comp["warning"].astype(bool)
     return df_comp.sort_values(by="elpd", ascending=False)
 
 
-def _compute_elpd_diff_subsampled(elpd_a, elpd_b, name_a=None, name_b=None):
+def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
     """Compute ELPD differences for subsampled models."""
     subsample_a = getattr(elpd_a, "loo_subsample_observations", None)
     subsample_b = getattr(elpd_b, "loo_subsample_observations", None)
@@ -328,15 +347,12 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b, name_a=None, name_b=None):
     if shared.size >= 2:
         result = _difference_estimator(elpd_a, elpd_b, shared, subsample_a, subsample_b)
         if result is not None:
+            result["subsample_mismatch"] = subsample_mismatch
             return result
 
-    if subsample_mismatch:
-        warnings.warn(
-            f"Different subsamples used in '{name_a}' and '{name_b}'. Naive diff SE is used.",
-            UserWarning,
-        )
-
-    return _compute_naive_diff(elpd_a, elpd_b)
+    result = _compute_naive_diff(elpd_a, elpd_b)
+    result["subsample_mismatch"] = subsample_mismatch
+    return result
 
 
 def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subsample_b=None):
