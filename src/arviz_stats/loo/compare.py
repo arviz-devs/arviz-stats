@@ -430,8 +430,8 @@ def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subs
 def _compute_naive_diff(elpd_a, elpd_b):
     """Compute naive ELPD difference using paired observations."""
     elpd_diff = elpd_a.elpd - elpd_b.elpd
-    se_a = getattr(elpd_a, "se", 0.0) or 0.0
-    se_b = getattr(elpd_b, "se", 0.0) or 0.0
+    se_a = getattr(elpd_a, "se", 0.0)
+    se_b = getattr(elpd_b, "se", 0.0)
     se_diff = np.sqrt(se_a**2 + se_b**2)
 
     result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
