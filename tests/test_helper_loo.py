@@ -308,6 +308,7 @@ def test_warn_pointwise_loo():
         assert len(record) == 0
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_thin_draws(log_likelihood_dataset):
     log_likelihood = log_likelihood_dataset["obs"]
     original_draws = log_likelihood.draw.size

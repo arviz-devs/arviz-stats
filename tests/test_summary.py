@@ -74,6 +74,7 @@ def test_summary_focus_kind(datatree, params):
     assert_array_equal(summary_df.columns, metrics_names_)
 
 
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_summary_nan(datatree):
     datatree = deepcopy(datatree)
     datatree.posterior["theta"].loc[{"hierarchy": 0}] = np.nan

@@ -96,11 +96,13 @@ def test_bayes_factor_mismatched_lengths(fake_dt):
         bayes_factor(data=fake_dt, var_names=["a", "b"], ref_vals=[0])
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_bayes_factor_outside_posterior(fake_dt):
     with pytest.warns(UserWarning, match="is outside the posterior range"):
         bayes_factor(data=fake_dt, var_names=["a"], ref_vals=[1000])
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_bayes_factor_outside_prior(fake_dt):
     with pytest.warns(UserWarning, match="is outside the prior range"):
         bayes_factor(data=fake_dt, var_names=["a"], ref_vals=[1000])
@@ -120,6 +122,7 @@ def test_bayes_factor_float_ref_val(fake_dt):
     assert result["a"]["BF01"] > 0
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_bayes_factor_narrow_distribution():
     narrow_posterior = np.random.normal(100, 0.1, (4, 100))
     narrow_prior = np.random.normal(100, 0.1, (4, 100))

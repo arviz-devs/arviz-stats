@@ -78,6 +78,7 @@ def high_k_loo_data(non_centered_eight):
     return loo_data_modified
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_reloo(mock_wrapper, high_k_loo_data):
     result = reloo(
         mock_wrapper,
@@ -183,6 +184,7 @@ def mock_2d_data():
     )
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_reloo_multidimensional(mock_2d_data):
     loo_orig = loo(mock_2d_data, pointwise=True, var_name="log_lik")
     loo_modified = ELPDData(
@@ -218,6 +220,7 @@ def test_reloo_multidimensional(mock_2d_data):
     assert result.pareto_k.loc[unchanged_loc] == loo_modified.pareto_k.loc[unchanged_loc]
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_reloo_with_log_weights(mock_wrapper):
     loo_result = loo(mock_wrapper.idata_orig, pointwise=True, var_name="obs")
 

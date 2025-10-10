@@ -172,6 +172,8 @@ def test_psis_matches_r_reference(roaches_r_example):
     )
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_moment_match_matches_r_reference(roaches_r_example):
     example = roaches_r_example
     parity = load_r_parity()

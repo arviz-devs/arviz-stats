@@ -28,6 +28,30 @@ def test_r2_score_array(datatree):
     assert result.shape == (y_pred.shape[0],)
 
 
+@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+def test_r2_score_point_estimate(datatree, point_estimate):
+    result = r2_score(datatree, summary=True, point_estimate=point_estimate)
+    assert point_estimate in result._fields
+
+
+@pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
+def test_r2_score_ci_kind(datatree, ci_kind):
+    result = r2_score(datatree, summary=True, ci_kind=ci_kind)
+    assert f"{ci_kind}_lb" in result._fields
+    assert f"{ci_kind}_ub" in result._fields
+
+
+@pytest.mark.parametrize("ci_prob", [0.9, 0.95])
+def test_r2_score_ci_prob(datatree, ci_prob):
+    result = r2_score(datatree, summary=True, ci_prob=ci_prob)
+    assert hasattr(result, "_fields")
+
+
+def test_r2_score_no_rounding(datatree):
+    result = r2_score(datatree, summary=True, round_to=None)
+    assert isinstance(result.mean, float)
+
+
 def test_r2_score_invalid_shapes():
     y_true = np.array([3, -0.5, 2, 7])
     y_pred = np.array([[2.5, 0.0, 2]])
@@ -67,10 +91,32 @@ def test_metrics_invalid_kind(datatree):
         metrics(datatree, kind="invalid_kind")
 
 
+def test_metrics_no_rounding(datatree):
+    result = metrics(datatree, kind="rmse", round_to=None)
+    assert isinstance(result.mean, float)
+    assert isinstance(result.se, float)
+
+
 @pytest.mark.parametrize("joint", [True, False])
 def test_wasserstein(fake_dt, joint):
     result = wasserstein(fake_dt, fake_dt, num_samples=100, joint=joint)
     assert_array_almost_equal(result, 0.0, decimal=5)
+
+
+def test_wasserstein_var_names(fake_dt):
+    result = wasserstein(fake_dt, fake_dt, var_names="a", num_samples=100)
+    assert_array_almost_equal(result, 0.0, decimal=5)
+
+
+def test_wasserstein_no_rounding(fake_dt):
+    result = wasserstein(fake_dt, fake_dt, num_samples=100, round_to=None)
+    assert isinstance(result, float)
+
+
+def test_wasserstein_custom_seed(fake_dt):
+    result1 = wasserstein(fake_dt, fake_dt, num_samples=100, random_seed=42)
+    result2 = wasserstein(fake_dt, fake_dt, num_samples=100, random_seed=42)
+    assert_almost_equal(result1, result2)
 
 
 def test_wasserstein_not_shared_vars(fake_dt):
@@ -81,6 +127,22 @@ def test_wasserstein_not_shared_vars(fake_dt):
 def test_kl_divergence(fake_dt):
     result = kl_divergence(fake_dt, fake_dt, num_samples=100)
     assert_array_almost_equal(result, 0.0, decimal=5)
+
+
+def test_kl_divergence_var_names(fake_dt):
+    result = kl_divergence(fake_dt, fake_dt, var_names="a", num_samples=100)
+    assert_array_almost_equal(result, 0.0, decimal=5)
+
+
+def test_kl_divergence_no_rounding(fake_dt):
+    result = kl_divergence(fake_dt, fake_dt, num_samples=100, round_to=None)
+    assert isinstance(result, float)
+
+
+def test_kl_divergence_custom_seed(fake_dt):
+    result1 = kl_divergence(fake_dt, fake_dt, num_samples=100, random_seed=42)
+    result2 = kl_divergence(fake_dt, fake_dt, num_samples=100, random_seed=42)
+    assert_almost_equal(result1, result2)
 
 
 def test_kl_divergence_not_shared_vars(fake_dt):

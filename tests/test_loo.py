@@ -140,6 +140,7 @@ def test_compare_different(centered_eight, non_centered_eight, method):
     assert_allclose(np.sum(weight), 1.0)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_compare_multiple_different_sizes(centered_eight):
     centered_eight_subset1 = centered_eight.sel(school=["Choate"])
     centered_eight_subset2 = centered_eight.sel(school=["Choate", "Deerfield"])
@@ -250,6 +251,8 @@ def test_loo_expectations(centered_eight, kind, probs, expected_vals):
     assert_almost_equal(loo_exp_vals.sel({"school": "Choate"}), expected_vals, decimal=2)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 @pytest.mark.parametrize("kind", ["mean", "var", "quantile"])
 def test_loo_expectations_khat(centered_eight, datatree, kind):
     probs = [0.25, 0.75] if kind == "quantile" else None
@@ -318,6 +321,7 @@ def test_loo_metrics_invalid_kind(centered_eight):
         loo_metrics(centered_eight, kind="invalid_kind")
 
 
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 @pytest.mark.parametrize(
     "values_type, expected_behavior",
     [
@@ -624,6 +628,8 @@ def test_update_loo_subsample(centered_eight_with_sigma):
     assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == 6
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 @pytest.mark.parametrize("thin", [None, 2, "auto"])
 def test_loo_subsample_thin_parameter(centered_eight_with_sigma, thin):
     result = loo_subsample(
@@ -693,6 +699,8 @@ def moment_match_data(datatree):
     return upars_da_final, log_prob_upars_fn, log_lik_i_upars_fn, upars_ds
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_loo_moment_match(datatree, loo_orig, moment_match_data):
     upars_da, log_prob_fn, log_lik_i_fn, _ = moment_match_data
     max_k = np.nanmax(loo_orig.pareto_k.values)
@@ -724,6 +732,8 @@ def test_loo_moment_match(datatree, loo_orig, moment_match_data):
     assert hasattr(loo_mm, "p_loo_i"), "loo_mm object should have p_loo_i attribute"
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_loo_moment_match_optional_upars(datatree, loo_orig, moment_match_data):
     upars_da, log_prob_fn, log_lik_i_fn, upars_ds = moment_match_data
 
@@ -767,6 +777,8 @@ def test_loo_moment_match_optional_upars(datatree, loo_orig, moment_match_data):
         )
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_loo_moment_match_no_problematic_k(datatree, loo_orig, moment_match_data):
     upars_da, log_prob_fn, log_lik_i_fn, _ = moment_match_data
     k_threshold = np.nanmax(loo_orig.pareto_k.values) + 0.1
@@ -785,6 +797,8 @@ def test_loo_moment_match_no_problematic_k(datatree, loo_orig, moment_match_data
     assert_allclose(loo_mm.pareto_k.values, loo_orig.pareto_k.values)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_loo_moment_match_errors(datatree, moment_match_data):
     upars_da, log_prob_fn, log_lik_i_fn, _ = moment_match_data
 
@@ -816,6 +830,8 @@ def test_loo_moment_match_errors(datatree, moment_match_data):
         )
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_loo_moment_match_function_errors(datatree, loo_orig):
     upars_da = xr.DataArray(
         np.random.randn(4, 500, 10),
@@ -1171,6 +1187,7 @@ def test_loo_score_validation_errors(centered_eight, kind, scenario, pattern):
         loo_score(broken, kind=kind)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
     loo_sub1 = loo_subsample(
         centered_eight_with_sigma,
