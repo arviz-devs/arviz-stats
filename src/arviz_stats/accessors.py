@@ -273,7 +273,7 @@ class AzStatsDtAccessor(_BaseAccessor):
             return self._obj
         raise ValueError(
             f"Group {group} not available in DataTree. Present groups are {self._obj.children} "
-            f"and the DataTree itself is named {self._obs.name}"
+            f"and the DataTree itself is named {self._obj.name}"
         )
 
     def _apply(self, func, **kwargs):

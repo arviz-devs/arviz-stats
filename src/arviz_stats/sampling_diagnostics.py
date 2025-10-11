@@ -376,6 +376,7 @@ def rhat_nested(
         data = np.array(data)
         return get_array_function("rhat_nested")(
             data,
+            method=method,
             chain_axis=chain_axis,
             draw_axis=draw_axis,
             superchain_ids=superchain_ids,
@@ -385,17 +386,20 @@ def rhat_nested(
         # Make sure the grouped dimension is added as one of the dimensions to be reduced
         sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
         return data.map(
-            rhat,
+            rhat_nested,
             sample_dims=sample_dims,
             var_names=var_names,
             coords=coords,
+            method=method,
             superchain_ids=superchain_ids,
         )
 
     if isinstance(data, xr.DataArray):
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.rhat_nested(sample_dims=sample_dims, superchain_ids=superchain_ids)
+        return data.azstats.rhat_nested(
+            sample_dims=sample_dims, method=method, superchain_ids=superchain_ids
+        )
 
     if isinstance(data, xr.DataTree):
         data = data.azstats.filter_vars(
@@ -404,7 +408,7 @@ def rhat_nested(
         if coords is not None:
             data = data.sel(coords)
         return data.azstats.rhat_nested(
-            sample_dims=sample_dims, group=group, superchain_ids=superchain_ids
+            sample_dims=sample_dims, group=group, method=method, superchain_ids=superchain_ids
         )
 
     data = convert_to_dataset(data, group=group)
