@@ -1,8 +1,8 @@
 # pylint: disable=redefined-outer-name, unused-import
-# ruff: noqa: F811
+# ruff: noqa: F811, F401
 import numpy as np
 
-from .helpers import importorskip
+from .helpers import centered_eight, importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")

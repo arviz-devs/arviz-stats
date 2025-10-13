@@ -1,4 +1,4 @@
-# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name, no-self-use, unused-argument
 from copy import deepcopy
 
 import numpy as np
@@ -9,6 +9,7 @@ from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
+
 from arviz_stats import loo, reloo
 from arviz_stats.loo.wrapper import SamplingWrapper
 from arviz_stats.utils import ELPDData
