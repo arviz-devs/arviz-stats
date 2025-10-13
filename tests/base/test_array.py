@@ -240,6 +240,7 @@ class TestPowerScale:
         result = array_stats.power_scale_lw(ary, alpha=0.5)
         assert result.shape == (100,)
 
+    @pytest.mark.filterwarnings("ignore::RuntimeWarning")
     def test_power_scale_sense(self, array_stats):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(4, 100))

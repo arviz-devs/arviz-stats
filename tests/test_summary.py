@@ -342,3 +342,63 @@ def test_ci_in_rope_array_rope(fake_dt):
     result = ci_in_rope(fake_dt, var_names=["a"], rope=np.array([-1, 1]))
     assert "a" in result.data_vars
     assert result["a"] > 60
+
+
+def test_hdi_empty_coords(datatree):
+    result = hdi(datatree, var_names=["mu"], coords={})
+    assert result["mu"].shape == (2,)
+
+
+def test_eti_empty_coords(datatree):
+    result = eti(datatree, var_names=["tau"], coords={})
+    assert result["tau"].shape == (2,)
+
+
+def test_summary_single_var(datatree):
+    summary_df = summary(datatree, var_names=["mu"])
+    assert len(summary_df.index) == 1
+    assert "mu" in summary_df.index
+
+
+def test_summary_small_data():
+    array = np.random.randn(2, 10)
+    summary_df = summary(array)
+    assert "mean" in summary_df.columns
+    assert "ess_bulk" in summary_df.columns
+
+
+def test_hdi_filter_vars_multiple(datatree):
+    result = hdi(datatree, var_names=["mu", "tau"], filter_vars=None)
+    assert "mu" in result.data_vars
+    assert "tau" in result.data_vars
+
+
+def test_qds_small_nquantiles(datatree):
+    result = qds(datatree, nquantiles=5, var_names=["mu"])
+    assert result["mu"].shape == (2, 5)
+
+
+def test_mode_single_value_array():
+    array = np.ones((4, 100))
+    result = mode(array)
+    assert result.shape == ()
+    assert result.item() == 1.0
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_summary_zero_variance():
+    array = np.ones((4, 100, 2))
+    summary_df = summary(array)
+    assert summary_df["sd"].iloc[0] == 0.0
+
+
+@pytest.mark.parametrize("prob", [0.5, 0.89, 0.95])
+def test_hdi_prob_parameter(datatree, prob):
+    result = hdi(datatree, prob=prob, var_names=["mu"])
+    assert result["mu"].shape == (2,)
+
+
+@pytest.mark.parametrize("prob", [0.5, 0.89, 0.95])
+def test_eti_prob_parameter(datatree, prob):
+    result = eti(datatree, prob=prob, var_names=["tau"])
+    assert result["tau"].shape == (2,)

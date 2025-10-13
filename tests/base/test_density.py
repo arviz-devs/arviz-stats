@@ -639,3 +639,59 @@ class TestECDF:
         eval_points, ecdf = density._ecdf(x, npoints=None, pit=False)
         assert len(eval_points) == 200
         assert len(ecdf) == 200
+
+    def test_ecdf_single_value(self, density):
+        x = np.ones(100)
+        eval_points, ecdf = density._ecdf(x, npoints=50, pit=False)
+        assert len(eval_points) == 50
+        assert len(ecdf) == 50
+
+    def test_ecdf_with_nans(self, density):
+        x = np.random.randn(100)
+        x[:10] = np.nan
+        eval_points, ecdf = density._ecdf(x, npoints=50, pit=False)
+        assert len(eval_points) == 50
+        assert len(ecdf) == 50
+
+
+class TestKDEEdgeCases:
+    def test_kde_two_values(self, density):
+        x = np.array([1.0] * 50 + [2.0] * 50)
+        grid, pdf, bw = density.kde_linear(x)
+        assert len(grid) == 512
+        assert len(pdf) == 512
+        assert bw > 0
+
+    def test_kde_with_outliers(self, density):
+        x = np.concatenate([np.random.randn(95), [100, -100, 200, -200, 300]])
+        grid, _pdf, bw = density.kde_linear(x)
+        assert len(grid) == 512
+        assert bw > 0
+
+    def test_kde_circular_boundary_wrapping(self, density):
+        x = np.concatenate(
+            [np.random.uniform(-np.pi, -np.pi + 0.3, 50), np.random.uniform(np.pi - 0.3, np.pi, 50)]
+        )
+        grid, _pdf, bw = density.kde_circular(x)
+        assert len(grid) == 512
+        assert bw > 0
+
+
+class TestHistogramEdgeCases:
+    def test_histogram_empty_bins(self, density):
+        x = np.random.randn(100)
+        counts, _edges = density._histogram(x, bins=100, range=(-10, -5))
+        assert len(counts) == 100
+        assert np.sum(counts) == 0
+
+    def test_histogram_single_bin(self, density):
+        x = np.random.randn(100)
+        counts, edges = density._histogram(x, bins=1)
+        assert len(counts) == 1
+        assert len(edges) == 2
+        assert np.sum(counts) == 100
+
+    def test_histogram_all_same_value(self, density):
+        x = np.ones(100) * 5.0
+        counts, _edges = density._histogram(x, bins=10)
+        assert np.sum(counts > 0) <= 2

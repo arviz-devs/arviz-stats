@@ -18,7 +18,7 @@ __all__ = ["eti", "quantile"]
     target="parallel",
 )
 def _quantile(ary, q, result):  # pylint: disable=unused-argument
-    result = np.quantile(ary, q)
+    result[:] = np.quantile(ary, q)
 
 
 def quantile(da, q, dim):
@@ -28,7 +28,7 @@ def quantile(da, q, dim):
         da = _remove_indexes_to_reduce(da, dim).stack({aux_dim: dim}, create_index=False)
     else:
         aux_dim = dim
-    xr.apply_ufunc(
+    return xr.apply_ufunc(
         _quantile, da, q, input_core_dims=[[aux_dim], ["quantile"]], output_core_dims=[["quantile"]]
     )
 
