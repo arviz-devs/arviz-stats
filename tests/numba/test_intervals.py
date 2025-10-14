@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from ..helpers import centered_eight, importorskip
+from ..helpers import importorskip
 
 xr = importorskip("xarray")
 

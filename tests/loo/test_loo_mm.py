@@ -1,9 +1,8 @@
 # pylint: disable=redefined-outer-name
-"""Test moment matching for the roaches example."""
-
+# ruff: noqa: F811
 import pytest
 
-from .helpers import importorskip
+from ..helpers import importorskip
 
 importorskip("arviz_base")
 js = importorskip("json")
@@ -23,7 +22,7 @@ from arviz_stats.loo.loo_moment_match import _split_moment_match
 
 @ft.lru_cache(maxsize=1)
 def _get_roaches_data_path():
-    data = pt.Path(__file__).resolve().with_name("roaches.nc.xz")
+    data = pt.Path(__file__).resolve().parent / "roaches.nc.xz"
     if not data.exists():
         raise FileNotFoundError(f"missing roaches data at {data}")
 
@@ -39,6 +38,62 @@ def _get_roaches_data_path():
 
 
 ROACHES_DATA_PATH = _get_roaches_data_path()
+
+
+def _safe_exp(da):
+    with np.errstate(over="ignore"):
+        data = np.exp(da.data)
+    return xr.DataArray(data, dims=da.dims, coords=da.coords)
+
+
+def _as_beta(upars, beta_param_names, coef_names):
+    return upars.sel(uparam=beta_param_names).rename(uparam="coef").assign_coords(coef=coef_names)
+
+
+def log_prob_upars(
+    upars,
+    design_matrix,
+    y_da,
+    offset_da,
+    factorial_term,
+    beta_param_names,
+    coef_names,
+    beta_scale,
+    alpha_scale,
+    const_log_prior_beta,
+    const_log_prior_intercept,
+    sample_dims,
+):
+    upars = upars.transpose(*sample_dims, ...)
+    beta = _as_beta(upars, beta_param_names, coef_names)
+    intercept = upars.sel(uparam="intercept")
+    lin = xr.dot(beta, design_matrix, dim="coef") + intercept + offset_da
+    exp_term = _safe_exp(lin)
+
+    log_lik = y_da * lin - exp_term - factorial_term
+    log_prior_beta = const_log_prior_beta - 0.5 * (beta / beta_scale) ** 2
+    log_prior_beta = log_prior_beta.sum("coef")
+    log_prior_intercept = const_log_prior_intercept - 0.5 * (intercept / alpha_scale) ** 2
+    return log_lik.sum("obs") + log_prior_beta + log_prior_intercept
+
+
+def log_lik_i_upars(
+    upars,
+    index,
+    design_matrix,
+    y_da,
+    offset_da,
+    factorial_term,
+    beta_param_names,
+    coef_names,
+    sample_dims,
+):
+    upars = upars.transpose(*sample_dims, ...)
+    beta = _as_beta(upars, beta_param_names, coef_names)
+    intercept = upars.sel(uparam="intercept")
+    features_i = design_matrix.isel(obs=index)
+    lin = (beta * features_i).sum("coef") + intercept + offset_da.isel(obs=index)
+    return y_da.isel(obs=index) * lin - _safe_exp(lin) - factorial_term.isel(obs=index)
 
 
 def load_roaches_r_example():
@@ -105,55 +160,98 @@ def load_roaches_r_example():
     }
 
 
-def log_prob_upars(
-    upars,
-    design_matrix,
-    y_da,
-    offset_da,
-    factorial_term,
-    beta_param_names,
-    coef_names,
-    beta_scale,
-    alpha_scale,
-    const_log_prior_beta,
-    const_log_prior_intercept,
-    sample_dims,
-):
-    upars = upars.transpose(*sample_dims, ...)
-    beta = _as_beta(upars, beta_param_names, coef_names)
-    intercept = upars.sel(uparam="intercept")
-    lin = xr.dot(beta, design_matrix, dim="coef") + intercept + offset_da
-    exp_term = _safe_exp(lin)
-
-    log_lik = y_da * lin - exp_term - factorial_term
-    log_prior_beta = const_log_prior_beta - 0.5 * (beta / beta_scale) ** 2
-    log_prior_beta = log_prior_beta.sum("coef")
-    log_prior_intercept = const_log_prior_intercept - 0.5 * (intercept / alpha_scale) ** 2
-    return log_lik.sum("obs") + log_prior_beta + log_prior_intercept
-
-
-def log_lik_i_upars(
-    upars,
-    index,
-    design_matrix,
-    y_da,
-    offset_da,
-    factorial_term,
-    beta_param_names,
-    coef_names,
-    sample_dims,
-):
-    upars = upars.transpose(*sample_dims, ...)
-    beta = _as_beta(upars, beta_param_names, coef_names)
-    intercept = upars.sel(uparam="intercept")
-    features_i = design_matrix.isel(obs=index)
-    lin = (beta * features_i).sum("coef") + intercept + offset_da.isel(obs=index)
-    return y_da.isel(obs=index) * lin - _safe_exp(lin) - factorial_term.isel(obs=index)
-
-
 @pytest.fixture(scope="module")
 def roaches_r_example():
     return load_roaches_r_example()
+
+
+def moment_match_debug_payload(parity, log_fn=None):
+    payload = {
+        "log_lik_ref": parity.get("log_lik"),
+        "log_weights_ref": parity.get("log_weights_mm"),
+        "mm_debug": parity.get("mm_debug") or {},
+        "metadata": parity.get("metadata", {}),
+        "targets": parity.get("elpd", {}).get("moment_match", {}) if parity.get("elpd") else {},
+    }
+    if log_fn is not None:
+        payload["log_fn"] = log_fn
+    return payload
+
+
+def reshape_draw_major(matrix, n_chains, n_draws, n_params):
+    return matrix.reshape(n_chains, n_draws, n_params).transpose(1, 0, 2).reshape(-1, n_params)
+
+
+def transform_forward_upars(upars_matrix, total_shift, total_scaling, total_mapping):
+    mean_original = upars_matrix.mean(axis=0)
+    centered = upars_matrix - mean_original
+    scaled = centered * total_scaling
+    if total_mapping.size:
+        scaled = scaled @ total_mapping.T
+    return scaled + (total_shift + mean_original)
+
+
+def transform_inverse_upars(upars_matrix, total_shift, total_scaling, total_mapping):
+    mean_original = upars_matrix.mean(axis=0)
+    centered = upars_matrix - mean_original
+    mapped = centered
+    if total_mapping.size:
+        mapped = mapped @ np.linalg.inv(total_mapping.T)
+    scaled = mapped / total_scaling
+    return scaled + (mean_original - total_shift)
+
+
+def load_r_parity():
+    parity_ds = xr.load_dataset(ROACHES_DATA_PATH, group="parity")
+    try:
+        log_lik = parity_ds["log_lik"].load().rename("log_lik")
+        log_weights = parity_ds["log_weights"].load().rename("log_weights")
+
+        log_weights_mm = parity_ds.get("log_weights_mm")
+        if log_weights_mm is not None:
+            log_weights_mm = log_weights_mm.load().rename("log_weights_mm")
+
+        pareto_k = parity_ds["pareto_k"].load().rename("pareto_k")
+        pareto_k_mm = parity_ds.get("pareto_k_mm")
+        if pareto_k_mm is not None:
+            pareto_k_mm = pareto_k_mm.load().rename("pareto_k_mm")
+
+        r_eff = parity_ds["r_eff"].load().rename("r_eff")
+        r_eff_mm = parity_ds.get("r_eff_mm")
+        if r_eff_mm is not None:
+            r_eff_mm = r_eff_mm.load().rename("r_eff_mm")
+
+        elpd = js.loads(parity_ds.attrs.get("elpd_json", "{}"))
+        metadata = js.loads(parity_ds.attrs.get("metadata_json", "{}"))
+        mm_debug_raw = js.loads(parity_ds.attrs.get("mm_debug_json", "{}"))
+        mm_debug = (
+            {int(key): value for key, value in mm_debug_raw.items()} if mm_debug_raw else None
+        )
+
+        return {
+            "log_lik": log_lik,
+            "log_weights": log_weights,
+            "pareto_k": pareto_k,
+            "r_eff": r_eff,
+            "elpd": elpd,
+            "metadata": metadata,
+            "log_weights_mm": log_weights_mm,
+            "pareto_k_mm": pareto_k_mm,
+            "r_eff_mm": r_eff_mm,
+            "mm_debug": mm_debug,
+        }
+    finally:
+        parity_ds.close()
+
+
+def capture_log_prob_call(container, upars_da):
+    container.append(upars_da.copy(deep=True))
+    return xr.zeros_like(upars_da.isel(uparam=0, drop=True))
+
+
+def capture_log_lik_call(container, upars_da, _):
+    container.append(upars_da.copy(deep=True))
+    return xr.zeros_like(upars_da.isel(uparam=0, drop=True))
 
 
 def test_psis_matches_r_reference(roaches_r_example):
@@ -320,102 +418,3 @@ def test_split_moment_match_matches_r_snapshot(roaches_r_example):
 
     split_case_ds.close()
     split_snapshot_ds.close()
-
-
-def load_r_parity():
-    parity_ds = xr.load_dataset(ROACHES_DATA_PATH, group="parity")
-    try:
-        log_lik = parity_ds["log_lik"].load().rename("log_lik")
-        log_weights = parity_ds["log_weights"].load().rename("log_weights")
-
-        log_weights_mm = parity_ds.get("log_weights_mm")
-        if log_weights_mm is not None:
-            log_weights_mm = log_weights_mm.load().rename("log_weights_mm")
-
-        pareto_k = parity_ds["pareto_k"].load().rename("pareto_k")
-        pareto_k_mm = parity_ds.get("pareto_k_mm")
-        if pareto_k_mm is not None:
-            pareto_k_mm = pareto_k_mm.load().rename("pareto_k_mm")
-
-        r_eff = parity_ds["r_eff"].load().rename("r_eff")
-        r_eff_mm = parity_ds.get("r_eff_mm")
-        if r_eff_mm is not None:
-            r_eff_mm = r_eff_mm.load().rename("r_eff_mm")
-
-        elpd = js.loads(parity_ds.attrs.get("elpd_json", "{}"))
-        metadata = js.loads(parity_ds.attrs.get("metadata_json", "{}"))
-        mm_debug_raw = js.loads(parity_ds.attrs.get("mm_debug_json", "{}"))
-        mm_debug = (
-            {int(key): value for key, value in mm_debug_raw.items()} if mm_debug_raw else None
-        )
-
-        return {
-            "log_lik": log_lik,
-            "log_weights": log_weights,
-            "pareto_k": pareto_k,
-            "r_eff": r_eff,
-            "elpd": elpd,
-            "metadata": metadata,
-            "log_weights_mm": log_weights_mm,
-            "pareto_k_mm": pareto_k_mm,
-            "r_eff_mm": r_eff_mm,
-            "mm_debug": mm_debug,
-        }
-    finally:
-        parity_ds.close()
-
-
-def moment_match_debug_payload(parity, log_fn=None):
-    payload = {
-        "log_lik_ref": parity.get("log_lik"),
-        "log_weights_ref": parity.get("log_weights_mm"),
-        "mm_debug": parity.get("mm_debug") or {},
-        "metadata": parity.get("metadata", {}),
-        "targets": parity.get("elpd", {}).get("moment_match", {}) if parity.get("elpd") else {},
-    }
-    if log_fn is not None:
-        payload["log_fn"] = log_fn
-    return payload
-
-
-def capture_log_prob_call(container, upars_da):
-    container.append(upars_da.copy(deep=True))
-    return xr.zeros_like(upars_da.isel(uparam=0, drop=True))
-
-
-def capture_log_lik_call(container, upars_da, _):
-    container.append(upars_da.copy(deep=True))
-    return xr.zeros_like(upars_da.isel(uparam=0, drop=True))
-
-
-def reshape_draw_major(matrix, n_chains, n_draws, n_params):
-    return matrix.reshape(n_chains, n_draws, n_params).transpose(1, 0, 2).reshape(-1, n_params)
-
-
-def transform_forward_upars(upars_matrix, total_shift, total_scaling, total_mapping):
-    mean_original = upars_matrix.mean(axis=0)
-    centered = upars_matrix - mean_original
-    scaled = centered * total_scaling
-    if total_mapping.size:
-        scaled = scaled @ total_mapping.T
-    return scaled + (total_shift + mean_original)
-
-
-def transform_inverse_upars(upars_matrix, total_shift, total_scaling, total_mapping):
-    mean_original = upars_matrix.mean(axis=0)
-    centered = upars_matrix - mean_original
-    mapped = centered
-    if total_mapping.size:
-        mapped = mapped @ np.linalg.inv(total_mapping.T)
-    scaled = mapped / total_scaling
-    return scaled + (mean_original - total_shift)
-
-
-def _safe_exp(da):
-    with np.errstate(over="ignore"):
-        data = np.exp(da.data)
-    return xr.DataArray(data, dims=da.dims, coords=da.coords)
-
-
-def _as_beta(upars, beta_param_names, coef_names):
-    return upars.sel(uparam=beta_param_names).rename(uparam="coef").assign_coords(coef=coef_names)

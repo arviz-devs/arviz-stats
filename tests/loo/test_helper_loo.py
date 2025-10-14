@@ -6,11 +6,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal
 
-from .helpers import (
-    centered_eight,
-    centered_eight_with_sigma,
-    importorskip,
-)
+from ..helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
@@ -41,12 +37,7 @@ from arviz_stats.loo.helper_loo import (
 from arviz_stats.loo.loo_moment_match import _split_moment_match
 from arviz_stats.loo.loo_subsample import loo_subsample
 from arviz_stats.manipulation import thin
-from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
-
-
-@pytest.fixture(scope="module")
-def log_likelihood_dataset(centered_eight):
-    return get_log_likelihood_dataset(centered_eight, var_names="obs")
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 def log_lik_fn(obs_da, datatree):
@@ -60,37 +51,6 @@ def log_lik_fn_subsample(obs_da, datatree):
     theta = datatree.posterior["theta"]
     sigma = datatree.constant_data["sigma"]
     return sp.stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
-
-
-@pytest.fixture(scope="module")
-def elpd_data(centered_eight):
-    log_likelihood = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = log_likelihood.school.size
-
-    elpd_values = np.random.normal(size=n_data_points)
-    pareto_k_values = np.random.uniform(0, 0.7, size=n_data_points)
-
-    elpd_i = xr.DataArray(elpd_values, dims=["school"], coords={"school": log_likelihood.school})
-
-    pareto_k = xr.DataArray(
-        pareto_k_values, dims=["school"], coords={"school": log_likelihood.school}
-    )
-
-    mock_elpd = ELPDData(
-        elpd=float(elpd_values.sum()),
-        se=1.0,
-        p=2.0,
-        good_k=0.7,
-        n_samples=n_samples,
-        n_data_points=n_data_points,
-        warning=False,
-        elpd_i=elpd_i,
-        pareto_k=pareto_k,
-        scale="log",
-        kind="loo",
-    )
-    return mock_elpd
 
 
 def test_get_r_eff(centered_eight):
@@ -684,7 +644,7 @@ def test_compute_loo_approximation_auxiliary_data(centered_eight):
         centered_eight_aux["constant_data"].to_dataset().assign(sigma=sigma_da)
     )
 
-    def log_lik_fn(obs_da, datatree):
+    def log_lik_fn_aux(obs_da, datatree):
         theta = datatree.posterior["theta"]
         sigma = datatree.constant_data["sigma"]
         return -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
@@ -700,7 +660,7 @@ def test_compute_loo_approximation_auxiliary_data(centered_eight):
     result = _compute_loo_approximation(
         data=centered_eight_aux,
         var_name="obs",
-        log_lik_fn=log_lik_fn,
+        log_lik_fn=log_lik_fn_aux,
         param_names=["theta"],
         method="lpd",
         log=True,
@@ -710,7 +670,7 @@ def test_compute_loo_approximation_auxiliary_data(centered_eight):
 
 
 def test_compute_loo_approximation_errors(centered_eight_with_sigma):
-    def log_lik_fn(obs_da, datatree):
+    def log_lik_fn_bad(obs_da, datatree):
         theta = datatree.posterior["theta"]
         sigma = datatree.constant_data["sigma"]
         result = sp.stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
@@ -720,7 +680,7 @@ def test_compute_loo_approximation_errors(centered_eight_with_sigma):
         _compute_loo_approximation(
             data=centered_eight_with_sigma,
             var_name="obs",
-            log_lik_fn=log_lik_fn,
+            log_lik_fn=log_lik_fn_bad,
             param_names=["theta"],
             method="lpd",
             log=True,

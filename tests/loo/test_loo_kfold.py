@@ -2,152 +2,15 @@
 # ruff: noqa: F811
 """Test k-fold cross-validation."""
 
-import numpy as np
 import pytest
-from scipy import stats
 
-from .helpers import centered_eight, datatree, importorskip  # noqa: F401
+from ..helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
 from arviz_stats import loo_kfold
-from arviz_stats.loo import SamplingWrapper
 from arviz_stats.utils import ELPDData
-
-
-@pytest.fixture
-def custom_folds():
-    return np.array([1, 1, 2, 2, 3, 3, 4, 4])
-
-
-@pytest.fixture
-def strata():
-    return np.array([0, 0, 1, 1, 0, 0, 1, 1])
-
-
-@pytest.fixture
-def groups():
-    return np.array([1, 1, 2, 2, 3, 3, 4, 4])
-
-
-@pytest.fixture
-def mock_wrapper(centered_eight):
-    class CenteredEightWrapper(SamplingWrapper):
-        def __init__(self, idata):
-            super().__init__(model=None, idata_orig=idata)
-            self.fit_count = 0
-            self.test_indices_history = []
-            self.rng = np.random.default_rng(42)
-
-            self.original_posterior = idata.posterior
-            self.original_obs_data = idata.observed_data["obs"].values
-            self.n_schools = len(self.original_obs_data)
-
-            self.sigma_values = np.array([15, 10, 16, 11, 9, 11, 10, 18])
-
-        def sel_observations(self, idx):
-            all_indices = np.arange(self.n_schools)
-            train_indices = np.setdiff1d(all_indices, idx)
-
-            train_y = self.original_obs_data[train_indices]
-            test_y = self.original_obs_data[idx]
-
-            train_data = {
-                "indices": train_indices,
-                "y": train_y,
-                "sigma": self.sigma_values[train_indices],
-                "n_schools": len(train_indices),
-            }
-            test_data = {
-                "indices": idx,
-                "y": test_y,
-                "sigma": self.sigma_values[idx],
-                "n_schools": len(idx),
-            }
-
-            self.test_indices_history.append(idx)
-            return train_data, test_data
-
-        def sample(self, modified_observed_data):
-            self.fit_count += 1
-
-            train_y = modified_observed_data["y"]
-            n_train = len(train_y)
-
-            y_mean = np.mean(train_y)
-            y_std = np.std(train_y, ddof=1)
-
-            n_samples = 2000
-            mu_samples = self.rng.normal(y_mean, y_std / np.sqrt(n_train), n_samples)
-
-            tau_samples = np.abs(self.rng.normal(y_std, y_std / 2, n_samples))
-            tau_samples = np.maximum(tau_samples, 0.1)
-
-            theta_samples = np.zeros((n_samples, n_train))
-            for i in range(n_samples):
-                theta_samples[i] = self.rng.normal(mu_samples[i], tau_samples[i], n_train)
-
-            return {
-                "mu": mu_samples,
-                "tau": tau_samples,
-                "theta": theta_samples,
-                "train_indices": modified_observed_data["indices"],
-                "n_train": n_train,
-            }
-
-        def get_inference_data(self, fitted_model):
-            posterior_dict = {
-                "mu": xr.DataArray(
-                    fitted_model["mu"].reshape(1, 2000),
-                    dims=["chain", "draw"],
-                    coords={"chain": [0], "draw": np.arange(2000)},
-                ),
-                "tau": xr.DataArray(
-                    fitted_model["tau"].reshape(1, 2000),
-                    dims=["chain", "draw"],
-                    coords={"chain": [0], "draw": np.arange(2000)},
-                ),
-                "theta": xr.DataArray(
-                    fitted_model["theta"].T.reshape(1, 2000, fitted_model["n_train"]),
-                    dims=["chain", "draw", "school"],
-                    coords={
-                        "chain": [0],
-                        "draw": np.arange(2000),
-                        "school": fitted_model["train_indices"],
-                    },
-                ),
-            }
-
-            idata_new = azb.from_dict(
-                {"posterior": posterior_dict},
-                dims={"school": ["school"]},
-                coords={"school": fitted_model["train_indices"]},
-            )
-
-            return idata_new
-
-        def log_likelihood__i(self, excluded_obs, idata__i):
-            test_y = excluded_obs["y"]
-            test_sigma = excluded_obs["sigma"]
-            mu = idata__i.posterior["mu"].values.flatten()
-            tau = idata__i.posterior["tau"].values.flatten()
-
-            var_total = tau[:, np.newaxis] ** 2 + test_sigma**2
-            log_lik = stats.norm.logpdf(test_y, loc=mu[:, np.newaxis], scale=np.sqrt(var_total))
-
-            dims = ["chain", "school", "draw"]
-            coords = {"school": excluded_obs["indices"]}
-            return xr.DataArray(log_lik.T[np.newaxis, :, :], dims=dims, coords=coords)
-
-    return CenteredEightWrapper(centered_eight)
-
-
-@pytest.fixture
-def fresh_wrapper(mock_wrapper):
-    mock_wrapper.fit_count = 0
-    mock_wrapper.test_indices_history = []
-    return mock_wrapper
 
 
 @pytest.mark.parametrize("pointwise", [True, False])

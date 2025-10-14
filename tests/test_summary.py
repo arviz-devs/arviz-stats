@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from .helpers import datatree, fake_dt, importorskip  # noqa: F401
+from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")

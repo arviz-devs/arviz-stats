@@ -5,7 +5,7 @@
 import numpy as np
 import pytest
 
-from .helpers import datatree, importorskip  # noqa: F401
+from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")

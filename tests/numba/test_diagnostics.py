@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_almost_equal
 
-from ..helpers import centered_eight, importorskip
+from ..helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")

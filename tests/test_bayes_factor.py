@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from .helpers import fake_dt, importorskip  # noqa: F401
+from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 

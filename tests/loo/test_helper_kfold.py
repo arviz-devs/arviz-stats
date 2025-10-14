@@ -5,12 +5,11 @@
 import numpy as np
 import pytest
 
-from .helpers import datatree, importorskip  # noqa: F401
+from ..helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
-from arviz_stats.loo import SamplingWrapper
 from arviz_stats.loo.helper_loo_kfold import (
     _combine_fold_elpds,
     _extract_fold_data,
@@ -23,57 +22,6 @@ from arviz_stats.loo.helper_loo_kfold import (
     _validate_fold_parameters,
     _validate_k_value,
 )
-
-
-@pytest.fixture(name="simple_data", scope="session")
-def fixture_simple_data():
-    return azb.load_arviz_data("centered_eight")
-
-
-@pytest.fixture
-def simple_wrapper():
-    class SimpleWrapper(SamplingWrapper):
-        def __init__(self):
-            super().__init__(model=None, idata_orig=None)
-
-        def sel_observations(self, idx):
-            return {"train": idx}, {"test": idx}
-
-        def sample(self, modified_observed_data):
-            return {"data": modified_observed_data}
-
-        def get_inference_data(self, fitted_model):
-            return fitted_model
-
-        def log_likelihood__i(self, excluded_obs, idata__i):
-            return np.random.randn(10)
-
-    return SimpleWrapper()
-
-
-@pytest.fixture
-def sample_array():
-    return np.array([1, 2, 3, 4, 5])
-
-
-@pytest.fixture
-def sample_dataarray():
-    return xr.DataArray([1, 2, 3, 4, 5], dims=["obs"])
-
-
-@pytest.fixture
-def fold_assignments():
-    return np.array([1, 1, 2, 2, 3, 3, 4, 4])
-
-
-@pytest.fixture
-def stratified_data():
-    return np.array([0, 0, 0, 0, 1, 1, 1, 1])
-
-
-@pytest.fixture
-def grouped_data():
-    return np.array([1, 1, 2, 2, 3, 3, 4, 4])
 
 
 @pytest.mark.parametrize(

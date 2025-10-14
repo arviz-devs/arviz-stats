@@ -2,7 +2,7 @@
 # ruff: noqa: F811, F401
 import numpy as np
 
-from .helpers import centered_eight, importorskip
+from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
