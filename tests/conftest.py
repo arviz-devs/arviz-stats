@@ -11,14 +11,6 @@ from .helpers import (
     importorskip,
 )
 
-azb = importorskip("arviz_base")
-xr = importorskip("xarray")
-sp = importorskip("scipy")
-
-from arviz_stats import loo
-from arviz_stats.loo.wrapper import SamplingWrapper
-from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
-
 
 @pytest.fixture()
 def data_random():
@@ -46,31 +38,37 @@ def multidim_models():
 
 @pytest.fixture(scope="session")
 def datatree():
+    azb = importorskip("arviz_base")
     return azb.testing.datatree()
 
 
 @pytest.fixture(scope="session")
 def datatree_binary():
+    azb = importorskip("arviz_base")
     return azb.testing.datatree_binary()
 
 
 @pytest.fixture(scope="session")
 def fake_dt():
+    azb = importorskip("arviz_base")
     return azb.testing.fake_dt()
 
 
 @pytest.fixture(scope="session")
 def centered_eight():
+    azb = importorskip("arviz_base")
     return azb.load_arviz_data("centered_eight")
 
 
 @pytest.fixture(scope="session")
 def non_centered_eight():
+    azb = importorskip("arviz_base")
     return azb.load_arviz_data("non_centered_eight")
 
 
 @pytest.fixture(scope="module")
 def centered_eight_with_sigma(centered_eight):
+    xr = importorskip("xarray")
     sigma_values = np.array([15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0])
     sigma_da = xr.DataArray(
         sigma_values, dims=["school"], coords={"school": centered_eight.observed_data.school.values}
@@ -82,6 +80,7 @@ def centered_eight_with_sigma(centered_eight):
 
 @pytest.fixture(scope="module")
 def multivariable_log_likelihood(centered_eight):
+    xr = importorskip("xarray")
     centered_eight = centered_eight.copy()
 
     new_arr = xr.DataArray(
@@ -95,11 +94,14 @@ def multivariable_log_likelihood(centered_eight):
 
 @pytest.fixture(name="simple_data", scope="session")
 def fixture_simple_data():
+    azb = importorskip("arviz_base")
     return azb.load_arviz_data("centered_eight")
 
 
 @pytest.fixture
 def simple_wrapper():
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
     class SimpleWrapper(SamplingWrapper):
         def __init__(self):
             super().__init__(model=None, idata_orig=None)
@@ -126,6 +128,7 @@ def sample_array():
 
 @pytest.fixture
 def sample_dataarray():
+    xr = importorskip("xarray")
     return xr.DataArray([1, 2, 3, 4, 5], dims=["obs"])
 
 
@@ -146,11 +149,16 @@ def grouped_data():
 
 @pytest.fixture(scope="module")
 def log_likelihood_dataset(centered_eight):
+    from arviz_stats.utils import get_log_likelihood_dataset
+
     return get_log_likelihood_dataset(centered_eight, var_names="obs")
 
 
 @pytest.fixture(scope="module")
 def elpd_data(centered_eight):
+    from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
+
+    xr = importorskip("xarray")
     log_likelihood = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
     n_data_points = log_likelihood.school.size
@@ -182,6 +190,9 @@ def elpd_data(centered_eight):
 
 @pytest.fixture(scope="module")
 def log_densities(centered_eight):
+    from arviz_stats.utils import get_log_likelihood_dataset
+
+    xr = importorskip("xarray")
     log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")
     rng = np.random.default_rng(seed=42)
 
@@ -226,6 +237,8 @@ def groups():
 
 @pytest.fixture
 def mock_wrapper(centered_eight):
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
     class CenteredEightWrapper(SamplingWrapper):
         def __init__(self, idata):
             super().__init__(model=None, idata_orig=idata)
@@ -290,6 +303,9 @@ def mock_wrapper(centered_eight):
             }
 
         def get_inference_data(self, fitted_model):
+            xr = importorskip("xarray")
+            azb = importorskip("arviz_base")
+
             posterior_dict = {
                 "mu": xr.DataArray(
                     fitted_model["mu"].reshape(1, 2000),
@@ -321,6 +337,9 @@ def mock_wrapper(centered_eight):
             return idata_new
 
         def log_likelihood__i(self, excluded_obs, idata__i):
+            sp = importorskip("scipy")
+            xr = importorskip("xarray")
+
             test_y = excluded_obs["y"]
             test_sigma = excluded_obs["sigma"]
             mu = idata__i.posterior["mu"].values.flatten()
@@ -343,47 +362,51 @@ def fresh_wrapper(mock_wrapper):
     return mock_wrapper
 
 
-class MockSamplingWrapper(SamplingWrapper):
-    def __init__(self, model, idata_orig=None, **kwargs):
-        super().__init__(model, idata_orig, **kwargs)
-        self.data = idata_orig
-        self.log_lik_var_name = "obs"
-
-    def sel_observations(self, idx):
-        obs_data = self.data.observed_data["obs"]
-        all_indices = list(range(len(obs_data)))
-        all_indices.remove(idx)
-        modified_obs = obs_data.isel(obs_dim_0=all_indices)
-        excluded_obs = obs_data.isel(obs_dim_0=idx)
-        return modified_obs, excluded_obs
-
-    def sample(self, modified_observed_data):
-        return {"fit": "mock_fit", "data": modified_observed_data}
-
-    def get_inference_data(self, fitted_model):
-        return self.data
-
-    def log_likelihood__i(self, excluded_obs, idata__i):
-        posterior = idata__i.posterior
-        theta = posterior["theta"]
-        obs_idx = int(excluded_obs.obs_dim_0.values)
-        theta_i = theta.isel(school=obs_idx)
-        sigma = 12.5
-        log_lik_values = (
-            -0.5 * np.log(2 * np.pi * sigma**2)
-            - 0.5 * ((excluded_obs.values - theta_i) / sigma) ** 2
-        )
-        log_lik = log_lik_values
-        return log_lik
-
-
 @pytest.fixture
 def mock_wrapper_reloo(non_centered_eight):
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    class MockSamplingWrapper(SamplingWrapper):
+        def __init__(self, model, idata_orig=None, **kwargs):
+            super().__init__(model, idata_orig, **kwargs)
+            self.data = idata_orig
+            self.log_lik_var_name = "obs"
+
+        def sel_observations(self, idx):
+            obs_data = self.data.observed_data["obs"]
+            all_indices = list(range(len(obs_data)))
+            all_indices.remove(idx)
+            modified_obs = obs_data.isel(obs_dim_0=all_indices)
+            excluded_obs = obs_data.isel(obs_dim_0=idx)
+            return modified_obs, excluded_obs
+
+        def sample(self, modified_observed_data):
+            return {"fit": "mock_fit", "data": modified_observed_data}
+
+        def get_inference_data(self, fitted_model):
+            return self.data
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            posterior = idata__i.posterior
+            theta = posterior["theta"]
+            obs_idx = int(excluded_obs.obs_dim_0.values)
+            theta_i = theta.isel(school=obs_idx)
+            sigma = 12.5
+            log_lik_values = (
+                -0.5 * np.log(2 * np.pi * sigma**2)
+                - 0.5 * ((excluded_obs.values - theta_i) / sigma) ** 2
+            )
+            log_lik = log_lik_values
+            return log_lik
+
     return MockSamplingWrapper(model=None, idata_orig=non_centered_eight)
 
 
 @pytest.fixture
 def high_k_loo_data(non_centered_eight):
+    from arviz_stats import loo
+    from arviz_stats.utils import ELPDData
+
     loo_data = loo(non_centered_eight, pointwise=True, var_name="obs")
     loo_data_modified = ELPDData(
         elpd=loo_data.elpd,
@@ -404,43 +427,9 @@ def high_k_loo_data(non_centered_eight):
     return loo_data_modified
 
 
-class MockSamplingWrapper2D(SamplingWrapper):
-    def __init__(self, model, idata_orig=None, **kwargs):
-        super().__init__(model, idata_orig, **kwargs)
-        self.data = idata_orig
-        self.log_lik_var_name = "log_lik"
-
-    def sel_observations(self, idx):
-        obs_data = self.data.observed_data["y_obs"]
-
-        if isinstance(idx, dict):
-            mask = xr.ones_like(obs_data, dtype=bool)
-            mask.loc[idx] = False
-            modified_obs = obs_data.where(mask, drop=True)
-            excluded_obs = obs_data.loc[idx]
-        else:
-            modified_obs = obs_data
-            excluded_obs = obs_data
-
-        return modified_obs, excluded_obs
-
-    def sample(self, modified_observed_data):
-        return {"fit": "mock_fit_2d", "data": modified_observed_data}
-
-    def get_inference_data(self, fitted_model):
-        return self.data
-
-    def log_likelihood__i(self, excluded_obs, idata__i):
-        posterior = idata__i.posterior
-        return xr.DataArray(
-            np.random.normal(-1, 0.1, size=(posterior.dims["chain"], posterior.dims["draw"])),
-            dims=["chain", "draw"],
-            coords={"chain": posterior.chain, "draw": posterior.draw},
-        )
-
-
 @pytest.fixture
 def mock_2d_data():
+    azb = importorskip("arviz_base")
     np.random.seed(42)
 
     n_chains = 4
@@ -480,4 +469,42 @@ def mock_2d_data():
 
 @pytest.fixture
 def mock_wrapper_2d(mock_2d_data):
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    class MockSamplingWrapper2D(SamplingWrapper):
+        def __init__(self, model, idata_orig=None, **kwargs):
+            super().__init__(model, idata_orig, **kwargs)
+            self.data = idata_orig
+            self.log_lik_var_name = "log_lik"
+
+        def sel_observations(self, idx):
+            obs_data = self.data.observed_data["y_obs"]
+
+            if isinstance(idx, dict):
+                xr = importorskip("xarray")
+                mask = xr.ones_like(obs_data, dtype=bool)
+                mask.loc[idx] = False
+                modified_obs = obs_data.where(mask, drop=True)
+                excluded_obs = obs_data.loc[idx]
+            else:
+                modified_obs = obs_data
+                excluded_obs = obs_data
+
+            return modified_obs, excluded_obs
+
+        def sample(self, modified_observed_data):
+            return {"fit": "mock_fit_2d", "data": modified_observed_data}
+
+        def get_inference_data(self, fitted_model):
+            return self.data
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            posterior = idata__i.posterior
+            xr = importorskip("xarray")
+            return xr.DataArray(
+                np.random.normal(-1, 0.1, size=(posterior.dims["chain"], posterior.dims["draw"])),
+                dims=["chain", "draw"],
+                coords={"chain": posterior.chain, "draw": posterior.draw},
+            )
+
     return MockSamplingWrapper2D(model=None, idata_orig=mock_2d_data)

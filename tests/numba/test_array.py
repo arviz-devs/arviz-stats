@@ -4,6 +4,10 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
+from ..helpers import importorskip
+
+importorskip("numba")
+
 from arviz_stats.numba.array import NumbaArray, _histogram_jit, _quantile_ufunc, process_ary_axes
 
 

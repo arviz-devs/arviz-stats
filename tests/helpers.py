@@ -44,11 +44,10 @@ def importorskip(modname: str, reason: str | None = None) -> Any:
     return mod
 
 
-azb = importorskip("arviz_base")
-
-
 def create_model(seed=10, transpose=False):
     """Create model with fake data."""
+    from arviz_base import from_dict
+
     rng = np.random.default_rng(seed)
     nchains = 4
     ndraws = 500
@@ -83,7 +82,7 @@ def create_model(seed=10, transpose=False):
         "energy": rng.random((nchains, ndraws)),
         "diverging": (rng.random((nchains, ndraws)) > 0.90).astype(int),
     }
-    model = azb.from_dict(
+    model = from_dict(
         {
             "posterior": posterior,
             "posterior_predictive": posterior_predictive,
@@ -111,6 +110,8 @@ def create_model(seed=10, transpose=False):
 
 def create_multidimensional_model(seed=10, transpose=False):
     """Create model with fake data."""
+    from arviz_base import from_dict
+
     rng = np.random.default_rng(seed)
     nchains = 4
     ndraws = 500
@@ -142,7 +143,7 @@ def create_multidimensional_model(seed=10, transpose=False):
         "energy": rng.standard_normal((nchains, ndraws)),
         "diverging": (rng.standard_normal((nchains, ndraws)) > 0.95).astype(int),
     }
-    model = azb.from_dict(
+    model = from_dict(
         {
             "posterior": posterior,
             "posterior_predictive": posterior_predictive,
@@ -165,6 +166,8 @@ def create_multidimensional_model(seed=10, transpose=False):
 
 def create_data_random(groups=None, seed=10):
     """Create InferenceData object using random data."""
+    from arviz_base import from_dict
+
     if groups is None:
         groups = ["posterior", "sample_stats", "observed_data", "posterior_predictive"]
     rng = np.random.default_rng(seed)
@@ -180,7 +183,7 @@ def create_data_random(groups=None, seed=10):
         "warmup_posterior_predictive": {"a": data[..., 0], "b": data},
         "warmup_prior": {"a": data[..., 0], "b": data},
     }
-    idata = azb.from_dict(
+    idata = from_dict(
         {group: ary for group, ary in idata_dict.items() if group in groups}, save_warmup=True
     )
     return idata
