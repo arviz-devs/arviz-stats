@@ -2,7 +2,9 @@
 # ruff: noqa: F811
 """Test k-fold cross-validation."""
 
+import numpy as np
 import pytest
+from numpy.testing import assert_almost_equal
 
 from ..helpers import importorskip
 
@@ -185,3 +187,71 @@ def test_loo_kfold_errors(centered_eight, mock_wrapper, error_case, expected_err
                 wrapper=mock_wrapper,
                 stratify_by=[0, 1, 0],
             )
+
+
+def test_loo_kfold_pointwise_sum_equals_total(centered_eight, fresh_wrapper):
+    result = loo_kfold(data=centered_eight, wrapper=fresh_wrapper, k=4, pointwise=True)
+    elpd_sum = np.sum(result.elpd_i.values)
+    assert_almost_equal(result.elpd, elpd_sum, decimal=10)
+
+
+def test_loo_kfold_k_equals_n(centered_eight, fresh_wrapper):
+    result = loo_kfold(data=centered_eight, wrapper=fresh_wrapper, k=8, pointwise=True)
+    assert result.n_folds == 8
+    assert fresh_wrapper.fit_count == 8
+    assert result.elpd_i.shape == (8,)
+
+
+def test_loo_kfold_fold_fits_all_present(centered_eight, fresh_wrapper):
+    k = 4
+    result = loo_kfold(data=centered_eight, wrapper=fresh_wrapper, k=k, save_fits=True)
+    assert len(result.fold_fits) == k
+    for fold_num in range(1, k + 1):
+        assert fold_num in result.fold_fits
+        assert "fit" in result.fold_fits[fold_num]
+        assert "test_indices" in result.fold_fits[fold_num]
+
+
+def test_loo_kfold_all_observations_tested(centered_eight, fresh_wrapper):
+    custom_folds = [1, 1, 2, 2, 3, 3, 4, 4]
+    result = loo_kfold(
+        data=centered_eight,
+        wrapper=fresh_wrapper,
+        folds=custom_folds,
+        pointwise=True,
+        save_fits=True,
+    )
+    all_test_indices = []
+    for fold_data in result.fold_fits.values():
+        all_test_indices.extend(fold_data["test_indices"])
+    assert len(all_test_indices) == 8
+    assert len(set(all_test_indices)) == 8
+    assert set(all_test_indices) == set(range(8))
+
+
+def test_loo_kfold_finite_values(centered_eight, fresh_wrapper):
+    result = loo_kfold(data=centered_eight, wrapper=fresh_wrapper, k=4, pointwise=True)
+    assert np.isfinite(result.elpd)
+    assert np.isfinite(result.se)
+    assert np.isfinite(result.p)
+    assert np.all(np.isfinite(result.elpd_i.values))
+    assert np.all(np.isfinite(result.p_kfold_i.values))
+
+
+def test_loo_kfold_xarray_stratify(centered_eight, fresh_wrapper):
+    strata_da = xr.DataArray([0, 0, 1, 1, 0, 0, 1, 1], dims=["school"])
+    result = loo_kfold(
+        data=centered_eight, wrapper=fresh_wrapper, k=4, stratify_by=strata_da, pointwise=False
+    )
+    assert result.n_folds == 4
+    assert fresh_wrapper.fit_count == 4
+
+
+def test_loo_kfold_se_positive(centered_eight, fresh_wrapper):
+    result = loo_kfold(data=centered_eight, wrapper=fresh_wrapper, k=4, pointwise=False)
+    assert result.se > 0
+
+
+def test_loo_kfold_p_positive(centered_eight, fresh_wrapper):
+    result = loo_kfold(data=centered_eight, wrapper=fresh_wrapper, k=4, pointwise=False)
+    assert result.p > 0

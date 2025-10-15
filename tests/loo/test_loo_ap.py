@@ -8,7 +8,14 @@ from ..helpers import importorskip
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
-from arviz_stats import loo_approximate_posterior
+from arviz_stats import loo, loo_approximate_posterior
+
+
+def test_loo_approx_invalid_var_name(centered_eight, log_densities):
+    log_p, log_q = log_densities["dataarray"]
+
+    with pytest.raises(TypeError, match="No log likelihood data named nonexistent found"):
+        loo_approximate_posterior(centered_eight, log_p=log_p, log_q=log_q, var_name="nonexistent")
 
 
 @pytest.mark.parametrize("input_type", ["dataarray", "numpy"])
@@ -98,3 +105,128 @@ def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type
 
     with pytest.raises(error_type, match=error_match):
         loo_approximate_posterior(centered_eight, var_name="obs", **kwargs)
+
+
+def test_loo_approx_approx_posterior_attribute(centered_eight, log_densities):
+    log_p, log_q = log_densities["dataarray"]
+
+    result = loo_approximate_posterior(centered_eight, log_p=log_p, log_q=log_q, var_name="obs")
+
+    assert hasattr(result, "approx_posterior")
+    assert result.approx_posterior is True
+
+
+def test_loo_approx_vs_standard_loo(centered_eight, log_densities):
+    log_p, log_q = log_densities["dataarray"]
+
+    result_approx = loo_approximate_posterior(
+        centered_eight, log_p=log_p, log_q=log_q, var_name="obs"
+    )
+    result_standard = loo(centered_eight, var_name="obs")
+
+    assert result_approx.kind == result_standard.kind
+    assert result_approx.n_samples == result_standard.n_samples
+    assert result_approx.n_data_points == result_standard.n_data_points
+
+
+def test_loo_approx_with_log_jacobian(centered_eight, log_densities):
+    log_p, log_q = log_densities["dataarray"]
+    log_lik = log_densities["log_lik"]
+
+    log_jacobian = xr.DataArray(
+        np.zeros(log_lik.sizes["school"]),
+        dims=["school"],
+        coords={"school": log_lik.coords["school"]},
+    )
+
+    result = loo_approximate_posterior(
+        centered_eight, log_p=log_p, log_q=log_q, var_name="obs", log_jacobian=log_jacobian
+    )
+
+    assert result.kind == "loo"
+    assert isinstance(result.elpd, float)
+    assert isinstance(result.se, float)
+
+
+def test_loo_approx_with_nonzero_log_jacobian(centered_eight, log_densities):
+    log_p, log_q = log_densities["dataarray"]
+    log_lik = log_densities["log_lik"]
+
+    rng = np.random.default_rng(42)
+    log_jacobian = xr.DataArray(
+        rng.normal(size=log_lik.sizes["school"]),
+        dims=["school"],
+        coords={"school": log_lik.coords["school"]},
+    )
+
+    result_with_jac = loo_approximate_posterior(
+        centered_eight, log_p=log_p, log_q=log_q, var_name="obs", log_jacobian=log_jacobian
+    )
+    result_without_jac = loo_approximate_posterior(
+        centered_eight, log_p=log_p, log_q=log_q, var_name="obs"
+    )
+
+    assert result_with_jac.elpd != result_without_jac.elpd
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_approx_multidimensional():
+    rng = np.random.default_rng(42)
+
+    multi_dim_data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 50))},
+            "log_likelihood": {"y": rng.normal(size=(2, 50, 3, 4))},
+        }
+    )
+
+    log_p = xr.DataArray(
+        rng.normal(size=(2, 50)),
+        dims=["chain", "draw"],
+        coords={"chain": [0, 1], "draw": range(50)},
+    )
+    log_q = xr.DataArray(
+        rng.normal(size=(2, 50)),
+        dims=["chain", "draw"],
+        coords={"chain": [0, 1], "draw": range(50)},
+    )
+
+    result = loo_approximate_posterior(multi_dim_data, log_p=log_p, log_q=log_q, var_name="y")
+
+    assert result.kind == "loo"
+    assert result.n_data_points == 12
+    assert isinstance(result.elpd, float)
+
+
+def test_loo_approx_pointwise_values_shape(centered_eight, log_densities):
+    log_p, log_q = log_densities["dataarray"]
+
+    result = loo_approximate_posterior(
+        centered_eight, log_p=log_p, log_q=log_q, var_name="obs", pointwise=True
+    )
+
+    assert result.elpd_i.dims == ("school",)
+    assert result.pareto_k.dims == ("school",)
+    assert np.all(np.isfinite(result.elpd_i.values))
+    assert np.all(np.isfinite(result.pareto_k.values))
+
+
+def test_loo_approx_good_k_threshold(centered_eight, log_densities):
+    log_p, log_q = log_densities["dataarray"]
+
+    result = loo_approximate_posterior(centered_eight, log_p=log_p, log_q=log_q, var_name="obs")
+
+    assert hasattr(result, "good_k")
+    assert isinstance(result.good_k, float)
+    assert 0 < result.good_k <= 1
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_approx_identical_log_p_log_q(centered_eight, log_densities):
+    log_p, _ = log_densities["dataarray"]
+    log_q = log_p.copy()
+
+    result = loo_approximate_posterior(centered_eight, log_p=log_p, log_q=log_q, var_name="obs")
+
+    assert isinstance(result.elpd, float)
+    assert np.isfinite(result.elpd)

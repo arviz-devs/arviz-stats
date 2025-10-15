@@ -246,3 +246,191 @@ def test_loo_jacobian(centered_eight):
     )
     with pytest.raises(ValueError, match="must contain only finite values"):
         loo(centered_eight, pointwise=True, log_jacobian=nan_jacobian)
+
+
+def test_loo_log_weights_pareto_k_mismatch(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+
+    with pytest.raises(ValueError, match="Both log_weights and pareto_k must be provided together"):
+        loo(centered_eight, log_weights=loo_result.log_weights, pareto_k=None)
+
+    with pytest.raises(ValueError, match="Both log_weights and pareto_k must be provided together"):
+        loo(centered_eight, log_weights=None, pareto_k=loo_result.pareto_k)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_single_chain():
+    rng = np.random.default_rng(42)
+
+    single_chain_data = azb.from_dict(
+        {
+            "posterior": {"theta": rng.normal(size=(1, 100, 8))},
+            "log_likelihood": {"obs": rng.normal(size=(1, 100, 8))},
+            "observed_data": {"obs": rng.normal(size=8)},
+        }
+    )
+
+    result = loo(single_chain_data, pointwise=True)
+
+    assert result.n_samples == 100
+    assert result.elpd is not None
+    assert result.pareto_k is not None
+    assert result.p is not None
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize("reff_value", [0.5, 0.8, 1.0])
+def test_loo_custom_reff(centered_eight, reff_value):
+    result = loo(centered_eight, reff=reff_value, pointwise=True)
+
+    assert result.elpd is not None
+    assert result.p is not None
+    assert result.kind == "loo"
+    assert result.pareto_k is not None
+
+
+def test_loo_i_with_precomputed_weights(centered_eight):
+    loo_full = loo(centered_eight, pointwise=True)
+
+    i = 3
+    result_with_weights = loo_i(
+        i, centered_eight, log_weights=loo_full.log_weights, pareto_k=loo_full.pareto_k
+    )
+
+    result_direct = loo_i(i, centered_eight)
+
+    assert_almost_equal(result_with_weights.elpd, result_direct.elpd, decimal=10)
+    assert_almost_equal(result_with_weights.pareto_k, result_direct.pareto_k, decimal=10)
+
+
+def test_loo_i_jacobian(centered_eight):
+    y_obs = centered_eight.observed_data["obs"].values
+    y_positive = y_obs + np.abs(y_obs.min()) + 1
+
+    log_jacobian_values = -np.log(2) - 0.5 * np.log(y_positive)
+    log_jacobian = xr.DataArray(
+        log_jacobian_values,
+        dims=["school"],
+        coords={"school": centered_eight.observed_data["obs"].coords["school"]},
+    )
+
+    result_no_jac = loo_i(0, centered_eight)
+    result_with_jac = loo_i(0, centered_eight, log_jacobian=log_jacobian)
+
+    expected_elpd = result_no_jac.elpd + log_jacobian_values[0]
+    assert_almost_equal(result_with_jac.elpd, expected_elpd, decimal=10)
+    assert_almost_equal(result_with_jac.p, result_no_jac.p, decimal=10)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_multidimensional_observations():
+    rng = np.random.default_rng(42)
+
+    multi_dim_data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(4, 100))},
+            "log_likelihood": {"y": rng.normal(size=(4, 100, 3, 4))},
+            "observed_data": {"y": rng.normal(size=(3, 4))},
+        }
+    )
+
+    result = loo(multi_dim_data, pointwise=True)
+
+    assert result.n_data_points == 12
+    assert result.elpd_i.shape == (3, 4)
+    assert result.pareto_k.shape == (3, 4)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_i_multidimensional_indexing():
+    rng = np.random.default_rng(42)
+
+    multi_dim_data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(4, 100))},
+            "log_likelihood": {"y": rng.normal(size=(4, 100, 3, 4))},
+            "observed_data": {"y": rng.normal(size=(3, 4))},
+        }
+    )
+
+    result_int = loo_i(5, multi_dim_data)
+    assert result_int.n_data_points == 1
+    assert result_int.elpd is not None
+
+    result_dict = loo_i({"y_dim_0": 1, "y_dim_1": 2}, multi_dim_data)
+    assert result_dict.n_data_points == 1
+    assert result_dict.elpd is not None
+
+    loo_full = loo(multi_dim_data, pointwise=True)
+    expected_elpd = loo_full.elpd_i.isel(y_dim_0=1, y_dim_1=2).item()
+    assert_almost_equal(result_dict.elpd, expected_elpd, decimal=10)
+
+
+def test_loo_var_name_explicit(centered_eight):
+    result_explicit = loo(centered_eight, var_name="obs", pointwise=True)
+    result_auto = loo(centered_eight, pointwise=True)
+
+    assert_almost_equal(result_explicit.elpd, result_auto.elpd, decimal=10)
+    assert_array_equal(result_explicit.pareto_k.values, result_auto.pareto_k.values)
+
+
+def test_loo_consistency_between_pointwise_modes(centered_eight):
+    result_pointwise_true = loo(centered_eight, pointwise=True)
+    result_pointwise_false = loo(centered_eight, pointwise=False)
+
+    assert_almost_equal(result_pointwise_true.elpd, result_pointwise_false.elpd, decimal=10)
+    assert_almost_equal(result_pointwise_true.p, result_pointwise_false.p, decimal=10)
+    assert_almost_equal(result_pointwise_true.se, result_pointwise_false.se, decimal=10)
+
+    assert result_pointwise_true.elpd_i is not None
+    assert result_pointwise_true.pareto_k is not None
+    assert result_pointwise_false.elpd_i is None
+    assert result_pointwise_false.pareto_k is None
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_with_extreme_values():
+    rng = np.random.default_rng(42)
+
+    extreme_data = azb.from_dict(
+        {
+            "posterior": {"theta": rng.normal(size=(2, 50, 5))},
+            "log_likelihood": {"obs": rng.normal(size=(2, 50, 5)) * 10 - 100},
+            "observed_data": {"obs": rng.normal(size=5)},
+        }
+    )
+
+    result = loo(extreme_data, pointwise=True)
+
+    assert np.isfinite(result.elpd)
+    assert np.all(np.isfinite(result.elpd_i.values))
+    assert np.all(np.isfinite(result.pareto_k.values))
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_i_with_different_var_names():
+    rng = np.random.default_rng(42)
+
+    multi_var_data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 50))},
+            "log_likelihood": {
+                "y1": rng.normal(size=(2, 50, 5)),
+                "y2": rng.normal(size=(2, 50, 3)),
+            },
+            "observed_data": {
+                "y1": rng.normal(size=5),
+                "y2": rng.normal(size=3),
+            },
+        }
+    )
+
+    result_y1 = loo_i(0, multi_var_data, var_name="y1")
+    assert result_y1.n_data_points == 1
+    assert result_y1.elpd is not None
+
+    result_y2 = loo_i(0, multi_var_data, var_name="y2")
+    assert result_y2.n_data_points == 1
+    assert result_y2.elpd is not None
+
+    assert result_y1.elpd != result_y2.elpd

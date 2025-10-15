@@ -8,7 +8,43 @@ from ..helpers import importorskip
 
 azb = importorskip("arviz_base")
 
-from arviz_stats import loo, loo_expectations
+from arviz_stats import loo, loo_expectations, loo_metrics
+from arviz_stats.utils import ELPDData
+
+
+def test_loo_expectations_invalid_kind(centered_eight):
+    with pytest.raises(ValueError, match="kind must be either"):
+        loo_expectations(centered_eight, kind="invalid")
+
+
+def test_loo_expectations_quantile_without_probs(centered_eight):
+    with pytest.raises(ValueError, match="probs must be provided when kind is 'quantile'"):
+        loo_expectations(centered_eight, kind="quantile")
+
+
+def test_loo_expectations_invalid_var_name(centered_eight):
+    with pytest.raises(KeyError):
+        loo_expectations(centered_eight, var_name="nonexistent")
+
+
+def test_loo_expectations_elpddata_without_log_weights(centered_eight):
+    np.random.default_rng(42)
+
+    loo_result_no_weights = ELPDData(
+        elpd=-30.0,
+        se=3.0,
+        p=2.0,
+        good_k=0.7,
+        n_samples=100,
+        n_data_points=8,
+        warning=False,
+        kind="loo",
+        scale="log",
+        log_weights=None,
+    )
+
+    with pytest.raises(ValueError, match="ELPDData object does not contain log_weights"):
+        loo_expectations(centered_eight, log_weights=loo_result_no_weights)
 
 
 @pytest.mark.parametrize(
@@ -77,3 +113,104 @@ def test_log_weights_input_formats(centered_eight):
     )
     assert_array_equal(loo_exp_da.values, loo_exp_elpddata.values)
     assert_array_equal(khat_da.values, khat_elpddata.values)
+
+
+@pytest.mark.parametrize("kind", ["median", "sd"])
+def test_loo_expectations_median_sd(centered_eight, kind):
+    result, khat = loo_expectations(centered_eight, kind=kind)
+
+    assert result.shape == (8,)
+    assert khat.shape == (8,)
+    assert np.all(np.isfinite(result.values))
+    assert np.all(np.isfinite(khat.values))
+
+
+def test_loo_expectations_single_quantile(centered_eight):
+    result, khat = loo_expectations(centered_eight, kind="quantile", probs=0.5)
+
+    assert result.shape == (8,)
+    assert khat.shape == (8,)
+    assert np.all(np.isfinite(result.values))
+    assert np.all(np.isfinite(khat.values))
+
+
+def test_loo_expectations_extreme_probs(centered_eight):
+    result, khat = loo_expectations(centered_eight, kind="quantile", probs=[0.01, 0.99])
+
+    assert result.shape == (2, 8)
+    assert khat.shape == (8,)
+    assert np.all(np.isfinite(result.values))
+    assert np.all(np.isfinite(khat.values))
+
+
+def test_loo_expectations_var_computation(centered_eight):
+    result_var, khat_var = loo_expectations(centered_eight, kind="var")
+    result_sd, khat_sd = loo_expectations(centered_eight, kind="sd")
+
+    assert np.all(result_var.values >= 0)
+    assert_allclose(result_sd.values, np.sqrt(result_var.values), rtol=1e-10)
+    assert_array_equal(khat_var.values, khat_sd.values)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_expectations_multidimensional():
+    rng = np.random.default_rng(42)
+
+    multi_dim_data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 50))},
+            "posterior_predictive": {"y": rng.normal(size=(2, 50, 3, 4))},
+            "log_likelihood": {"y": rng.normal(size=(2, 50, 3, 4))},
+            "observed_data": {"y": rng.normal(size=(3, 4))},
+        }
+    )
+
+    result, khat = loo_expectations(multi_dim_data, kind="mean")
+
+    assert result.shape == (3, 4)
+    assert khat.shape == (3, 4)
+    assert np.all(np.isfinite(result.values))
+
+
+def test_loo_expectations_with_explicit_var_name(centered_eight):
+    result_explicit, khat_explicit = loo_expectations(centered_eight, var_name="obs", kind="mean")
+    result_auto, khat_auto = loo_expectations(centered_eight, kind="mean")
+
+    assert_array_equal(result_explicit.values, result_auto.values)
+    assert_array_equal(khat_explicit.values, khat_auto.values)
+
+
+@pytest.mark.parametrize("kind", ["mae", "mse", "rmse"])
+def test_loo_metrics(centered_eight, kind):
+    result = loo_metrics(centered_eight, kind=kind)
+
+    assert hasattr(result, "_fields")
+    assert hasattr(result, "mean")
+    assert hasattr(result, "se")
+    assert isinstance(result.mean, int | float | str)
+    assert isinstance(result.se, int | float | str)
+
+
+def test_loo_metrics_with_log_weights(centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+
+    result_with_weights = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result)
+    result_without_weights = loo_metrics(centered_eight, kind="rmse")
+
+    assert hasattr(result_with_weights, "mean")
+    assert hasattr(result_without_weights, "mean")
+
+
+def test_loo_metrics_explicit_var_name(centered_eight):
+    result = loo_metrics(centered_eight, var_name="obs", kind="mae")
+
+    assert hasattr(result, "mean")
+    assert hasattr(result, "se")
+
+
+def test_loo_metrics_round_to(centered_eight):
+    result_2g = loo_metrics(centered_eight, kind="rmse", round_to="2g")
+    result_3 = loo_metrics(centered_eight, kind="rmse", round_to=3)
+
+    assert hasattr(result_2g, "mean")
+    assert hasattr(result_3, "mean")

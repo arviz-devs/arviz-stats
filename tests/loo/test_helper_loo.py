@@ -15,13 +15,16 @@ sp = importorskip("scipy")
 from arviz_stats.loo.helper_loo import (
     _align_data_to_obs,
     _check_log_density,
+    _check_log_jacobian,
     _compute_loo_approximation,
     _diff_srs_estimator,
     _extract_loo_data,
     _generate_subsample_indices,
     _get_log_likelihood_i,
     _get_r_eff,
+    _get_r_eff_i,
     _get_weights_and_k_i,
+    _prepare_full_arrays,
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
@@ -699,3 +702,179 @@ def test_compute_loo_approximation_errors(centered_eight_with_sigma):
             method="lpd",
             log=True,
         )
+
+
+def test_prepare_full_arrays_single_dim(log_likelihood_dataset):
+    log_lik = log_likelihood_dataset["obs"]
+    obs_dims = ["school"]
+    indices = np.array([1, 3, 5])
+
+    pointwise_values = xr.DataArray(
+        [-2.5, -3.0, -2.8], dims=["school"], coords={"school": [1, 3, 5]}
+    )
+    pareto_k_values = xr.DataArray([0.3, 0.4, 0.2], dims=["school"], coords={"school": [1, 3, 5]})
+    ref_array = log_lik.isel(chain=0, draw=0)
+
+    elpd_full, pareto_full = _prepare_full_arrays(
+        pointwise_values, pareto_k_values, ref_array, indices, obs_dims
+    )
+
+    assert elpd_full.shape == ref_array.shape
+    assert pareto_full.shape == ref_array.shape
+    assert_allclose(elpd_full.isel(school=indices).values, pointwise_values.values)
+    assert np.sum(~np.isnan(elpd_full.values)) == len(indices)
+
+
+@pytest.mark.parametrize("obs_dims", [[], None])
+def test_prepare_full_arrays_no_obs_dims(obs_dims):
+    pointwise_values = xr.DataArray([-2.5])
+    pareto_k_values = xr.DataArray([0.3])
+    ref_array = xr.DataArray([1.0])
+    indices = np.array([0])
+
+    elpd_full, pareto_full = _prepare_full_arrays(
+        pointwise_values, pareto_k_values, ref_array, indices, obs_dims or []
+    )
+
+    assert elpd_full is pointwise_values
+    assert pareto_full is pareto_k_values
+
+
+def test_check_log_jacobian_valid(log_likelihood_dataset):
+    log_lik = log_likelihood_dataset["obs"]
+    obs_dims = ["school"]
+
+    log_jacobian = xr.DataArray(np.zeros(8), dims=["school"], coords={"school": log_lik.school})
+
+    result = _check_log_jacobian(log_jacobian, obs_dims)
+    assert result is not None
+    assert isinstance(result, xr.DataArray)
+    assert result.dims == ("school",)
+
+
+def test_check_log_jacobian_none():
+    result = _check_log_jacobian(None, ["school"])
+    assert result is None
+
+
+@pytest.mark.parametrize(
+    "error_case,error_type,error_match",
+    [
+        ("not_dataarray", TypeError, "log_jacobian must be an xarray.DataArray"),
+        ("has_sample_dims", ValueError, "log_jacobian must not have sample dimensions"),
+        ("wrong_dims", ValueError, "log_jacobian dimensions must exactly match"),
+        ("has_nans", ValueError, "log_jacobian must contain only finite values"),
+        ("has_infs", ValueError, "log_jacobian must contain only finite values"),
+    ],
+)
+def test_check_log_jacobian_errors(log_likelihood_dataset, error_case, error_type, error_match):
+    log_lik = log_likelihood_dataset["obs"]
+    obs_dims = ["school"]
+
+    if error_case == "not_dataarray":
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian([1, 2, 3], obs_dims)
+
+    elif error_case == "has_sample_dims":
+        bad_jac = xr.DataArray(
+            np.zeros((log_lik.chain.size, log_lik.draw.size, log_lik.school.size)),
+            dims=["chain", "draw", "school"],
+            coords={"chain": log_lik.chain, "draw": log_lik.draw, "school": log_lik.school},
+        )
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian(bad_jac, obs_dims)
+
+    elif error_case == "wrong_dims":
+        bad_jac = xr.DataArray(np.zeros(5), dims=["wrong_dim"])
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian(bad_jac, obs_dims)
+
+    elif error_case == "has_nans":
+        bad_jac = xr.DataArray(
+            np.array([0.0, np.nan, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            dims=["school"],
+            coords={"school": log_lik.school},
+        )
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian(bad_jac, obs_dims)
+
+    elif error_case == "has_infs":
+        bad_jac = xr.DataArray(
+            np.array([0.0, np.inf, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            dims=["school"],
+            coords={"school": log_lik.school},
+        )
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian(bad_jac, obs_dims)
+
+
+def test_get_r_eff_i(log_likelihood_dataset):
+    log_lik = log_likelihood_dataset["obs"]
+    obs_dims = ["school"]
+
+    r_eff_array = xr.DataArray(
+        np.array([0.8, 0.85, 0.9, 0.75, 0.82, 0.88, 0.91, 0.79]),
+        dims=["school"],
+        coords={"school": log_lik.school},
+    )
+
+    r_eff_val = _get_r_eff_i(r_eff_array, 3, obs_dims)
+
+    assert isinstance(r_eff_val, float)
+    assert_allclose(r_eff_val, 0.75)
+
+
+@pytest.mark.parametrize(
+    "error_case,error_type,error_match",
+    [
+        ("not_dataarray", TypeError, "r_eff must be an xarray.DataArray"),
+        ("no_obs_dims", ValueError, "r_eff must have observation dimensions"),
+        ("missing_dims", ValueError, "r_eff must include observation dimensions"),
+    ],
+)
+def test_get_r_eff_i_errors(error_case, error_type, error_match):
+    obs_dims = ["school"]
+
+    if error_case == "not_dataarray":
+        with pytest.raises(error_type, match=error_match):
+            _get_r_eff_i(0.8, 0, obs_dims)
+
+    elif error_case == "no_obs_dims":
+        r_eff_array = xr.DataArray([0.8], dims=["x"])
+        with pytest.raises(error_type, match=error_match):
+            _get_r_eff_i(r_eff_array, 0, [])
+
+    elif error_case == "missing_dims":
+        r_eff_array = xr.DataArray(np.ones(5), dims=["x"])
+        with pytest.raises(error_type, match=error_match):
+            _get_r_eff_i(r_eff_array, 0, obs_dims)
+
+
+def test_select_obs_by_indices_multidim():
+    data = xr.DataArray(
+        np.arange(12).reshape(3, 4),
+        dims=["x", "y"],
+        coords={"x": [0, 1, 2], "y": [0, 1, 2, 3]},
+    )
+    indices = np.array([1, 5, 9])
+    result = _select_obs_by_indices(data, indices, dims=["x", "y"], dim_name="__obs__")
+
+    assert result.shape[0] == 3
+    assert_allclose(result.values.ravel(), [1, 5, 9])
+
+
+def test_diff_srs_estimator_edge_case_full_sample():
+    elpd_sample = xr.DataArray([-5.0, -6.0])
+    lpd_approx_sample = xr.DataArray([-5.0, -6.0])
+    lpd_approx_all = xr.DataArray([-4.0, -5.0])
+    n_data_points = 2
+    subsample_size = 2
+
+    elpd_est, subsampling_se, total_se = _diff_srs_estimator(
+        elpd_sample, lpd_approx_sample, lpd_approx_all, n_data_points, subsample_size
+    )
+
+    assert isinstance(elpd_est, float)
+    assert isinstance(subsampling_se, float)
+    assert isinstance(total_se, float)
+    assert subsampling_se == 0.0

@@ -4,7 +4,7 @@ import copy
 
 import numpy as np
 import pytest
-from numpy.testing import assert_allclose, assert_almost_equal
+from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
 
 from ..helpers import importorskip
 
@@ -211,3 +211,202 @@ def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
     assert "subsampling_dse" not in comparison_regular.columns
     assert np.isfinite(comparison_regular["dse"].values).all()
     assert_almost_equal(comparison_regular["elpd_diff"].iloc[0], 0.0, decimal=4)
+
+
+@pytest.mark.parametrize("method", ["BB-pseudo-BMA", "pseudo-BMA"])
+def test_compare_single_model(centered_eight, method):
+    single_dict = {"model": centered_eight}
+    result = compare(single_dict, method=method)
+
+    assert len(result) == 1
+    assert result.index[0] == "model"
+    assert result["rank"].iloc[0] == 0
+    assert result["elpd_diff"].iloc[0] == 0.0
+    assert result["dse"].iloc[0] == 0.0
+    assert result["weight"].iloc[0] == 1.0
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+@pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
+def test_compare_many_models(centered_eight, method):
+    models = {f"model_{i}": centered_eight for i in range(7)}
+    result = compare(models, method=method)
+
+    assert len(result) == 7
+    assert result["rank"].min() == 0
+    assert result["rank"].max() == 6
+    assert_allclose(result["weight"].sum(), 1.0)
+    assert result.iloc[0]["elpd_diff"] == 0.0
+    assert result.iloc[0]["dse"] == 0.0
+
+    for i in range(len(result)):
+        assert result.iloc[i]["rank"] == i
+
+
+@pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
+def test_compare_columns(centered_eight, non_centered_eight, method):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict, method=method)
+
+    expected_cols = ["rank", "elpd", "p", "elpd_diff", "weight", "se", "dse", "warning"]
+    assert all(col in result.columns for col in expected_cols)
+    assert result["rank"].dtype == int
+    assert result["elpd"].dtype == float
+    assert result["p"].dtype == float
+    assert result["weight"].dtype == float
+    assert result["warning"].dtype == bool
+
+
+@pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
+def test_compare_best_model_properties(centered_eight, non_centered_eight, method):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict, method=method)
+
+    best_model = result.iloc[0]
+    assert best_model["rank"] == 0
+    assert best_model["elpd_diff"] == 0.0
+    assert best_model["dse"] == 0.0
+    assert best_model["elpd"] >= result.iloc[1]["elpd"]
+
+
+@pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
+def test_compare_weights_properties(centered_eight, non_centered_eight, method):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict, method=method)
+
+    assert (result["weight"] >= 0).all()
+    assert (result["weight"] <= 1).all()
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_sorting(centered_eight, non_centered_eight):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict)
+
+    elpd_values = result["elpd"].values
+    assert all(elpd_values[i] >= elpd_values[i + 1] for i in range(len(elpd_values) - 1))
+
+
+@pytest.mark.parametrize("n_models", [2, 3, 5, 8])
+@pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
+def test_compare_weight_sum(centered_eight, n_models, method):
+    models = {f"model_{i}": centered_eight for i in range(n_models)}
+    result = compare(models, method=method)
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_mixed_idata_elpd(centered_eight, non_centered_eight):
+    loo_result = loo(centered_eight, pointwise=True)
+
+    mixed_dict = {
+        "idata_model": non_centered_eight,
+        "elpd_model": loo_result,
+    }
+    result = compare(mixed_dict)
+
+    assert len(result) == 2
+    assert "idata_model" in result.index
+    assert "elpd_model" in result.index
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_elpd_diff_consistency(centered_eight, non_centered_eight):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict)
+
+    best_elpd = result.iloc[0]["elpd"]
+    second_elpd = result.iloc[1]["elpd"]
+    reported_diff = result.iloc[1]["elpd_diff"]
+
+    expected_diff = best_elpd - second_elpd
+    assert_almost_equal(reported_diff, expected_diff, decimal=5)
+
+
+def test_compare_all_methods_produce_same_ranking(centered_eight, non_centered_eight):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+
+    rankings = {}
+    for method in ["stacking", "BB-pseudo-BMA", "pseudo-BMA"]:
+        result = compare(model_dict, method=method)
+        rankings[method] = list(result.index)
+
+    assert rankings["stacking"] == rankings["BB-pseudo-BMA"]
+    assert rankings["stacking"] == rankings["pseudo-BMA"]
+
+
+def test_compare_finite_values(centered_eight, non_centered_eight):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict)
+
+    numeric_cols = ["elpd", "p", "elpd_diff", "weight", "se", "dse"]
+    for col in numeric_cols:
+        assert np.all(np.isfinite(result[col]))
+
+
+def test_compare_se_values(centered_eight, non_centered_eight):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict)
+
+    for se_val in result["se"]:
+        assert se_val > 0
+
+    for dse_val in result["dse"]:
+        assert dse_val >= 0
+
+
+def test_compare_rank_ordering(centered_eight):
+    models = {f"model_{i}": centered_eight for i in range(5)}
+    result = compare(models)
+
+    ranks = result["rank"].values
+    expected_ranks = np.arange(len(models))
+    assert_array_equal(ranks, expected_ranks)
+
+
+def test_compare_identical_models_equal_weights(centered_eight):
+    model_dict = {"model_a": centered_eight, "model_b": centered_eight, "model_c": centered_eight}
+    result = compare(model_dict, method="stacking")
+
+    weights = result["weight"].values
+    assert_allclose(weights[0], weights[1], rtol=1e-5)
+    assert_allclose(weights[1], weights[2], rtol=1e-5)
+
+
+def test_compare_elpd_values_ordered(centered_eight):
+    models = {f"model_{i}": centered_eight for i in range(4)}
+    result = compare(models)
+
+    for i in range(len(result) - 1):
+        assert result.iloc[i]["elpd"] >= result.iloc[i + 1]["elpd"]
+
+
+def test_compare_empty_dict_error():
+    with pytest.raises((ValueError, KeyError, IndexError)):
+        compare({})
+
+
+def test_compare_identical_elpd_values(centered_eight):
+    models = {f"model_{i}": centered_eight for i in range(3)}
+    result = compare(models)
+
+    elpd_values = result["elpd"].unique()
+    assert len(elpd_values) == 1
+
+
+def test_compare_no_negative_weights(centered_eight, non_centered_eight):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+
+    for method in ["stacking", "BB-pseudo-BMA", "pseudo-BMA"]:
+        result = compare(model_dict, method=method)
+        assert (result["weight"] >= 0).all()
+
+
+def test_compare_elpd_diff_relative_to_best(centered_eight, non_centered_eight):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict)
+
+    best_elpd = result.iloc[0]["elpd"]
+
+    for i in range(len(result)):
+        expected_diff = best_elpd - result.iloc[i]["elpd"]
+        assert_almost_equal(result.iloc[i]["elpd_diff"], expected_diff, decimal=10)
