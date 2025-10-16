@@ -21,8 +21,9 @@ tox -e minimal  # should work for any python version
 
 ## How to write tests
 
-Use `importorskip` helper function from `tests/helpers` for any import outside of
-the Python standard library plus NumPy and SciPy. For example:
+Use `importorskip` helper function from
+[`tests/helpers.py`](https://github.com/arviz-devs/arviz-stats/blob/main/tests/helpers.py)
+for any import outside of the Python standard library plus NumPy and SciPy. For example:
 
 ```python
 import copy
@@ -48,7 +49,8 @@ the functions that used to be within `arviz/stats` module. However, it is also p
 arviz-stats without the xarray or arviz-base dependencies in which case a minimal version of the
 library that depends only on NumPy and SciPy is installed.
 
-To take this into account, tests use the `importorskip` helper function from `tests/helpers.py`
+To take this into account, tests use the `importorskip` helper function from
+[`tests/helpers.py`](https://github.com/arviz-devs/arviz-stats/blob/main/tests/helpers.py)
 when importing optional dependencies like xarray, arviz-base or pandas so that tests are skipped
 if a dependency is not available.
 In addition, the env variable `ARVIZ_REQUIRE_ALL_DEPS` can be set to disable this behaviour
@@ -65,4 +67,6 @@ on top of that.
 
 At the time of writing, on GitHub Actions we run the full test suite for all python versions
 and the minimal test suite for one python version.
-Which tests are executed is defined by the combination of `tox.ini` and `.github/workflows/test.yml`.
+Which tests are executed is defined by the combination of
+[`tox.ini`](https://github.com/arviz-devs/arviz-stats/blob/main/tox.ini) and
+[`.github/workflows/test.yml`](https://github.com/arviz-devs/arviz-stats/blob/main/.github/workflows/test.yml).
