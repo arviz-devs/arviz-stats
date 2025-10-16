@@ -68,9 +68,9 @@ def summary(
 
     See Also
     --------
-    arviz_stats.rhat : Compute estimate of rank normalized split R-hat for a set of traces.
-    arviz_stats.ess : Calculate the effective sample size of a set of traces.
-    arviz_stats.mcse : Calculate Markov Chain Standard Error statistic.
+    rhat : Compute estimate of rank normalized split R-hat for a set of traces.
+    ess : Calculate the effective sample size of a set of traces.
+    mcse : Calculate Markov Chain Standard Error statistic.
     arviz_plots.plot_ess : Plot quantile, local or evolution of effective sample sizes (ESS).
     arviz_plots.plot_mcse : Plot quantile, local or evolution of Markov Chain Standard Error (MCSE).
 
