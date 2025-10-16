@@ -68,9 +68,9 @@ def summary(
 
     See Also
     --------
-    arviz.rhat : Compute estimate of rank normalized split R-hat for a set of traces.
-    arviz.ess : Calculate the effective sample size of a set of traces.
-    arviz.mcse : Calculate Markov Chain Standard Error statistic.
+    rhat : Compute estimate of rank normalized split R-hat for a set of traces.
+    ess : Calculate the effective sample size of a set of traces.
+    mcse : Calculate Markov Chain Standard Error statistic.
     plot_ess : Plot quantile, local or evolution of effective sample sizes (ESS).
     plot_mcse : Plot quantile, local or evolution of Markov Chain Standard Error (MCSE).
 
@@ -271,9 +271,9 @@ def ci_in_rope(
 
     See Also
     --------
-    arviz.summary : Compute summary statistics and or diagnostics.
-    arviz.hdi : Compute highest density interval (HDI).
-    arviz.eti : Compute equal tail interval (ETI).
+    summary : Compute summary statistics and or diagnostics.
+    hdi : Compute highest density interval (HDI).
+    eti : Compute equal tail interval (ETI).
 
     Examples
     --------
