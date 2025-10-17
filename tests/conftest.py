@@ -12,6 +12,11 @@ from .helpers import (
 )
 
 
+@pytest.fixture
+def rng():
+    return np.random.default_rng(42)
+
+
 @pytest.fixture()
 def data_random():
     idata = create_data_random()
@@ -116,7 +121,8 @@ def simple_wrapper():
             return fitted_model
 
         def log_likelihood__i(self, excluded_obs, idata__i):
-            return np.random.randn(10)
+            rng = np.random.default_rng(42)
+            return rng.normal(size=10)
 
     return SimpleWrapper()
 
@@ -163,8 +169,9 @@ def elpd_data(centered_eight):
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
     n_data_points = log_likelihood.school.size
 
-    elpd_values = np.random.normal(size=n_data_points)
-    pareto_k_values = np.random.uniform(0, 0.7, size=n_data_points)
+    rng = np.random.default_rng(42)
+    elpd_values = rng.normal(size=n_data_points)
+    pareto_k_values = rng.uniform(0, 0.7, size=n_data_points)
 
     elpd_i = xr.DataArray(elpd_values, dims=["school"], coords={"school": log_likelihood.school})
 
@@ -430,7 +437,7 @@ def high_k_loo_data(non_centered_eight):
 @pytest.fixture
 def mock_2d_data():
     azb = importorskip("arviz_base")
-    np.random.seed(42)
+    rng = np.random.default_rng(42)
 
     n_chains = 4
     n_draws = 100
@@ -438,15 +445,15 @@ def mock_2d_data():
     n_measurements = 4
 
     posterior = {
-        "theta": np.random.normal(0, 1, (n_chains, n_draws, n_schools, n_measurements)),
+        "theta": rng.normal(0, 1, (n_chains, n_draws, n_schools, n_measurements)),
     }
 
     log_likelihood = {
-        "log_lik": np.random.normal(-1, 0.5, (n_chains, n_draws, n_schools, n_measurements)),
+        "log_lik": rng.normal(-1, 0.5, (n_chains, n_draws, n_schools, n_measurements)),
     }
 
     observed_data = {
-        "y_obs": np.random.normal(0, 1, (n_schools, n_measurements)),
+        "y_obs": rng.normal(0, 1, (n_schools, n_measurements)),
     }
 
     return azb.from_dict(
@@ -501,8 +508,9 @@ def mock_wrapper_2d(mock_2d_data):
         def log_likelihood__i(self, excluded_obs, idata__i):
             posterior = idata__i.posterior
             xr = importorskip("xarray")
+            rng = np.random.default_rng(42)
             return xr.DataArray(
-                np.random.normal(-1, 0.1, size=(posterior.dims["chain"], posterior.dims["draw"])),
+                rng.normal(-1, 0.1, size=(posterior.dims["chain"], posterior.dims["draw"])),
                 dims=["chain", "draw"],
                 coords={"chain": posterior.chain, "draw": posterior.draw},
             )

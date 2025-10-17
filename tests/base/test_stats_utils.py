@@ -15,7 +15,7 @@ from arviz_stats.base.stats_utils import make_ufunc, not_valid
 @pytest.mark.parametrize("axis", [None, 0, 1, (-2, -1)])
 @pytest.mark.parametrize("b", [None, 0, 1 / 100, 1 / 101])
 @pytest.mark.parametrize("keepdims", [True, False])
-def test_logsumexp_b(ary_dtype, axis, b, keepdims):  # pylint: disable=invalid-name
+def test_logsumexp_b(rng, ary_dtype, axis, b, keepdims):  # pylint: disable=invalid-name
     """Test ArviZ implementation of logsumexp.
 
     Test also compares against Scipy implementation.
@@ -24,12 +24,12 @@ def test_logsumexp_b(ary_dtype, axis, b, keepdims):  # pylint: disable=invalid-n
 
     Test tests against b parameter.
     """
-    ary = np.random.randn(100, 101).astype(ary_dtype)  # pylint: disable=no-member
+    ary = rng.normal(size=(100, 101)).astype(ary_dtype)
     assert _logsumexp(ary=ary, axis=axis, b=b, keepdims=keepdims, copy=True) is not None
     ary = ary.copy()
     assert _logsumexp(ary=ary, axis=axis, b=b, keepdims=keepdims, copy=False) is not None
     out = np.empty(5)
-    assert _logsumexp(ary=np.random.randn(10, 5), axis=0, out=out) is not None
+    assert _logsumexp(ary=rng.normal(size=(10, 5)), axis=0, out=out) is not None
 
     # Scipy implementation
     scipy_results = logsumexp(ary, b=b, axis=axis, keepdims=keepdims)
@@ -42,7 +42,7 @@ def test_logsumexp_b(ary_dtype, axis, b, keepdims):  # pylint: disable=invalid-n
 @pytest.mark.parametrize("axis", [None, 0, 1, (-2, -1)])
 @pytest.mark.parametrize("b_inv", [None, 0, 100, 101])
 @pytest.mark.parametrize("keepdims", [True, False])
-def test_logsumexp_b_inv(ary_dtype, axis, b_inv, keepdims):
+def test_logsumexp_b_inv(rng, ary_dtype, axis, b_inv, keepdims):
     """Test ArviZ implementation of logsumexp.
 
     Test also compares against Scipy implementation.
@@ -51,12 +51,12 @@ def test_logsumexp_b_inv(ary_dtype, axis, b_inv, keepdims):
 
     Test tests against b_inv parameter.
     """
-    ary = np.random.randn(100, 101).astype(ary_dtype)  # pylint: disable=no-member
+    ary = rng.normal(size=(100, 101)).astype(ary_dtype)
     assert _logsumexp(ary=ary, axis=axis, b_inv=b_inv, keepdims=keepdims, copy=True) is not None
     ary = ary.copy()
     assert _logsumexp(ary=ary, axis=axis, b_inv=b_inv, keepdims=keepdims, copy=False) is not None
     out = np.empty(5)
-    assert _logsumexp(ary=np.random.randn(10, 5), axis=0, out=out) is not None
+    assert _logsumexp(ary=rng.normal(size=(10, 5)), axis=0, out=out) is not None
 
     if b_inv != 0:
         # Scipy implementation when b_inv != 0
@@ -69,8 +69,8 @@ def test_logsumexp_b_inv(ary_dtype, axis, b_inv, keepdims):
 
 @pytest.mark.parametrize("quantile", ((0.5,), (0.5, 0.1)))
 @pytest.mark.parametrize("arg", (True, False))
-def test_make_ufunc_output(quantile, arg):
-    ary = np.random.randn(4, 100)
+def test_make_ufunc_output(rng, quantile, arg):
+    ary = rng.normal(size=(4, 100))
     n_output = len(quantile)
     if arg:
         res = make_ufunc(np.quantile, n_output=n_output)(ary, quantile)
@@ -183,17 +183,17 @@ def test_make_ufunc_out_bad(n_output):
 
 
 @pytest.mark.parametrize("how", ("all", "any"))
-def test_nan(how):
+def test_nan(rng, how):
     assert not not_valid(np.ones(10), check_shape=False, nan_kwargs={"how": how})
     if how == "any":
         assert not_valid(
-            np.concatenate((np.random.randn(100), np.full(2, np.nan))),
+            np.concatenate((rng.normal(size=100), np.full(2, np.nan))),
             check_shape=False,
             nan_kwargs={"how": how},
         )
     else:
         assert not not_valid(
-            np.concatenate((np.random.randn(100), np.full(2, np.nan))),
+            np.concatenate((rng.normal(size=100), np.full(2, np.nan))),
             check_shape=False,
             nan_kwargs={"how": how},
         )
@@ -201,8 +201,8 @@ def test_nan(how):
 
 
 @pytest.mark.parametrize("axis", (-1, 0, 1))
-def test_nan_axis(axis):
-    data = np.random.randn(4, 100)
+def test_nan_axis(rng, axis):
+    data = rng.normal(size=(4, 100))
     data[0, 0] = np.nan  #  pylint: disable=unsupported-assignment-operation
     axis_ = (len(data.shape) + axis) if axis < 0 else axis
     assert not_valid(data, check_shape=False, nan_kwargs={"how": "any"})

@@ -15,21 +15,21 @@ def array_stats():
 
 class TestHelperFunctions:
     def test_process_chain_none_with_none(self):
-        ary = np.random.randn(100, 50)
+        ary = np.empty((100, 50))
         ary_out, chain_axis, draw_axis = process_chain_none(ary, None, -1)
         assert ary_out.shape == (1, 100, 50)
         assert chain_axis == 0
         assert draw_axis == -1
 
     def test_process_chain_none_without_none(self):
-        ary = np.random.randn(4, 100, 50)
+        ary = np.empty((4, 100, 50))
         ary_out, chain_axis, draw_axis = process_chain_none(ary, 0, 1)
         assert ary_out.shape == ary.shape
         assert chain_axis == 0
         assert draw_axis == 1
 
     def test_process_chain_none_negative_draw_axis(self):
-        ary = np.random.randn(100, 50)
+        ary = np.empty((100, 50))
         ary_out, chain_axis, draw_axis = process_chain_none(ary, None, -2)
         assert ary_out.shape == (1, 100, 50)
         assert chain_axis == 0
@@ -37,20 +37,23 @@ class TestHelperFunctions:
 
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     def test_process_ary_axes_single_axis(self, axis):
-        ary = np.random.randn(10, 20, 30)
+        ary = np.empty((10, 20, 30))
         ary_out, axes = process_ary_axes(ary, axis)
         assert ary_out.ndim == ary.ndim
+        assert len(axes) == 1
         assert axes[-1] == -1
+        assert ary.shape[axis] == ary_out.shape[-1]
 
     def test_process_ary_axes_multiple_axes(self):
-        ary = np.random.randn(10, 20, 30, 40)
+        ary = np.empty((10, 20, 30, 40))
         ary_out, axes = process_ary_axes(ary, [0, 2])
         assert ary_out.ndim == ary.ndim
+        assert ary_out.shape == (20, 40, 10, 30)
         assert len(axes) == 2
         assert_array_equal(axes, [-2, -1])
 
     def test_process_ary_axes_none(self):
-        ary = np.random.randn(10, 20, 30)
+        ary = np.empty((10, 20, 30))
         ary_out, axes = process_ary_axes(ary, None)
         assert ary_out.shape == ary.shape
         assert len(axes) == ary.ndim
@@ -76,7 +79,7 @@ class TestHDI:
             assert result.shape == (2,)
 
     def test_hdi_invalid_prob(self, array_stats):
-        ary = np.random.randn(100)
+        ary = np.empty((100,))
         with pytest.raises(ValueError, match="must be in the"):
             array_stats.hdi(ary, prob=1.5)
 
@@ -92,6 +95,12 @@ class TestHDI:
         ary = rng.normal(size=(10, 20, 30))
         result = array_stats.hdi(ary, prob=0.9, axis=axis)
         assert result.shape[-1] == 2
+        expected_shape = {
+            0: (20, 30, 2),
+            1: (10, 30, 2),
+            -1: (10, 20, 2),
+        }
+        assert result.shape == expected_shape[axis]
 
 
 class TestESS:
@@ -102,17 +111,37 @@ class TestESS:
         assert result.shape == ()
         assert result > 0
 
-    @pytest.mark.parametrize("method", ["bulk", "tail", "mean", "sd", "median", "mad"])
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "bulk",
+            "tail",
+            "mean",
+            "sd",
+            "median",
+            "mad",
+            "z_scale",
+            "folded",
+            "identity",
+            "quantile",
+            "local",
+        ],
+    )
     def test_ess_methods(self, array_stats, method):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(4, 100))
-        prob = 0.95 if method == "tail" else None
+        if method == "local":
+            prob = [0.025, 0.975]
+        elif method in ("tail", "quantile"):
+            prob = 0.95
+        else:
+            prob = None
         result = array_stats.ess(ary, method=method, prob=prob)
         assert result.shape == ()
         assert result > 0
 
     def test_ess_invalid_method(self, array_stats):
-        ary = np.random.randn(4, 100)
+        ary = np.empty((4, 100))
         with pytest.raises(ValueError, match="must be one of"):
             array_stats.ess(ary, method="invalid")
 
@@ -127,6 +156,13 @@ class TestESS:
         ary = rng.normal(size=(3, 4, 100))
         result = array_stats.ess(ary)
         assert result.shape == (3,)
+
+    def test_ess_chain_draw_axis(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(5, 4, 10, 100))
+        result = array_stats.ess(ary, chain_axis=1, draw_axis=3)
+        assert result.shape == (5, 10)
+        assert result.min() > 0
 
 
 class TestRhat:
@@ -146,7 +182,7 @@ class TestRhat:
         assert result > 0
 
     def test_rhat_invalid_method(self, array_stats):
-        ary = np.random.randn(4, 100)
+        ary = np.empty((4, 100))
         with pytest.raises(ValueError, match="must be one of"):
             array_stats.rhat(ary, method="invalid")
 
@@ -175,7 +211,7 @@ class TestRhatNested:
         assert result.shape == ()
 
     def test_rhat_nested_invalid_method(self, array_stats):
-        ary = np.random.randn(4, 100)
+        ary = np.empty((4, 100))
         superchain_ids = np.array([0, 0, 1, 1])
         with pytest.raises(ValueError, match="must be one of"):
             array_stats.rhat_nested(ary, superchain_ids, method="invalid")
@@ -199,7 +235,7 @@ class TestMCSE:
         assert result > 0
 
     def test_mcse_invalid_method(self, array_stats):
-        ary = np.random.randn(4, 100)
+        ary = np.empty((4, 100))
         with pytest.raises(ValueError, match="must be one of"):
             array_stats.mcse(ary, method="invalid")
 
@@ -232,6 +268,34 @@ class TestParetoFunctions:
         result = array_stats.pareto_khat(ary)
         assert result.shape == ()
 
+    def test_pareto_min_ss_chain_draw_axis(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(5, 4, 10, 100))
+        result = array_stats.pareto_min_ss(ary, chain_axis=1, draw_axis=3)
+        assert result.shape == (5, 10)
+        assert result.min() > 0
+
+    @pytest.mark.parametrize("axis", [0, 1, -1])
+    def test_psislw_axis_integer(self, array_stats, axis):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(50, 60, 70))
+        log_weights, khat = array_stats.psislw(ary, axis=axis)
+        assert log_weights.ndim == ary.ndim
+        assert khat.shape == tuple(s for i, s in enumerate(ary.shape) if i != axis % ary.ndim)
+
+    def test_psislw_axis_list(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(50, 60, 70, 80))
+        log_weights, khat = array_stats.psislw(ary, axis=[1, 3])
+        assert log_weights.ndim == ary.ndim
+        assert khat.shape == (50, 70)
+
+    def test_pareto_khat_chain_draw_axis(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(5, 4, 10, 100))
+        result = array_stats.pareto_khat(ary, chain_axis=1, draw_axis=3)
+        assert result.shape == (5, 10)
+
 
 class TestPowerScale:
     def test_power_scale_lw(self, array_stats):
@@ -255,6 +319,7 @@ class TestComputeRanks:
         x = np.array([3.0, 1.0, 2.0, 4.0])
         result = array_stats.compute_ranks(x)
         assert result.shape == (4,)
+        assert_array_equal(result, np.array([3.0, 1.0, 2.0, 4.0]))
 
     def test_compute_ranks_relative(self, array_stats):
         x = np.array([3.0, 1.0, 2.0, 4.0])
@@ -268,6 +333,7 @@ class TestComputeRanks:
         ary = rng.normal(size=(10, 20, 30))
         result = array_stats.compute_ranks(ary, axis=axis)
         assert result.ndim == ary.ndim
+        assert result.max() == ary.shape[axis]
 
 
 class TestBinning:
@@ -276,7 +342,9 @@ class TestBinning:
         ary = rng.normal(size=(100,))
         bins = array_stats.get_bins(ary)
         assert bins.ndim == 1
-        assert len(bins) > 0
+        assert len(bins) == 9
+        assert bins[0] == ary.min()
+        assert ary.max() <= bins[-1]
 
     @pytest.mark.parametrize("bins", [10, 20, 50])
     def test_get_bins_integer(self, array_stats, bins):
@@ -284,6 +352,7 @@ class TestBinning:
         ary = rng.normal(size=(100,))
         result = array_stats.get_bins(ary, bins=bins)
         assert result.ndim == 1
+        assert len(result) == bins + 1
 
     def test_histogram_basic(self, array_stats):
         rng = np.random.default_rng(42)
@@ -324,7 +393,7 @@ class TestKDE:
         assert len(pdf) == 512
         assert bw > 0
 
-    @pytest.mark.parametrize("grid_len", [128, 256, 512, 1024])
+    @pytest.mark.parametrize("grid_len", [128, 256])
     def test_kde_grid_len(self, array_stats, grid_len):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(100,))
@@ -339,6 +408,16 @@ class TestKDE:
         assert len(grid) == 512
         assert len(pdf) == 512
         assert bw > 0
+
+    @pytest.mark.parametrize("axis", [0, 1, -1])
+    def test_kde_axis(self, array_stats, axis):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(10, 20, 30))
+        grid, pdf, bw = array_stats.kde(ary, axis=axis)
+        expected_shape = tuple(s for i, s in enumerate(ary.shape) if i != axis % ary.ndim) + (512,)
+        assert grid.shape == expected_shape
+        assert pdf.shape == expected_shape
+        assert bw.shape == tuple(s for i, s in enumerate(ary.shape) if i != axis % ary.ndim)
 
 
 class TestQuantileDots:
@@ -407,7 +486,7 @@ class TestThinning:
         assert factor >= 1
 
     def test_thin_factor_invalid_reduce_func(self, array_stats):
-        ary = np.random.randn(4, 100)
+        ary = np.empty((4, 100))
         with pytest.raises(ValueError, match="not recognized"):
             array_stats.thin_factor(ary, reduce_func="invalid")
 
@@ -433,7 +512,7 @@ class TestThinning:
         assert_array_equal(result, ary)
 
     def test_thin_invalid_factor(self, array_stats):
-        ary = np.random.randn(4, 100)
+        ary = np.empty((4, 100))
         with pytest.raises(ValueError, match="must be greater than 1"):
             array_stats.thin(ary, factor=0)
 

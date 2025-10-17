@@ -14,8 +14,8 @@ def density():
 
 
 class TestDCT:
-    def test_dct1d_shape(self, density):
-        x = np.random.randn(100)
+    def test_dct1d_shape(self, density, rng):
+        x = rng.normal(size=100)
         result = density.dct1d(x)
         assert result.shape == x.shape
 
@@ -25,93 +25,93 @@ class TestDCT:
         assert result.dtype == np.float64
 
     @pytest.mark.parametrize("size", [10, 50, 100, 256])
-    def test_dct1d_different_sizes(self, density, size):
-        x = np.random.randn(size)
+    def test_dct1d_different_sizes(self, density, rng, size):
+        x = rng.normal(size=size)
         result = density.dct1d(x)
         assert len(result) == size
 
 
 class TestBandwidthEstimators:
-    def test_bw_scott(self, density):
-        x = np.random.randn(100)
+    def test_bw_scott(self, density, rng):
+        x = rng.normal(size=100)
         bw = density.bw_scott(x)
         assert bw > 0
         assert isinstance(bw, float)
 
-    def test_bw_scott_with_std(self, density):
-        x = np.random.randn(100)
+    def test_bw_scott_with_std(self, density, rng):
+        x = rng.normal(size=100)
         x_std = np.std(x)
         bw1 = density.bw_scott(x)
         bw2 = density.bw_scott(x, x_std=x_std)
         assert_allclose(bw1, bw2)
 
-    def test_bw_silverman(self, density):
-        x = np.random.randn(100)
+    def test_bw_silverman(self, density, rng):
+        x = rng.normal(size=100)
         bw = density.bw_silverman(x)
         assert bw > 0
         assert isinstance(bw, float)
 
-    def test_bw_silverman_with_std(self, density):
-        x = np.random.randn(100)
+    def test_bw_silverman_with_std(self, density, rng):
+        x = rng.normal(size=100)
         x_std = np.std(x)
         bw1 = density.bw_silverman(x)
         bw2 = density.bw_silverman(x, x_std=x_std)
         assert_allclose(bw1, bw2)
 
-    def test_bw_isj(self, density):
-        x = np.random.randn(100)
+    def test_bw_isj(self, density, rng):
+        x = rng.normal(size=100)
         bw = density.bw_isj(x)
         assert bw > 0
 
-    def test_bw_isj_with_precomputed(self, density):
-        x = np.random.randn(100)
+    def test_bw_isj_with_precomputed(self, density, rng):
+        x = rng.normal(size=100)
         x_std = np.std(x)
         x_range = x.max() - x.min()
         grid_counts, _ = density._histogram(x, bins=256)
         bw = density.bw_isj(x, grid_counts=grid_counts, x_std=x_std, x_range=x_range)
         assert bw > 0
 
-    def test_bw_experimental(self, density):
-        x = np.random.randn(100)
+    def test_bw_experimental(self, density, rng):
+        x = rng.normal(size=100)
         bw = density.bw_experimental(x)
         assert bw > 0
 
-    def test_bw_experimental_average(self, density):
-        x = np.random.randn(100)
+    def test_bw_experimental_average(self, density, rng):
+        x = rng.normal(size=100)
         bw_silverman = density.bw_silverman(x)
         bw_isj = density.bw_isj(x)
         bw_experimental = density.bw_experimental(x)
         assert_allclose(bw_experimental, 0.5 * (bw_silverman + bw_isj))
 
     @pytest.mark.parametrize("method", ["scott", "silverman", "isj", "experimental"])
-    def test_get_bw_string(self, density, method):
-        x = np.random.randn(100)
+    def test_get_bw_string(self, density, rng, method):
+        x = rng.normal(size=100)
         bw = density.get_bw(x, method)
         assert bw > 0
 
     @pytest.mark.parametrize("bw_value", [0.1, 0.5, 1.0, 2.0])
-    def test_get_bw_numeric(self, density, bw_value):
-        x = np.random.randn(100)
+    def test_get_bw_numeric(self, density, rng, bw_value):
+        x = rng.normal(size=100)
         bw = density.get_bw(x, bw_value)
         assert bw == bw_value
 
-    def test_get_bw_invalid_bool(self, density):
-        x = np.random.randn(100)
+    def test_get_bw_invalid_bool(self, density, rng):
+        x = rng.normal(size=100)
         with pytest.raises(ValueError, match="must not be of type `bool`"):
             density.get_bw(x, True)
 
-    def test_get_bw_negative(self, density):
-        x = np.random.randn(100)
+    def test_get_bw_negative(self, density, rng):
+        x = rng.normal(size=100)
         with pytest.raises(ValueError, match="must be positive"):
             density.get_bw(x, -0.5)
 
-    def test_get_bw_invalid_method(self, density):
-        x = np.random.randn(100)
+    def test_get_bw_invalid_method(self, density, rng):
+        x = rng.normal(size=100)
         with pytest.raises(ValueError, match="Unrecognized bandwidth method"):
             density.get_bw(x, "invalid_method")
 
-    def test_bw_taylor(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_bw_taylor(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         bw = density.bw_taylor(x)
         assert bw > 0
 
@@ -178,8 +178,8 @@ class TestCircularHelpers:
         result = density._a1inv(x)
         assert result >= 0
 
-    def test_kappa_mle(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kappa_mle(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         kappa = density._kappa_mle(x)
         assert kappa > 0
 
@@ -272,87 +272,87 @@ class TestGridUtilities:
 
 
 class TestKDELinear:
-    def test_kde_linear_basic(self, density):
-        x = np.random.randn(100)
+    def test_kde_linear_basic(self, density, rng):
+        x = rng.normal(size=100)
         grid, pdf, bw = density.kde_linear(x)
         assert len(grid) == 512
         assert len(pdf) == 512
         assert bw > 0
 
     @pytest.mark.parametrize("bw_method", ["scott", "silverman", "isj", "experimental"])
-    def test_kde_linear_bw_methods(self, density, bw_method):
-        x = np.random.randn(100)
+    def test_kde_linear_bw_methods(self, density, rng, bw_method):
+        x = rng.normal(size=100)
         grid, pdf, bw = density.kde_linear(x, bw=bw_method)
         assert len(grid) == len(pdf)
         assert bw > 0
 
-    def test_kde_linear_numeric_bw(self, density):
-        x = np.random.randn(100)
+    def test_kde_linear_numeric_bw(self, density, rng):
+        x = rng.normal(size=100)
         bw_value = 0.5
         grid, pdf, bw = density.kde_linear(x, bw=bw_value)
         assert len(grid) == 512
         assert len(pdf) == 512
         assert_allclose(bw, bw_value)
 
-    def test_kde_linear_normalization(self, density):
-        x = np.random.randn(1000)
+    def test_kde_linear_normalization(self, density, rng):
+        x = rng.normal(size=1000)
         grid, pdf, _ = density.kde_linear(x, cumulative=False)
         dx = grid[1] - grid[0]
         integral = np.sum(pdf * dx)
         assert_allclose(integral, 1.0, rtol=0.01)
 
-    def test_kde_linear_cumulative(self, density):
-        x = np.random.randn(100)
+    def test_kde_linear_cumulative(self, density, rng):
+        x = rng.normal(size=100)
         _, pdf, _ = density.kde_linear(x, cumulative=True)
         assert np.all(np.diff(pdf) >= -1e-10)
         assert_allclose(pdf[-1], 1.0, rtol=0.01)
 
     @pytest.mark.parametrize("grid_len", [128, 256, 512, 1024])
-    def test_kde_linear_grid_len(self, density, grid_len):
-        x = np.random.randn(100)
+    def test_kde_linear_grid_len(self, density, rng, grid_len):
+        x = rng.normal(size=100)
         grid, pdf, _ = density.kde_linear(x, grid_len=grid_len)
         assert len(grid) == grid_len
         assert len(pdf) == grid_len
 
-    def test_kde_linear_adaptive(self, density):
-        x = np.random.randn(100)
+    def test_kde_linear_adaptive(self, density, rng):
+        x = rng.normal(size=100)
         grid, pdf, bw = density.kde_linear(x, adaptive=True)
         assert len(grid) == len(pdf)
         assert bw > 0
 
     @pytest.mark.parametrize("bound_correction", [True, False])
-    def test_kde_linear_bound_correction(self, density, bound_correction):
-        x = np.random.randn(100)
+    def test_kde_linear_bound_correction(self, density, rng, bound_correction):
+        x = rng.normal(size=100)
         grid, pdf, _ = density.kde_linear(x, bound_correction=bound_correction)
         assert len(grid) == len(pdf)
 
-    def test_kde_linear_custom_lims(self, density):
-        x = np.random.randn(100)
+    def test_kde_linear_custom_lims(self, density, rng):
+        x = rng.normal(size=100)
         custom_lims = [x.min() - 1, x.max() + 1]
         grid, _, _ = density.kde_linear(x, custom_lims=custom_lims)
         assert grid.min() >= custom_lims[0]
         assert grid.max() <= custom_lims[1]
 
     @pytest.mark.parametrize("bw_fct", [0.5, 1.0, 2.0])
-    def test_kde_linear_bw_fct(self, density, bw_fct):
-        x = np.random.randn(100)
+    def test_kde_linear_bw_fct(self, density, rng, bw_fct):
+        x = rng.normal(size=100)
         grid, pdf, _ = density.kde_linear(x, bw_fct=bw_fct)
         assert len(grid) == len(pdf)
 
-    def test_kde_linear_invalid_bw_fct_type(self, density):
-        x = np.random.randn(100)
+    def test_kde_linear_invalid_bw_fct_type(self, density, rng):
+        x = rng.normal(size=100)
         with pytest.raises(TypeError, match="must be a positive number"):
             density.kde_linear(x, bw_fct="invalid")
 
-    def test_kde_linear_negative_bw_fct(self, density):
-        x = np.random.randn(100)
+    def test_kde_linear_negative_bw_fct(self, density, rng):
+        x = rng.normal(size=100)
         with pytest.raises(ValueError, match="must be a positive number"):
             density.kde_linear(x, bw_fct=-0.5)
 
 
 class TestKDEConvolution:
-    def test_kde_convolution_basic(self, density):
-        x = np.random.randn(100)
+    def test_kde_convolution_basic(self, density, rng):
+        x = rng.normal(size=100)
         grid_len = 256
         grid_counts, grid_edges = density._histogram(x, bins=grid_len, density=False)
         bw = density.bw_silverman(x)
@@ -360,8 +360,8 @@ class TestKDEConvolution:
         assert len(grid) == grid_len
         assert len(pdf) == grid_len
 
-    def test_kde_convolution_bound_correction(self, density):
-        x = np.random.randn(100)
+    def test_kde_convolution_bound_correction(self, density, rng):
+        x = rng.normal(size=100)
         grid_len = 256
         grid_counts, grid_edges = density._histogram(x, bins=grid_len, density=False)
         bw = density.bw_silverman(x)
@@ -371,8 +371,8 @@ class TestKDEConvolution:
 
 
 class TestKDEAdaptive:
-    def test_kde_adaptive_basic(self, density):
-        x = np.random.randn(100)
+    def test_kde_adaptive_basic(self, density, rng):
+        x = rng.normal(size=100)
         grid_len = 256
         grid_counts, grid_edges = density._histogram(x, bins=grid_len, density=False)
         bw = density.bw_silverman(x)
@@ -380,8 +380,8 @@ class TestKDEAdaptive:
         assert len(grid) == grid_len
         assert len(pdf) == grid_len
 
-    def test_kde_adaptive_bound_correction(self, density):
-        x = np.random.randn(100)
+    def test_kde_adaptive_bound_correction(self, density, rng):
+        x = rng.normal(size=100)
         grid_len = 256
         grid_counts, grid_edges = density._histogram(x, bins=grid_len, density=False)
         bw = density.bw_silverman(x)
@@ -391,27 +391,27 @@ class TestKDEAdaptive:
 
 
 class TestKDECircular:
-    def test_kde_circular_basic(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_basic(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         grid, pdf, bw = density.kde_circular(x)
         assert len(grid) == 512
         assert len(pdf) == 512
         assert bw > 0
 
-    def test_kde_circular_normalization(self, density):
-        x = np.random.vonmises(0, 2, 1000)
+    def test_kde_circular_normalization(self, density, rng):
+        x = rng.vonmises(0, 2, 1000)
         grid, pdf, _ = density.kde_circular(x, cumulative=False)
         dx = grid[1] - grid[0]
         integral = np.sum(pdf * dx)
         assert_allclose(integral, 1.0, rtol=0.01)
 
-    def test_kde_circular_cumulative(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_cumulative(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         _, pdf, _ = density.kde_circular(x, cumulative=True)
         assert_allclose(pdf[-1], 1.0, rtol=0.01)
 
-    def test_kde_circular_numeric_bw(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_numeric_bw(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         bw_value = 5.0
         grid, pdf, bw = density.kde_circular(x, bw=bw_value)
         assert len(grid) == 512
@@ -419,61 +419,61 @@ class TestKDECircular:
         assert_allclose(bw, bw_value)
 
     @pytest.mark.parametrize("grid_len", [128, 256, 512, 1024])
-    def test_kde_circular_grid_len(self, density, grid_len):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_grid_len(self, density, rng, grid_len):
+        x = rng.vonmises(0, 2, 100)
         grid, pdf, _ = density.kde_circular(x, grid_len=grid_len)
         assert len(grid) == grid_len
         assert len(pdf) == grid_len
 
     @pytest.mark.parametrize("bw_fct", [0.5, 1.0, 2.0])
-    def test_kde_circular_bw_fct(self, density, bw_fct):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_bw_fct(self, density, rng, bw_fct):
+        x = rng.vonmises(0, 2, 100)
         grid, pdf, _ = density.kde_circular(x, bw_fct=bw_fct)
         assert len(grid) == len(pdf)
 
-    def test_kde_circular_invalid_bw_fct_type(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_invalid_bw_fct_type(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         with pytest.raises(TypeError, match="must be a positive number"):
             density.kde_circular(x, bw_fct="invalid")
 
-    def test_kde_circular_negative_bw_fct(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_negative_bw_fct(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         with pytest.raises(ValueError, match="must be a positive number"):
             density.kde_circular(x, bw_fct=-0.5)
 
-    def test_kde_circular_invalid_bw_bool(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_invalid_bw_bool(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         with pytest.raises(ValueError, match="can't be of type `bool`"):
             density.kde_circular(x, bw=True)
 
-    def test_kde_circular_negative_bw(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_negative_bw(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         with pytest.raises(ValueError, match="must be positive"):
             density.kde_circular(x, bw=-1.0)
 
-    def test_kde_circular_invalid_bw_string(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_circular_invalid_bw_string(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         with pytest.raises(ValueError, match="must be a positive numeric or `taylor`"):
             density.kde_circular(x, bw="invalid")
 
 
 class TestKDEWrapper:
-    def test_kde_wrapper_linear(self, density):
-        x = np.random.randn(100)
+    def test_kde_wrapper_linear(self, density, rng):
+        x = rng.normal(size=100)
         grid, pdf, bw = density._kde(x, circular=False)
         assert len(grid) == 512
         assert len(pdf) == 512
         assert bw > 0
 
-    def test_kde_wrapper_circular(self, density):
-        x = np.random.vonmises(0, 2, 100)
+    def test_kde_wrapper_circular(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
         grid, pdf, bw = density._kde(x, circular=True)
         assert len(grid) == 512
         assert len(pdf) == 512
         assert bw > 0
 
-    def test_kde_wrapper_circular_degrees(self, density):
-        x = np.random.uniform(0, 360, 100)
+    def test_kde_wrapper_circular_degrees(self, density, rng):
+        x = rng.uniform(0, 360, 100)
         grid, pdf, bw = density._kde(x, circular="degrees")
         assert len(grid) == 512
         assert len(pdf) == 512
@@ -493,30 +493,30 @@ class TestKDEWrapper:
 
 
 class TestKDE2D:
-    def test_fast_kde_2d_basic(self, density):
-        x = np.random.randn(100)
-        y = np.random.randn(100)
+    def test_fast_kde_2d_basic(self, density, rng):
+        x = rng.normal(size=100)
+        y = rng.normal(size=100)
         grid, xmin, xmax, ymin, ymax = density._fast_kde_2d(x, y)
         assert grid.shape == (128, 128)
         assert xmin < xmax
         assert ymin < ymax
 
     @pytest.mark.parametrize("gridsize", [(64, 64), (128, 128), (256, 256)])
-    def test_fast_kde_2d_gridsize(self, density, gridsize):
-        x = np.random.randn(100)
-        y = np.random.randn(100)
+    def test_fast_kde_2d_gridsize(self, density, rng, gridsize):
+        x = rng.normal(size=100)
+        y = rng.normal(size=100)
         grid, _, _, _, _ = density._fast_kde_2d(x, y, gridsize=gridsize)
         assert grid.shape == gridsize
 
-    def test_fast_kde_2d_circular(self, density):
-        x = np.random.randn(100)
-        y = np.random.randn(100)
+    def test_fast_kde_2d_circular(self, density, rng):
+        x = rng.normal(size=100)
+        y = rng.normal(size=100)
         grid, _, _, _, _ = density._fast_kde_2d(x, y, circular=True)
         assert grid.shape == (128, 128)
 
-    def test_fast_kde_2d_normalization(self, density):
-        x = np.random.randn(1000)
-        y = np.random.randn(1000)
+    def test_fast_kde_2d_normalization(self, density, rng):
+        x = rng.normal(size=1000)
+        y = rng.normal(size=1000)
         grid, xmin, xmax, ymin, ymax = density._fast_kde_2d(x, y)
         dx = (xmax - xmin) / (grid.shape[0] - 1)
         dy = (ymax - ymin) / (grid.shape[1] - 1)
@@ -547,8 +547,8 @@ class TestHDIContours:
 
 
 class TestQuantileDots:
-    def test_qds_basic(self, density):
-        x = np.random.randn(100)
+    def test_qds_basic(self, density, rng):
+        x = rng.normal(size=100)
         x_out, y_out, radius = density._qds(
             x, nquantiles=20, binwidth=None, dotsize=1, stackratio=1
         )
@@ -557,29 +557,29 @@ class TestQuantileDots:
         assert radius > 0
 
     @pytest.mark.parametrize("nquantiles", [10, 20, 50, 100])
-    def test_qds_nquantiles(self, density, nquantiles):
-        x = np.random.randn(200)
+    def test_qds_nquantiles(self, density, rng, nquantiles):
+        x = rng.normal(size=200)
         x_out, y_out, _ = density._qds(
             x, nquantiles=nquantiles, binwidth=None, dotsize=1, stackratio=1
         )
         assert len(x_out) == nquantiles
         assert len(y_out) == nquantiles
 
-    def test_qds_too_many_quantiles(self, density):
-        x = np.random.randn(50)
+    def test_qds_too_many_quantiles(self, density, rng):
+        x = rng.normal(size=50)
         with pytest.warns(UserWarning, match="nquantiles"):
             x_out, _, _ = density._qds(x, nquantiles=100, binwidth=None, dotsize=1, stackratio=1)
         assert len(x_out) == 50
 
-    def test_compute_quantiles_and_binwidth(self, density):
-        x = np.random.randn(100)
+    def test_compute_quantiles_and_binwidth(self, density, rng):
+        x = rng.normal(size=100)
         qvalues, binwidth = density._compute_quantiles_and_binwidth(x, nquantiles=10)
         assert len(qvalues) == 10
         assert binwidth > 0
         assert np.all(np.diff(qvalues) >= 0)
 
-    def test_compute_quantiles_custom_binwidth(self, density):
-        x = np.random.randn(100)
+    def test_compute_quantiles_custom_binwidth(self, density, rng):
+        x = rng.normal(size=100)
         custom_binwidth = 0.5
         _, binwidth = density._compute_quantiles_and_binwidth(
             x, nquantiles=10, binwidth=custom_binwidth
@@ -602,40 +602,40 @@ class TestQuantileDots:
 
 
 class TestECDF:
-    def test_ecdf_basic(self, density):
-        x = np.random.randn(100)
+    def test_ecdf_basic(self, density, rng):
+        x = rng.normal(size=100)
         eval_points, ecdf = density._ecdf(x, npoints=50, pit=False)
         assert len(eval_points) == 50
         assert len(ecdf) == 50
         assert np.all(ecdf >= 0)
         assert np.all(ecdf <= 1)
 
-    def test_ecdf_monotonic(self, density):
-        x = np.random.randn(100)
+    def test_ecdf_monotonic(self, density, rng):
+        x = rng.normal(size=100)
         _, ecdf = density._ecdf(x, npoints=50, pit=False)
         assert np.all(np.diff(ecdf) >= -1e-10)
 
-    def test_ecdf_pit(self, density):
-        x = np.random.randn(100)
+    def test_ecdf_pit(self, density, rng):
+        x = rng.normal(size=100)
         eval_points, ecdf = density._ecdf(x, npoints=50, pit=True)
         assert len(eval_points) == 50
         assert len(ecdf) == 50
 
     @pytest.mark.parametrize("npoints", [10, 50, 100, 200])
-    def test_ecdf_npoints(self, density, npoints):
-        x = np.random.randn(100)
+    def test_ecdf_npoints(self, density, rng, npoints):
+        x = rng.normal(size=100)
         eval_points, ecdf = density._ecdf(x, npoints=npoints, pit=False)
         assert len(eval_points) == npoints
         assert len(ecdf) == npoints
 
-    def test_ecdf_none_npoints(self, density):
-        x = np.random.randn(50)
+    def test_ecdf_none_npoints(self, density, rng):
+        x = rng.normal(size=50)
         eval_points, ecdf = density._ecdf(x, npoints=None, pit=False)
         assert len(eval_points) == 50
         assert len(ecdf) == 50
 
-    def test_ecdf_large_dataset(self, density):
-        x = np.random.randn(1000)
+    def test_ecdf_large_dataset(self, density, rng):
+        x = rng.normal(size=1000)
         eval_points, ecdf = density._ecdf(x, npoints=None, pit=False)
         assert len(eval_points) == 200
         assert len(ecdf) == 200
@@ -646,8 +646,8 @@ class TestECDF:
         assert len(eval_points) == 50
         assert len(ecdf) == 50
 
-    def test_ecdf_with_nans(self, density):
-        x = np.random.randn(100)
+    def test_ecdf_with_nans(self, density, rng):
+        x = rng.normal(size=100)
         x[:10] = np.nan
         eval_points, ecdf = density._ecdf(x, npoints=50, pit=False)
         assert len(eval_points) == 50
@@ -662,15 +662,15 @@ class TestKDEEdgeCases:
         assert len(pdf) == 512
         assert bw > 0
 
-    def test_kde_with_outliers(self, density):
-        x = np.concatenate([np.random.randn(95), [100, -100, 200, -200, 300]])
+    def test_kde_with_outliers(self, density, rng):
+        x = np.concatenate([rng.normal(size=95), [100, -100, 200, -200, 300]])
         grid, _pdf, bw = density.kde_linear(x)
         assert len(grid) == 512
         assert bw > 0
 
-    def test_kde_circular_boundary_wrapping(self, density):
+    def test_kde_circular_boundary_wrapping(self, density, rng):
         x = np.concatenate(
-            [np.random.uniform(-np.pi, -np.pi + 0.3, 50), np.random.uniform(np.pi - 0.3, np.pi, 50)]
+            [rng.uniform(-np.pi, -np.pi + 0.3, 50), rng.uniform(np.pi - 0.3, np.pi, 50)]
         )
         grid, _pdf, bw = density.kde_circular(x)
         assert len(grid) == 512
@@ -678,14 +678,14 @@ class TestKDEEdgeCases:
 
 
 class TestHistogramEdgeCases:
-    def test_histogram_empty_bins(self, density):
-        x = np.random.randn(100)
+    def test_histogram_empty_bins(self, density, rng):
+        x = rng.normal(size=100)
         counts, _edges = density._histogram(x, bins=100, range=(-10, -5))
         assert len(counts) == 100
         assert np.sum(counts) == 0
 
-    def test_histogram_single_bin(self, density):
-        x = np.random.randn(100)
+    def test_histogram_single_bin(self, density, rng):
+        x = rng.normal(size=100)
         counts, edges = density._histogram(x, bins=1)
         assert len(counts) == 1
         assert len(edges) == 2

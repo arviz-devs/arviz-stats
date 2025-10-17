@@ -13,19 +13,22 @@ from arviz_stats.numba.array import NumbaArray, _histogram_jit, _quantile_ufunc,
 
 class TestProcessAryAxes:
     def test_process_ary_axes_single_axis(self):
-        ary = np.random.randn(3, 4, 5)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(3, 4, 5))
         result, axes = process_ary_axes(ary, -1)
         assert result.shape == (3, 4, 5)
         assert axes == [2]
 
     def test_process_ary_axes_multiple_axes(self):
-        ary = np.random.randn(3, 4, 5)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(3, 4, 5))
         result, axes = process_ary_axes(ary, [1, 2])
         assert result.shape == (3, 20)
         assert axes == [1, 2]
 
     def test_process_ary_axes_negative_index(self):
-        ary = np.random.randn(3, 4, 5)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(3, 4, 5))
         result, axes = process_ary_axes(ary, -2)
         assert result.shape == (3, 5, 4)
         assert axes == [1]
@@ -50,14 +53,16 @@ class TestQuantileUfunc:
 
 class TestHistogramJit:
     def test_histogram_jit_basic(self):
-        ary = np.random.randn(100)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=100)
         hist, edges = _histogram_jit(ary, 10)
         assert len(hist) == 10
         assert len(edges) == 11
         assert np.sum(hist) == 100
 
     def test_histogram_jit_with_range(self):
-        ary = np.random.randn(100)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=100)
         hist, edges = _histogram_jit(ary, 10, range=(-3, 3))
         assert len(hist) == 10
         assert len(edges) == 11
@@ -68,46 +73,53 @@ class TestHistogramJit:
 class TestNumbaArray:
     def test_quantile_linear(self):
         array_stats = NumbaArray()
-        ary = np.random.randn(4, 100)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(4, 100))
         result = array_stats.quantile(ary, np.array([0.5]), axis=-1)
         assert result.shape == (4, 1)
 
     def test_quantile_multiple_quantiles(self):
         array_stats = NumbaArray()
-        ary = np.random.randn(4, 100)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(4, 100))
         result = array_stats.quantile(ary, [0.25, 0.5, 0.75], axis=-1)
         assert result.shape == (4, 3)
 
     def test_quantile_fallback_non_linear(self):
         array_stats = NumbaArray()
-        ary = np.random.randn(4, 100)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(4, 100))
         result = array_stats.quantile(ary, 0.5, axis=-1, method="midpoint")
         assert result.shape == (4,)
 
     def test_histogram_basic(self):
         array_stats = NumbaArray()
-        ary = np.random.randn(100)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=100)
         hist, edges = array_stats._histogram(ary, bins=10)
         assert len(hist) == 10
         assert len(edges) == 11
 
     def test_histogram_density(self):
         array_stats = NumbaArray()
-        ary = np.random.randn(100)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=100)
         hist, edges = array_stats._histogram(ary, bins=10, density=True)
         bin_width = edges[1] - edges[0]
         assert_allclose(np.sum(hist) * bin_width, 1.0, rtol=0.01)
 
     def test_histogram_weights_not_supported(self):
         array_stats = NumbaArray()
-        ary = np.random.randn(100)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=100)
         weights = np.ones(100)
         with pytest.raises(NotImplementedError, match="weights"):
             array_stats._histogram(ary, bins=10, weights=weights)
 
     def test_kde_basic(self):
         array_stats = NumbaArray()
-        ary = np.random.randn(4, 100)
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(4, 100))
         grid, pdf, bw = array_stats.kde(ary, axis=-1, grid_len=256)  # pylint: disable=unpacking-non-sequence
         assert grid.shape == (4, 256)
         assert pdf.shape == (4, 256)

@@ -204,14 +204,15 @@ def test_check_log_density(log_likelihood_dataset):
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
     sample_dims = ["chain", "draw"]
 
-    log_dens_np = np.random.randn(n_samples)
+    rng = np.random.default_rng(42)
+    log_dens_np = rng.normal(size=n_samples)
     result_np = _check_log_density(log_dens_np, "log_p", log_likelihood, n_samples, sample_dims)
 
     assert isinstance(result_np, xr.DataArray)
     assert all(dim in result_np.dims for dim in sample_dims)
 
     log_dens_da = xr.DataArray(
-        np.random.randn(log_likelihood.chain.size, log_likelihood.draw.size),
+        rng.normal(size=(log_likelihood.chain.size, log_likelihood.draw.size)),
         dims=sample_dims,
         coords={dim: log_likelihood[dim] for dim in sample_dims},
     )
@@ -229,12 +230,13 @@ def test_check_log_density_errors(log_likelihood_dataset):
     with pytest.raises(TypeError, match="log_p must be a numpy ndarray or xarray DataArray"):
         _check_log_density([1, 2, 3], "log_p", log_likelihood, n_samples, sample_dims)
 
+    rng = np.random.default_rng(42)
     with pytest.raises(ValueError, match="Size of log_p .* must match"):
         _check_log_density(
-            np.random.randn(n_samples - 1), "log_p", log_likelihood, n_samples, sample_dims
+            rng.normal(size=n_samples - 1), "log_p", log_likelihood, n_samples, sample_dims
         )
 
-    bad_dims_da = xr.DataArray(np.random.randn(n_samples), dims=["sample"])
+    bad_dims_da = xr.DataArray(rng.normal(size=n_samples), dims=["sample"])
     with pytest.raises(ValueError, match="log_p must have dimension 'chain'"):
         _check_log_density(bad_dims_da, "log_p", log_likelihood, n_samples, sample_dims)
 
@@ -413,9 +415,10 @@ def test_prepare_update_subsample(centered_eight, method):
 
 
 def test_shift():
+    rng = np.random.default_rng(42)
     chain_size, draw_size, param_size = 2, 100, 3
     upars = xr.DataArray(
-        np.random.randn(chain_size, draw_size, param_size),
+        rng.normal(size=(chain_size, draw_size, param_size)),
         dims=["chain", "draw", "param"],
         coords={
             "chain": np.arange(chain_size),
@@ -425,7 +428,7 @@ def test_shift():
     )
 
     lwi = xr.DataArray(
-        np.random.randn(chain_size, draw_size),
+        rng.normal(size=(chain_size, draw_size)),
         dims=["chain", "draw"],
         coords={"chain": upars.chain, "draw": upars.draw},
     )
@@ -454,9 +457,10 @@ def test_shift():
 
 
 def test_shift_and_scale():
+    rng = np.random.default_rng(42)
     chain_size, draw_size, param_size = 2, 100, 3
     upars = xr.DataArray(
-        np.random.randn(chain_size, draw_size, param_size),
+        rng.normal(size=(chain_size, draw_size, param_size)),
         dims=["chain", "draw", "param"],
         coords={
             "chain": np.arange(chain_size),
@@ -466,7 +470,7 @@ def test_shift_and_scale():
     )
 
     lwi = xr.DataArray(
-        np.random.randn(chain_size, draw_size),
+        rng.normal(size=(chain_size, draw_size)),
         dims=["chain", "draw"],
         coords={"chain": upars.chain, "draw": upars.draw},
     )
@@ -489,9 +493,10 @@ def test_shift_and_scale():
 
 
 def test_shift_and_cov():
+    rng = np.random.default_rng(42)
     chain_size, draw_size, param_size = 2, 100, 3
     upars = xr.DataArray(
-        np.random.randn(chain_size, draw_size, param_size),
+        rng.normal(size=(chain_size, draw_size, param_size)),
         dims=["chain", "draw", "param"],
         coords={
             "chain": np.arange(chain_size),
@@ -501,7 +506,7 @@ def test_shift_and_cov():
     )
 
     lwi = xr.DataArray(
-        np.random.randn(chain_size, draw_size),
+        rng.normal(size=(chain_size, draw_size)),
         dims=["chain", "draw"],
         coords={"chain": upars.chain, "draw": upars.draw},
     )
@@ -523,13 +528,14 @@ def test_shift_and_cov():
 
 @pytest.mark.parametrize("cov", [True, False])
 def test_split_moment_match(cov, centered_eight):
+    rng = np.random.default_rng(42)
     posterior = centered_eight.posterior
     chain_size = posterior.chain.size
     draw_size = posterior.draw.size
     param_size = 3
 
     upars = xr.DataArray(
-        np.random.randn(chain_size, draw_size, param_size),
+        rng.normal(size=(chain_size, draw_size, param_size)),
         dims=["chain", "draw", "param"],
         coords={
             "chain": posterior.chain,
@@ -538,9 +544,9 @@ def test_split_moment_match(cov, centered_eight):
         },
     )
 
-    total_shift = np.random.randn(param_size)
-    total_scaling = np.random.uniform(0.5, 2.0, param_size)
-    total_mapping = np.eye(param_size) + 0.1 * np.random.randn(param_size, param_size)
+    total_shift = rng.normal(size=param_size)
+    total_scaling = rng.uniform(0.5, 2.0, param_size)
+    total_mapping = np.eye(param_size) + 0.1 * rng.normal(size=(param_size, param_size))
 
     total_mapping = total_mapping @ total_mapping.T
 
@@ -601,7 +607,8 @@ def test_split_moment_match_errors():
             log_lik_i_upars_fn=lambda x, _i: x,
         )
 
-    upars_bad = xr.DataArray(np.random.randn(10, 3), dims=["draw", "param"])
+    rng = np.random.default_rng(42)
+    upars_bad = xr.DataArray(rng.normal(size=(10, 3)), dims=["draw", "param"])
     with pytest.raises(ValueError, match="Required sample dimensions"):
         _split_moment_match(
             upars=upars_bad,

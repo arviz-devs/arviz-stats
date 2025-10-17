@@ -74,7 +74,7 @@ def test_loo_approx_pointwise(centered_eight, log_densities, pointwise):
         ("dim_size_mismatch", ValueError, r"Size of dimension 'chain' in log_p"),
     ],
 )
-def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type, error_match):
+def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type, error_match, rng):
     log_p_da, log_q_da = log_densities["dataarray"]
     log_p_np, log_q_np = log_densities["numpy"]
     log_lik = log_densities["log_lik"]
@@ -85,14 +85,14 @@ def test_loo_approx_errors(centered_eight, log_densities, error_case, error_type
         kwargs = {"log_p": list(log_p_np), "log_q": log_q_np}
 
     elif error_case == "length_mismatch":
-        kwargs = {"log_p": np.random.randn(log_p_np.size - 1), "log_q": log_q_np}
+        kwargs = {"log_p": rng.normal(size=log_p_np.size - 1), "log_q": log_q_np}
 
     elif error_case == "missing_dims":
         broken_p = xr.DataArray(log_p_da.values.reshape(-1), dims=["sample"])
         kwargs = {"log_p": broken_p, "log_q": log_q_da}
 
     elif error_case == "dim_size_mismatch":
-        mismatched_p_values = np.random.randn(log_lik.chain.size - 1, log_lik.draw.size)
+        mismatched_p_values = rng.normal(size=(log_lik.chain.size - 1, log_lik.draw.size))
         mismatched_p = xr.DataArray(
             mismatched_p_values,
             dims=["chain", "draw"],

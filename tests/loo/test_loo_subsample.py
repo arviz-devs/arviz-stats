@@ -31,7 +31,6 @@ def log_lik_fn_subsample(obs_da, datatree):
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
 def test_loo_subsample(centered_eight_with_sigma, pointwise, method):
     observations = 4
-    np.random.seed(42)
     loo_sub = loo_subsample(
         centered_eight_with_sigma,
         observations=observations,

@@ -19,14 +19,15 @@ from arviz_stats.accessors import check_var_name_subset, update_dims, update_kwa
 
 @pytest.fixture(scope="module")
 def idata():
+    rng = np.random.default_rng(42)
     return azb.from_dict(
         {
             "posterior": {
-                "a": np.random.normal(size=(4, 100)),
-                "b": np.random.normal(size=(4, 100, 3)),
+                "a": rng.normal(size=(4, 100)),
+                "b": rng.normal(size=(4, 100, 3)),
             },
             "posterior_predictive": {
-                "y": np.random.normal(size=(4, 100, 7)),
+                "y": rng.normal(size=(4, 100, 7)),
             },
         }
     )
@@ -200,13 +201,15 @@ def test_datatree_datatree_property(idata):
     ],
 )
 def test_update_dims(dims, da_dims, expected):
-    da = xr.DataArray(np.random.randn(4, 100), dims=da_dims)
+    rng = np.random.default_rng(42)
+    da = xr.DataArray(rng.normal(size=(4, 100)), dims=da_dims)
     result = update_dims(dims, da)
     assert result == expected
 
 
 def test_update_kwargs_with_dims():
-    da = xr.DataArray(np.random.randn(4, 100), dims=["chain", "draw"])
+    rng = np.random.default_rng(42)
+    da = xr.DataArray(rng.normal(size=(4, 100)), dims=["chain", "draw"])
     kwargs = {"dim": ["chain", "missing"], "other_param": 42}
     result = update_kwargs_with_dims(da, kwargs)
     assert result["dim"] == ["chain"]
@@ -336,7 +339,8 @@ def test_datatree_process_input_invalid_group(idata):
 
 
 def test_update_kwargs_with_dims_both_dim_and_dims():
-    da = xr.DataArray(np.random.randn(4, 100), dims=["chain", "draw"])
+    rng = np.random.default_rng(42)
+    da = xr.DataArray(rng.normal(size=(4, 100)), dims=["chain", "draw"])
     kwargs = {"dim": ["chain"], "dims": ["draw", "missing"], "other": 123}
     result = update_kwargs_with_dims(da, kwargs)
     assert result["dim"] == ["chain"]

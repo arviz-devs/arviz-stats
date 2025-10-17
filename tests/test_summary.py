@@ -15,7 +15,8 @@ from arviz_stats import ci_in_rope, eti, hdi, mode, qds, summary
 
 
 def test_summary_ndarray():
-    array = np.random.randn(4, 100, 2)
+    rng = np.random.default_rng(42)
+    array = rng.normal(size=(4, 100, 2))
     summary_df = summary(array)
     assert summary_df.shape
 
@@ -221,13 +222,15 @@ def test_summary_round_to(datatree, round_to):
 
 
 def test_summary_invalid_ci_kind():
-    array = np.random.randn(4, 100, 2)
+    rng = np.random.default_rng(42)
+    array = rng.normal(size=(4, 100, 2))
     with pytest.raises(ValueError, match="ci_kind must be either 'hdi' or 'eti'"):
         summary(array, ci_kind="invalid")
 
 
 def test_summary_invalid_kind():
-    array = np.random.randn(4, 100, 2)
+    rng = np.random.default_rng(42)
+    array = rng.normal(size=(4, 100, 2))
     with pytest.raises(ValueError, match="valid options for kind are"):
         summary(array, kind="invalid")
 
@@ -295,14 +298,16 @@ def test_mode_coords(datatree):
 
 
 def test_mode_array_input():
-    array = np.random.randn(4, 100, 2)
+    rng = np.random.default_rng(42)
+    array = rng.normal(size=(4, 100, 2))
     result = mode(array)
     assert result.shape == ()
     assert isinstance(result.item(), float)
 
 
 def test_mode_integer_data():
-    int_array = np.random.randint(0, 10, size=(4, 100, 5))
+    rng = np.random.default_rng(42)
+    int_array = rng.integers(0, 10, size=(4, 100, 5))
     result = mode(int_array)
     assert result.shape == ()
     assert isinstance(result.item(), int | float)
@@ -361,7 +366,8 @@ def test_summary_single_var(datatree):
 
 
 def test_summary_small_data():
-    array = np.random.randn(2, 10)
+    rng = np.random.default_rng(42)
+    array = rng.normal(size=(2, 10))
     summary_df = summary(array)
     assert "mean" in summary_df.columns
     assert "ess_bulk" in summary_df.columns
