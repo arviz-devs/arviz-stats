@@ -298,15 +298,35 @@ class TestParetoFunctions:
 
 
 class TestPowerScale:
-    def test_power_scale_lw(self, array_stats):
-        rng = np.random.default_rng(42)
+    def test_power_scale_lw(self, array_stats, rng):
         ary = rng.normal(size=(100,))
         result = array_stats.power_scale_lw(ary, alpha=0.5)
         assert result.shape == (100,)
 
+    @pytest.mark.parametrize("axis", [0, 1, -1, -2])
+    @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
+    def test_power_scale_lw_axis(self, array_stats, rng, axis):
+        ary = rng.normal(size=(10, 20, 30))
+        result = array_stats.power_scale_lw(ary, alpha=0.5, axis=axis)
+        assert result.ndim == ary.ndim
+        expected_shape = {
+            0: (20, 30, 10),
+            1: (10, 30, 20),
+            -1: (10, 20, 30),
+            -2: (10, 30, 20),
+        }
+        assert result.shape == expected_shape[axis]
+
+    @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
+    def test_power_scale_lw_axis_list(self, array_stats, rng):
+        ary = rng.normal(size=(10, 20, 30, 40))
+        result = array_stats.power_scale_lw(ary, alpha=0.5, axis=[1, 3])
+        assert result.ndim == ary.ndim
+        assert result.shape == (10, 30, 20, 40)
+
     @pytest.mark.filterwarnings("ignore::RuntimeWarning")
-    def test_power_scale_sense(self, array_stats):
-        rng = np.random.default_rng(42)
+    @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
+    def test_power_scale_sense(self, array_stats, rng):
         ary = rng.normal(size=(4, 100))
         lower_w = rng.normal(size=(4, 100))
         upper_w = rng.normal(size=(4, 100))
@@ -337,8 +357,7 @@ class TestComputeRanks:
 
 
 class TestBinning:
-    def test_get_bins_basic(self, array_stats):
-        rng = np.random.default_rng(42)
+    def test_get_bins_basic(self, array_stats, rng):
         ary = rng.normal(size=(100,))
         bins = array_stats.get_bins(ary)
         assert bins.ndim == 1
@@ -347,41 +366,75 @@ class TestBinning:
         assert ary.max() <= bins[-1]
 
     @pytest.mark.parametrize("bins", [10, 20, 50])
-    def test_get_bins_integer(self, array_stats, bins):
-        rng = np.random.default_rng(42)
+    def test_get_bins_integer(self, array_stats, rng, bins):
         ary = rng.normal(size=(100,))
         result = array_stats.get_bins(ary, bins=bins)
         assert result.ndim == 1
         assert len(result) == bins + 1
 
-    def test_histogram_basic(self, array_stats):
-        rng = np.random.default_rng(42)
+    @pytest.mark.parametrize("axis", [0, 1, -1])
+    def test_get_bins_axis(self, array_stats, rng, axis):
+        ary = rng.normal(size=(10, 20, 30))
+        result = array_stats.get_bins(ary, axis=axis)
+        expected_shape = {
+            0: (20, 30),
+            1: (10, 30),
+            -1: (10, 20),
+        }
+        assert result.shape[:-1] == expected_shape[axis]
+        assert result.shape[-1] > 0
+
+    def test_histogram_basic(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
         counts, edges = array_stats.histogram(ary)
         assert len(counts) == len(edges) - 1
         assert counts.sum() == 1000
 
     @pytest.mark.parametrize("bins", [10, 20, 50])
-    def test_histogram_bins(self, array_stats, bins):
-        rng = np.random.default_rng(42)
+    def test_histogram_bins(self, array_stats, rng, bins):
         ary = rng.normal(size=(1000,))
         counts, _ = array_stats.histogram(ary, bins=bins)
         assert len(counts) == bins
 
-    def test_histogram_density(self, array_stats):
-        rng = np.random.default_rng(42)
+    def test_histogram_density(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
         counts, edges = array_stats.histogram(ary, density=True)
         widths = np.diff(edges)
         integral = np.sum(counts * widths)
         assert_allclose(integral, 1.0, rtol=0.01)
 
-    def test_histogram_range(self, array_stats):
-        rng = np.random.default_rng(42)
+    def test_histogram_range(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
         _, edges = array_stats.histogram(ary, bins=20, range=(-2, 2))
         assert_allclose(edges[0], -2)
         assert_allclose(edges[-1], 2)
+
+    @pytest.mark.parametrize("axis", [0, 1, -1])
+    def test_histogram_axis(self, array_stats, rng, axis):
+        ary = rng.normal(size=(10, 20, 30))
+        counts, edges = array_stats.histogram(ary, bins=15, axis=axis)
+        assert counts.ndim == ary.ndim
+        assert edges.ndim == ary.ndim
+        expected_counts_shape = {
+            0: (20, 30, 15),
+            1: (10, 30, 15),
+            -1: (10, 20, 15),
+        }
+        expected_edges_shape = {
+            0: (20, 30, 16),
+            1: (10, 30, 16),
+            -1: (10, 20, 16),
+        }
+        assert counts.shape == expected_counts_shape[axis]
+        assert edges.shape == expected_edges_shape[axis]
+
+    def test_histogram_axis_list(self, array_stats, rng):
+        ary = rng.normal(size=(10, 20, 30, 40))
+        counts, edges = array_stats.histogram(ary, bins=12, axis=[1, 3])
+        assert counts.ndim == 3
+        assert edges.ndim == 3
+        assert counts.shape == (10, 30, 12)
+        assert edges.shape == (10, 30, 13)
 
 
 class TestKDE:
@@ -421,8 +474,7 @@ class TestKDE:
 
 
 class TestQuantileDots:
-    def test_qds_basic(self, array_stats):
-        rng = np.random.default_rng(42)
+    def test_qds_basic(self, array_stats, rng):
         ary = rng.normal(size=(100,))
         x, y, radius = array_stats.qds(ary, nquantiles=20)
         assert len(x) == 20
@@ -430,17 +482,33 @@ class TestQuantileDots:
         assert radius > 0
 
     @pytest.mark.parametrize("nquantiles", [10, 20, 50, 100])
-    def test_qds_nquantiles(self, array_stats, nquantiles):
-        rng = np.random.default_rng(42)
+    def test_qds_nquantiles(self, array_stats, rng, nquantiles):
         ary = rng.normal(size=(200,))
         x, y, _ = array_stats.qds(ary, nquantiles=nquantiles)
         assert len(x) == nquantiles
         assert len(y) == nquantiles
 
+    @pytest.mark.parametrize("axis", [0, 1, -1])
+    def test_qds_axis(self, array_stats, rng, axis):
+        ary = rng.normal(size=(15, 25, 35))
+        x, y, radius = array_stats.qds(ary, nquantiles=10, axis=axis)
+        expected_shape = {
+            0: (25, 35, 10),
+            1: (15, 35, 10),
+            -1: (15, 25, 10),
+        }
+        assert x.shape == expected_shape[axis]
+        assert y.shape == expected_shape[axis]
+        expected_radius_shape = {
+            0: (25, 35),
+            1: (15, 35),
+            -1: (15, 25),
+        }
+        assert radius.shape == expected_radius_shape[axis]
+
 
 class TestECDF:
-    def test_ecdf_basic(self, array_stats):
-        rng = np.random.default_rng(42)
+    def test_ecdf_basic(self, array_stats, rng):
         ary = rng.normal(size=(100,))
         x, y = array_stats.ecdf(ary, npoints=50)
         assert len(x) == 50
@@ -448,18 +516,29 @@ class TestECDF:
         assert np.all(y >= 0)
         assert np.all(y <= 1)
 
-    def test_ecdf_monotonic(self, array_stats):
-        rng = np.random.default_rng(42)
+    def test_ecdf_monotonic(self, array_stats, rng):
         ary = rng.normal(size=(100,))
         _, y = array_stats.ecdf(ary, npoints=50)
         assert np.all(np.diff(y) >= -1e-10)
 
-    def test_ecdf_pit(self, array_stats):
-        rng = np.random.default_rng(42)
+    def test_ecdf_pit(self, array_stats, rng):
         ary = rng.normal(size=(100,))
         x, y = array_stats.ecdf(ary, npoints=50, pit=True)
         assert len(x) == 50
         assert len(y) == 50
+
+    @pytest.mark.parametrize("axis", [0, 1, -1, -2])
+    def test_ecdf_axis(self, array_stats, rng, axis):
+        ary = rng.normal(size=(10, 20, 30))
+        x, y = array_stats.ecdf(ary, npoints=40, axis=axis)
+        expected_shape = {
+            0: (20, 30, 40),
+            1: (10, 30, 40),
+            -1: (10, 20, 40),
+            -2: (10, 30, 40),
+        }
+        assert x.shape == expected_shape[axis]
+        assert y.shape == expected_shape[axis]
 
 
 class TestThinning:
