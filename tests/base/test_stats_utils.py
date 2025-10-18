@@ -226,3 +226,58 @@ def test_valid_shape():
     assert not_valid(
         np.ones((10, 10)), check_nan=False, shape_kwargs={"min_chains": 100, "min_draws": 2}
     )
+
+
+def test_logsumexp_loo(rng):
+    log_lik = rng.normal(loc=-10, scale=3, size=(4, 100, 50))
+    n_samples = 4 * 100
+    b = 1 / n_samples
+
+    scipy_result = logsumexp(log_lik, axis=(0, 1), b=b)
+    arviz_result = _logsumexp(log_lik, axis=(0, 1), b=b)
+
+    assert scipy_result.shape == (50,)
+    assert_array_almost_equal(scipy_result, arviz_result, decimal=10)
+
+
+def test_logsumexp_stability(rng):
+    large_vals = rng.normal(loc=700, scale=10, size=(4, 100))
+    small_vals = rng.normal(loc=-700, scale=10, size=(4, 100))
+
+    for ary in [large_vals, small_vals]:
+        scipy_result = logsumexp(ary)
+        arviz_result = _logsumexp(ary)
+        assert np.isfinite(scipy_result)
+        assert np.isfinite(arviz_result)
+        assert_array_almost_equal(scipy_result, arviz_result, decimal=10)
+
+
+def test_logsumexp_b_inv_match(rng):
+    ary = rng.normal(size=(10, 20))
+    b_inv = 50
+
+    arviz_b_inv = _logsumexp(ary, b_inv=b_inv, axis=0)
+    scipy_b = logsumexp(ary, b=1 / b_inv, axis=0)
+
+    assert_array_almost_equal(arviz_b_inv, scipy_b, decimal=10)
+
+
+@pytest.mark.parametrize("axis", [0, 1, -1, (0, 1), (-2, -1)])
+def test_logsumexp_axes(rng, axis):
+    ary = rng.normal(loc=-5, scale=2, size=(4, 100, 30))
+
+    scipy_result = logsumexp(ary, axis=axis)
+    arviz_result = _logsumexp(ary, axis=axis)
+
+    assert_array_almost_equal(scipy_result, arviz_result, decimal=10)
+
+
+def test_logsumexp_inf_handling():
+    assert _logsumexp(np.array([1.0, np.inf, 2.0])) == np.inf
+    assert _logsumexp(np.array([-np.inf, -np.inf])) == -np.inf
+
+
+def test_logsumexp_edge_b():
+    ary = np.array([1.0, 2.0, 3.0])
+    assert _logsumexp(ary, b=0) == -np.inf
+    assert _logsumexp(ary, b_inv=0) == np.inf
