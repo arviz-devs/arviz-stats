@@ -202,6 +202,14 @@ def logsumexp(ary, *, b=None, b_inv=None, axis=None, keepdims=False, out=None, c
     ary_max = np.empty(shape_max, dtype=dtype)
     # calculations
     ary.max(axis=axis, keepdims=True, out=ary_max)
+    # handle infinity: if max is ±inf, result is ±inf
+    if np.any(np.isinf(ary_max)):
+        result = ary_max if keepdims else ary_max.squeeze()
+        if out.shape:
+            out[:] = result
+        else:
+            out = result
+        return out if out.shape else dtype(out)
     if copy:
         ary = ary.copy()
     ary -= ary_max

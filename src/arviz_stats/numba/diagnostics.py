@@ -6,7 +6,7 @@ import scipy
 import xarray as xr
 from scipy.fftpack import next_fast_len
 from xarray_einstats import stats
-from xarray_einstats.einops import raw_rearrange
+from xarray_einstats.einops import rearrange
 
 __all__ = ["rhat", "ess"]
 
@@ -66,7 +66,7 @@ def _split_chains(da, **kwargs):
     if kwargs.get("dask", None) == "allowed":
         pass  # pylint: disable=unused-import
 
-    return raw_rearrange(da, "(d1 d2)=draw -> (chain d1)=c2 d2", d2=half, **kwargs).rename(
+    return rearrange(da, "(d1 d2)=draw -> (chain d1)=c2 d2", d2=half, **kwargs).rename(
         d2="draw", c2="chain"
     )
 
@@ -118,7 +118,7 @@ def rhat(ds, group="posterior", method="rank", **kwargs):
         raise ValueError("method not recognized")
     rhat_func = func_map[method]
     if isinstance(ds, xr.DataTree):
-        ds = ds[group]
+        ds = ds[group].dataset
         return ds.map(rhat_func, **kwargs)
     if isinstance(ds, xr.Dataset):
         return ds.map(rhat_func, **kwargs)
@@ -283,7 +283,7 @@ def ess(ds, group="posterior", method="bulk", **kwargs):
         raise ValueError("method not recognized")
     ess_func = func_map[method]
     if isinstance(ds, xr.DataTree):
-        ds = ds[group]
+        ds = ds[group].dataset
         return ds.map(ess_func, **kwargs)
     if isinstance(ds, xr.Dataset):
         return ds.map(ess_func, **kwargs)
