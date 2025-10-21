@@ -1,13 +1,12 @@
 """Compare PSIS-LOO-CV results."""
 
-import itertools
 import warnings
 from copy import deepcopy
 
 import numpy as np
 import pandas as pd
 from arviz_base import rcParams
-from scipy.optimize import minimize
+from scipy.optimize import Bounds, LinearConstraint, minimize
 from scipy.stats import dirichlet
 
 from arviz_stats.loo import loo
@@ -170,37 +169,22 @@ def compare(
     if method.lower() == "stacking":
         rows, cols, ic_i_val = _ic_matrix(ics)
         exp_ic_i = np.exp(ic_i_val)
-        km1 = cols - 1
-
-        def w_fuller(weights):
-            return np.concatenate((weights, [max(1.0 - np.sum(weights), 0.0)]))
 
         def log_score(weights):
-            w_full = w_fuller(weights)
-            score = 0.0
-            for i in range(rows):
-                score += np.log(np.dot(exp_ic_i[i], w_full))
-            return -score
+            return -np.sum(np.log(np.dot(exp_ic_i, weights)))
 
         def gradient(weights):
-            w_full = w_fuller(weights)
-            grad = np.zeros(km1)
-            for k, i in itertools.product(range(km1), range(rows)):
-                grad[k] += (exp_ic_i[i, k] - exp_ic_i[i, km1]) / np.dot(exp_ic_i[i], w_full)
-            return -grad
+            denominator = np.dot(exp_ic_i, weights)
+            return -np.sum(exp_ic_i / denominator[:, np.newaxis], axis=0)
 
-        theta = np.full(km1, 1.0 / cols)
-        bounds = [(0.0, 1.0) for _ in range(km1)]
-        constraints = [
-            {"type": "ineq", "fun": lambda x: -np.sum(x) + 1.0},
-            {"type": "ineq", "fun": np.sum},
-        ]
+        theta = np.full(cols, 1.0 / cols)
+        bounds = Bounds(lb=np.zeros(cols), ub=np.ones(cols))
+        constraints = LinearConstraint(np.ones(cols), lb=1.0, ub=1.0)
 
         minimize_result = minimize(
             fun=log_score, x0=theta, jac=gradient, bounds=bounds, constraints=constraints
         )
-
-        weights = w_fuller(minimize_result["x"])
+        weights = minimize_result["x"]
 
     elif method.lower() == "bb-pseudo-bma":
         b_samples = 1000
@@ -531,11 +515,11 @@ def _calculate_ics(
                     f"are supported currently."
                 )
 
-    compare_dict = deepcopy(compare_dict)
+    new_compare_dict = deepcopy(compare_dict)
     for name, dataset in compare_dict.items():
         if not isinstance(dataset, ELPDData):
             try:
-                compare_dict[name] = loo(
+                new_compare_dict[name] = loo(
                     dataset,
                     pointwise=True,
                     var_name=var_name,
@@ -544,4 +528,4 @@ def _calculate_ics(
                 raise e.__class__(
                     f"Encountered error trying to compute ELPD from model {name}."
                 ) from e
-    return compare_dict
+    return new_compare_dict
