@@ -114,7 +114,7 @@ def loo_subsample(
     log_jacobian : DataArray, optional
         Log-Jacobian adjustment for variable transformations. Required when the model was fitted
         on transformed response data :math:`z = T(y)` but you want to compute ELPD on the
-        original response scale :math:`y`. The value should be :math:`\\log|\\frac{dz}{dy}|`
+        original response scale :math:`y`. The value should be :math:`\log|\frac{dz}{dy}|`
         (the log absolute value of the derivative of the transformation). Must be a DataArray
         with dimensions matching the observation dimensions.
 
