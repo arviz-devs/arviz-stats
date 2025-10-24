@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import, unused-argument
-# ruff: noqa: F811, F401
+"""Test score functions for PSIS-LOO-CV."""
+
+# pylint: disable=redefined-outer-name, unused-argument
 import numpy as np
 import pytest
 from numpy.testing import assert_almost_equal

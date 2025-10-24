@@ -1,7 +1,7 @@
 """Tests for stats_utils."""
 
 # ruff: noqa: E731
-#  pylint: disable=no-member,unnecessary-lambda-assignment
+#  pylint: disable=unnecessary-lambda-assignment
 import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal

@@ -1,7 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import
-# ruff: noqa: F811
-"""Test for thinning function."""
+"""Test thinning function."""
 
+# pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
 

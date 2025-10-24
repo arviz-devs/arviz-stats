@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import
-# ruff: noqa: F811
+"""Test survival analysis."""
+
+# pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
 

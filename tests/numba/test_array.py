@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import, no-self-use, protected-access
-# ruff: noqa: F811, F401
+"""Test array functions."""
+
+# pylint: disable=redefined-outer-name, no-self-use, protected-access
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose

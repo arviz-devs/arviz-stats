@@ -1,5 +1,5 @@
-# pylint: disable=redefined-outer-name, unused-import
-# ruff: noqa: F811
+"""Test validation functions."""
+
 import pytest
 
 from .helpers import importorskip

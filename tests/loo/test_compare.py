@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import, unused-argument
-# ruff: noqa: F811, F401
+"""Test compare function."""
+
+# pylint: disable=redefined-outer-name, unused-argument
 import copy
 
 import numpy as np

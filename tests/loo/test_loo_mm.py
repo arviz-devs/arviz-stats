@@ -1,5 +1,6 @@
+"""Test moment matching for PSIS-LOO-CV."""
+
 # pylint: disable=redefined-outer-name
-# ruff: noqa: F811
 import pytest
 
 from ..helpers import importorskip

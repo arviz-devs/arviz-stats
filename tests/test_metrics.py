@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import
-# ruff: noqa: F811
+"""Test metrics."""
+
+# pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
 from numpy.testing import assert_almost_equal, assert_array_almost_equal

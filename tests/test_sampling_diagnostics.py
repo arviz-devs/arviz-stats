@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import
-# ruff: noqa: F811, F401
+"""Test sampling diagnostics."""
+
+# pylint: disable=redefined-outer-name
 import numpy as np
 
 from .helpers import importorskip

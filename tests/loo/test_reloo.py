@@ -1,5 +1,6 @@
+"""Test re-loo for PSIS-LOO-CV."""
+
 # pylint: disable=redefined-outer-name, no-self-use, unused-argument
-# ruff: noqa: F811
 from copy import deepcopy
 
 import numpy as np

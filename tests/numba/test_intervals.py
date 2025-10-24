@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import, no-self-use
-# ruff: noqa: F811, F401
+"""Test intervals."""
+
+# pylint: disable=redefined-outer-name, no-self-use
 import numpy as np
 import pytest
 

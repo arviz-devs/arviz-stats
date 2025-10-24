@@ -1,3 +1,5 @@
+"""Test power-scaling sensitivity diagnostics."""
+
 import os
 
 import pytest

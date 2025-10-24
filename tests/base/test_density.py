@@ -1,6 +1,6 @@
 """Tests for density estimation base functions."""
 
-# pylint: disable=no-member, redefined-outer-name, no-self-use, protected-access
+# pylint: disable=redefined-outer-name, no-self-use, protected-access
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose

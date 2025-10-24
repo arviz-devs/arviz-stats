@@ -1,4 +1,6 @@
-# pylint: disable=redefined-outer-name, no-member, unused-import
+"""Test stats functions."""
+
+# pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
@@ -9,7 +11,7 @@ from ..helpers import importorskip
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
-import arviz_stats.accessors  # noqa: F401
+import arviz_stats.accessors  # noqa: F401  # pylint: disable=unused-import
 
 
 @pytest.fixture(scope="module")

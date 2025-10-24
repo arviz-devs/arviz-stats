@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-argument, unused-import
-# ruff: noqa: F811, F401
+"""Test helper functions for PSIS-LOO-CV."""
+
+# pylint: disable=redefined-outer-name, unused-argument
 import warnings
 
 import numpy as np

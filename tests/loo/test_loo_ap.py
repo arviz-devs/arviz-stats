@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import, unused-argument
-# ruff: noqa: F811, F401
+"""Test PSIS-LOO-CV for approximate posteriors."""
+
+# pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
 

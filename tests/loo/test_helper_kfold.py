@@ -1,5 +1,4 @@
-# pylint: disable=redefined-outer-name, unused-import
-# ruff: noqa: F811
+# pylint: disable=redefined-outer-name
 """Test helper functions for k-fold cross-validation."""
 
 import numpy as np

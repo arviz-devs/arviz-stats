@@ -1,3 +1,5 @@
+"""Test minimal functionality."""
+
 # pylint: disable=redefined-outer-name
 import numpy as np
 import pytest

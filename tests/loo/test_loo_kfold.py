@@ -1,7 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import, too-many-function-args
-# ruff: noqa: F811
 """Test k-fold cross-validation."""
 
+# pylint: disable=redefined-outer-name, too-many-function-args
 import numpy as np
 import pytest
 from numpy.testing import assert_almost_equal

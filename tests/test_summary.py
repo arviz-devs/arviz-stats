@@ -1,5 +1,6 @@
-# pylint: disable=redefined-outer-name, unused-import
-# ruff: noqa: F811
+"""Test summary."""
+
+# pylint: disable=redefined-outer-name
 from copy import deepcopy
 
 import numpy as np
