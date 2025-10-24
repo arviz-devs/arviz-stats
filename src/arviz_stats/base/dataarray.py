@@ -112,7 +112,7 @@ class BaseDataArray:
             kwargs={"method": method, "chain_axis": -2, "draw_axis": -1},
         )
 
-    def rhat_nested(self, da, superchain_ids, sample_dims=None):
+    def rhat_nested(self, da, superchain_ids, sample_dims=None, method="rank"):
         """Compute nested rhat on DataArray input."""
         dims = validate_dims(sample_dims)
         if len(dims) != 2:
@@ -122,7 +122,12 @@ class BaseDataArray:
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"superchain_ids": superchain_ids, "chain_axis": -2, "draw_axis": -1},
+            kwargs={
+                "superchain_ids": superchain_ids,
+                "method": method,
+                "chain_axis": -2,
+                "draw_axis": -1,
+            },
         )
 
     def mcse(self, da, sample_dims=None, method="mean", prob=None):
@@ -315,9 +320,13 @@ class BaseDataArray:
                 f"current ESS average {var_indicator} at {ess_ave.item()} is preserved."
             )
             return 1
+        # defensive fallback in the unlikely case that ESS exceeds n_samples
+        # this should only happen with uncorrelated chains
         if reduce_func == "min":
-            return int(np.floor(n_samples / target_ess))
-        return int(np.ceil(n_samples / target_ess))
+            factor = int(np.floor(n_samples / target_ess))
+        else:
+            factor = int(np.ceil(n_samples / target_ess))
+        return max(1, factor)
 
     def thin(self, da, factor="auto", sample_dims=None):
         """Perform thinning on DataArray input."""

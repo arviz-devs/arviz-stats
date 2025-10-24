@@ -1,4 +1,6 @@
-# pylint: disable=redefined-outer-name, no-member
+"""Test stats functions."""
+
+# pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
@@ -8,6 +10,8 @@ from ..helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
+
+import arviz_stats.accessors  # noqa: F401  # pylint: disable=unused-import
 
 
 @pytest.fixture(scope="module")
@@ -265,3 +269,86 @@ def test_ecdf_coords(centered_eight):
     data = centered_eight.posterior.sel({"chain": [0, 1, 3]}).ds
     result = data.azstats.ecdf(dim="draw")
     assert_array_equal(result.coords["chain"], [0, 1, 3])
+
+
+def test_hdi_filter_vars_like(centered_eight):
+    result = centered_eight.posterior.dataset.azstats.filter_vars(
+        var_names="~mu", filter_vars="like"
+    ).hdi()
+    assert "mu" not in result.data_vars
+    assert "tau" in result.data_vars
+    assert "theta" in result.data_vars
+
+
+def test_hdi_filter_vars_regex(centered_eight):
+    result = centered_eight.posterior.dataset.azstats.filter_vars(
+        var_names="^t", filter_vars="regex"
+    ).hdi()
+    assert "mu" not in result.data_vars
+    assert "tau" in result.data_vars
+    assert "theta" in result.data_vars
+
+
+def test_ecdf_filter_vars_like(centered_eight):
+    result = centered_eight.posterior.dataset.azstats.filter_vars(
+        var_names="mu", filter_vars="like"
+    ).ecdf()
+    assert "mu" in result.data_vars
+    assert "tau" not in result.data_vars
+
+
+def test_kde_filter_vars_regex(centered_eight):
+    result = centered_eight.posterior.dataset.azstats.filter_vars(
+        var_names="^mu$", filter_vars="regex"
+    ).kde()
+    assert "mu" in result.data_vars
+    assert "tau" not in result.data_vars
+
+
+def test_hdi_coords_subset(centered_eight):
+    schools = ["Choate", "Phillips Andover", "Hotchkiss"]
+    data = centered_eight.posterior.sel({"school": schools}).dataset
+    result = data.azstats.hdi()
+    assert len(result.theta.school) == 3
+    assert_array_equal(result.school.values, schools)
+
+
+def test_hdi_multiple_vars(centered_eight):
+    result = centered_eight.posterior.dataset.azstats.filter_vars(var_names=["mu", "tau"]).hdi()
+    assert "mu" in result.data_vars
+    assert "tau" in result.data_vars
+    assert "theta" not in result.data_vars
+
+
+def test_ecdf_multiple_vars(centered_eight):
+    result = centered_eight.posterior.dataset.azstats.filter_vars(var_names=["theta", "mu"]).ecdf()
+    assert "mu" in result.data_vars
+    assert "theta" in result.data_vars
+    assert "tau" not in result.data_vars
+
+
+def test_hdi_all_nans_with_skipna():
+    data = np.full((4, 100), np.nan)
+    da = azb.ndarray_to_dataarray(data, "x", sample_dims=["sample"])
+    result = da.azstats.hdi(dim="sample", skipna=True)
+    assert np.all(np.isnan(result))
+
+
+def test_hdi_single_chain(centered_eight):
+    da = centered_eight.posterior["mu"].isel(chain=0, drop=True).expand_dims(chain=[0])
+    result = da.azstats.hdi()
+    assert result.shape == (2,)
+
+
+def test_hdi_few_draws(centered_eight):
+    da = centered_eight.posterior["mu"].isel(draw=slice(0, 10))
+    result = da.azstats.hdi()
+    assert result.shape == (2,)
+
+
+def test_ecdf_boundary_values(centered_eight):
+    da = centered_eight.posterior["mu"]
+    result = da.azstats.ecdf()
+    y_vals = result.sel(plot_axis="y")
+    assert np.all(y_vals >= 0)
+    assert np.all(y_vals <= 1)
