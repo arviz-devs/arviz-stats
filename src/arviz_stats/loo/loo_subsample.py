@@ -51,6 +51,9 @@ def loo_subsample(
     The PSIS-LOO-CV method is described in [1]_, [2]_. The sub-sampling
     method is described in [3]_.
 
+    See the EABM chapter on `Model Comparison for Large Data <https://arviz-devs.github.io/EABM/Chapters/Model_comparison_large_data.html>`_
+    for more details.
+
     Parameters
     ----------
     data : DataTree or InferenceData
@@ -437,6 +440,9 @@ def update_subsample(
     incrementally improving the sub-sampled PSIS-LOO-CV estimate with additional observations.
 
     The sub-sampling method is described in [1]_.
+
+    See the EABM chapter on `Model Comparison for Large Data <https://arviz-devs.github.io/EABM/Chapters/Model_comparison_large_data.html>`_
+    for more details.
 
     Parameters
     ----------
