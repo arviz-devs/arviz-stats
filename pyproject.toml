@@ -39,11 +39,17 @@ documentation = "https://arviz-stats.readthedocs.io"
 funding = "https://opencollective.com/arviz"
 
 [project.optional-dependencies]
+# user facing optional dependency blocks
 xarray = [
   "arviz-base @ git+https://github.com/arviz-devs/arviz-base",
   "xarray-einstats",
-  "numba",
+  "xarray",
 ]
+numba = [
+  "numba",
+  "xarray_einstats[einops,numba]",
+]
+# development related blocks
 test = [
     "pytest",
     "pytest-cov",
@@ -64,10 +70,6 @@ doc = [
     "jupyter-sphinx",
     "h5netcdf",
     "sphinx_autosummary_accessors",
-]
-numba = [
-  "numba",
-  "xarray_einstats[einops]",
 ]
 
 [tool.ruff]

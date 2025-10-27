@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        job: ["minimal", "nonumba", "alltests"]
         python-version: ["3.11", "3.12", "3.13"]
       fail-fast: false
     steps:
@@ -25,8 +26,10 @@ jobs:
           pip install tox tox-gh-actions
       - name: Test with tox
         run: SKIP=no-commit-to-branch tox
+        env:
+          JOB: ${{ matrix.job }}
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          name: Python ${{ matrix.python-version }}
+          name: Python ${{ matrix.python-version }} ${{ matrix.job }}
           fail_ci_if_error: false

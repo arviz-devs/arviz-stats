@@ -6,6 +6,7 @@ import pytest
 
 from ..helpers import importorskip
 
+importorskip("numba")
 xr = importorskip("xarray")
 
 from arviz_stats.numba.intervals import _quantile, eti, quantile
