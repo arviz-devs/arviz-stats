@@ -17,12 +17,16 @@ def kaplan_meier(
     ----------
     dt: DataTree
         DataTree with "posterior_predictive" and "observed_data" groups
-    var_names : list of str, optional
+    var_names : str or list of str
         The variables to compute the unique values.
     group : str
         The group from which to get the unique values.
     """
-    var_names = list(var_names)
+    if isinstance(var_names, str):
+        var_names = [var_names]
+    else:
+        var_names = list(var_names)
+
     pp = extract(dt, group=group, var_names=var_names, keep_dataset=True, combined=False)
     try:
         constant_data = dt["constant_data"].dataset
@@ -89,7 +93,7 @@ def generate_survival_curves(
     ----------
     dt : DataTree
         DataTree with posterior_predictive and observed_data groups
-    var_names : list of str, optional
+    var_names : str or list of str
         The variables to compute the survival curves for.
     group : str, default "posterior_predictive"
         Group containing the predictive samples.
@@ -99,7 +103,10 @@ def generate_survival_curves(
         Factor by which truncates the survival curves beyond the maximum observed time.
         Set to None to show all posterior predictive draws.
     """
-    var_names = list(var_names)
+    if isinstance(var_names, str):
+        var_names = [var_names]
+    else:
+        var_names = list(var_names)
     # Extract predictive data
     pp = extract(dt, group=group, var_names=var_names, num_samples=num_samples, keep_dataset=True)
     obs_data = dt["observed_data"].dataset

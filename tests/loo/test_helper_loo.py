@@ -1,16 +1,13 @@
-# pylint: disable=redefined-outer-name, unused-argument, unused-import
-# ruff: noqa: F811, F401
+"""Test helper functions for PSIS-LOO-CV."""
+
+# pylint: disable=redefined-outer-name, unused-argument
 import warnings
 
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal
 
-from .helpers import (
-    centered_eight,
-    centered_eight_with_sigma,
-    importorskip,
-)
+from ..helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
@@ -19,13 +16,16 @@ sp = importorskip("scipy")
 from arviz_stats.loo.helper_loo import (
     _align_data_to_obs,
     _check_log_density,
+    _check_log_jacobian,
     _compute_loo_approximation,
     _diff_srs_estimator,
     _extract_loo_data,
     _generate_subsample_indices,
     _get_log_likelihood_i,
     _get_r_eff,
+    _get_r_eff_i,
     _get_weights_and_k_i,
+    _prepare_full_arrays,
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
@@ -41,12 +41,7 @@ from arviz_stats.loo.helper_loo import (
 from arviz_stats.loo.loo_moment_match import _split_moment_match
 from arviz_stats.loo.loo_subsample import loo_subsample
 from arviz_stats.manipulation import thin
-from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
-
-
-@pytest.fixture(scope="module")
-def log_likelihood_dataset(centered_eight):
-    return get_log_likelihood_dataset(centered_eight, var_names="obs")
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 def log_lik_fn(obs_da, datatree):
@@ -60,37 +55,6 @@ def log_lik_fn_subsample(obs_da, datatree):
     theta = datatree.posterior["theta"]
     sigma = datatree.constant_data["sigma"]
     return sp.stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
-
-
-@pytest.fixture(scope="module")
-def elpd_data(centered_eight):
-    log_likelihood = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = log_likelihood.school.size
-
-    elpd_values = np.random.normal(size=n_data_points)
-    pareto_k_values = np.random.uniform(0, 0.7, size=n_data_points)
-
-    elpd_i = xr.DataArray(elpd_values, dims=["school"], coords={"school": log_likelihood.school})
-
-    pareto_k = xr.DataArray(
-        pareto_k_values, dims=["school"], coords={"school": log_likelihood.school}
-    )
-
-    mock_elpd = ELPDData(
-        elpd=float(elpd_values.sum()),
-        se=1.0,
-        p=2.0,
-        good_k=0.7,
-        n_samples=n_samples,
-        n_data_points=n_data_points,
-        warning=False,
-        elpd_i=elpd_i,
-        pareto_k=pareto_k,
-        scale="log",
-        kind="loo",
-    )
-    return mock_elpd
 
 
 def test_get_r_eff(centered_eight):
@@ -241,14 +205,15 @@ def test_check_log_density(log_likelihood_dataset):
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
     sample_dims = ["chain", "draw"]
 
-    log_dens_np = np.random.randn(n_samples)
+    rng = np.random.default_rng(42)
+    log_dens_np = rng.normal(size=n_samples)
     result_np = _check_log_density(log_dens_np, "log_p", log_likelihood, n_samples, sample_dims)
 
     assert isinstance(result_np, xr.DataArray)
     assert all(dim in result_np.dims for dim in sample_dims)
 
     log_dens_da = xr.DataArray(
-        np.random.randn(log_likelihood.chain.size, log_likelihood.draw.size),
+        rng.normal(size=(log_likelihood.chain.size, log_likelihood.draw.size)),
         dims=sample_dims,
         coords={dim: log_likelihood[dim] for dim in sample_dims},
     )
@@ -266,12 +231,13 @@ def test_check_log_density_errors(log_likelihood_dataset):
     with pytest.raises(TypeError, match="log_p must be a numpy ndarray or xarray DataArray"):
         _check_log_density([1, 2, 3], "log_p", log_likelihood, n_samples, sample_dims)
 
+    rng = np.random.default_rng(42)
     with pytest.raises(ValueError, match="Size of log_p .* must match"):
         _check_log_density(
-            np.random.randn(n_samples - 1), "log_p", log_likelihood, n_samples, sample_dims
+            rng.normal(size=n_samples - 1), "log_p", log_likelihood, n_samples, sample_dims
         )
 
-    bad_dims_da = xr.DataArray(np.random.randn(n_samples), dims=["sample"])
+    bad_dims_da = xr.DataArray(rng.normal(size=n_samples), dims=["sample"])
     with pytest.raises(ValueError, match="log_p must have dimension 'chain'"):
         _check_log_density(bad_dims_da, "log_p", log_likelihood, n_samples, sample_dims)
 
@@ -308,6 +274,7 @@ def test_warn_pointwise_loo():
         assert len(record) == 0
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_thin_draws(log_likelihood_dataset):
     log_likelihood = log_likelihood_dataset["obs"]
     original_draws = log_likelihood.draw.size
@@ -449,9 +416,10 @@ def test_prepare_update_subsample(centered_eight, method):
 
 
 def test_shift():
+    rng = np.random.default_rng(42)
     chain_size, draw_size, param_size = 2, 100, 3
     upars = xr.DataArray(
-        np.random.randn(chain_size, draw_size, param_size),
+        rng.normal(size=(chain_size, draw_size, param_size)),
         dims=["chain", "draw", "param"],
         coords={
             "chain": np.arange(chain_size),
@@ -461,7 +429,7 @@ def test_shift():
     )
 
     lwi = xr.DataArray(
-        np.random.randn(chain_size, draw_size),
+        rng.normal(size=(chain_size, draw_size)),
         dims=["chain", "draw"],
         coords={"chain": upars.chain, "draw": upars.draw},
     )
@@ -490,9 +458,10 @@ def test_shift():
 
 
 def test_shift_and_scale():
+    rng = np.random.default_rng(42)
     chain_size, draw_size, param_size = 2, 100, 3
     upars = xr.DataArray(
-        np.random.randn(chain_size, draw_size, param_size),
+        rng.normal(size=(chain_size, draw_size, param_size)),
         dims=["chain", "draw", "param"],
         coords={
             "chain": np.arange(chain_size),
@@ -502,7 +471,7 @@ def test_shift_and_scale():
     )
 
     lwi = xr.DataArray(
-        np.random.randn(chain_size, draw_size),
+        rng.normal(size=(chain_size, draw_size)),
         dims=["chain", "draw"],
         coords={"chain": upars.chain, "draw": upars.draw},
     )
@@ -525,9 +494,10 @@ def test_shift_and_scale():
 
 
 def test_shift_and_cov():
+    rng = np.random.default_rng(42)
     chain_size, draw_size, param_size = 2, 100, 3
     upars = xr.DataArray(
-        np.random.randn(chain_size, draw_size, param_size),
+        rng.normal(size=(chain_size, draw_size, param_size)),
         dims=["chain", "draw", "param"],
         coords={
             "chain": np.arange(chain_size),
@@ -537,7 +507,7 @@ def test_shift_and_cov():
     )
 
     lwi = xr.DataArray(
-        np.random.randn(chain_size, draw_size),
+        rng.normal(size=(chain_size, draw_size)),
         dims=["chain", "draw"],
         coords={"chain": upars.chain, "draw": upars.draw},
     )
@@ -559,13 +529,14 @@ def test_shift_and_cov():
 
 @pytest.mark.parametrize("cov", [True, False])
 def test_split_moment_match(cov, centered_eight):
+    rng = np.random.default_rng(42)
     posterior = centered_eight.posterior
     chain_size = posterior.chain.size
     draw_size = posterior.draw.size
     param_size = 3
 
     upars = xr.DataArray(
-        np.random.randn(chain_size, draw_size, param_size),
+        rng.normal(size=(chain_size, draw_size, param_size)),
         dims=["chain", "draw", "param"],
         coords={
             "chain": posterior.chain,
@@ -574,9 +545,9 @@ def test_split_moment_match(cov, centered_eight):
         },
     )
 
-    total_shift = np.random.randn(param_size)
-    total_scaling = np.random.uniform(0.5, 2.0, param_size)
-    total_mapping = np.eye(param_size) + 0.1 * np.random.randn(param_size, param_size)
+    total_shift = rng.normal(size=param_size)
+    total_scaling = rng.uniform(0.5, 2.0, param_size)
+    total_mapping = np.eye(param_size) + 0.1 * rng.normal(size=(param_size, param_size))
 
     total_mapping = total_mapping @ total_mapping.T
 
@@ -637,7 +608,8 @@ def test_split_moment_match_errors():
             log_lik_i_upars_fn=lambda x, _i: x,
         )
 
-    upars_bad = xr.DataArray(np.random.randn(10, 3), dims=["draw", "param"])
+    rng = np.random.default_rng(42)
+    upars_bad = xr.DataArray(rng.normal(size=(10, 3)), dims=["draw", "param"])
     with pytest.raises(ValueError, match="Required sample dimensions"):
         _split_moment_match(
             upars=upars_bad,
@@ -683,7 +655,7 @@ def test_compute_loo_approximation_auxiliary_data(centered_eight):
         centered_eight_aux["constant_data"].to_dataset().assign(sigma=sigma_da)
     )
 
-    def log_lik_fn(obs_da, datatree):
+    def log_lik_fn_aux(obs_da, datatree):
         theta = datatree.posterior["theta"]
         sigma = datatree.constant_data["sigma"]
         return -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((obs_da - theta) / sigma) ** 2
@@ -699,7 +671,7 @@ def test_compute_loo_approximation_auxiliary_data(centered_eight):
     result = _compute_loo_approximation(
         data=centered_eight_aux,
         var_name="obs",
-        log_lik_fn=log_lik_fn,
+        log_lik_fn=log_lik_fn_aux,
         param_names=["theta"],
         method="lpd",
         log=True,
@@ -709,7 +681,7 @@ def test_compute_loo_approximation_auxiliary_data(centered_eight):
 
 
 def test_compute_loo_approximation_errors(centered_eight_with_sigma):
-    def log_lik_fn(obs_da, datatree):
+    def log_lik_fn_bad(obs_da, datatree):
         theta = datatree.posterior["theta"]
         sigma = datatree.constant_data["sigma"]
         result = sp.stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
@@ -719,7 +691,7 @@ def test_compute_loo_approximation_errors(centered_eight_with_sigma):
         _compute_loo_approximation(
             data=centered_eight_with_sigma,
             var_name="obs",
-            log_lik_fn=log_lik_fn,
+            log_lik_fn=log_lik_fn_bad,
             param_names=["theta"],
             method="lpd",
             log=True,
@@ -738,3 +710,179 @@ def test_compute_loo_approximation_errors(centered_eight_with_sigma):
             method="lpd",
             log=True,
         )
+
+
+def test_prepare_full_arrays_single_dim(log_likelihood_dataset):
+    log_lik = log_likelihood_dataset["obs"]
+    obs_dims = ["school"]
+    indices = np.array([1, 3, 5])
+
+    pointwise_values = xr.DataArray(
+        [-2.5, -3.0, -2.8], dims=["school"], coords={"school": [1, 3, 5]}
+    )
+    pareto_k_values = xr.DataArray([0.3, 0.4, 0.2], dims=["school"], coords={"school": [1, 3, 5]})
+    ref_array = log_lik.isel(chain=0, draw=0)
+
+    elpd_full, pareto_full = _prepare_full_arrays(
+        pointwise_values, pareto_k_values, ref_array, indices, obs_dims
+    )
+
+    assert elpd_full.shape == ref_array.shape
+    assert pareto_full.shape == ref_array.shape
+    assert_allclose(elpd_full.isel(school=indices).values, pointwise_values.values)
+    assert np.sum(~np.isnan(elpd_full.values)) == len(indices)
+
+
+@pytest.mark.parametrize("obs_dims", [[], None])
+def test_prepare_full_arrays_no_obs_dims(obs_dims):
+    pointwise_values = xr.DataArray([-2.5])
+    pareto_k_values = xr.DataArray([0.3])
+    ref_array = xr.DataArray([1.0])
+    indices = np.array([0])
+
+    elpd_full, pareto_full = _prepare_full_arrays(
+        pointwise_values, pareto_k_values, ref_array, indices, obs_dims or []
+    )
+
+    assert elpd_full is pointwise_values
+    assert pareto_full is pareto_k_values
+
+
+def test_check_log_jacobian_valid(log_likelihood_dataset):
+    log_lik = log_likelihood_dataset["obs"]
+    obs_dims = ["school"]
+
+    log_jacobian = xr.DataArray(np.zeros(8), dims=["school"], coords={"school": log_lik.school})
+
+    result = _check_log_jacobian(log_jacobian, obs_dims)
+    assert result is not None
+    assert isinstance(result, xr.DataArray)
+    assert result.dims == ("school",)
+
+
+def test_check_log_jacobian_none():
+    result = _check_log_jacobian(None, ["school"])
+    assert result is None
+
+
+@pytest.mark.parametrize(
+    "error_case,error_type,error_match",
+    [
+        ("not_dataarray", TypeError, "log_jacobian must be an xarray.DataArray"),
+        ("has_sample_dims", ValueError, "log_jacobian must not have sample dimensions"),
+        ("wrong_dims", ValueError, "log_jacobian dimensions must exactly match"),
+        ("has_nans", ValueError, "log_jacobian must contain only finite values"),
+        ("has_infs", ValueError, "log_jacobian must contain only finite values"),
+    ],
+)
+def test_check_log_jacobian_errors(log_likelihood_dataset, error_case, error_type, error_match):
+    log_lik = log_likelihood_dataset["obs"]
+    obs_dims = ["school"]
+
+    if error_case == "not_dataarray":
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian([1, 2, 3], obs_dims)
+
+    elif error_case == "has_sample_dims":
+        bad_jac = xr.DataArray(
+            np.zeros((log_lik.chain.size, log_lik.draw.size, log_lik.school.size)),
+            dims=["chain", "draw", "school"],
+            coords={"chain": log_lik.chain, "draw": log_lik.draw, "school": log_lik.school},
+        )
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian(bad_jac, obs_dims)
+
+    elif error_case == "wrong_dims":
+        bad_jac = xr.DataArray(np.zeros(5), dims=["wrong_dim"])
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian(bad_jac, obs_dims)
+
+    elif error_case == "has_nans":
+        bad_jac = xr.DataArray(
+            np.array([0.0, np.nan, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            dims=["school"],
+            coords={"school": log_lik.school},
+        )
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian(bad_jac, obs_dims)
+
+    elif error_case == "has_infs":
+        bad_jac = xr.DataArray(
+            np.array([0.0, np.inf, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            dims=["school"],
+            coords={"school": log_lik.school},
+        )
+        with pytest.raises(error_type, match=error_match):
+            _check_log_jacobian(bad_jac, obs_dims)
+
+
+def test_get_r_eff_i(log_likelihood_dataset):
+    log_lik = log_likelihood_dataset["obs"]
+    obs_dims = ["school"]
+
+    r_eff_array = xr.DataArray(
+        np.array([0.8, 0.85, 0.9, 0.75, 0.82, 0.88, 0.91, 0.79]),
+        dims=["school"],
+        coords={"school": log_lik.school},
+    )
+
+    r_eff_val = _get_r_eff_i(r_eff_array, 3, obs_dims)
+
+    assert isinstance(r_eff_val, float)
+    assert_allclose(r_eff_val, 0.75)
+
+
+@pytest.mark.parametrize(
+    "error_case,error_type,error_match",
+    [
+        ("not_dataarray", TypeError, "r_eff must be an xarray.DataArray"),
+        ("no_obs_dims", ValueError, "r_eff must have observation dimensions"),
+        ("missing_dims", ValueError, "r_eff must include observation dimensions"),
+    ],
+)
+def test_get_r_eff_i_errors(error_case, error_type, error_match):
+    obs_dims = ["school"]
+
+    if error_case == "not_dataarray":
+        with pytest.raises(error_type, match=error_match):
+            _get_r_eff_i(0.8, 0, obs_dims)
+
+    elif error_case == "no_obs_dims":
+        r_eff_array = xr.DataArray([0.8], dims=["x"])
+        with pytest.raises(error_type, match=error_match):
+            _get_r_eff_i(r_eff_array, 0, [])
+
+    elif error_case == "missing_dims":
+        r_eff_array = xr.DataArray(np.ones(5), dims=["x"])
+        with pytest.raises(error_type, match=error_match):
+            _get_r_eff_i(r_eff_array, 0, obs_dims)
+
+
+def test_select_obs_by_indices_multidim():
+    data = xr.DataArray(
+        np.arange(12).reshape(3, 4),
+        dims=["x", "y"],
+        coords={"x": [0, 1, 2], "y": [0, 1, 2, 3]},
+    )
+    indices = np.array([1, 5, 9])
+    result = _select_obs_by_indices(data, indices, dims=["x", "y"], dim_name="__obs__")
+
+    assert result.shape[0] == 3
+    assert_allclose(result.values.ravel(), [1, 5, 9])
+
+
+def test_diff_srs_estimator_edge_case_full_sample():
+    elpd_sample = xr.DataArray([-5.0, -6.0])
+    lpd_approx_sample = xr.DataArray([-5.0, -6.0])
+    lpd_approx_all = xr.DataArray([-4.0, -5.0])
+    n_data_points = 2
+    subsample_size = 2
+
+    elpd_est, subsampling_se, total_se = _diff_srs_estimator(
+        elpd_sample, lpd_approx_sample, lpd_approx_all, n_data_points, subsample_size
+    )
+
+    assert isinstance(elpd_est, float)
+    assert isinstance(subsampling_se, float)
+    assert isinstance(total_se, float)
+    assert subsampling_se == 0.0
