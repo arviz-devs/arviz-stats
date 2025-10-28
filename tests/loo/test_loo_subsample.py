@@ -3,7 +3,7 @@
 # pylint: disable=redefined-outer-name, unused-argument
 import numpy as np
 import pytest
-from numpy.testing import assert_allclose
+from numpy.testing import assert_allclose, assert_almost_equal
 
 from ..helpers import importorskip
 
@@ -685,3 +685,145 @@ def test_loo_subsample_approximate_posterior_methods(centered_eight_with_sigma, 
     )
     assert result.approx_posterior is True
     assert np.isfinite(result.elpd)
+
+
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_loo_subsample_jacobian(centered_eight_with_sigma, method):
+    centered_eight = centered_eight_with_sigma
+
+    y_obs = centered_eight.observed_data["obs"].values
+    y_positive = y_obs + np.abs(y_obs.min()) + 1
+    log_jacobian_values = -np.log(2) - 0.5 * np.log(y_positive)
+    log_jacobian = xr.DataArray(
+        log_jacobian_values,
+        dims=["school"],
+        coords={"school": centered_eight.observed_data["obs"].coords["school"]},
+    )
+
+    def log_lik_fn(obs_da, data):
+        theta = data.posterior["theta"]
+        sigma = data.constant_data["sigma"]
+        return sp.stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
+
+    loo_kwargs = {
+        "observations": 5,
+        "var_name": "obs",
+        "pointwise": True,
+        "method": method,
+        "seed": 42,
+    }
+    if method == "plpd":
+        loo_kwargs["log_lik_fn"] = log_lik_fn
+        loo_kwargs["param_names"] = ["theta"]
+
+    loo_no_jac = loo_subsample(centered_eight, **loo_kwargs)
+    loo_with_jac = loo_subsample(centered_eight, **loo_kwargs, log_jacobian=log_jacobian)
+
+    assert loo_with_jac.elpd != loo_no_jac.elpd
+    assert loo_with_jac.elpd_i is not None
+    assert loo_no_jac.elpd_i is not None
+
+    assert loo_with_jac.log_jacobian is not None
+    assert loo_no_jac.log_jacobian is None
+
+    expected_elpd_adjustment = np.sum(log_jacobian_values)
+    expected_elpd_with_jac = loo_no_jac.elpd + expected_elpd_adjustment
+    assert_almost_equal(loo_with_jac.elpd, expected_elpd_with_jac, decimal=8)
+
+    non_nan_mask = ~np.isnan(loo_with_jac.elpd_i.values) & ~np.isnan(loo_no_jac.elpd_i.values)
+    if np.any(non_nan_mask):
+        elpd_i_diff = (
+            loo_with_jac.elpd_i.values[non_nan_mask] - loo_no_jac.elpd_i.values[non_nan_mask]
+        )
+        expected_diff = log_jacobian_values[non_nan_mask]
+        assert_allclose(elpd_i_diff, expected_diff, rtol=1e-10)
+
+    loo_kwargs_no_pw = loo_kwargs.copy()
+    loo_kwargs_no_pw["pointwise"] = False
+    loo_no_pointwise = loo_subsample(centered_eight, **loo_kwargs_no_pw, log_jacobian=log_jacobian)
+    assert loo_no_pointwise.elpd_i is None
+    assert loo_no_pointwise.elpd != loo_no_jac.elpd
+
+
+def test_update_subsample_jacobian(centered_eight_with_sigma):
+    centered_eight = centered_eight_with_sigma
+
+    y_obs = centered_eight.observed_data["obs"].values
+    y_positive = y_obs + np.abs(y_obs.min()) + 1
+    log_jacobian_values = -np.log(2) - 0.5 * np.log(y_positive)
+    log_jacobian = xr.DataArray(
+        log_jacobian_values,
+        dims=["school"],
+        coords={"school": centered_eight.observed_data["obs"].coords["school"]},
+    )
+
+    initial_loo_no_jac = loo_subsample(
+        centered_eight, observations=3, var_name="obs", pointwise=True, seed=42
+    )
+
+    initial_loo_with_jac = loo_subsample(
+        centered_eight,
+        observations=3,
+        var_name="obs",
+        pointwise=True,
+        seed=42,
+        log_jacobian=log_jacobian,
+    )
+
+    updated_no_jac = update_subsample(
+        initial_loo_no_jac, centered_eight, observations=2, var_name="obs", seed=43
+    )
+
+    updated_with_jac = update_subsample(
+        initial_loo_with_jac, centered_eight, observations=2, var_name="obs", seed=43
+    )
+
+    assert updated_with_jac.elpd != updated_no_jac.elpd
+    assert updated_with_jac.subsample_size == 5
+    assert updated_no_jac.subsample_size == 5
+    assert updated_with_jac.elpd_i is not None
+    n_non_nan = np.sum(~np.isnan(updated_with_jac.elpd_i.values))
+    assert n_non_nan == 5
+
+    assert initial_loo_with_jac.log_jacobian is not None
+    assert updated_with_jac.log_jacobian is not None
+    assert updated_no_jac.log_jacobian is None
+
+    expected_elpd_adjustment = np.sum(log_jacobian_values)
+    expected_elpd_with_jac = updated_no_jac.elpd + expected_elpd_adjustment
+    assert_almost_equal(updated_with_jac.elpd, expected_elpd_with_jac, decimal=8)
+
+    non_nan_mask = ~np.isnan(updated_with_jac.elpd_i.values) & ~np.isnan(
+        updated_no_jac.elpd_i.values
+    )
+    if np.any(non_nan_mask):
+        elpd_i_diff = (
+            updated_with_jac.elpd_i.values[non_nan_mask]
+            - updated_no_jac.elpd_i.values[non_nan_mask]
+        )
+        expected_diff = log_jacobian_values[non_nan_mask]
+        assert_allclose(elpd_i_diff, expected_diff, rtol=1e-10)
+
+
+def test_loo_subsample_jacobian_errors(centered_eight):
+    wrong_type_jacobian = np.ones(8)
+    with pytest.raises(TypeError, match="log_jacobian must be an xarray.DataArray"):
+        loo_subsample(
+            centered_eight, observations=4, var_name="obs", log_jacobian=wrong_type_jacobian
+        )
+
+    wrong_dims_jacobian = xr.DataArray(
+        np.ones(5), dims=["wrong_dim"], coords={"wrong_dim": np.arange(5)}
+    )
+    with pytest.raises(ValueError, match="Missing dimensions"):
+        loo_subsample(
+            centered_eight, observations=4, var_name="obs", log_jacobian=wrong_dims_jacobian
+        )
+
+    nan_jacobian = xr.DataArray(
+        np.array([np.nan] + [0.1] * 7),
+        dims=["school"],
+        coords={"school": centered_eight.observed_data["obs"].coords["school"]},
+    )
+    with pytest.raises(ValueError, match="must contain only finite values"):
+        loo_subsample(centered_eight, observations=4, var_name="obs", log_jacobian=nan_jacobian)
