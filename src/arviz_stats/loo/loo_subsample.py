@@ -126,28 +126,29 @@ def loo_subsample(
     ELPDData
         Object with the following attributes:
 
+        - **kind**: "loo"
         - **elpd**: approximated expected log pointwise predictive density (elpd)
-        - **se**: standard error of the elpd (includes approximation and sampling uncertainty)
+        - **se**: standard error of the elpd
         - **p**: effective number of parameters
         - **n_samples**: number of samples in the posterior
-        - **n_data_points**: total number of data points (N)
-        - **warning**: True if the estimated shape parameter k of the Pareto distribution
+        - **n_data_points**: total number of data points (:math:`N`)
+        - **scale**: "log"
+        - **warning**: True if the estimated shape parameter of the Pareto distribution
           is > ``good_k`` for any observation in the subsample.
-        - **elpd_i**: :class:`~xarray.DataArray` with pointwise elpd values (filled with NaNs
-          for non-subsampled points), only if ``pointwise=True``.
-        - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values for the subsample
-          (filled with NaNs for non-subsampled points), only if ``pointwise=True``.
-        - **scale**: scale of the elpd results ("log", "negative_log", or "deviance").
         - **good_k**: Threshold for Pareto k warnings.
+        - **elpd_i**: :class:`~xarray.DataArray` with the pointwise elpd values, only if
+          ``pointwise=True``.
+        - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values, only if
+          ``pointwise=True``.
         - **approx_posterior**: True if approximate posterior was used.
         - **subsampling_se**: Standard error estimate from subsampling uncertainty only.
-        - **subsample_size**: Number of observations in the subsample (m).
+        - **subsample_size**: Number of observations in the subsample (:math:`m`).
         - **log_p**: Log density of the target posterior.
         - **log_q**: Log density of the proposal posterior.
-        - **thin**: Thinning factor for posterior draws.
+        - **thin_factor**: Thinning factor for posterior draws.
         - **log_weights**: Smoothed log weights.
         - **loo_subsample_observations**: Indices of subsampled observations.
-        - **elpd_loo_approx**: Approximation for all N observations.
+        - **elpd_loo_approx**: Approximation for all :math:`N` observations.
         - **log_jacobian**: Log-Jacobian adjustment for variable transformations.
 
     Examples
@@ -498,26 +499,28 @@ def update_subsample(
     ELPDData
         Object with the following attributes:
 
+        - **kind**: "loo"
         - **elpd**: updated approximated expected log pointwise predictive density (elpd)
         - **se**: standard error of the elpd (includes approximation and sampling uncertainty)
         - **p**: effective number of parameters
         - **n_samples**: number of samples in the posterior
         - **n_data_points**: total number of data points (N)
+        - **scale**: "log"
         - **warning**: True if the estimated shape parameter k of the Pareto distribution
           is > ``good_k`` for any observation in the subsample.
+        - **good_k**: Threshold for Pareto k warnings.
         - **elpd_i**: :class:`~xarray.DataArray` with pointwise elpd values (filled with NaNs
           for non-subsampled points), only if ``pointwise=True``.
         - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values for the subsample
           (filled with NaNs for non-subsampled points), only if ``pointwise=True``.
-        - **scale**: scale of the elpd results ("log", "negative_log", or "deviance").
-        - **good_k**: Threshold for Pareto k warnings.
         - **approx_posterior**: True if approximate posterior was used.
         - **subsampling_se**: Standard error estimate from subsampling uncertainty only.
         - **subsample_size**: Number of observations in the subsample (original + new).
         - **log_p**: Log density of the target posterior.
         - **log_q**: Log density of the proposal posterior.
-        - **thin**: Thinning factor for posterior draws.
+        - **thin_factor**: Thinning factor for posterior draws.
         - **log_weights**: Smoothed log weights.
+        - **n_folds**: None (not applicable for subsampled LOO)
         - **loo_subsample_observations**: Indices of subsampled observations.
         - **elpd_loo_approx**: Approximation for all N observations.
         - **log_jacobian**: Log-Jacobian adjustment for variable transformations.

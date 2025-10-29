@@ -112,19 +112,23 @@ def loo_moment_match(
     ELPDData
         Object with the following attributes:
 
+        - **kind**: "loo"
         - **elpd**: expected log pointwise predictive density
         - **se**: standard error of the elpd
         - **p**: effective number of parameters
         - **n_samples**: number of samples
         - **n_data_points**: number of data points
+        - **scale**: "log"
         - **warning**: True if the estimated shape parameter of Pareto distribution is greater
           than ``good_k``.
-        - **elp_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
-          ``pointwise=True``
-        - **pareto_k**: array of Pareto shape values, only if ``pointwise=True``
         - **good_k**: For a sample size S, the threshold is computed as
           ``min(1 - 1/log10(S), 0.7)``
-        - **approx_posterior**: True if approximate posterior was used.
+        - **elpd_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
+          ``pointwise=True``.
+        - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values, only if
+          ``pointwise=True``.
+        - **approx_posterior**: False (not used for standard LOO)
+        - **log_weights**: Smoothed log weights.
 
     Examples
     --------

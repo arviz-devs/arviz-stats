@@ -72,8 +72,25 @@ def reloo(
     Returns
     -------
     ELPDData
-        Updated LOO results where high Pareto k observations have been
-        replaced with exact LOO-CV values from refitting.
+        Updated LOO results with the following attributes:
+
+        - **kind**: "loo"
+        - **elpd**: expected log pointwise predictive density
+        - **se**: standard error of the elpd
+        - **p**: effective number of parameters
+        - **n_samples**: number of samples
+        - **n_data_points**: number of data points
+        - **scale**: "log"
+        - **warning**: True if the estimated shape parameter of Pareto distribution is greater
+          than ``good_k``.
+        - **good_k**: For a sample size S, the threshold is computed as
+          ``min(1 - 1/log10(S), 0.7)``
+        - **elpd_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
+          ``pointwise=True``
+        - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values,
+          only if ``pointwise=True``
+        - **approx_posterior**: False (not used for standard LOO)
+        - **log_weights**: Smoothed log weights.
 
     Notes
     -----
