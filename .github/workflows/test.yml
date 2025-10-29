@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        job: ["minimal", "nonumba", "alltests"]
+        job: ["minimal", "xarray", "full"]
         python-version: ["3.11", "3.12", "3.13"]
       fail-fast: false
     steps:
