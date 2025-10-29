@@ -7,6 +7,7 @@ from numpy.testing import assert_allclose, assert_array_almost_equal
 
 from ..helpers import importorskip
 
+importorskip("numba")
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 xr_einstats = importorskip("xarray_einstats")
