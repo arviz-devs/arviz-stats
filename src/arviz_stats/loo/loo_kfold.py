@@ -69,21 +69,23 @@ def loo_kfold(
     ELPDData
         Object with the following attributes:
 
+        - **kind**: "loo_kfold"
         - **elpd**: expected log pointwise predictive density
         - **se**: standard error of the elpd
         - **p**: effective number of parameters
         - **n_samples**: number of samples per fold
         - **n_data_points**: number of data points
-        - **warning**: True if any issues occurred during fitting
-        - **elpd_i**: pointwise predictive accuracy (if ``pointwise=True``)
-        - **p_kfold_i**: pointwise effective number of parameters (if ``pointwise=True``)
-        - **pareto_k**: None (not applicable for k-fold)
         - **scale**: "log"
-
-        Additional attributes when ``save_fits=True``:
-
-        - **fold_fits**: Dictionary containing fitted models for each fold
-        - **fold_indices**: Dictionary containing test indices for each fold
+        - **warning**: False (not applicable for :math:`k`-fold)
+        - **good_k**: None (not applicable for :math:`k`-fold)
+        - **elpd_i**: :class:`~xarray.DataArray` with pointwise predictive accuracy,
+          only if ``pointwise=True``
+        - **pareto_k**: None (not applicable for :math:`k`-fold)
+        - **n_folds**: number of folds (:math:`k`)
+        - **p_kfold_i**: :class:`~xarray.DataArray` with pointwise effective number of parameters,
+          only if ``pointwise=True``
+        - **fold_fits**: Dictionary containing fitted models for each fold,
+          only if ``save_fits=True``
 
     Examples
     --------

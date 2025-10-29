@@ -65,20 +65,24 @@ def loo(
     ELPDData
         Object with the following attributes:
 
+        - **kind**: "loo"
         - **elpd**: expected log pointwise predictive density
         - **se**: standard error of the elpd
         - **p**: effective number of parameters
         - **n_samples**: number of samples
         - **n_data_points**: number of data points
+        - **scale**: "log"
         - **warning**: True if the estimated shape parameter of Pareto distribution is greater
           than ``good_k``.
-        - **elpd_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
-          ``pointwise=True``
-        - **pareto_k**: array of Pareto shape values, only if ``pointwise=True``
         - **good_k**: For a sample size S, the threshold is computed as
           ``min(1 - 1/log10(S), 0.7)``
-        - **approx_posterior**: True if approximate posterior was used.
+        - **elpd_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
+          ``pointwise=True``
+        - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values,
+          only if ``pointwise=True``
+        - **approx_posterior**: False (not used for standard LOO)
         - **log_weights**: Smoothed log weights.
+        - **log_jacobian**: Log-Jacobian adjustment for variable transformations.
 
     Examples
     --------
@@ -234,18 +238,23 @@ def loo_i(
     ELPDData
         Object with the following attributes:
 
-        - **elpd**: expected log pointwise predictive density for observation i
+        - **kind**: "loo"
+        - **elpd**: expected log pointwise predictive density for observation :math:`i`
         - **se**: standard error (set to 0.0 as SE is undefined for a single observation)
-        - **p**: effective number of parameters for observation i
+        - **p**: effective number of parameters for observation :math:`i`
         - **n_samples**: number of samples
         - **n_data_points**: 1 (single observation)
+        - **scale**: "log"
         - **warning**: True if the estimated shape parameter of Pareto distribution is greater
           than ``good_k``
-        - **elpd_i**: :class:`~xarray.DataArray` with single value
-        - **pareto_k**: :class:`~xarray.DataArray` with single Pareto shape value
         - **good_k**: For a sample size S, the threshold is computed as
           ``min(1 - 1/log10(S), 0.7)``
-        - **log_weights**: Smoothed log weights for observation i
+        - **elpd_i**: scalar value of the expected log pointwise predictive density for observation
+          :math:`i`
+        - **pareto_k**: scalar Pareto shape value for observation :math:`i`
+        - **approx_posterior**: False (not used for standard LOO)
+        - **log_weights**: Smoothed log weights for observation :math:`i`
+        - **log_jacobian**: Log-Jacobian adjustment for variable transformations.
 
     Notes
     -----
