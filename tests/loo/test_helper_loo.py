@@ -594,36 +594,6 @@ def test_split_moment_match(cov, centered_eight):
     assert result.log_liki.shape == (chain_size, draw_size)
 
 
-def test_split_moment_match_errors():
-    with pytest.raises(TypeError, match="upars must be a DataArray"):
-        _split_moment_match(
-            upars=np.array([1, 2, 3]),
-            cov=False,
-            total_shift=None,
-            total_scaling=None,
-            total_mapping=None,
-            i=0,
-            reff=0.8,
-            log_prob_upars_fn=lambda x: x,
-            log_lik_i_upars_fn=lambda x, _i: x,
-        )
-
-    rng = np.random.default_rng(42)
-    upars_bad = xr.DataArray(rng.normal(size=(10, 3)), dims=["draw", "param"])
-    with pytest.raises(ValueError, match="Required sample dimensions"):
-        _split_moment_match(
-            upars=upars_bad,
-            cov=False,
-            total_shift=None,
-            total_scaling=None,
-            total_mapping=None,
-            i=0,
-            reff=0.8,
-            log_prob_upars_fn=lambda x: x,
-            log_lik_i_upars_fn=lambda x, _i: x,
-        )
-
-
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
 def test_compute_loo_approximation(centered_eight_with_sigma, method):
     result = _compute_loo_approximation(

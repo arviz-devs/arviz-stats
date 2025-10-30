@@ -602,20 +602,8 @@ def _split_moment_match(
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    if not isinstance(upars, xr.DataArray):
-        raise TypeError("upars must be a DataArray.")
-
     sample_dims = ["chain", "draw"]
-    param_dim_list = [dim for dim in upars.dims if dim not in sample_dims]
-
-    if len(param_dim_list) != 1:
-        raise ValueError("upars must have exactly one dimension besides chain and draw.")
-    param_dim = param_dim_list[0]
-
-    if not all(dim in upars.dims for dim in sample_dims):
-        raise ValueError(
-            f"Required sample dimensions {sample_dims} not found in upars dimensions {upars.dims}"
-        )
+    param_dim = next(dim for dim in upars.dims if dim not in sample_dims)
 
     dim = upars.sizes[param_dim]
     n_chains = upars.sizes["chain"]
@@ -626,13 +614,6 @@ def _split_moment_match(
     stack_dims = ["draw", "chain"]
     upars_stacked = upars.stack(__sample__=stack_dims).transpose("__sample__", param_dim)
     mean_original = upars_stacked.mean(dim="__sample__")
-
-    if total_shift is None or total_shift.size == 0:
-        total_shift = np.zeros(dim)
-    if total_scaling is None or total_scaling.size == 0:
-        total_scaling = np.ones(dim)
-    if total_mapping is None or total_mapping.size == 0:
-        total_mapping = np.eye(dim)
 
     # Forward transformation
     upars_trans = upars_stacked - mean_original
@@ -677,7 +658,26 @@ def _split_moment_match(
 
     try:
         log_prob_half_trans = log_prob_upars_fn(upars_trans_half)
+        if not isinstance(log_prob_half_trans, xr.DataArray):
+            raise TypeError("log_prob_upars_fn must return a DataArray.")
+        if not all(dim in log_prob_half_trans.dims for dim in sample_dims) or len(
+            log_prob_half_trans.dims
+        ) != len(sample_dims):
+            raise ValueError(
+                f"log_prob_upars_fn must return a DataArray with dimensions {sample_dims}, "
+                f"but got {log_prob_half_trans.dims}"
+            )
+
         log_prob_half_trans_inv = log_prob_upars_fn(upars_trans_half_inv)
+        if not isinstance(log_prob_half_trans_inv, xr.DataArray):
+            raise TypeError("log_prob_upars_fn must return a DataArray.")
+        if not all(dim in log_prob_half_trans_inv.dims for dim in sample_dims) or len(
+            log_prob_half_trans_inv.dims
+        ) != len(sample_dims):
+            raise ValueError(
+                f"log_prob_upars_fn must return a DataArray with dimensions {sample_dims}, "
+                f"but got {log_prob_half_trans_inv.dims}"
+            )
     except Exception as e:
         raise ValueError(
             f"Could not compute log probabilities for transformed parameters: {e}"
