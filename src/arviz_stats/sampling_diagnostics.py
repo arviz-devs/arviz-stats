@@ -229,7 +229,8 @@ def rhat(
 
     Rank values are calculated over all the chains with ``scipy.stats.rankdata``.
     Each chain is split in two and normalized with the z-transform following
-    Vehtari et al. (2021).
+    Rank values are calculated over all the chains with ``scipy.stats.rankdata``.
+    Each chain is split in two and normalized with the z-transform following [1]_.
 
     References
     ----------
