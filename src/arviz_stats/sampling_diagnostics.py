@@ -233,9 +233,9 @@ def rhat(
 
     References
     ----------
-    * Vehtari et al. (2021).  Rank-normalization, folding, and
-      localization: An improved Rhat for assessing convergence of
-      MCMC. Bayesian analysis, 16(2):667-718.
+    .. [1] Vehtari et al. *Rank-normalization, folding, and localization: An improved Rhat 
+        for assessing convergence of MCMC*. Bayesian Analysis, 16, 2 (2021). 
+        https://doi.org/10.1214/20-BA1221
 
     Examples
     --------
