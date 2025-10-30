@@ -411,3 +411,72 @@ def test_compare_elpd_diff_relative_to_best(centered_eight, non_centered_eight):
     for i in range(len(result)):
         expected_diff = best_elpd - result.iloc[i]["elpd"]
         assert_almost_equal(result.iloc[i]["elpd_diff"], expected_diff, decimal=10)
+
+
+def test_compare_order_stat_check(centered_eight, rng):
+    models = {}
+    for i in range(12):
+        loo_result = loo(centered_eight, pointwise=True)
+        shift = rng.normal(0, 0.1, size=loo_result.elpd_i.shape)
+        loo_result.elpd_i = loo_result.elpd_i + shift
+        loo_result.elpd = np.sum(loo_result.elpd_i)
+        models[f"model_{i}"] = loo_result
+
+    with pytest.warns(
+        UserWarning,
+        match="Difference in performance potentially due to chance.*10.1007/s11222-024-10442-4",
+    ):
+        result = compare(models)
+    assert len(result) == 12
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_order_stat_check_identical_models(centered_eight):
+    models = {f"model_{i}": centered_eight for i in range(12)}
+    with pytest.warns(UserWarning, match="All models have nearly identical performance"):
+        result = compare(models)
+    assert len(result) == 12
+    assert_allclose(result["elpd"].values, result["elpd"].values[0])
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_order_stat_check_few_models(centered_eight):
+    models = {f"model_{i}": centered_eight for i in range(11)}
+    result = compare(models)
+    assert len(result) == 11
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_order_stat_check_subsampling(centered_eight_with_sigma):
+    models = {}
+    for i in range(12):
+        loo_sub = loo_subsample(
+            centered_eight_with_sigma,
+            observations=np.array([0, 1, 2, 3]),
+            var_name="obs",
+            method="plpd",
+            log_lik_fn=log_lik_fn_subsample,
+            param_names=["theta"],
+            pointwise=True,
+        )
+        models[f"model_{i}"] = loo_sub
+
+    result = compare(models)
+    assert len(result) == 12
+    assert "subsampling_dse" in result.columns
+
+
+def test_compare_order_stat_check_different_models(centered_eight):
+    models = {}
+    for i in range(12):
+        loo_result = loo(centered_eight, pointwise=True)
+        loo_result = copy.deepcopy(loo_result)
+        shift = 5 - (i * 5)
+        loo_result.elpd_i = loo_result.elpd_i + shift
+        loo_result.elpd = np.sum(loo_result.elpd_i)
+        models[f"model_{i}"] = loo_result
+
+    result = compare(models)
+    assert len(result) == 12
+    assert result.iloc[0]["elpd"] > result.iloc[-1]["elpd"]
+    assert result.iloc[-1]["elpd_diff"] > 10
