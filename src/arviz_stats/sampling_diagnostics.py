@@ -228,17 +228,13 @@ def rhat(
     greater than one indicate that one or more chains have not yet converged.
 
     Rank values are calculated over all the chains with ``scipy.stats.rankdata``.
-    Each chain is split in two and normalized with the z-transform following
-    Vehtari et al. (2021).
+    Each chain is split in two and normalized with the z-transform following [1]_.
 
     References
     ----------
-    * Vehtari et al. (2021).  Rank-normalization, folding, and
-      localization: An improved Rhat for assessing convergence of
-      MCMC. Bayesian analysis, 16(2):667-718.
-    * Gelman et al. BDA3 (2013)
-    * Brooks and Gelman (1998)
-    * Gelman and Rubin (1992)
+    .. [1] Vehtari et al. *Rank-normalization, folding, and localization: An improved Rhat
+           for assessing convergence of MCMC*. Bayesian Analysis, 16, 2 (2021).
+           https://doi.org/10.1214/20-BA1221
 
     Examples
     --------
