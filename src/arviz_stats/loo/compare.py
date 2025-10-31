@@ -26,12 +26,9 @@ def compare(
     The method is described in [2]_ and [3]_.
     By default, the weights are estimated using ``"stacking"`` as described in [4]_.
 
-    When more than 11 models are compared, an order statistics-based diagnostic
-    is performed to check whether differences in predictive performance are
-    potentially due to chance, as described by [1]_. A warning is issued if
-    selection-induced bias is detected. If this is the case, we recommend avoiding
-    model selection based on LOO-CV and instead favor model averaging/stacking
-    or projection predictive inference.
+    If more than 11 models are compared, a diagnostic check for selection bias
+    is performed. If detected, avoid LOO-based selection and use model averaging
+    or `projection predictive inference <https://kulprit.readthedocs.io/en/latest/index.html>`_.
 
     See the EABM chapters on `Model Comparison <https://arviz-devs.github.io/EABM/Chapters/Model_comparison.html>`_,
     `Model Comparison (Case Study) <https://arviz-devs.github.io/EABM/Chapters/Case_study_model_comparison.html>`_,
