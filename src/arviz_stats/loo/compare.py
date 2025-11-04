@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from arviz_base import rcParams
 from scipy.optimize import Bounds, LinearConstraint, minimize
-from scipy.stats import dirichlet
+from scipy.stats import dirichlet, norm
 
 from arviz_stats.loo import loo
 from arviz_stats.loo.helper_loo import _diff_srs_estimator
@@ -23,8 +23,17 @@ def compare(
 
     The ELPD is estimated by Pareto smoothed importance sampling leave-one-out
     cross-validation, the same method used by :func:`arviz_stats.loo`.
-    The method is described in [1]_ and [2]_.
-    By default, the weights are estimated using ``"stacking"`` as described in [3]_.
+    The method is described in [2]_ and [3]_.
+    By default, the weights are estimated using ``"stacking"`` as described in [4]_.
+
+    If more than 11 models are compared, a diagnostic check for selection bias
+    is performed. If detected, avoid LOO-based selection and use model averaging
+    or `projection predictive inference <https://kulprit.readthedocs.io/en/latest/index.html>`_.
+
+    See the EABM chapters on `Model Comparison <https://arviz-devs.github.io/EABM/Chapters/Model_comparison.html>`_,
+    `Model Comparison (Case Study) <https://arviz-devs.github.io/EABM/Chapters/Case_study_model_comparison.html>`_,
+    and `Model Comparison for Large Data <https://arviz-devs.github.io/EABM/Chapters/Model_comparison_large_data.html>`_
+    for more details.
 
     Parameters
     ----------
@@ -117,15 +126,20 @@ def compare(
     References
     ----------
 
-    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+    .. [1] McLatchie, Y., Vehtari, A. *Efficient estimation and correction of selection-induced
+        bias with order statistics*. Statistics and Computing, 34, 132 (2024).
+        https://doi.org/10.1007/s11222-024-10442-4
+        arXiv preprint https://arxiv.org/abs/2309.03742
+
+    .. [2] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
         and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
         arXiv preprint https://arxiv.org/abs/1507.04544.
 
-    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+    .. [3] Vehtari et al. *Pareto Smoothed Importance Sampling*.
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
 
-    .. [3] Yao et al. *Using stacking to average Bayesian predictive distributions*
+    .. [4] Yao et al. *Using stacking to average Bayesian predictive distributions*
         Bayesian Analysis, 13, 3 (2018). https://doi.org/10.1214/17-BA1091
         arXiv preprint https://arxiv.org/abs/1704.02030.
     """
@@ -270,6 +284,9 @@ def compare(
 
     df_comp["rank"] = df_comp["rank"].astype(int)
     df_comp["warning"] = df_comp["warning"].astype(bool)
+
+    model_order = list(ics.index)
+    _order_stat_check(ics_dict, model_order, has_subsampling)
     return df_comp.sort_values(by="elpd", ascending=False)
 
 
@@ -529,3 +546,50 @@ def _calculate_ics(
                     f"Encountered error trying to compute ELPD from model {name}."
                 ) from e
     return new_compare_dict
+
+
+def _order_stat_check(ics_dict, model_order, has_subsampling):
+    """Perform order statistics-based checks on models."""
+    if has_subsampling or len(ics_dict) <= 11:
+        return
+
+    # Use the median model as the baseline model to compute ELPD differences
+    baseline_idx = len(model_order) // 2
+    baseline_model = model_order[baseline_idx]
+    baseline_elpd = ics_dict[baseline_model]
+
+    elpd_diffs = np.zeros(len(model_order))
+    for idx, model_name in enumerate(model_order):
+        if model_name != baseline_model:
+            elpd_a_vals = np.ravel(baseline_elpd.elpd_i)
+            elpd_b_vals = np.ravel(ics_dict[model_name].elpd_i)
+            elpd_diffs[idx] = np.sum(elpd_b_vals - elpd_a_vals)
+
+    elpd_diffs = np.array(elpd_diffs)
+    diff_median = np.median(elpd_diffs)
+    elpd_diff_trunc = elpd_diffs[elpd_diffs >= diff_median]
+    n_models = np.sum(~np.isnan(elpd_diff_trunc))
+
+    if n_models < 1:
+        return
+
+    candidate_sd = np.sqrt(1 / n_models * np.sum(elpd_diff_trunc**2))
+
+    # Defensive check to avoid a runtime error when computing the order statistic
+    if candidate_sd == 0 or not np.isfinite(candidate_sd):
+        warnings.warn(
+            "All models have nearly identical performance.",
+            UserWarning,
+        )
+        return
+
+    # Estimate expected best diff under null hypothesis
+    k = len(ics_dict) - 1
+    order_stat = norm.ppf(1 - 1 / (k * 2), loc=0, scale=candidate_sd)
+
+    if np.nanmax(elpd_diffs) <= order_stat:
+        warnings.warn(
+            "Difference in performance potentially due to chance. "
+            "See https://doi.org/10.1007/s11222-024-10442-4 for details.",
+            UserWarning,
+        )
