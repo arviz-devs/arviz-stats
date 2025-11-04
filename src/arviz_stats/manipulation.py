@@ -47,7 +47,7 @@ def thin(
         of the data for which to perform the computation.
     factor : str or int, default "auto"
         The thinning factor. If "auto", the thinning factor is computed based on bulk and tail
-        effective sample size as suggested by Säilynoja et al. (2022).
+        effective sample size as suggested by Säilynoja et al. (2022) [1]_.
         If an integer, the thinning factor is set to that value.
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
@@ -58,6 +58,14 @@ def thin(
     ndarray, DataArray, Dataset, DataTree
         Thinned samples
 
+    References
+    ----------
+
+    .. [1] Säilynoja, Teemu, Paul-Christian Bürkner, and Aki Vehtari.
+           "Graphical Test for Discrete Uniformity and Its Applications in
+           Goodness-of-Fit Evaluation and Multiple Sample Comparison."
+           Statistics and Computing 32 (2), 32 (2022).
+           https://doi.org/10.1007/s11222-022-10090-6
 
     Examples
     --------
