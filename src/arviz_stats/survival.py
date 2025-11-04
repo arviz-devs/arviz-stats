@@ -85,7 +85,7 @@ def generate_survival_curves(
     var_names,
     group="posterior_predictive",
     num_samples=None,
-    truncation_factor=1.2,
+    extrapolation_factor=1.2,
 ):
     """Compute Kaplan-Meier curves for predictive samples.
 
@@ -99,9 +99,9 @@ def generate_survival_curves(
         Group containing the predictive samples.
     num_samples : int, optional
         Number of samples to draw from the predictive distribution.
-    truncation_factor : float, default 1.2
-        Factor by which truncates the survival curves beyond the maximum observed time.
-        Set to None to show all posterior predictive draws.
+    extrapolation_factor : float, default 1.2
+        Factor by which to limit the survival curves beyond the maximum observed time.
+        Set to None to show the unaffected posterior predictive draws.
     """
     if isinstance(var_names, str):
         var_names = [var_names]
@@ -116,7 +116,7 @@ def generate_survival_curves(
     for var_name in pp.data_vars:
         # Handle extrapolation - get max observed time if needed
         max_observed_time = np.inf
-        if truncation_factor is not None:
+        if extrapolation_factor is not None:
             if var_name in obs_data.data_vars:
                 max_observed_time = obs_data[var_name].max().values
 
@@ -128,8 +128,8 @@ def generate_survival_curves(
             times = pp[var_name].isel(sample=i)
 
             # Filter times based on extrapolation factor
-            if truncation_factor is not None:
-                times = times[times <= max_observed_time * truncation_factor]
+            if extrapolation_factor is not None:
+                times = times[times <= max_observed_time * extrapolation_factor]
 
             # Skip if no times left after filtering
             if len(times) == 0:
