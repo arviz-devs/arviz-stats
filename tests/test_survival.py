@@ -141,13 +141,13 @@ def test_generate_survival_curves_decreasing(survival_datatree_predictive):
             assert np.all(np.diff(probs_array[i][valid_idx]) <= 0)
 
 
-def test_generate_survival_curves_with_truncation(survival_datatree_predictive):
+def test_generate_survival_curves_with_extrapolation(survival_datatree_predictive):
     result = generate_survival_curves(
         survival_datatree_predictive,
         var_names=["times"],
         group="posterior_predictive",
         num_samples=10,
-        truncation_factor=1.5,
+        extrapolation_factor=1.5,
     )
     max_observed = survival_datatree_predictive.observed_data["times"].max().values
     times_array = result["times"].values[0]
@@ -155,13 +155,13 @@ def test_generate_survival_curves_with_truncation(survival_datatree_predictive):
     assert np.all(valid_times <= max_observed * 1.5)
 
 
-def test_generate_survival_curves_no_truncation(survival_datatree_predictive):
+def test_generate_survival_curves_no_extrapolation(survival_datatree_predictive):
     result = generate_survival_curves(
         survival_datatree_predictive,
         var_names=["times"],
         group="posterior_predictive",
         num_samples=10,
-        truncation_factor=None,
+        extrapolation_factor=None,
     )
     assert "times" in result.data_vars
 
@@ -289,7 +289,7 @@ def test_kaplan_meier_identical_times():
     assert len(survival_probs) == 1
 
 
-def test_generate_survival_curves_extreme_truncation_low():
+def test_generate_survival_curves_extreme_extrapolation_low():
     rng = np.random.default_rng(42)
     observed_times = rng.exponential(10, 20)
     predictive_times = rng.exponential(10, (2, 10, 20))
@@ -300,12 +300,16 @@ def test_generate_survival_curves_extreme_truncation_low():
         }
     )
     result = generate_survival_curves(
-        dt, var_names=["times"], group="posterior_predictive", num_samples=5, truncation_factor=0.1
+        dt,
+        var_names=["times"],
+        group="posterior_predictive",
+        num_samples=5,
+        extrapolation_factor=0.1,
     )
     assert "times" in result.data_vars
 
 
-def test_generate_survival_curves_extreme_truncation_high():
+def test_generate_survival_curves_extreme_extrapolation_high():
     rng = np.random.default_rng(42)
     observed_times = rng.exponential(10, 20)
     predictive_times = rng.exponential(10, (2, 10, 20))
@@ -316,7 +320,11 @@ def test_generate_survival_curves_extreme_truncation_high():
         }
     )
     result = generate_survival_curves(
-        dt, var_names=["times"], group="posterior_predictive", num_samples=5, truncation_factor=10.0
+        dt,
+        var_names=["times"],
+        group="posterior_predictive",
+        num_samples=5,
+        extrapolation_factor=10.0,
     )
     assert "times" in result.data_vars
     times_array = result["times"].values[0]
