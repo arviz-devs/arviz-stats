@@ -305,7 +305,7 @@ def test_logsumexp_loo_shapes(rng, shape, axis, expected_shape):
 
     max_log_lik = np.max(log_lik, axis=axis)
     assert np.all(scipy_result <= max_log_lik + 1e-6)
-    assert np.all(scipy_result >= max_log_lik - np.log(n_samples)  - 1e-6)
+    assert np.all(scipy_result >= max_log_lik - np.log(n_samples) - 1e-6)
     assert np.all(arviz_result <= max_log_lik + 1)
     assert np.all(arviz_result >= -10)
 
