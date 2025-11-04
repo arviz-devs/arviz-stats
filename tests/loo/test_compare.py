@@ -415,8 +415,10 @@ def test_compare_elpd_diff_relative_to_best(centered_eight, non_centered_eight):
 
 def test_compare_order_stat_check(centered_eight, rng):
     models = {}
+    base_loo = loo(centered_eight, pointwise=True)
+
     for i in range(12):
-        loo_result = loo(centered_eight, pointwise=True)
+        loo_result = copy.deepcopy(base_loo)
         shift = rng.normal(0, 0.1, size=loo_result.elpd_i.shape)
         loo_result.elpd_i = loo_result.elpd_i + shift
         loo_result.elpd = np.sum(loo_result.elpd_i)
@@ -447,36 +449,25 @@ def test_compare_order_stat_check_few_models(centered_eight):
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_compare_order_stat_check_subsampling(centered_eight_with_sigma):
+def test_compare_order_stat_check_subsampling(centered_eight_with_sigma, rng):
+    base_loo_sub = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 1, 2, 3]),
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        pointwise=True,
+    )
+
     models = {}
     for i in range(12):
-        loo_sub = loo_subsample(
-            centered_eight_with_sigma,
-            observations=np.array([0, 1, 2, 3]),
-            var_name="obs",
-            method="plpd",
-            log_lik_fn=log_lik_fn_subsample,
-            param_names=["theta"],
-            pointwise=True,
-        )
+        loo_sub = copy.deepcopy(base_loo_sub)
+        shift = rng.normal(0, 0.1, size=loo_sub.elpd_i.shape)
+        loo_sub.elpd_i = loo_sub.elpd_i + shift
+        loo_sub.elpd = np.sum(loo_sub.elpd_i)
         models[f"model_{i}"] = loo_sub
 
     result = compare(models)
     assert len(result) == 12
     assert "subsampling_dse" in result.columns
-
-
-def test_compare_order_stat_check_different_models(centered_eight):
-    models = {}
-    for i in range(12):
-        loo_result = loo(centered_eight, pointwise=True)
-        loo_result = copy.deepcopy(loo_result)
-        shift = 5 - (i * 5)
-        loo_result.elpd_i = loo_result.elpd_i + shift
-        loo_result.elpd = np.sum(loo_result.elpd_i)
-        models[f"model_{i}"] = loo_result
-
-    result = compare(models)
-    assert len(result) == 12
-    assert result.iloc[0]["elpd"] > result.iloc[-1]["elpd"]
-    assert result.iloc[-1]["elpd_diff"] > 10

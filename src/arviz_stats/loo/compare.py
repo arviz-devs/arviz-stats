@@ -558,14 +558,12 @@ def _order_stat_check(ics_dict, model_order, has_subsampling):
     baseline_model = model_order[baseline_idx]
     baseline_elpd = ics_dict[baseline_model]
 
-    elpd_diffs = []
-    for model_name in model_order:
-        if model_name == baseline_model:
-            elpd_diffs.append(0.0)
-        else:
-            elpd_a_vals = np.asarray(baseline_elpd.elpd_i).flatten()
-            elpd_b_vals = np.asarray(ics_dict[model_name].elpd_i).flatten()
-            elpd_diffs.append(np.sum(elpd_b_vals - elpd_a_vals))
+    elpd_diffs = np.zeros(len(model_order))
+    for idx, model_name in enumerate(model_order):
+        if model_name != baseline_model:
+            elpd_a_vals = np.ravel(baseline_elpd.elpd_i)
+            elpd_b_vals = np.ravel(ics_dict[model_name].elpd_i)
+            elpd_diffs[idx] = np.sum(elpd_b_vals - elpd_a_vals)
 
     elpd_diffs = np.array(elpd_diffs)
     diff_median = np.median(elpd_diffs)
