@@ -340,7 +340,8 @@ def rhat_nested(
     filter_vars : {None, "like", "regex"}, default None
     method : str, default "rank"
         Valid methods are:
-        - "rank"        # recommended by Vehtari et al. (2021)
+
+        - "rank"        # recommended by Vehtari et al. (2021) [2]_
         - "split"
         - "folded"
         - "z_scale"
@@ -364,9 +365,12 @@ def rhat_nested(
 
     References
     ----------
-    .. [1] Margossian et al *Nested R-hat: Assessing the convergence of Markov Chain Monte Carlo
-        when running many short chains*.
+    .. [1] Margossian et al. *Nested R-hat: Assessing the convergence of
+        Markov Chain Monte Carlo when running many short chains*.
         Bayesian Analysis, (2024). https://doi.org/10.1214/24-BA1453
+    .. [2] Vehtari et al. *Rank-normalization, folding, and localization: An improved Rhat
+        for assessing convergence of MCMC*. Bayesian Analysis, 16, 2 (2021).
+        https://doi.org/10.1214/20-BA1221
     """
     if isinstance(data, list | tuple | np.ndarray):
         data = np.array(data)
