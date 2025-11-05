@@ -61,10 +61,9 @@ def thin(
     References
     ----------
 
-    .. [1] Säilynoja, Teemu, Paul-Christian Bürkner, and Aki Vehtari.
-           "Graphical Test for Discrete Uniformity and Its Applications in
-           Goodness-of-Fit Evaluation and Multiple Sample Comparison."
-           Statistics and Computing 32 (2), 32 (2022).
+    .. [1] Säilynoja, T., Bürkner, PC. & Vehtari, A. "Graphical test for discrete 
+           uniformity and its applications in goodness-of-fit evaluation and 
+           multiple sample comparison." Statistics and Computing 32, 32 (2022).
            https://doi.org/10.1007/s11222-022-10090-6
 
     Examples
