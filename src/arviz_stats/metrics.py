@@ -110,6 +110,10 @@ def bayesian_r2(
     .. [1] Gelman et al. *R-squared for Bayesian regression models*.
         The American Statistician. 73(3) (2019). https://doi.org/10.1080/00031305.2018.1549100
         preprint http://www.stat.columbia.edu/~gelman/research/published/bayes_R2_v3.pdf.
+    .. [2] Tjur, T. *Coefficient of determination in logistic regression models-A new proposal:
+        The coefficient of discrimination* The American Statistician, 63(2) (2009).
+        https://doi.org/10.1198/tast.2009.08210
+
     """
     if point_estimate is None:
         point_estimate = rcParams["stats.point_estimate"]
