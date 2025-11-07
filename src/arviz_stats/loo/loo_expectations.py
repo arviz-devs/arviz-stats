@@ -2,11 +2,12 @@
 
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_datatree, extract
+from arviz_base import convert_to_datatree, extract, rcParams
+from scipy.stats import dirichlet
 from xarray import apply_ufunc
 
 from arviz_stats.loo.helper_loo import _warn_pareto_k
-from arviz_stats.metrics import _metrics
+from arviz_stats.metrics import _metrics, _summary_r2
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
@@ -228,6 +229,110 @@ def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to="2g
     predicted, _ = loo_expectations(data, kind="mean", var_name=var_name, log_weights=log_weights)
 
     return _metrics(observed, predicted, kind, round_to)
+
+
+def loo_r2(
+    data,
+    var_name,
+    n_simulations=4000,
+    summary=True,
+    point_estimate=None,
+    ci_kind=None,
+    ci_prob=None,
+    circular=False,
+    round_to="2g",
+):
+    """Compute LOO-adjusted R².
+
+    Parameters
+    ----------
+    data: DataTree or InferenceData
+        It should contain groups `observed_data`, `posterior_predictive` and `log_likelihood`.
+    var_name : str
+        Name of the observed variable.
+    n_simulations : int, default 4000
+        Number of Dirichlet-weighted bootstrap samples for variance estimation.
+    circular : bool, default False
+        Whether the variable is circular (angles in radians, range [-π, π]).
+    summary: bool
+        Whether to return a summary (default) or an array of R² samples.
+        The summary is a Pandas' series with a point estimate and a credible interval
+    point_estimate: str
+        The point estimate to compute. If None, the default value is used.
+        Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
+        summary is False.
+    ci_kind: str
+        The kind of credible interval to compute. If None, the default value is used.
+        Defaults values are defined in rcParams["stats.ci_kind"]. Ignored if
+        summary is False.
+    ci_prob: float
+        The probability for the credible interval. If None, the default value is used.
+        Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
+        summary is False.
+    circular: bool
+        Whether to compute the Bayesian R² for circular data. Defaults to False.
+        It's assumed that the circular data is in radians and ranges from -π to π.
+        We use the same definition of R² for circular data as in the linear case,
+        but using circular variance instead of regular variance.
+    round_to: int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
+
+    Returns
+    -------
+    np.ndarray or pd.Series
+        LOO-adjusted R² samples or summary statistics.
+
+    Examples
+    --------
+    Calculate LOO-adjusted R² for circular regression model:
+
+    .. ipython::
+
+        In [1]: from arviz_stats import loo_r2
+           ...: from arviz_base import load_arviz_data
+           ...: data = load_arviz_data('periwinkles')
+           ...: loo_r2(data, var_name='direction', circular=True)
+    """
+    if point_estimate is None:
+        point_estimate = rcParams["stats.point_estimate"]
+    if ci_kind is None:
+        ci_kind = rcParams["stats.ci_kind"]
+    if ci_prob is None:
+        ci_prob = rcParams["stats.ci_prob"]
+
+    y = data.observed_data[var_name].values
+    ypred_loo, _ = loo_expectations(data)
+
+    if circular:
+        eloo = np.angle(np.exp(1j * (ypred_loo.values - y)))
+    else:
+        eloo = ypred_loo.values - y
+
+    n = len(y)
+    rd = dirichlet.rvs(np.ones(n), size=n_simulations, random_state=42)
+
+    if circular:
+        vary = _circular_weighted_var(y, rd)
+        vareloo = _circular_weighted_var(eloo, rd)
+    else:
+        vary = (np.sum(rd * y**2, axis=1) - np.sum(rd * y, axis=1) ** 2) * (n / (n - 1))
+        vareloo = (np.sum(rd * eloo**2, axis=1) - np.sum(rd * eloo, axis=1) ** 2) * (n / (n - 1))
+
+    loo_r_squared = 1 - vareloo / vary
+    loo_r_squared = np.clip(loo_r_squared, 0, 1)
+
+    if summary:
+        return _summary_r2(loo_r_squared, point_estimate, ci_kind, ci_prob, round_to)
+    return loo_r_squared
+
+
+def _circular_weighted_var(angles, weights):
+    """Compute weighted circular variance for angles in [-π, π]."""
+    mean_cos = np.sum(weights * np.cos(angles), axis=1)
+    mean_sin = np.sum(weights * np.sin(angles), axis=1)
+    return 1 - np.sqrt(mean_cos**2 + mean_sin**2)
 
 
 def _get_function_khat(

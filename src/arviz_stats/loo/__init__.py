@@ -2,7 +2,7 @@
 
 from arviz_stats.loo.loo import loo, loo_i
 from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
-from arviz_stats.loo.loo_expectations import loo_expectations, loo_metrics
+from arviz_stats.loo.loo_expectations import loo_expectations, loo_metrics, loo_r2
 from arviz_stats.loo.loo_score import loo_score
 from arviz_stats.loo.loo_pit import loo_pit
 from arviz_stats.loo.loo_subsample import loo_subsample, update_subsample
@@ -18,6 +18,7 @@ __all__ = [
     "loo_approximate_posterior",
     "loo_expectations",
     "loo_metrics",
+    "loo_r2",
     "loo_score",
     "loo_pit",
     "loo_subsample",

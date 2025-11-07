@@ -10,11 +10,11 @@ from .helpers import importorskip
 azb = importorskip("arviz_base")
 
 from arviz_stats.base import array_stats
-from arviz_stats.metrics import kl_divergence, metrics, r2_score, wasserstein
+from arviz_stats.metrics import kl_divergence, metrics, residual_r2, wasserstein
 
 
-def test_r2_score_summary(datatree):
-    result = r2_score(datatree, summary=True, ci_kind="hdi")
+def test_residual_r2_summary(datatree):
+    result = residual_r2(datatree, summary=True, ci_kind="hdi")
     assert isinstance(result, tuple)
     assert hasattr(result, "_fields")
     assert "mean" in result._fields
@@ -22,42 +22,42 @@ def test_r2_score_summary(datatree):
     assert "hdi_ub" in result._fields
 
 
-def test_r2_score_array(datatree):
+def test_residual_r2_array(datatree):
     y_pred = azb.extract(datatree, group="posterior_predictive").values.T
-    result = r2_score(datatree, summary=False)
+    result = residual_r2(datatree, summary=False)
     assert isinstance(result, np.ndarray)
     assert result.shape == (y_pred.shape[0],)
 
 
 @pytest.mark.parametrize("point_estimate", ["mean", "median"])
-def test_r2_score_point_estimate(datatree, point_estimate):
-    result = r2_score(datatree, summary=True, point_estimate=point_estimate)
+def test_residual_r2_point_estimate(datatree, point_estimate):
+    result = residual_r2(datatree, summary=True, point_estimate=point_estimate)
     assert point_estimate in result._fields
 
 
 @pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
-def test_r2_score_ci_kind(datatree, ci_kind):
-    result = r2_score(datatree, summary=True, ci_kind=ci_kind)
+def test_residual_r2_ci_kind(datatree, ci_kind):
+    result = residual_r2(datatree, summary=True, ci_kind=ci_kind)
     assert f"{ci_kind}_lb" in result._fields
     assert f"{ci_kind}_ub" in result._fields
 
 
 @pytest.mark.parametrize("ci_prob", [0.9, 0.95])
-def test_r2_score_ci_prob(datatree, ci_prob):
-    result = r2_score(datatree, summary=True, ci_prob=ci_prob)
+def test_residual_r2_ci_prob(datatree, ci_prob):
+    result = residual_r2(datatree, summary=True, ci_prob=ci_prob)
     assert hasattr(result, "_fields")
 
 
-def test_r2_score_no_rounding(datatree):
-    result = r2_score(datatree, summary=True, round_to=None)
+def test_residual_r2_no_rounding(datatree):
+    result = residual_r2(datatree, summary=True, round_to=None)
     assert isinstance(result.mean, float)
 
 
-def test_r2_score_invalid_shapes():
+def test_residual_r2_invalid_shapes():
     y_true = np.array([3, -0.5, 2, 7])
     y_pred = np.array([[2.5, 0.0, 2]])
     with pytest.raises(ValueError):
-        array_stats.r2_score(y_true, y_pred)
+        array_stats.residual_r2(y_true, y_pred)
 
 
 @pytest.mark.parametrize(

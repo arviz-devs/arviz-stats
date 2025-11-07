@@ -11,32 +11,59 @@ from arviz_stats.base import array_stats
 from arviz_stats.utils import round_num
 
 
-def r2_score(
+def bayesian_r2(
     data,
-    var_name=None,
-    data_pair=None,
+    pred_mean=None,
+    scale=None,
+    scale_kind="sd",
     summary=True,
     point_estimate=None,
     ci_kind=None,
     ci_prob=None,
+    circular=False,
     round_to="2g",
 ):
-    """R² for Bayesian regression models.
+    r"""Bayesian R² for regression models.
 
     The R², or coefficient of determination, is defined as the proportion of variance
-    in the data that is explained by the model. It is computed as the variance of the
-    predicted values divided by the variance of the predicted values plus the variance
-    of the residuals. For details of the Bayesian R² see [1]_.
+    in the data that is explained by the model.
+
+    The Bayesian R² (or modeled R²) differs from other definitions of R² in that
+    it is computed only using posterior quantities from the fitted model. For details of
+    the Bayesian R² see [1]_.
+
+    Briefly, it is defined as:
+
+    .. math::
+
+        R^2 = \\frac{\\mathrm{Var}_{\\mu}}{\\mathrm{Var}_{\\mu} + \\mathrm{Var}_{\\mathrm{res}}}
+
+    where :math:`\\mathrm{Var}_{\\mu}` is the variance of the predicted means,
+    and :math:`\\mathrm{Var}_{\\mathrm{res}}` is the modelled residual variance.
+
+    For a Gaussian family, this is :math:`\\sigma^2`.
+    For a Bernoulli family, this is :math:`p(1-p)`, where :math:`p` is the predicted
+    probability of success (see [2]_ for details). This is computed internally if
+    `scale` is not provided.
+
+    For other models, you may need to compute the appropriate scale variable
+    representing the modeled variance (or pseudo-variance) and pass it using
+    the ``scale`` argument.
 
     Parameters
     ----------
     data : DataTree or InferenceData
-        Input data. It should contain the posterior and the log_likelihood groups.
-    var_name : str
-        Name of the variable to compute the R² for.
-    data_pair : dict
-        Dictionary with the first element containing the posterior predictive name
-        and the second element containing the observed data variable name.
+        Input data. It should contain the posterior and posterior_predictive groups.
+    pred_mean : str
+        Name of the variable representing the predicted mean.
+    scale : str, optional
+        Name of the variable representing the modeled variance (or pseudo-variance).
+        It can be omitted for binary classification problems, in which case the pseudo-variance
+        is computed internally.
+    scale_kind : str
+        Whether the variable referenced by `scale` is a standard deviation ("sd")
+        or variance ("var"). Defaults to "sd".
+        If "sd", it is squared internally to obtain the variance. Omitted if `scale` is None.
     summary: bool
         Whether to return a summary (default) or an array of R² samples.
         The summary is a Pandas' series with a point estimate and a credible interval
@@ -52,6 +79,11 @@ def r2_score(
         The probability for the credible interval. If None, the default value is used.
         Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
         summary is False.
+    circular: bool
+        Whether to compute the Bayesian R² for circular data. Defaults to False.
+        It's assumed that the circular data is in radians and ranges from -π to π.
+        We use the same definition of R² for circular data as in the linear case,
+        but using circular variance instead of regular variance.
     round_to: int or str, optional
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.
@@ -63,14 +95,14 @@ def r2_score(
 
     Examples
     --------
-    Calculate R² samples for Bayesian regression models :
+    Calculate Bayesian R² for regression models :
 
     .. ipython::
 
-        In [1]: from arviz_stats import r2_score
+        In [1]: from arviz_stats import bayesian_r2
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data('regression1d')
-           ...: r2_score(data)
+           ...: bayesian_r2(data, pred_mean='mu', scale='sigma')
 
     References
     ----------
@@ -86,28 +118,126 @@ def r2_score(
     if ci_prob is None:
         ci_prob = rcParams["stats.ci_prob"]
 
-    if data_pair is None:
-        obs_var_name = var_name
-        pred_var_name = var_name
-    else:
-        obs_var_name = list(data_pair.keys())[0]
-        pred_var_name = list(data_pair.values())[0]
+    mu_pred = extract(data, group="posterior", var_names=pred_mean).values.T
+    scale = extract(data, group="posterior", var_names=scale).values.T
 
-    y_true = extract(data, group="observed_data", var_names=obs_var_name, combined=False).values
-    y_pred = extract(data, group="posterior_predictive", var_names=pred_var_name).values.T
-
-    r_squared = array_stats.r2_score(y_true, y_pred)
+    r_squared = array_stats.bayesian_r2(mu_pred, scale, scale_kind, circular)
 
     if summary:
-        estimate = getattr(np, point_estimate)(r_squared).item()
-        c_i = getattr(array_stats, ci_kind)(r_squared, ci_prob)
+        return _summary_r2(r_squared, point_estimate, ci_kind, ci_prob, round_to)
 
-        r2_summary = namedtuple("R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
-        if (round_to is not None) and (round_to not in ("None", "none")):
-            estimate = round_num(estimate, round_to)
-            c_i = (round_num(c_i[0].item(), round_to), round_num(c_i[1].item(), round_to))
+    return r_squared
 
-        return r2_summary(estimate, c_i[0], c_i[1])
+
+def residual_r2(
+    data,
+    pred_mean=None,
+    obs_name=None,
+    summary=True,
+    point_estimate=None,
+    ci_kind=None,
+    ci_prob=None,
+    circular=False,
+    round_to="2g",
+):
+    r"""Residual R² for Bayesian regression models.
+
+    The R², or coefficient of determination, is defined as the proportion of variance
+    in the data that is explained by the model. For details of the residual R² see [1]_.
+
+    Briefly, it is defined as:
+
+    .. math::
+
+        R^2 = \\frac{\\mathrm{Var}_{\\mu}}{\\mathrm{Var}_{\\mu} + \\mathrm{Var}_{\\mathrm{res}}}
+
+    where :math:`\\mathrm{Var}_{\\mu}` is the variance of the predicted means,
+    and :math:`\\mathrm{Var}_{\\mathrm{res}}` is the residual variance.
+
+    .. math::
+
+        \\mathrm{Var}_{\\mathrm{res}}^s = V_{n=1}^N \\hat{e}_n^s,
+
+    where :math:`\\hat{e}_n^s=y_n-\\hat{y}_n^s` are the residuals for observation :math:`n` in
+    posterior sample :math:`s`.
+
+
+    Parameters
+    ----------
+    data : DataTree or InferenceData
+        Input data. It should contain the posterior_predictive and observed_data groups.
+    pred_name : str
+        Name of the variable representing the predicted mean.
+    obs_name : str, optional
+        Name of the variable representing the observed data.
+    summary: bool
+        Whether to return a summary (default) or an array of R² samples.
+        The summary is a Pandas' series with a point estimate and a credible interval
+    point_estimate: str
+        The point estimate to compute. If None, the default value is used.
+        Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
+        summary is False.
+    ci_kind: str
+        The kind of credible interval to compute. If None, the default value is used.
+        Defaults values are defined in rcParams["stats.ci_kind"]. Ignored if
+        summary is False.
+    ci_prob: float
+        The probability for the credible interval. If None, the default value is used.
+        Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
+        summary is False.
+    circular: bool
+        Whether to compute the residual R² for circular data. Defaults to False.
+        It's assumed that the circular data is in radians and ranges from -π to π.
+        We use the same definition of R² for circular data as in the linear case,
+        but using circular variance instead of regular variance.
+    round_to: int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
+
+    Returns
+    -------
+    Namedtuple or array
+
+
+    See Also
+    --------
+    arviz_stats.bayesian_r2 : Bayesian R² for regression models.
+    arviz_stats.loo_r2 : Residual R² for Bayesian regression models.
+
+    Examples
+    --------
+    Calculate residual R² for Bayesian circular regression:
+
+    .. ipython::
+
+        In [1]: from arviz_stats import residual_r2
+           ...: from arviz_base import load_arviz_data
+           ...: data = load_arviz_data('periwinkles')
+           ...: residual_r2(data, pred_mean='mu', obs_name='direction', circular=True)
+
+
+    References
+    ----------
+
+    .. [1] Gelman et al. *R-squared for Bayesian regression models*.
+        The American Statistician. 73(3) (2019). https://doi.org/10.1080/00031305.2018.1549100
+        preprint http://www.stat.columbia.edu/~gelman/research/published/bayes_R2_v3.pdf.
+    """
+    if point_estimate is None:
+        point_estimate = rcParams["stats.point_estimate"]
+    if ci_kind is None:
+        ci_kind = rcParams["stats.ci_kind"]
+    if ci_prob is None:
+        ci_prob = rcParams["stats.ci_prob"]
+
+    y_true = extract(data, group="observed_data", var_names=obs_name, combined=False).values
+    mu_pred = extract(data, group="posterior", var_names=pred_mean).values.T
+
+    r_squared = array_stats.residual_r2(y_true, mu_pred, circular)
+
+    if summary:
+        return _summary_r2(r_squared, point_estimate, ci_kind, ci_prob, round_to)
 
     return r_squared
 
@@ -507,3 +637,15 @@ def _metrics(observed, predicted, kind, round_to):
     mean, std_error = array_stats.metrics(observed, predicted, kind=kind)
 
     return estimate(round_num(mean, round_to), round_num(std_error, round_to))
+
+
+def _summary_r2(r_squared, point_estimate, ci_kind, ci_prob, round_to):
+    estimate = getattr(np, point_estimate)(r_squared).item()
+    c_i = getattr(array_stats, ci_kind)(r_squared, ci_prob)
+
+    r2_summary = namedtuple("R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
+    if (round_to is not None) and (round_to not in ("None", "none")):
+        estimate = round_num(estimate, round_to)
+        c_i = (round_num(c_i[0].item(), round_to), round_num(c_i[1].item(), round_to))
+
+    return r2_summary(estimate, c_i[0], c_i[1])

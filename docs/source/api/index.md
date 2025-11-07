@@ -55,7 +55,7 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.metrics
    arviz_stats.mode
    arviz_stats.qds
-   arviz_stats.r2_score
+   arviz_stats.residual_r2
    arviz_stats.summary
    arviz_stats.wasserstein
 ```

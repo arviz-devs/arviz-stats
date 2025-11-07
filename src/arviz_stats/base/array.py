@@ -600,17 +600,28 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
-    def r2_score(self, y_true, y_pred):
-        """Compute R² for Bayesian regression models."""
+    def bayesian_r2(self, y_pred, scale=None, scale_kind="sd", circular=False):
+        """Compute Bayesian R² for regression models."""
         r2_ufunc = make_ufunc(
-            self._r2_score,
+            self._bayesian_r2,
+            n_output=1,
+            n_input=2,
+            n_dims=2,
+            ravel=False,
+        )
+        return r2_ufunc(y_pred, scale, scale_kind, circular, out_shape=(y_pred.shape[0],))
+
+    def residual_r2(self, y_obs, mu_pred, circular=False):
+        """Compute residual R² for Bayesian regression models."""
+        r2_ufunc = make_ufunc(
+            self._residual_r2,
             n_output=1,
             n_input=2,
             n_dims=1,
             ravel=False,
         )
 
-        return r2_ufunc(y_true, y_pred, out_shape=(y_pred.shape[0],))
+        return r2_ufunc(y_obs, mu_pred, circular, out_shape=(mu_pred.shape[0],))
 
     def metrics(self, observed, predicted, kind):
         """Compute metrics for Bayesian regression models."""
