@@ -100,24 +100,26 @@ def bayesian_r2(
 
     Examples
     --------
-    Calculate Bayesian R² for regression models :
+    Calculate Bayesian R² for logistic regression:
 
     .. ipython::
 
         In [1]: from arviz_stats import bayesian_r2
            ...: from arviz_base import load_arviz_data
-           ...: kappa = data.posterior['kappa']
-           ...: # compute variance from concentration parameter
-           ...: data.posterior["variance"] = 1 - i1(kappa) / i0(kappa)
-           ...: bayesian_r2(data, pred_mean='mu', scale='variance',
-           ...:             scale_kind="var", circular=True)
+           ...: data = load_arviz_data('anes')
+           ...: bayesian_r2(data, pred_mean="p")
 
-    Calculate Bayesian R² for logistic regression:
+    Calculate Bayesian R² for circular regression. The posterior has
+    the concentration parameter ``kappa`` (from the VonMises distribution).
+    We need to compute the variance from it.
 
     .. ipython::
 
-        In [1]: data = load_arviz_data('anes')
-           ...: bayesian_r2(data, pred_mean="p")
+        In [1]: data = load_arviz_data('periwinkles')
+           ...: kappa = data.posterior['kappa']
+           ...: data.posterior["variance"] = 1 - i1(kappa) / i0(kappa)
+           ...: bayesian_r2(data, pred_mean='mu', scale='variance',
+           ...:             scale_kind="var", circular=True)
 
     References
     ----------
@@ -227,21 +229,22 @@ def residual_r2(
 
     Examples
     --------
-    Calculate residual R² for Bayesian circular regression:
+    Calculate residual R² for Bayesian logistic regression:
 
     .. ipython::
 
         In [1]: from arviz_stats import residual_r2
            ...: from arviz_base import load_arviz_data
-           ...: data = load_arviz_data('periwinkles')
-           ...: residual_r2(data, pred_mean='mu', obs_name='direction', circular=True)
+           ...: data = load_arviz_data('anes')
+           ...: residual_r2(data, pred_mean='p', obs_name='vote')
 
-    Calculate residual R² for Bayesian logistic regression:
+    Calculate residual R² for Bayesian circular regression:
 
     .. ipython::
 
-        In [1]: data = load_arviz_data('anes')
-           ...: residual_r2(data, pred_mean='p', obs_name='vote')
+        In [1]: data = load_arviz_data('periwinkles')
+           ...: residual_r2(data, pred_mean='mu', obs_name='direction', circular=True)
+
 
     References
     ----------

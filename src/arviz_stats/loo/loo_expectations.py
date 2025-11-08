@@ -250,7 +250,7 @@ def loo_r2(
     data: DataTree or InferenceData
         It should contain groups `observed_data`, `posterior_predictive` and `log_likelihood`.
     var_name : str
-        Name of the observed variable.
+        Name of the observed variable
     n_simulations : int, default 4000
         Number of Dirichlet-weighted bootstrap samples for variance estimation.
     circular : bool, default False
@@ -291,21 +291,20 @@ def loo_r2(
 
     Examples
     --------
-    Calculate LOO-adjusted R² for circular regression model:
+    Calculate LOO-adjusted R² for Bayesian logistic regression:
 
     .. ipython::
 
         In [1]: from arviz_stats import loo_r2
            ...: from arviz_base import load_arviz_data
-           ...: data = load_arviz_data('periwinkles')
-           ...: loo_r2(data, var_name='direction', circular=True)
+           ...: data = load_arviz_data('anes')
 
-    Calculate LOO-adjusted R² for Bayesian logistic regression:
+    Calculate LOO-adjusted R² for circular regression:
 
     .. ipython::
 
-        In [1]: data = load_arviz_data('anes')
-           ...: loo_r2(data, var_name="vote")
+        In [1]: data = load_arviz_data('periwinkles')
+           ...: loo_r2(data, var_name='direction', circular=True)
     """
     if point_estimate is None:
         point_estimate = rcParams["stats.point_estimate"]
@@ -315,12 +314,12 @@ def loo_r2(
         ci_prob = rcParams["stats.ci_prob"]
 
     y = data.observed_data[var_name].values
-    ypred_loo, _ = loo_expectations(data)
+    ypred_loo = loo_expectations(data, var_name=var_name)[0].values
 
     if circular:
-        eloo = _circdiff(ypred_loo.values, y)
+        eloo = _circdiff(ypred_loo, y)
     else:
-        eloo = ypred_loo.values - y
+        eloo = ypred_loo - y
 
     n = len(y)
     rd = dirichlet.rvs(np.ones(n), size=n_simulations, random_state=42)
