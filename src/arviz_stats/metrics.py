@@ -93,6 +93,11 @@ def bayesian_r2(
     -------
     Namedtuple or array
 
+    See Also
+    --------
+    arviz_stats.residual_r2 : Residual R².
+    arviz_stats.loo_r2 : LOO-adjusted R².
+
     Examples
     --------
     Calculate Bayesian R² for regression models :
@@ -217,8 +222,8 @@ def residual_r2(
 
     See Also
     --------
-    arviz_stats.bayesian_r2 : Bayesian R² for regression models.
-    arviz_stats.loo_r2 : Residual R² for Bayesian regression models.
+    arviz_stats.bayesian_r2 : Bayesian R².
+    arviz_stats.loo_r2 : LOO-adjusted R².
 
     Examples
     --------

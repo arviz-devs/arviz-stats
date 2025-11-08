@@ -284,6 +284,11 @@ def loo_r2(
     -------
     Namedtuple or array
 
+    See Also
+    --------
+    arviz_stats.bayesian_r2 : Bayesian R².
+    arviz_stats.residual_r2 : Residual R².
+
     Examples
     --------
     Calculate LOO-adjusted R² for circular regression model:
