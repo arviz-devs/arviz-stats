@@ -10,6 +10,7 @@ from scipy.special import logsumexp
 from scipy.stats import circvar
 
 from arviz_stats.base.core import _CoreBase
+from arviz_stats.base.stats_utils import _circdiff
 from arviz_stats.base.stats_utils import not_valid as _not_valid
 
 
@@ -821,8 +822,7 @@ class _DiagnosticsBase(_CoreBase):
         """
         if circular:
             var_y_est = circvar(mu_pred, axis=1, high=np.pi, low=-np.pi)
-            resid = np.angle(np.exp(1j * (y_obs - mu_pred)))
-            var_e = circvar(resid, axis=1, high=np.pi, low=-np.pi)
+            var_e = circvar(_circdiff(y_obs, mu_pred), axis=1, high=np.pi, low=-np.pi)
         else:
             var_y_est = np.var(mu_pred, axis=1)
             var_e = np.var(y_obs - mu_pred, axis=1)

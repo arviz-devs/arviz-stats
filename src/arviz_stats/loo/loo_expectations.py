@@ -6,6 +6,7 @@ from arviz_base import convert_to_datatree, extract, rcParams
 from scipy.stats import dirichlet
 from xarray import apply_ufunc
 
+from arviz_stats.base.stats_utils import _circdiff
 from arviz_stats.loo.helper_loo import _warn_pareto_k
 from arviz_stats.metrics import _metrics, _summary_r2
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
@@ -256,7 +257,7 @@ def loo_r2(
         Whether the variable is circular (angles in radians, range [-π, π]).
     summary: bool
         Whether to return a summary (default) or an array of R² samples.
-        The summary is a Pandas' series with a point estimate and a credible interval
+        The summary is a named tuple with a point estimate and a credible interval
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
@@ -281,8 +282,7 @@ def loo_r2(
 
     Returns
     -------
-    np.ndarray or pd.Series
-        LOO-adjusted R² samples or summary statistics.
+    Namedtuple or array
 
     Examples
     --------
@@ -294,6 +294,13 @@ def loo_r2(
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data('periwinkles')
            ...: loo_r2(data, var_name='direction', circular=True)
+
+    Calculate LOO-adjusted R² for Bayesian logistic regression:
+
+    .. ipython::
+
+        In [1]: data = load_arviz_data('anes')
+           ...: loo_r2(data, var_name="vote")
     """
     if point_estimate is None:
         point_estimate = rcParams["stats.point_estimate"]
@@ -306,7 +313,7 @@ def loo_r2(
     ypred_loo, _ = loo_expectations(data)
 
     if circular:
-        eloo = np.angle(np.exp(1j * (ypred_loo.values - y)))
+        eloo = _circdiff(ypred_loo.values, y)
     else:
         eloo = ypred_loo.values - y
 

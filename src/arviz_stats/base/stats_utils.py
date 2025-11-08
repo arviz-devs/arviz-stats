@@ -298,3 +298,8 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
             _log.info(error_msg)
 
     return nan_error | chain_error | draw_error
+
+
+def _circdiff(array0, array1):
+    """Compute wrapped angular difference in [-pi, pi)."""
+    return ((array0 - array1 + np.pi) % (2 * np.pi)) - np.pi

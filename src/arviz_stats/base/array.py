@@ -600,23 +600,23 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
-    def bayesian_r2(self, y_pred, scale=None, scale_kind="sd", circular=False):
+    def bayesian_r2(self, mu_pred, scale=None, scale_kind="sd", circular=False):
         """Compute Bayesian R² for regression models."""
         r2_ufunc = make_ufunc(
             self._bayesian_r2,
             n_output=1,
-            n_input=2,
+            n_input=1,
             n_dims=2,
             ravel=False,
         )
-        return r2_ufunc(y_pred, scale, scale_kind, circular, out_shape=(y_pred.shape[0],))
+        return r2_ufunc(mu_pred, scale, scale_kind, circular, out_shape=(mu_pred.shape[0],))
 
     def residual_r2(self, y_obs, mu_pred, circular=False):
         """Compute residual R² for Bayesian regression models."""
         r2_ufunc = make_ufunc(
             self._residual_r2,
             n_output=1,
-            n_input=2,
+            n_input=1,
             n_dims=1,
             ravel=False,
         )

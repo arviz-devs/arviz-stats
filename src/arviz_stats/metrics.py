@@ -36,10 +36,10 @@ def bayesian_r2(
 
     .. math::
 
-        R^2 = \\frac{\\mathrm{Var}_{\\mu}}{\\mathrm{Var}_{\\mu} + \\mathrm{Var}_{\\mathrm{res}}}
+        R^2 = \frac{\mathrm{Var}_{\mu}}{\mathrm{Var}_{\mu} + \mathrm{Var}_{\mathrm{res}}}
 
-    where :math:`\\mathrm{Var}_{\\mu}` is the variance of the predicted means,
-    and :math:`\\mathrm{Var}_{\\mathrm{res}}` is the modelled residual variance.
+    where :math:`\mathrm{Var}_{\mu}` is the variance of the predicted means,
+    and :math:`\mathrm{Var}_{\mathrm{res}}` is the modelled residual variance.
 
     For a Gaussian family, this is :math:`\\sigma^2`.
     For a Bernoulli family, this is :math:`p(1-p)`, where :math:`p` is the predicted
@@ -66,7 +66,7 @@ def bayesian_r2(
         If "sd", it is squared internally to obtain the variance. Omitted if `scale` is None.
     summary: bool
         Whether to return a summary (default) or an array of R² samples.
-        The summary is a Pandas' series with a point estimate and a credible interval
+        The summary is a named tuple with a point estimate and a credible interval
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
@@ -101,8 +101,18 @@ def bayesian_r2(
 
         In [1]: from arviz_stats import bayesian_r2
            ...: from arviz_base import load_arviz_data
-           ...: data = load_arviz_data('regression1d')
-           ...: bayesian_r2(data, pred_mean='mu', scale='sigma')
+           ...: kappa = data.posterior['kappa']
+           ...: # compute variance from concentration parameter
+           ...: data.posterior["variance"] = 1 - i1(kappa) / i0(kappa)
+           ...: bayesian_r2(data, pred_mean='mu', scale='variance',
+           ...:             scale_kind="var", circular=True)
+
+    Calculate Bayesian R² for logistic regression:
+
+    .. ipython::
+
+        In [1]: data = load_arviz_data('anes')
+           ...: bayesian_r2(data, pred_mean="p")
 
     References
     ----------
@@ -111,7 +121,7 @@ def bayesian_r2(
         The American Statistician. 73(3) (2019). https://doi.org/10.1080/00031305.2018.1549100
         preprint http://www.stat.columbia.edu/~gelman/research/published/bayes_R2_v3.pdf.
     .. [2] Tjur, T. *Coefficient of determination in logistic regression models-A new proposal:
-        The coefficient of discrimination* The American Statistician, 63(2) (2009).
+        The coefficient of discrimination* The American Statistician, 63(4) (2009).
         https://doi.org/10.1198/tast.2009.08210
 
     """
@@ -123,7 +133,8 @@ def bayesian_r2(
         ci_prob = rcParams["stats.ci_prob"]
 
     mu_pred = extract(data, group="posterior", var_names=pred_mean).values.T
-    scale = extract(data, group="posterior", var_names=scale).values.T
+    if scale is not None:
+        scale = extract(data, group="posterior", var_names=scale).values.T
 
     r_squared = array_stats.bayesian_r2(mu_pred, scale, scale_kind, circular)
 
@@ -153,16 +164,16 @@ def residual_r2(
 
     .. math::
 
-        R^2 = \\frac{\\mathrm{Var}_{\\mu}}{\\mathrm{Var}_{\\mu} + \\mathrm{Var}_{\\mathrm{res}}}
+        R^2 = \frac{\mathrm{Var}_{\mu}}{\mathrm{Var}_{\mu} + \mathrm{Var}_{\mathrm{res}}}
 
-    where :math:`\\mathrm{Var}_{\\mu}` is the variance of the predicted means,
-    and :math:`\\mathrm{Var}_{\\mathrm{res}}` is the residual variance.
+    where :math:`\mathrm{Var}_{\mu}` is the variance of the predicted means,
+    and :math:`\mathrm{Var}_{\mathrm{res}}` is the residual variance.
 
     .. math::
 
-        \\mathrm{Var}_{\\mathrm{res}}^s = V_{n=1}^N \\hat{e}_n^s,
+        \mathrm{Var}_{\mathrm{res}}^s = V_{n=1}^N \hat{e}_n^s,
 
-    where :math:`\\hat{e}_n^s=y_n-\\hat{y}_n^s` are the residuals for observation :math:`n` in
+    where :math:`\hat{e}_n^s=y_n-\hat{y}_n^s` are the residuals for observation :math:`n` in
     posterior sample :math:`s`.
 
 
@@ -176,7 +187,7 @@ def residual_r2(
         Name of the variable representing the observed data.
     summary: bool
         Whether to return a summary (default) or an array of R² samples.
-        The summary is a Pandas' series with a point estimate and a credible interval
+        The summary is a named tuple with a point estimate and a credible interval
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
@@ -220,6 +231,12 @@ def residual_r2(
            ...: data = load_arviz_data('periwinkles')
            ...: residual_r2(data, pred_mean='mu', obs_name='direction', circular=True)
 
+    Calculate residual R² for Bayesian logistic regression:
+
+    .. ipython::
+
+        In [1]: data = load_arviz_data('anes')
+           ...: residual_r2(data, pred_mean='p', obs_name='vote')
 
     References
     ----------
