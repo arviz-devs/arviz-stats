@@ -115,7 +115,8 @@ def bayesian_r2(
 
     .. ipython::
 
-        In [1]: data = load_arviz_data('periwinkles')
+        In [1]: from scipy.special import i0, i1
+           ...: data = load_arviz_data('periwinkles')
            ...: kappa = data.posterior['kappa']
            ...: data.posterior["variance"] = 1 - i1(kappa) / i0(kappa)
            ...: bayesian_r2(data, pred_mean='mu', scale='variance',

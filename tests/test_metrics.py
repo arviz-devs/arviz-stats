@@ -14,7 +14,7 @@ from arviz_stats.metrics import kl_divergence, metrics, residual_r2, wasserstein
 
 
 def test_residual_r2_summary(datatree):
-    result = residual_r2(datatree, summary=True, ci_kind="hdi")
+    result = residual_r2(datatree, pred_mean="mu", obs_name="y", summary=True, ci_kind="hdi")
     assert isinstance(result, tuple)
     assert hasattr(result, "_fields")
     assert "mean" in result._fields
