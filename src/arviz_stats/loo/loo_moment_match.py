@@ -235,7 +235,7 @@ def loo_moment_match(
     match the signature expected by :func:`loo_moment_match()`:
 
     .. ipython::
-        :okwarning:
+        ::
 
         In [4]: from functools import partial
            ...: log_prob_fn = partial(

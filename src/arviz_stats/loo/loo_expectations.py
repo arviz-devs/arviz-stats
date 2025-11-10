@@ -294,6 +294,7 @@ def loo_r2(
     Calculate LOO-adjusted R² for Bayesian logistic regression:
 
     .. ipython::
+        :okwarning:
 
         In [1]: from arviz_stats import loo_r2
            ...: from arviz_base import load_arviz_data
@@ -302,6 +303,7 @@ def loo_r2(
     Calculate LOO-adjusted R² for circular regression:
 
     .. ipython::
+        :okwarning:
 
         In [1]: data = load_arviz_data('periwinkles')
            ...: loo_r2(data, var_name='direction', circular=True)
