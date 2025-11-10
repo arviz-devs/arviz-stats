@@ -54,6 +54,12 @@ def datatree_binary():
 
 
 @pytest.fixture(scope="session")
+def datatree_regression():
+    azb = importorskip("arviz_base")
+    return azb.testing.datatree_regression()
+
+
+@pytest.fixture(scope="session")
 def fake_dt():
     azb = importorskip("arviz_base")
     return azb.testing.fake_dt()

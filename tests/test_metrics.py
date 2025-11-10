@@ -10,11 +10,13 @@ from .helpers import importorskip
 azb = importorskip("arviz_base")
 
 from arviz_stats.base import array_stats
-from arviz_stats.metrics import kl_divergence, metrics, residual_r2, wasserstein
+from arviz_stats.metrics import bayesian_r2, kl_divergence, metrics, residual_r2, wasserstein
 
 
-def test_residual_r2_summary(datatree):
-    result = residual_r2(datatree, pred_mean="mu", obs_name="y", summary=True, ci_kind="hdi")
+def test_residual_r2_summary(datatree_regression):
+    result = residual_r2(
+        datatree_regression, pred_mean="mu", obs_name="y", summary=True, ci_kind="hdi"
+    )
     assert isinstance(result, tuple)
     assert hasattr(result, "_fields")
     assert "mean" in result._fields
@@ -22,34 +24,46 @@ def test_residual_r2_summary(datatree):
     assert "hdi_ub" in result._fields
 
 
-def test_residual_r2_array(datatree):
-    y_pred = azb.extract(datatree, group="posterior_predictive").values.T
-    result = residual_r2(datatree, summary=False)
+def test_residual_r2_array(datatree_regression):
+    mu_pred = azb.extract(datatree_regression, group="posterior")["mu"].values.T
+    result = residual_r2(datatree_regression, pred_mean="mu", obs_name="y", summary=False)
     assert isinstance(result, np.ndarray)
-    assert result.shape == (y_pred.shape[0],)
+    assert result.shape == (mu_pred.shape[0],)
 
 
 @pytest.mark.parametrize("point_estimate", ["mean", "median"])
-def test_residual_r2_point_estimate(datatree, point_estimate):
-    result = residual_r2(datatree, summary=True, point_estimate=point_estimate)
+def test_residual_r2_point_estimate(datatree_regression, point_estimate):
+    result = residual_r2(
+        datatree_regression,
+        pred_mean="mu",
+        obs_name="y",
+        summary=True,
+        point_estimate=point_estimate,
+    )
     assert point_estimate in result._fields
 
 
 @pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
-def test_residual_r2_ci_kind(datatree, ci_kind):
-    result = residual_r2(datatree, summary=True, ci_kind=ci_kind)
+def test_residual_r2_ci_kind(datatree_regression, ci_kind):
+    result = residual_r2(
+        datatree_regression, pred_mean="mu", obs_name="y", summary=True, ci_kind=ci_kind
+    )
     assert f"{ci_kind}_lb" in result._fields
     assert f"{ci_kind}_ub" in result._fields
 
 
 @pytest.mark.parametrize("ci_prob", [0.9, 0.95])
-def test_residual_r2_ci_prob(datatree, ci_prob):
-    result = residual_r2(datatree, summary=True, ci_prob=ci_prob)
+def test_residual_r2_ci_prob(datatree_regression, ci_prob):
+    result = residual_r2(
+        datatree_regression, pred_mean="mu", obs_name="y", summary=True, ci_prob=ci_prob
+    )
     assert hasattr(result, "_fields")
 
 
-def test_residual_r2_no_rounding(datatree):
-    result = residual_r2(datatree, summary=True, round_to=None)
+def test_residual_r2_no_rounding(datatree_regression):
+    result = residual_r2(
+        datatree_regression, pred_mean="mu", obs_name="y", summary=True, round_to=None
+    )
     assert isinstance(result.mean, float)
 
 
@@ -58,6 +72,60 @@ def test_residual_r2_invalid_shapes():
     y_pred = np.array([[2.5, 0.0, 2]])
     with pytest.raises(ValueError):
         array_stats.residual_r2(y_true, y_pred)
+
+
+def test_bayesian_r2_summary(datatree_regression):
+    result = bayesian_r2(datatree_regression, pred_mean="mu", scale="sigma")
+    assert isinstance(result, tuple)
+    assert hasattr(result, "_fields")
+    assert "mean" in result._fields
+    assert "eti_lb" in result._fields
+    assert "eti_ub" in result._fields
+
+
+def test_bayesian_r2_array(datatree_regression):
+    mu_pred = azb.extract(datatree_regression, group="posterior")["mu"].values.T
+    result = bayesian_r2(datatree_regression, pred_mean="mu", scale="sigma", summary=False)
+    assert isinstance(result, np.ndarray)
+    assert result.shape == (mu_pred.shape[0],)
+
+
+@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+def test_bayesian_r2_point_estimate(datatree_regression, point_estimate):
+    result = bayesian_r2(
+        datatree_regression,
+        pred_mean="mu",
+        scale="sigma",
+        summary=True,
+        point_estimate=point_estimate,
+    )
+    assert point_estimate in result._fields
+
+
+def test_bayesian_r2_scale_var(datatree_regression):
+    result = bayesian_r2(datatree_regression, pred_mean="mu", scale="sigma")
+    datatree_regression.posterior["var"] = datatree_regression.posterior["sigma"] ** 2
+    result_var = bayesian_r2(datatree_regression, pred_mean="mu", scale="var", scale_kind="var")
+    assert_almost_equal(result.mean, result_var.mean)
+    assert_almost_equal(result.eti_lb, result_var.eti_lb)
+    assert_almost_equal(result.eti_ub, result_var.eti_ub)
+
+
+@pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
+def test_bayesian_r2_ci_kind(datatree_regression, ci_kind):
+    result = bayesian_r2(
+        datatree_regression, pred_mean="mu", scale="sigma", summary=True, ci_kind=ci_kind
+    )
+    assert f"{ci_kind}_lb" in result._fields
+    assert f"{ci_kind}_ub" in result._fields
+
+
+@pytest.mark.parametrize("ci_prob", [0.9, 0.95])
+def test_bayesian_r2_ci_prob(datatree_regression, ci_prob):
+    result = bayesian_r2(
+        datatree_regression, pred_mean="mu", scale="sigma", summary=True, ci_prob=ci_prob
+    )
+    assert hasattr(result, "_fields")
 
 
 @pytest.mark.parametrize(
