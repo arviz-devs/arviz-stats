@@ -334,7 +334,7 @@ def loo_r2(
         vareloo = (np.sum(rd * eloo**2, axis=1) - np.sum(rd * eloo, axis=1) ** 2) * (n / (n - 1))
 
     loo_r_squared = 1 - vareloo / vary
-    loo_r_squared = np.clip(loo_r_squared, 0, 1)
+    loo_r_squared = np.clip(loo_r_squared, -1, 1)
 
     if summary:
         return _summary_r2(loo_r_squared, point_estimate, ci_kind, ci_prob, round_to)
