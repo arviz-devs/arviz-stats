@@ -1,6 +1,8 @@
 # pylint: disable=wildcard-import
 """Statistical computation and diagnostics for ArviZ."""
 
+from arviz_stats._version import __version__
+
 try:
     from arviz_stats.utils import *
     from arviz_stats.accessors import *
