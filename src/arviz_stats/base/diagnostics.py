@@ -784,12 +784,11 @@ class _DiagnosticsBase(_CoreBase):
         if circular:
             var_y_est = circvar(mu_pred, axis=1, high=np.pi, low=-np.pi)
         else:
-            var_y_est = np.var(mu_pred, axis=1)
+            var_y_est = np.var(mu_pred, axis=1, ddof=1)
 
         if scale is None:
             # Bernoulli-like models: use Tjur’s pseudo-variance
-            mu_mean = np.mean(mu_pred, axis=1)
-            scale = mu_mean * (1 - mu_mean)
+            scale = np.mean(mu_pred * (1 - mu_pred), axis=1)
         else:
             if scale_kind not in ("sd", "var"):
                 raise ValueError("scale_kind must be either 'sd' or 'var'")
@@ -824,8 +823,8 @@ class _DiagnosticsBase(_CoreBase):
             var_y_est = circvar(mu_pred, axis=1, high=np.pi, low=-np.pi)
             var_e = circvar(_circdiff(y_obs, mu_pred), axis=1, high=np.pi, low=-np.pi)
         else:
-            var_y_est = np.var(mu_pred, axis=1)
-            var_e = np.var(y_obs - mu_pred, axis=1)
+            var_y_est = np.var(mu_pred, axis=1, ddof=1)
+            var_e = np.var(y_obs - mu_pred, axis=1, ddof=1)
 
         r_squared = var_y_est / (var_y_est + var_e)
         return r_squared

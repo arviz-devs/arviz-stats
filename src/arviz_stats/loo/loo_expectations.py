@@ -243,7 +243,7 @@ def loo_r2(
     circular=False,
     round_to="2g",
 ):
-    """Compute LOO-adjusted R².
+    """Compute LOO-adjusted :math:`R^2`.
 
     Parameters
     ----------
@@ -256,7 +256,7 @@ def loo_r2(
     circular : bool, default False
         Whether the variable is circular (angles in radians, range [-π, π]).
     summary: bool
-        Whether to return a summary (default) or an array of R² samples.
+        Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
@@ -271,9 +271,9 @@ def loo_r2(
         Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
         summary is False.
     circular: bool
-        Whether to compute the Bayesian R² for circular data. Defaults to False.
+        Whether to compute the Bayesian :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
-        We use the same definition of R² for circular data as in the linear case,
+        We use the same definition of :math:`R^2` for circular data as in the linear case,
         but using circular variance instead of regular variance.
     round_to: int or str, optional
         If integer, number of decimal places to round the result. If string of the
@@ -286,12 +286,12 @@ def loo_r2(
 
     See Also
     --------
-    arviz_stats.bayesian_r2 : Bayesian R².
-    arviz_stats.residual_r2 : Residual R².
+    arviz_stats.bayesian_r2 : Bayesian :math:`R^2`.
+    arviz_stats.residual_r2 : Residual :math:`R^2`.
 
     Examples
     --------
-    Calculate LOO-adjusted R² for Bayesian logistic regression:
+    Calculate LOO-adjusted :math:`R^2` for Bayesian logistic regression:
 
     .. ipython::
         :okwarning:
@@ -300,7 +300,7 @@ def loo_r2(
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data('anes')
 
-    Calculate LOO-adjusted R² for circular regression:
+    Calculate LOO-adjusted :math:`R^2` for circular regression:
 
     .. ipython::
         :okwarning:

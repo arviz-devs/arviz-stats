@@ -23,14 +23,14 @@ def bayesian_r2(
     circular=False,
     round_to="2g",
 ):
-    r"""Bayesian R² for regression models.
+    r"""Bayesian :math:`R^2` for regression models.
 
-    The R², or coefficient of determination, is defined as the proportion of variance
+    The :math:`R^2`, or coefficient of determination, is defined as the proportion of variance
     in the data that is explained by the model.
 
-    The Bayesian R² (or modeled R²) differs from other definitions of R² in that
-    it is computed only using posterior quantities from the fitted model. For details of
-    the Bayesian R² see [1]_.
+    The Bayesian :math:`R^2` (or modeled :math:`R^2`) differs from other definitions of
+    :math:`R^2` in that it is computed only using posterior quantities from the fitted model.
+    For details of the Bayesian :math:`R^2` see [1]_.
 
     Briefly, it is defined as:
 
@@ -65,7 +65,7 @@ def bayesian_r2(
         or variance ("var"). Defaults to "sd".
         If "sd", it is squared internally to obtain the variance. Omitted if `scale` is None.
     summary: bool
-        Whether to return a summary (default) or an array of R² samples.
+        Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
@@ -80,9 +80,9 @@ def bayesian_r2(
         Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
         summary is False.
     circular: bool
-        Whether to compute the Bayesian R² for circular data. Defaults to False.
+        Whether to compute the Bayesian :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
-        We use the same definition of R² for circular data as in the linear case,
+        We use the same definition of :math:`R^2` for circular data as in the linear case,
         but using circular variance instead of regular variance.
     round_to: int or str, optional
         If integer, number of decimal places to round the result. If string of the
@@ -95,12 +95,12 @@ def bayesian_r2(
 
     See Also
     --------
-    arviz_stats.residual_r2 : Residual R².
-    arviz_stats.loo_r2 : LOO-adjusted R².
+    arviz_stats.residual_r2 : Residual :math:`R^2`.
+    arviz_stats.loo_r2 : LOO-adjusted :math:`R^2`.
 
     Examples
     --------
-    Calculate Bayesian R² for logistic regression:
+    Calculate Bayesian :math:`R^2` for logistic regression:
 
     .. ipython::
 
@@ -109,7 +109,7 @@ def bayesian_r2(
            ...: data = load_arviz_data('anes')
            ...: bayesian_r2(data, pred_mean="p")
 
-    Calculate Bayesian R² for circular regression. The posterior has
+    Calculate Bayesian :math:`R^2` for circular regression. The posterior has
     the concentration parameter ``kappa`` (from the VonMises distribution).
     We need to compute the variance from it.
 
@@ -163,10 +163,10 @@ def residual_r2(
     circular=False,
     round_to="2g",
 ):
-    r"""Residual R² for Bayesian regression models.
+    r"""Residual :math:`R^2` for Bayesian regression models.
 
-    The R², or coefficient of determination, is defined as the proportion of variance
-    in the data that is explained by the model. For details of the residual R² see [1]_.
+    The :math:`R^2`, or coefficient of determination, is defined as the proportion of variance
+    in the data that is explained by the model. For details of the residual :math:`R^2` see [1]_.
 
     Briefly, it is defined as:
 
@@ -184,6 +184,10 @@ def residual_r2(
     where :math:`\hat{e}_n^s=y_n-\hat{y}_n^s` are the residuals for observation :math:`n` in
     posterior sample :math:`s`.
 
+    The residual :math:`R^2` differs from the Bayesian :math:`R^2` in that it computes
+    residual variance from the observed data, while for the Bayesian :math:`R^2` all
+    variance terms come from the model, and not directly from the data.
+
 
     Parameters
     ----------
@@ -194,7 +198,7 @@ def residual_r2(
     obs_name : str, optional
         Name of the variable representing the observed data.
     summary: bool
-        Whether to return a summary (default) or an array of R² samples.
+        Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
@@ -209,9 +213,9 @@ def residual_r2(
         Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
         summary is False.
     circular: bool
-        Whether to compute the residual R² for circular data. Defaults to False.
+        Whether to compute the residual :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
-        We use the same definition of R² for circular data as in the linear case,
+        We use the same definition of :math:`R^2` for circular data as in the linear case,
         but using circular variance instead of regular variance.
     round_to: int or str, optional
         If integer, number of decimal places to round the result. If string of the
@@ -225,12 +229,12 @@ def residual_r2(
 
     See Also
     --------
-    arviz_stats.bayesian_r2 : Bayesian R².
-    arviz_stats.loo_r2 : LOO-adjusted R².
+    arviz_stats.bayesian_r2 : Bayesian :math:`R^2`.
+    arviz_stats.loo_r2 : LOO-adjusted :math:`R^2`.
 
     Examples
     --------
-    Calculate residual R² for Bayesian logistic regression:
+    Calculate residual :math:`R^2` for Bayesian logistic regression:
 
     .. ipython::
 
@@ -239,7 +243,7 @@ def residual_r2(
            ...: data = load_arviz_data('anes')
            ...: residual_r2(data, pred_mean='p', obs_name='vote')
 
-    Calculate residual R² for Bayesian circular regression:
+    Calculate residual :math:`R^2` for Bayesian circular regression:
 
     .. ipython::
 
