@@ -1,3 +1,4 @@
+(api_reference)=
 # API reference
 
 :::{note}
