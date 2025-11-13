@@ -125,10 +125,12 @@ def loo_moment_match(
           ``min(1 - 1/log10(S), 0.7)``
         - **elpd_i**: :class:`~xarray.DataArray` with the pointwise predictive accuracy, only if
           ``pointwise=True``.
-        - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values, only if
+        - **pareto_k**: :class:`~xarray.DataArray` with moment-matched Pareto shape values, only if
           ``pointwise=True``.
         - **approx_posterior**: False (not used for standard LOO)
         - **log_weights**: Smoothed log weights.
+        - **influence_pareto_k**: :class:`~xarray.DataArray` with original (pre-moment-matching)
+          Pareto shape values, only if ``pointwise=True``.
 
     Examples
     --------
@@ -412,6 +414,8 @@ def loo_moment_match(
     if k_threshold is None:
         k_threshold = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
 
+    loo_data.influence_pareto_k = loo_data.pareto_k.copy()
+
     ks = loo_data.pareto_k.stack(__obs__=obs_dims).transpose("__obs__").values
     bad_obs_indices = np.where(ks > k_threshold)[0]
 
@@ -420,6 +424,7 @@ def loo_moment_match(
         if not pointwise:
             loo_data.elpd_i = None
             loo_data.pareto_k = None
+            loo_data.influence_pareto_k = None
             if hasattr(loo_data, "p_loo_i"):
                 loo_data.p_loo_i = None
         return loo_data
@@ -514,6 +519,7 @@ def loo_moment_match(
     if not pointwise:
         loo_data.elpd_i = None
         loo_data.pareto_k = None
+        loo_data.influence_pareto_k = None
         if hasattr(loo_data, "p_loo_i"):
             loo_data.p_loo_i = None
     return loo_data
