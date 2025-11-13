@@ -16,7 +16,7 @@ def bayes_factor(data, var_names, ref_vals=0, return_ref_vals=False, prior=None)
     data : DataTree, or InferenceData
         The data object containing the posterior and optionally the prior distributions.
     var_names : str or list of str
-        Names of the variables for which the bayes factor should be computed.
+        Names of the variables for which the Bayes factor should be computed.
     ref_vals : float or list of float, default 0
         Reference value for each variable. Must match var_names in length if list.
     return_ref_vals : bool, default False
