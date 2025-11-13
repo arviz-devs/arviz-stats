@@ -6,7 +6,7 @@ from arviz_base import convert_to_datatree, extract, rcParams
 from scipy.stats import dirichlet
 from xarray import apply_ufunc
 
-from arviz_stats.base.stats_utils import _circdiff
+from arviz_stats.base.stats_utils import _circdiff, _circular_var
 from arviz_stats.loo.helper_loo import _warn_pareto_k
 from arviz_stats.metrics import _metrics, _summary_r2
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
@@ -18,6 +18,7 @@ def loo_expectations(
     log_weights=None,
     kind="mean",
     probs=None,
+    circular=False,
 ):
     """Compute weighted expectations using the PSIS-LOO-CV method.
 
@@ -48,6 +49,10 @@ def loo_expectations(
         - 'quantile': the quantile of the posterior predictive distribution.
     probs: float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
+    circular: bool, default False
+        Whether to compute circular statistics. Defaults to False.
+        It's assumed that the circular data is in radians and ranges from -π to π.
+
 
     Returns
     -------
@@ -114,23 +119,31 @@ def loo_expectations(
         data, group="posterior_predictive", var_names=var_name, combined=False
     )
 
-    weighted_predictions = posterior_predictive.weighted(weights)
+    if circular:
+        if kind == "mean":
+            weights = weights / weights.sum(dim=dims)
+            sum_sin = (weights * np.sin(posterior_predictive)).sum(dim=dims)
+            sum_cos = (weights * np.cos(posterior_predictive)).sum(dim=dims)
+            loo_expec = np.arctan2(sum_sin, sum_cos)
 
-    if kind == "mean":
-        loo_expec = weighted_predictions.mean(dim=dims)
+    else:
+        weighted_predictions = posterior_predictive.weighted(weights)
 
-    elif kind == "median":
-        loo_expec = weighted_predictions.quantile(0.5, dim=dims)
+        if kind == "mean":
+            loo_expec = weighted_predictions.mean(dim=dims)
 
-    elif kind == "var":
-        # We use a Bessel's like correction term
-        # instead of n/(n-1) we use ESS/(ESS-1)
-        # where ESS/(ESS-1) = 1/(1-sum(weights**2))
-        loo_expec = weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))
-    elif kind == "sd":
-        loo_expec = (weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))) ** 0.5
-    else:  # kind == "quantile"
-        loo_expec = weighted_predictions.quantile(probs, dim=dims)
+        elif kind == "median":
+            loo_expec = weighted_predictions.quantile(0.5, dim=dims)
+
+        elif kind == "var":
+            # We use a Bessel's like correction term
+            # instead of n/(n-1) we use ESS/(ESS-1)
+            # where ESS/(ESS-1) = 1/(1-sum(weights**2))
+            loo_expec = weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))
+        elif kind == "sd":
+            loo_expec = (weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))) ** 0.5
+        else:  # kind == "quantile"
+            loo_expec = weighted_predictions.quantile(probs, dim=dims)
 
     log_ratios = -log_likelihood[var_name]
 
@@ -316,7 +329,7 @@ def loo_r2(
         ci_prob = rcParams["stats.ci_prob"]
 
     y = data.observed_data[var_name].values
-    ypred_loo = loo_expectations(data, var_name=var_name)[0].values
+    ypred_loo = loo_expectations(data, var_name=var_name, circular=circular)[0].values
 
     if circular:
         eloo = _circdiff(ypred_loo, y)
@@ -327,8 +340,8 @@ def loo_r2(
     rd = dirichlet.rvs(np.ones(n), size=n_simulations, random_state=42)
 
     if circular:
-        vary = _circular_weighted_var(y, rd)
-        vareloo = _circular_weighted_var(eloo, rd)
+        vary = _circular_var(y, rd)
+        vareloo = _circular_var(eloo, rd)
     else:
         vary = (np.sum(rd * y**2, axis=1) - np.sum(rd * y, axis=1) ** 2) * (n / (n - 1))
         vareloo = (np.sum(rd * eloo**2, axis=1) - np.sum(rd * eloo, axis=1) ** 2) * (n / (n - 1))
@@ -339,13 +352,6 @@ def loo_r2(
     if summary:
         return _summary_r2(loo_r_squared, point_estimate, ci_kind, ci_prob, round_to)
     return loo_r_squared
-
-
-def _circular_weighted_var(angles, weights):
-    """Compute weighted circular variance for angles in [-π, π]."""
-    mean_cos = np.sum(weights * np.cos(angles), axis=1)
-    mean_sin = np.sum(weights * np.sin(angles), axis=1)
-    return 1 - np.sqrt(mean_cos**2 + mean_sin**2)
 
 
 def _get_function_khat(

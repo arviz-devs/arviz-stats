@@ -303,3 +303,16 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
 def _circdiff(array0, array1):
     """Compute wrapped angular difference in [-pi, pi)."""
     return ((array0 - array1 + np.pi) % (2 * np.pi)) - np.pi
+
+
+def _circular_var(angles, weights=None):
+    """Compute weighted circular variance for angles in [-π, π].
+    
+    Explaination:
+    """
+    if weights is None:
+        weights = np.ones_like(angles) / angles.shape[1]
+    mean_cos = np.sum(weights * np.cos(angles), axis=1)
+    mean_sin = np.sum(weights * np.sin(angles), axis=1)
+    c_var = 1 - np.sqrt(mean_cos**2 + mean_sin**2)
+    return -2 * np.log(1 - np.clip(c_var, 0, 1 - 1e-12))

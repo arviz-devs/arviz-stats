@@ -10,7 +10,7 @@ from scipy.special import logsumexp
 from scipy.stats import circvar
 
 from arviz_stats.base.core import _CoreBase
-from arviz_stats.base.stats_utils import _circdiff
+from arviz_stats.base.stats_utils import _circdiff, _circular_var
 from arviz_stats.base.stats_utils import not_valid as _not_valid
 
 
@@ -781,11 +781,6 @@ class _DiagnosticsBase(_CoreBase):
         array-like  (sample, dims)
 
         """
-        if circular:
-            var_y_est = circvar(mu_pred, axis=1, high=np.pi, low=-np.pi)
-        else:
-            var_y_est = np.var(mu_pred, axis=1, ddof=1)
-
         if scale is None:
             # Bernoulli-like models: use Tjur’s pseudo-variance
             scale = np.mean(mu_pred * (1 - mu_pred), axis=1)
@@ -796,11 +791,19 @@ class _DiagnosticsBase(_CoreBase):
             if np.any(scale < 0):
                 raise ValueError("Variance must be non-negative.")
 
-            if scale_kind == "sd":
-                scale = scale**2
+            if circular:
+                if scale_kind == "var":
+                    scale = np.sqrt(-2 * np.log(1 - scale))
+            else:
+                if scale_kind == "sd":
+                    scale = scale**2
 
-        r2 = var_y_est / (var_y_est + scale)
-        return r2
+        if circular:
+            var_y_est = _circular_var(mu_pred)
+        else:
+            var_y_est = np.var(mu_pred, axis=1, ddof=1)
+
+        return var_y_est / (var_y_est + scale)
 
     @staticmethod
     def _residual_r2(y_obs, mu_pred, circular):
