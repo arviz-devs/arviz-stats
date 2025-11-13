@@ -131,6 +131,8 @@ def loo_moment_match(
         - **log_weights**: Smoothed log weights.
         - **influence_pareto_k**: :class:`~xarray.DataArray` with original (pre-moment-matching)
           Pareto shape values, only if ``pointwise=True``.
+        - **n_eff_i**: :class:`~xarray.DataArray` with effective sample size per observation,
+          only if ``pointwise=True``.
 
     Examples
     --------
@@ -427,6 +429,8 @@ def loo_moment_match(
             loo_data.influence_pareto_k = None
             if hasattr(loo_data, "p_loo_i"):
                 loo_data.p_loo_i = None
+            if hasattr(loo_data, "n_eff_i"):
+                loo_data.n_eff_i = None
         return loo_data
 
     lpd = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
@@ -477,6 +481,7 @@ def loo_moment_match(
                 sample_dims,
                 obs_dims,
                 n_samples,
+                mm_result.n_eff_i,
                 original_log_liki,
                 suppress_warnings=True,
             )
@@ -522,6 +527,8 @@ def loo_moment_match(
         loo_data.influence_pareto_k = None
         if hasattr(loo_data, "p_loo_i"):
             loo_data.p_loo_i = None
+        if hasattr(loo_data, "n_eff_i"):
+            loo_data.n_eff_i = None
     return loo_data
 
 
@@ -1032,6 +1039,7 @@ def _update_loo_data_i(
     sample_dims,
     obs_dims,
     n_samples,
+    n_eff_i=None,
     original_log_liki=None,
     suppress_warnings=False,
 ):
@@ -1056,6 +1064,12 @@ def _update_loo_data_i(
         loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
 
     loo_data.p_loo_i[idx_dict] = p_loo_i
+
+    if n_eff_i is not None:
+        if not hasattr(loo_data, "n_eff_i") or loo_data.n_eff_i is None:
+            loo_data.n_eff_i = xr.full_like(loo_data.elpd_i, np.nan)
+        loo_data.n_eff_i[idx_dict] = n_eff_i
+
     loo_data.elpd = np.nansum(loo_data.elpd_i.values)
     loo_data.se = np.sqrt(loo_data.n_data_points * np.nanvar(loo_data.elpd_i.values, ddof=1))
 
