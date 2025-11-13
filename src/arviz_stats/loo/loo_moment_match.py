@@ -28,7 +28,7 @@ SplitMomentMatch = namedtuple("SplitMomentMatch", ["lwi", "lwfi", "log_liki", "r
 UpdateQuantities = namedtuple("UpdateQuantities", ["lwi", "lwfi", "ki", "kfi", "log_liki"])
 LooMomentMatchResult = namedtuple(
     "LooMomentMatchResult",
-    ["final_log_liki", "final_lwi", "final_ki", "kfs_i", "reff_i", "original_ki", "i"],
+    ["final_log_liki", "final_lwi", "final_ki", "kfs_i", "reff_i", "n_eff_i", "original_ki", "i"],
 )
 
 
@@ -838,6 +838,8 @@ def _loo_moment_match_i(
         log_ratio_i_init = -log_liki
         lwi, ki = _wrap__psislw(log_ratio_i_init, sample_dims, reff_i)
 
+    lwfi = xr.full_like(lwi, -np.log(n_samples))
+
     upars_i = upars.copy(deep=True)
     total_shift = np.zeros(upars_i.sizes[param_dim_name])
     total_scaling = np.ones(upars_i.sizes[param_dim_name])
@@ -872,6 +874,7 @@ def _loo_moment_match_i(
             if quantities_i.ki < ki:
                 ki = quantities_i.ki
                 lwi = quantities_i.lwi
+                lwfi = quantities_i.lwfi
                 log_liki = quantities_i.log_liki
                 kfs_i = quantities_i.kfi
                 upars_i = shift_res.upars
@@ -904,6 +907,7 @@ def _loo_moment_match_i(
             if quantities_i.ki < ki:
                 ki = quantities_i.ki
                 lwi = quantities_i.lwi
+                lwfi = quantities_i.lwfi
                 log_liki = quantities_i.log_liki
                 kfs_i = quantities_i.kfi
                 upars_i = scale_res.upars
@@ -938,6 +942,7 @@ def _loo_moment_match_i(
                 if quantities_i.ki < ki:
                     ki = quantities_i.ki
                     lwi = quantities_i.lwi
+                    lwfi = quantities_i.lwfi
                     log_liki = quantities_i.log_liki
                     kfs_i = quantities_i.kfi
                     upars_i = cov_res.upars
@@ -974,6 +979,7 @@ def _loo_moment_match_i(
 
             final_log_liki = split_res.log_liki
             final_lwi = split_res.lwi
+            final_lwfi = split_res.lwfi
             final_ki = ki
             reff_i = split_res.reff
 
@@ -986,17 +992,24 @@ def _loo_moment_match_i(
             )
             final_log_liki = log_liki
             final_lwi = lwi
+            final_lwfi = lwfi
             final_ki = ki
     else:
         final_log_liki = log_liki
         final_lwi = lwi
+        final_lwfi = lwfi
         final_ki = ki
 
-        if transformations_applied:
-            liki_final = np.exp(final_log_liki)
-            liki_final_reshaped = liki_final.values.reshape(n_chains, n_draws).T
-            ess_val_final = ess(liki_final_reshaped, method="mean").item()
-            reff_i = ess_val_final / n_samples if n_samples > 0 else 1.0
+        liki_final = np.exp(final_log_liki)
+        liki_final_reshaped = liki_final.values.reshape(n_chains, n_draws).T
+        ess_val_final = ess(liki_final_reshaped, method="mean").item()
+        reff_i = ess_val_final / n_samples if n_samples > 0 else 1.0
+
+    lwi_vals = final_lwi.values.flatten()
+    lwfi_vals = final_lwfi.values.flatten()
+    n_eff_loo = 1.0 / np.sum(np.exp(2 * lwi_vals))
+    n_eff_full = 1.0 / np.sum(np.exp(2 * lwfi_vals))
+    n_eff_i = min(n_eff_loo, n_eff_full) * reff_i
 
     return LooMomentMatchResult(
         final_log_liki=final_log_liki,
@@ -1004,6 +1017,7 @@ def _loo_moment_match_i(
         final_ki=final_ki,
         kfs_i=kfs_i,
         reff_i=reff_i,
+        n_eff_i=n_eff_i,
         original_ki=original_ki,
         i=i,
     )
@@ -1066,9 +1080,11 @@ def _update_quantities_i(
     log_liki_new = log_lik_i_upars_fn(upars, i)
 
     log_ratio_i = -log_liki_new + log_prob_new - orig_log_prob
+    log_ratio_i = xr.where(np.isnan(log_ratio_i), -np.inf, log_ratio_i)
     lwi_new, ki_new = _wrap__psislw(log_ratio_i, sample_dims, reff_i)
 
     log_ratio_full = log_prob_new - orig_log_prob
+    log_ratio_full = xr.where(np.isnan(log_ratio_full), -np.inf, log_ratio_full)
     lwfi_new, kfi_new = _wrap__psislw(log_ratio_full, sample_dims, reff_i)
 
     return UpdateQuantities(
