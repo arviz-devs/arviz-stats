@@ -520,7 +520,7 @@ class _DensityBase(_CoreBase):
         -----
         One dimensional adaptive Gaussian kernel density estimation.
         The implementation uses the binning technique.
-        Since there is not an unique `bw`, the convolution is not possible.
+        Since there is not a unique `bw`, the convolution is not possible.
         The alternative implemented in this function is known as Abramson's method.
 
         This is an internal function used by `kde()`.
