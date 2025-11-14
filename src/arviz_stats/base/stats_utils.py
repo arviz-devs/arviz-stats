@@ -308,23 +308,16 @@ def _circdiff(array0, array1):
 def _circular_var(angles, weights=None):
     """Compute weighted circular variance for angles in [-π, π].
 
-    This variance is in linearized form, i.e., it can take values in [0, ∞).
-    We first compute the circular variance c_var in [0, 1], then we plug it into
-    the formula for the circular standard deviation, which is defined as
-    sqrt(-2 log(1 - c_var)). Because we want a variance-like measure, we square
-    the circular standard deviation, obtaining -2 log(1 - c_var).
-
-
     Parameters
     ----------
     angles : np.ndarray
         Array of angles in radians, shape (n_samples, n_angles).
     weights : np.ndarray, optional
         Weights for each angle, shape (n_samples, n_angles). If None, equal weights are used.
+        Weights should be non-negative and sum to 1 along axis 1.
     """
     if weights is None:
         weights = np.ones_like(angles) / angles.shape[1]
     mean_cos = np.sum(weights * np.cos(angles), axis=1)
     mean_sin = np.sum(weights * np.sin(angles), axis=1)
-    c_var = 1 - np.sqrt(mean_cos**2 + mean_sin**2)
-    return -2 * np.log(1 - np.clip(c_var, 0, 1 - 1e-12))
+    return 1 - np.sqrt(mean_cos**2 + mean_sin**2)

@@ -773,7 +773,8 @@ class _DiagnosticsBase(_CoreBase):
             Kind of scale for the variance. Options are 'sd' (standard deviation) or
             'var' (variance). Default is 'sd'.
         circular: bool, optional
-            Whether the response variable is circular.
+            Whether the response variable is circular. For circular response,
+            the scale should be the circular variance and scale_kind should be 'var'.
 
         Returns
         -------
@@ -791,13 +792,14 @@ class _DiagnosticsBase(_CoreBase):
                 raise ValueError("Variance must be non-negative.")
 
             if scale_kind == "sd":
+                if circular:
+                    raise ValueError("scale_kind cannot be 'sd' for circular response.")
                 scale = scale**2
 
         if circular:
-            var_y_est = _circular_var(mu_pred)
-        else:
-            var_y_est = np.var(mu_pred, axis=1, ddof=1)
+            return 1 - scale
 
+        var_y_est = np.var(mu_pred, axis=1, ddof=1)
         return var_y_est / (var_y_est + scale)
 
     @staticmethod
@@ -818,11 +820,10 @@ class _DiagnosticsBase(_CoreBase):
         array-like  (sample, dims)
         """
         if circular:
-            var_y_est = _circular_var(mu_pred)
-            var_e = _circular_var(_circdiff(y_obs, mu_pred))
-        else:
-            var_y_est = np.var(mu_pred, axis=1, ddof=1)
-            var_e = np.var(y_obs - mu_pred, axis=1, ddof=1)
+            return 1 - _circular_var(_circdiff(y_obs, mu_pred))
+
+        var_y_est = np.var(mu_pred, axis=1, ddof=1)
+        var_e = np.var(y_obs - mu_pred, axis=1, ddof=1)
 
         r_squared = var_y_est / (var_y_est + var_e)
         return r_squared

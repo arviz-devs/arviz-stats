@@ -80,12 +80,13 @@ def bayesian_r2(
         Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
         summary is False.
     circular: bool
-        Whether to compute the Bayesian :math:`R^2` for circular data. Defaults to False.
+        Whether to compute the residual :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
-        We use the same definition of :math:`R^2` for circular data as in the linear case,
-        but using the linearized circular variance. The linearized circular variance is defined as
-        :math:`-2 \log(1 - V_c)`, where :math:`V_c` is the circular variance. Thus, this
-        function assumes that the `scale` variable is already in linearized form.
+        :math:`R^2 = 1 - \mathrm{Var}_{\mathrm{res}}`. Thus the `scale` must represent the
+        modeled circular variance and `scale_kind` must be "var".
+        We avoid using the term math::`\mathrm{Var}_{\mu}`, because as the dispersion of the
+        circular data increases the dispersion of the mean also increase so even for a model
+        that does not explain any of the data :math:`R^2` can be much higher than 0.
     round_to: int or str, optional
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.
@@ -113,15 +114,14 @@ def bayesian_r2(
 
     Calculate Bayesian :math:`R^2` for circular regression. The posterior has
     the concentration parameter ``kappa`` (from the VonMises distribution).
-    Instead of the typical circular variance, which ranges from 0 to 1, we use the
-    linearized variance, which ranges from 0 to ∞.
+    Thus we compute the circular variance as :math:`1 - I_1(kappa) / I_0(kappa)`,
 
     .. ipython::
 
         In [1]: from scipy.special import i0, i1
            ...: data = load_arviz_data('periwinkles')
            ...: kappa = data.posterior['kappa']
-           ...: data.posterior["variance"] = -2 * np.log(1 - (1 - i1(kappa) / i0(kappa)))
+           ...: data.posterior["variance"] = 1 - i1(kappa) / i0(kappa)
            ...: bayesian_r2(data, pred_mean='mu', scale='variance',
            ...:             scale_kind="var", circular=True)
 
@@ -218,9 +218,11 @@ def residual_r2(
     circular: bool
         Whether to compute the residual :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
-        We use the same definition of :math:`R^2` for circular data as in the linear case,
-        but using the linearized circular variance. The linearized circular variance is defined as
-        :math:`-2 \log(1 - V_c)`, where :math:`V_c` is the circular variance.
+        :math:`R^2 = 1 - Var_{\mathrm{res}}`. where :math:`Var_{\mathrm{res}}` is computed
+        using the circular variance which goes from 0 to 1.
+        We avoid using the term math::`\mathrm{Var}_{\mu}`, because as the dispersion of the
+        circular data increases the dispersion of the mean also increase so even for a model
+        that does not explain any of the data :math:`R^2` can be much higher than 0.
     round_to: int or str, optional
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.
