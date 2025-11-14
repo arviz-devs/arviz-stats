@@ -114,7 +114,7 @@ def bayesian_r2(
 
     Calculate Bayesian :math:`R^2` for circular regression. The posterior has
     the concentration parameter ``kappa`` (from the VonMises distribution).
-    Thus we compute the circular variance as :math:`1 - I_1(kappa) / I_0(kappa)`,
+    Thus we compute the circular variance as :math:`1 - I_1(\kappa) / I_0(\kappa)`,
 
     .. ipython::
 
@@ -150,7 +150,7 @@ def bayesian_r2(
     r_squared = array_stats.bayesian_r2(mu_pred, scale, scale_kind, circular)
 
     if summary:
-        return _summary_r2(r_squared, point_estimate, ci_kind, ci_prob, round_to)
+        return _summary_r2("bayesian", r_squared, point_estimate, ci_kind, ci_prob, round_to)
 
     return r_squared
 
@@ -277,7 +277,7 @@ def residual_r2(
     r_squared = array_stats.residual_r2(y_true, mu_pred, circular)
 
     if summary:
-        return _summary_r2(r_squared, point_estimate, ci_kind, ci_prob, round_to)
+        return _summary_r2("residual", r_squared, point_estimate, ci_kind, ci_prob, round_to)
 
     return r_squared
 
@@ -679,11 +679,11 @@ def _metrics(observed, predicted, kind, round_to):
     return estimate(round_num(mean, round_to), round_num(std_error, round_to))
 
 
-def _summary_r2(r_squared, point_estimate, ci_kind, ci_prob, round_to):
+def _summary_r2(name, r_squared, point_estimate, ci_kind, ci_prob, round_to):
     estimate = getattr(np, point_estimate)(r_squared).item()
     c_i = getattr(array_stats, ci_kind)(r_squared, ci_prob)
 
-    r2_summary = namedtuple("R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
+    r2_summary = namedtuple(f"{name}_R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
     if (round_to is not None) and (round_to not in ("None", "none")):
         estimate = round_num(estimate, round_to)
         c_i = (round_num(c_i[0].item(), round_to), round_num(c_i[1].item(), round_to))

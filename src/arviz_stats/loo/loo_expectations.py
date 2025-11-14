@@ -312,6 +312,7 @@ def loo_r2(
         In [1]: from arviz_stats import loo_r2
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data('anes')
+           ...: loo_r2(data, var_name="vote")
 
     Calculate LOO-adjusted :math:`R^2` for circular regression:
 
@@ -347,17 +348,16 @@ def loo_r2(
     rd = dirichlet.rvs(np.ones(n), size=n_simulations, random_state=42)
 
     if circular:
-        vary = _circular_var(y, rd)
-        vareloo = _circular_var(eloo, rd)
+        loo_r_squared = 1 - _circular_var(eloo, rd)
     else:
         vary = (np.sum(rd * y**2, axis=1) - np.sum(rd * y, axis=1) ** 2) * (n / (n - 1))
         vareloo = (np.sum(rd * eloo**2, axis=1) - np.sum(rd * eloo, axis=1) ** 2) * (n / (n - 1))
 
-    loo_r_squared = 1 - vareloo / vary
-    loo_r_squared = np.clip(loo_r_squared, -1, 1)
+        loo_r_squared = 1 - vareloo / vary
+        loo_r_squared = np.clip(loo_r_squared, -1, 1)
 
     if summary:
-        return _summary_r2(loo_r_squared, point_estimate, ci_kind, ci_prob, round_to)
+        return _summary_r2("loo", loo_r_squared, point_estimate, ci_kind, ci_prob, round_to)
     return loo_r_squared
 
 
