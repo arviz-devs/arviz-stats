@@ -419,3 +419,52 @@ def test_split_moment_match_matches_r_snapshot(roaches_r_example):
 
     split_case_ds.close()
     split_snapshot_ds.close()
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.parametrize("pointwise", [True, False])
+def test_n_eff_i(roaches_r_example, pointwise):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+
+    loo_mm = loo_moment_match(
+        example["data_tree"],
+        loo_orig,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=example["upars"],
+        var_name="log_lik",
+        pointwise=pointwise,
+    )
+
+    if pointwise:
+        assert loo_mm.n_eff_i is not None
+        assert loo_mm.n_eff_i.shape == loo_mm.elpd_i.shape
+        non_nan_values = loo_mm.n_eff_i.values[~np.isnan(loo_mm.n_eff_i.values)]
+        assert len(non_nan_values) > 0
+        assert np.all(non_nan_values > 0)
+    else:
+        assert loo_mm.n_eff_i is None
+        assert loo_mm.elpd_i is None
+        assert loo_mm.pareto_k is None
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_influence_pareto_k(roaches_r_example):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+
+    loo_mm = loo_moment_match(
+        example["data_tree"],
+        loo_orig,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=example["upars"],
+        var_name="log_lik",
+        pointwise=True,
+    )
+
+    assert loo_mm.influence_pareto_k is not None
+    assert loo_mm.influence_pareto_k.shape == loo_mm.pareto_k.shape
