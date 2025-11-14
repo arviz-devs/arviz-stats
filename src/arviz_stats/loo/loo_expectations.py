@@ -139,7 +139,7 @@ def loo_expectations(
     elif kind == "quantile":
         loo_expec = weighted_predictions.quantile(probs, dim=dims)
 
-    elif kind == "circular_mean":
+    else:  # kind == "circular_mean"
         weights = weights / weights.sum(dim=dims)
         sum_sin = (weights * np.sin(posterior_predictive)).sum(dim=dims)
         sum_cos = (weights * np.cos(posterior_predictive)).sum(dim=dims)
@@ -163,7 +163,7 @@ def loo_expectations(
 
     _warn_pareto_k(khat.values, n_samples)
 
-    return loo_expec, khat  # pylint: disable=E0606
+    return loo_expec, khat
 
 
 def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to="2g"):
