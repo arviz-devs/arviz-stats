@@ -43,7 +43,7 @@ def loo_moment_match(
     max_iters=30,
     k_threshold=None,
     split=True,
-    cov=False,
+    cov=True,
     pointwise=None,
 ):
     r"""Compute moment matching for problematic observations in PSIS-LOO-CV.
@@ -98,7 +98,7 @@ def loo_moment_match(
     split : bool, default True
         If True, only transform half of the draws and use multiple importance sampling to combine
         them with untransformed draws.
-    cov : bool, default False
+    cov : bool, default True
         If True, match the covariance structure during the transformation, in addition
         to the mean and marginal variances. Ignored if ``split=False``.
     pointwise: bool, optional
