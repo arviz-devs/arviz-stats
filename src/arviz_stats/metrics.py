@@ -83,7 +83,9 @@ def bayesian_r2(
         Whether to compute the Bayesian :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
         We use the same definition of :math:`R^2` for circular data as in the linear case,
-        but using circular variance instead of regular variance.
+        but using the linearized circular variance. The linearized circular variance is defined as
+        :math:`-2 \log(1 - V_c)`, where :math:`V_c` is the circular variance. Thus, this
+        function assumes that the `scale` variable is already in linearized form.
     round_to: int or str, optional
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.
@@ -111,14 +113,15 @@ def bayesian_r2(
 
     Calculate Bayesian :math:`R^2` for circular regression. The posterior has
     the concentration parameter ``kappa`` (from the VonMises distribution).
-    We need to compute the variance from it.
+    Instead of the typical circular variance, which ranges from 0 to 1, we use the
+    linearized variance, which ranges from 0 to ∞.
 
     .. ipython::
 
         In [1]: from scipy.special import i0, i1
            ...: data = load_arviz_data('periwinkles')
            ...: kappa = data.posterior['kappa']
-           ...: data.posterior["variance"] = 1 - i1(kappa) / i0(kappa)
+           ...: data.posterior["variance"] = -2 * np.log(1 - (1 - i1(kappa) / i0(kappa)))
            ...: bayesian_r2(data, pred_mean='mu', scale='variance',
            ...:             scale_kind="var", circular=True)
 
@@ -216,7 +219,8 @@ def residual_r2(
         Whether to compute the residual :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
         We use the same definition of :math:`R^2` for circular data as in the linear case,
-        but using circular variance instead of regular variance.
+        but using the linearized circular variance. The linearized circular variance is defined as
+        :math:`-2 \log(1 - V_c)`, where :math:`V_c` is the circular variance.
     round_to: int or str, optional
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.

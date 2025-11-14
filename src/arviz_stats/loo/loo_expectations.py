@@ -18,7 +18,6 @@ def loo_expectations(
     log_weights=None,
     kind="mean",
     probs=None,
-    circular=False,
 ):
     """Compute weighted expectations using the PSIS-LOO-CV method.
 
@@ -42,11 +41,12 @@ def loo_expectations(
     kind: str, optional
         The kind of expectation to compute. Available options are:
 
-        - 'mean': the mean of the posterior predictive distribution. Default.
-        - 'median': the median of the posterior predictive distribution.
-        - 'var': the variance of the posterior predictive distribution.
-        - 'sd': the standard deviation of the posterior predictive distribution.
-        - 'quantile': the quantile of the posterior predictive distribution.
+        - 'mean'. Default.
+        - 'median'.
+        - 'var':.
+        - 'sd'.
+        - 'quantile'.
+        - 'circular_mean': circular mean.
     probs: float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
     circular: bool, default False
@@ -88,7 +88,7 @@ def loo_expectations(
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    if kind not in ["mean", "median", "var", "sd", "quantile"]:
+    if kind not in ["mean", "median", "var", "sd", "quantile", "circular_mean"]:
         raise ValueError("kind must be either 'mean', 'median', 'var', 'sd' or 'quantile'")
 
     if kind == "quantile" and probs is None:
@@ -119,31 +119,31 @@ def loo_expectations(
         data, group="posterior_predictive", var_names=var_name, combined=False
     )
 
-    if circular:
-        if kind == "mean":
-            weights = weights / weights.sum(dim=dims)
-            sum_sin = (weights * np.sin(posterior_predictive)).sum(dim=dims)
-            sum_cos = (weights * np.cos(posterior_predictive)).sum(dim=dims)
-            loo_expec = np.arctan2(sum_sin, sum_cos)
+    weighted_predictions = posterior_predictive.weighted(weights)
 
-    else:
-        weighted_predictions = posterior_predictive.weighted(weights)
+    if kind == "mean":
+        loo_expec = weighted_predictions.mean(dim=dims)
 
-        if kind == "mean":
-            loo_expec = weighted_predictions.mean(dim=dims)
+    elif kind == "median":
+        loo_expec = weighted_predictions.quantile(0.5, dim=dims)
 
-        elif kind == "median":
-            loo_expec = weighted_predictions.quantile(0.5, dim=dims)
+    elif kind == "var":
+        # We use a Bessel's like correction term
+        # instead of n/(n-1) we use ESS/(ESS-1)
+        # where ESS/(ESS-1) = 1/(1-sum(weights**2))
+        loo_expec = weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))
 
-        elif kind == "var":
-            # We use a Bessel's like correction term
-            # instead of n/(n-1) we use ESS/(ESS-1)
-            # where ESS/(ESS-1) = 1/(1-sum(weights**2))
-            loo_expec = weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))
-        elif kind == "sd":
-            loo_expec = (weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))) ** 0.5
-        else:  # kind == "quantile"
-            loo_expec = weighted_predictions.quantile(probs, dim=dims)
+    elif kind == "sd":
+        loo_expec = (weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))) ** 0.5
+
+    elif kind == "quantile":
+        loo_expec = weighted_predictions.quantile(probs, dim=dims)
+
+    elif kind == "circular_mean":
+        weights = weights / weights.sum(dim=dims)
+        sum_sin = (weights * np.sin(posterior_predictive)).sum(dim=dims)
+        sum_cos = (weights * np.cos(posterior_predictive)).sum(dim=dims)
+        loo_expec = np.arctan2(sum_sin, sum_cos)
 
     log_ratios = -log_likelihood[var_name]
 
@@ -163,7 +163,7 @@ def loo_expectations(
 
     _warn_pareto_k(khat.values, n_samples)
 
-    return loo_expec, khat
+    return loo_expec, khat  # pylint: disable=E0606
 
 
 def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to="2g"):
@@ -329,7 +329,14 @@ def loo_r2(
         ci_prob = rcParams["stats.ci_prob"]
 
     y = data.observed_data[var_name].values
-    ypred_loo = loo_expectations(data, var_name=var_name, circular=circular)[0].values
+
+    if circular:
+        kind = "circular_mean"
+    else:
+        kind = "mean"
+
+    # Here we should compute the loo-adjusted posterior mean, not the predictive mean
+    ypred_loo = loo_expectations(data, var_name=var_name, kind=kind)[0].values
 
     if circular:
         eloo = _circdiff(ypred_loo, y)

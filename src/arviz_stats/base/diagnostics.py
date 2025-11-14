@@ -7,7 +7,6 @@ from collections.abc import Sequence
 import numpy as np
 from scipy import stats
 from scipy.special import logsumexp
-from scipy.stats import circvar
 
 from arviz_stats.base.core import _CoreBase
 from arviz_stats.base.stats_utils import _circdiff, _circular_var
@@ -791,12 +790,8 @@ class _DiagnosticsBase(_CoreBase):
             if np.any(scale < 0):
                 raise ValueError("Variance must be non-negative.")
 
-            if circular:
-                if scale_kind == "var":
-                    scale = np.sqrt(-2 * np.log(1 - scale))
-            else:
-                if scale_kind == "sd":
-                    scale = scale**2
+            if scale_kind == "sd":
+                scale = scale**2
 
         if circular:
             var_y_est = _circular_var(mu_pred)
@@ -823,8 +818,8 @@ class _DiagnosticsBase(_CoreBase):
         array-like  (sample, dims)
         """
         if circular:
-            var_y_est = circvar(mu_pred, axis=1, high=np.pi, low=-np.pi)
-            var_e = circvar(_circdiff(y_obs, mu_pred), axis=1, high=np.pi, low=-np.pi)
+            var_y_est = _circular_var(mu_pred)
+            var_e = _circular_var(_circdiff(y_obs, mu_pred))
         else:
             var_y_est = np.var(mu_pred, axis=1, ddof=1)
             var_e = np.var(y_obs - mu_pred, axis=1, ddof=1)

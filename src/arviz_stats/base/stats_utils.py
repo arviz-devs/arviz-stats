@@ -301,14 +301,26 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
 
 
 def _circdiff(array0, array1):
-    """Compute wrapped angular difference in [-pi, pi)."""
+    """Compute wrapped angular difference in [-π, π)."""
     return ((array0 - array1 + np.pi) % (2 * np.pi)) - np.pi
 
 
 def _circular_var(angles, weights=None):
     """Compute weighted circular variance for angles in [-π, π].
-    
-    Explaination:
+
+    This variance is in linearized form, i.e., it can take values in [0, ∞).
+    We first compute the circular variance c_var in [0, 1], then we plug it into
+    the formula for the circular standard deviation, which is defined as
+    sqrt(-2 log(1 - c_var)). Because we want a variance-like measure, we square
+    the circular standard deviation, obtaining -2 log(1 - c_var).
+
+
+    Parameters
+    ----------
+    angles : np.ndarray
+        Array of angles in radians, shape (n_samples, n_angles).
+    weights : np.ndarray, optional
+        Weights for each angle, shape (n_samples, n_angles). If None, equal weights are used.
     """
     if weights is None:
         weights = np.ones_like(angles) / angles.shape[1]
