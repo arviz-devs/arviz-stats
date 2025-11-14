@@ -617,9 +617,9 @@ class TestMode:
 
 
 class TestMetrics:
-    def test_r2_score_basic(self, array_stats):
+    def test_residual_r2_basic(self, array_stats):
         rng = np.random.default_rng(42)
         y_true = rng.normal(size=(100,))
         y_pred = rng.normal(size=(4, 100))
-        result = array_stats.r2_score(y_true, y_pred)
+        result = array_stats.residual_r2(y_true, y_pred)
         assert result.shape == (4,)
