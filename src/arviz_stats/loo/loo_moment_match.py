@@ -100,7 +100,7 @@ def loo_moment_match(
         them with untransformed draws.
     cov : bool, default True
         If True, match the covariance structure during the transformation, in addition
-        to the mean and marginal variances. Ignored if ``split=False``.
+        to the mean and marginal variances. If False, only match the mean and marginal variances.
     pointwise: bool, optional
         If True, the pointwise predictive accuracy will be returned. Defaults to
         ``rcParams["stats.ic_pointwise"]``. Moment matching always requires
