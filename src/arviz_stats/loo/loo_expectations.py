@@ -2,11 +2,13 @@
 
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_datatree, extract
+from arviz_base import convert_to_datatree, extract, rcParams
+from scipy.stats import dirichlet
 from xarray import apply_ufunc
 
+from arviz_stats.base.circular_utils import circular_diff, circular_mean, circular_sd, circular_var
 from arviz_stats.loo.helper_loo import _warn_pareto_k
-from arviz_stats.metrics import _metrics
+from arviz_stats.metrics import _metrics, _summary_r2
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
 
 
@@ -39,11 +41,14 @@ def loo_expectations(
     kind: str, optional
         The kind of expectation to compute. Available options are:
 
-        - 'mean': the mean of the posterior predictive distribution. Default.
-        - 'median': the median of the posterior predictive distribution.
-        - 'var': the variance of the posterior predictive distribution.
-        - 'sd': the standard deviation of the posterior predictive distribution.
-        - 'quantile': the quantile of the posterior predictive distribution.
+        - 'mean'. Default.
+        - 'median'.
+        - 'var'.
+        - 'sd'.
+        - 'quantile'.
+        - 'circular_mean'.
+        - 'circular_var'.
+        - 'circular_sd'.
     probs: float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
 
@@ -81,8 +86,20 @@ def loo_expectations(
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    if kind not in ["mean", "median", "var", "sd", "quantile"]:
-        raise ValueError("kind must be either 'mean', 'median', 'var', 'sd' or 'quantile'")
+    if kind not in [
+        "mean",
+        "median",
+        "var",
+        "sd",
+        "quantile",
+        "circular_mean",
+        "circular_var",
+        "circular_sd",
+    ]:
+        raise ValueError(
+            """kind must be either 'mean', 'median', 'var', 'sd', 'quantile',
+            'circular_mean', 'circular_var', or 'circular_sd'"""
+        )
 
     if kind == "quantile" and probs is None:
         raise ValueError("probs must be provided when kind is 'quantile'")
@@ -125,10 +142,23 @@ def loo_expectations(
         # instead of n/(n-1) we use ESS/(ESS-1)
         # where ESS/(ESS-1) = 1/(1-sum(weights**2))
         loo_expec = weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))
+
     elif kind == "sd":
         loo_expec = (weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))) ** 0.5
-    else:  # kind == "quantile"
+
+    elif kind == "quantile":
         loo_expec = weighted_predictions.quantile(probs, dim=dims)
+
+    elif kind == "circular_mean":
+        weights = weights / weights.sum(dim=dims)
+        loo_expec = circular_mean(posterior_predictive, weights=weights, dims=dims)
+
+    elif kind == "circular_var":
+        weights = weights / weights.sum(dim=dims)
+        loo_expec = circular_var(posterior_predictive, weights=weights, dims=dims)
+    else:  # kind == "circular_sd"
+        weights = weights / weights.sum(dim=dims)
+        loo_expec = circular_sd(posterior_predictive, weights=weights, dims=dims)
 
     log_ratios = -log_likelihood[var_name]
 
@@ -228,6 +258,122 @@ def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to="2g
     predicted, _ = loo_expectations(data, kind="mean", var_name=var_name, log_weights=log_weights)
 
     return _metrics(observed, predicted, kind, round_to)
+
+
+def loo_r2(
+    data,
+    var_name,
+    n_simulations=4000,
+    summary=True,
+    point_estimate=None,
+    ci_kind=None,
+    ci_prob=None,
+    circular=False,
+    round_to="2g",
+):
+    """Compute LOO-adjusted :math:`R^2`.
+
+    Parameters
+    ----------
+    data: DataTree or InferenceData
+        It should contain groups `observed_data`, `posterior_predictive` and `log_likelihood`.
+    var_name : str
+        Name of the observed variable
+    n_simulations : int, default 4000
+        Number of Dirichlet-weighted bootstrap samples for variance estimation.
+    circular : bool, default False
+        Whether the variable is circular (angles in radians, range [-π, π]).
+    summary: bool
+        Whether to return a summary (default) or an array of :math:`R^2` samples.
+        The summary is a named tuple with a point estimate and a credible interval
+    point_estimate: str
+        The point estimate to compute. If None, the default value is used.
+        Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
+        summary is False.
+    ci_kind: str
+        The kind of credible interval to compute. If None, the default value is used.
+        Defaults values are defined in rcParams["stats.ci_kind"]. Ignored if
+        summary is False.
+    ci_prob: float
+        The probability for the credible interval. If None, the default value is used.
+        Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
+        summary is False.
+    circular: bool
+        Whether to compute the Bayesian :math:`R^2` for circular data. Defaults to False.
+        It's assumed that the circular data is in radians and ranges from -π to π.
+        We use the same definition of :math:`R^2` for circular data as in the linear case,
+        but using circular variance instead of regular variance.
+    round_to: int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
+
+    Returns
+    -------
+    Namedtuple or array
+
+    See Also
+    --------
+    arviz_stats.bayesian_r2 : Bayesian :math:`R^2`.
+    arviz_stats.residual_r2 : Residual :math:`R^2`.
+
+    Examples
+    --------
+    Calculate LOO-adjusted :math:`R^2` for Bayesian logistic regression:
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: from arviz_stats import loo_r2
+           ...: from arviz_base import load_arviz_data
+           ...: data = load_arviz_data('anes')
+           ...: loo_r2(data, var_name="vote")
+
+    Calculate LOO-adjusted :math:`R^2` for circular regression:
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: data = load_arviz_data('periwinkles')
+           ...: loo_r2(data, var_name='direction', circular=True)
+    """
+    if point_estimate is None:
+        point_estimate = rcParams["stats.point_estimate"]
+    if ci_kind is None:
+        ci_kind = rcParams["stats.ci_kind"]
+    if ci_prob is None:
+        ci_prob = rcParams["stats.ci_prob"]
+
+    y = data.observed_data[var_name].values
+
+    if circular:
+        kind = "circular_mean"
+    else:
+        kind = "mean"
+
+    # Here we should compute the loo-adjusted posterior mean, not the predictive mean
+    ypred_loo = loo_expectations(data, var_name=var_name, kind=kind)[0].values
+
+    if circular:
+        eloo = circular_diff(ypred_loo, y)
+    else:
+        eloo = ypred_loo - y
+
+    n = len(y)
+    rd = dirichlet.rvs(np.ones(n), size=n_simulations, random_state=42)
+
+    if circular:
+        loo_r_squared = 1 - circular_var(eloo, rd)
+    else:
+        vary = (np.sum(rd * y**2, axis=1) - np.sum(rd * y, axis=1) ** 2) * (n / (n - 1))
+        vareloo = (np.sum(rd * eloo**2, axis=1) - np.sum(rd * eloo, axis=1) ** 2) * (n / (n - 1))
+
+        loo_r_squared = 1 - vareloo / vary
+        loo_r_squared = np.clip(loo_r_squared, -1, 1)
+
+    if summary:
+        return _summary_r2("loo", loo_r_squared, point_estimate, ci_kind, ci_prob, round_to)
+    return loo_r_squared
 
 
 def _get_function_khat(

@@ -11,6 +11,7 @@ try:
         loo_i,
         loo_expectations,
         loo_metrics,
+        loo_r2,
         loo_score,
         loo_pit,
         loo_approximate_posterior,
@@ -23,7 +24,7 @@ try:
         loo_kfold,
     )
     from arviz_stats.psense import psense, psense_summary
-    from arviz_stats.metrics import kl_divergence, metrics, r2_score, wasserstein
+    from arviz_stats.metrics import bayesian_r2, kl_divergence, metrics, residual_r2, wasserstein
     from arviz_stats.sampling_diagnostics import ess, mcse, rhat, rhat_nested
     from arviz_stats.summary import summary, ci_in_rope, mode
     from arviz_stats.manipulation import thin

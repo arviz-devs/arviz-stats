@@ -8,6 +8,7 @@ import numpy as np
 from scipy import stats
 from scipy.special import logsumexp
 
+from arviz_stats.base.circular_utils import circular_diff, circular_var
 from arviz_stats.base.core import _CoreBase
 from arviz_stats.base.stats_utils import not_valid as _not_valid
 
@@ -756,22 +757,77 @@ class _DiagnosticsBase(_CoreBase):
         return np.sqrt(1 + var_between_superchain / var_within_superchain)
 
     @staticmethod
-    def _r2_score(y_true, y_pred):
-        """Compute the R^2 score.
+    def _bayesian_r2(mu_pred, scale, scale_kind, circular):
+        """Compute the Bayesian R².
 
         Parameters
         ----------
-        y_true: array-like of shape = (n_outputs,)
-            Ground truth (correct) target values.
-        y_pred: array-like of shape = (n_posterior_samples, n_outputs)
-            Estimated target values.
+        mu_pred: array-like of shape = (n_posterior_samples, n_outputs)
+            Estimated mean for the response variable.
+        var : array-like of shape (n_posterior_samples,), optional
+            Posterior draws of the variance or pseudo-variance.
+            - If provided: treated as the model-implied residual variance.
+            - If None: assumes Bernoulli-like model and computes pseudo-variance
+            as mean(mu_pred) * (1 - mean(mu_pred)) per posterior draw.
+        scale_kind : str, optional
+            Kind of scale for the variance. Options are 'sd' (standard deviation) or
+            'var' (variance). Default is 'sd'.
+        circular: bool, optional
+            Whether the response variable is circular. For circular response,
+            the scale should be the circular variance and scale_kind should be 'var'.
+
+        Returns
+        -------
+        array-like  (sample, dims)
+
+        """
+        if scale is None:
+            if circular:
+                raise ValueError("scale must be provided for circular response.")
+
+            # Bernoulli-like models: use Tjur’s pseudo-variance
+            scale = np.mean(mu_pred * (1 - mu_pred), axis=1)
+        else:
+            if scale_kind not in ("sd", "var"):
+                raise ValueError("scale_kind must be either 'sd' or 'var'")
+
+            if np.any(scale < 0):
+                raise ValueError("Scale must be non-negative.")
+
+            if scale_kind == "sd":
+                if circular:
+                    raise ValueError("scale_kind cannot be 'sd' for circular response.")
+                scale = scale**2
+
+        if circular:
+            return 1 - scale
+
+        var_y_est = np.var(mu_pred, axis=1, ddof=1)
+        return var_y_est / (var_y_est + scale)
+
+    @staticmethod
+    def _residual_r2(y_obs, mu_pred, circular):
+        """Compute the residual R².
+
+        Parameters
+        ----------
+        y_obs: array-like of shape = (n_outputs,)
+            Observed values for the response variable.
+        mu_pred: array-like of shape = (n_posterior_samples, n_outputs)
+            Estimated mean for the response variable.
+        circular: bool, optional
+            Whether the response variable is circular.
 
         Returns
         -------
         array-like  (sample, dims)
         """
-        var_y_est = np.var(y_pred, axis=1)
-        var_e = np.var(y_true - y_pred, axis=1)
+        if circular:
+            return 1 - circular_var(circular_diff(y_obs, mu_pred))
+
+        var_y_est = np.var(mu_pred, axis=1, ddof=1)
+        var_e = np.var(y_obs - mu_pred, axis=1, ddof=1)
+
         r_squared = var_y_est / (var_y_est + var_e)
         return r_squared
 
