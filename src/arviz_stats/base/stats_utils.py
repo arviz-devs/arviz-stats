@@ -298,26 +298,3 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
             _log.info(error_msg)
 
     return nan_error | chain_error | draw_error
-
-
-def _circdiff(array0, array1):
-    """Compute wrapped angular difference in [-π, π)."""
-    return ((array0 - array1 + np.pi) % (2 * np.pi)) - np.pi
-
-
-def _circular_var(angles, weights=None):
-    """Compute weighted circular variance for angles in [-π, π].
-
-    Parameters
-    ----------
-    angles : np.ndarray
-        Array of angles in radians, shape (n_samples, n_angles).
-    weights : np.ndarray, optional
-        Weights for each angle, shape (n_samples, n_angles). If None, equal weights are used.
-        Weights should be non-negative and sum to 1 along axis 1.
-    """
-    if weights is None:
-        weights = np.ones_like(angles) / angles.shape[1]
-    mean_cos = np.sum(weights * np.cos(angles), axis=1)
-    mean_sin = np.sum(weights * np.sin(angles), axis=1)
-    return 1 - np.sqrt(mean_cos**2 + mean_sin**2)

@@ -6,7 +6,7 @@ from arviz_base import convert_to_datatree, extract, rcParams
 from scipy.stats import dirichlet
 from xarray import apply_ufunc
 
-from arviz_stats.base.stats_utils import _circdiff, _circular_var
+from arviz_stats.base.circular_utils import circular_diff, circular_mean, circular_sd, circular_var
 from arviz_stats.loo.helper_loo import _warn_pareto_k
 from arviz_stats.metrics import _metrics, _summary_r2
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
@@ -43,16 +43,14 @@ def loo_expectations(
 
         - 'mean'. Default.
         - 'median'.
-        - 'var':.
+        - 'var'.
         - 'sd'.
         - 'quantile'.
-        - 'circular_mean': circular mean.
+        - 'circular_mean'.
+        - 'circular_var'.
+        - 'circular_sd'.
     probs: float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
-    circular: bool, default False
-        Whether to compute circular statistics. Defaults to False.
-        It's assumed that the circular data is in radians and ranges from -π to π.
-
 
     Returns
     -------
@@ -88,8 +86,20 @@ def loo_expectations(
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    if kind not in ["mean", "median", "var", "sd", "quantile", "circular_mean"]:
-        raise ValueError("kind must be either 'mean', 'median', 'var', 'sd' or 'quantile'")
+    if kind not in [
+        "mean",
+        "median",
+        "var",
+        "sd",
+        "quantile",
+        "circular_mean",
+        "circular_var",
+        "circular_sd",
+    ]:
+        raise ValueError(
+            """kind must be either 'mean', 'median', 'var', 'sd', 'quantile',
+            'circular_mean', 'circular_var', or 'circular_sd'"""
+        )
 
     if kind == "quantile" and probs is None:
         raise ValueError("probs must be provided when kind is 'quantile'")
@@ -139,11 +149,16 @@ def loo_expectations(
     elif kind == "quantile":
         loo_expec = weighted_predictions.quantile(probs, dim=dims)
 
-    else:  # kind == "circular_mean"
+    elif kind == "circular_mean":
         weights = weights / weights.sum(dim=dims)
-        sum_sin = (weights * np.sin(posterior_predictive)).sum(dim=dims)
-        sum_cos = (weights * np.cos(posterior_predictive)).sum(dim=dims)
-        loo_expec = np.arctan2(sum_sin, sum_cos)
+        loo_expec = circular_mean(posterior_predictive, weights=weights, dims=dims)
+
+    elif kind == "circular_var":
+        weights = weights / weights.sum(dim=dims)
+        loo_expec = circular_var(posterior_predictive, weights=weights, dims=dims)
+    else:  # kind == "circular_sd"
+        weights = weights / weights.sum(dim=dims)
+        loo_expec = circular_sd(posterior_predictive, weights=weights, dims=dims)
 
     log_ratios = -log_likelihood[var_name]
 
@@ -340,7 +355,7 @@ def loo_r2(
     ypred_loo = loo_expectations(data, var_name=var_name, kind=kind)[0].values
 
     if circular:
-        eloo = _circdiff(ypred_loo, y)
+        eloo = circular_diff(ypred_loo, y)
     else:
         eloo = ypred_loo - y
 
@@ -348,7 +363,7 @@ def loo_r2(
     rd = dirichlet.rvs(np.ones(n), size=n_simulations, random_state=42)
 
     if circular:
-        loo_r_squared = 1 - _circular_var(eloo, rd)
+        loo_r_squared = 1 - circular_var(eloo, rd)
     else:
         vary = (np.sum(rd * y**2, axis=1) - np.sum(rd * y, axis=1) ** 2) * (n / (n - 1))
         vareloo = (np.sum(rd * eloo**2, axis=1) - np.sum(rd * eloo, axis=1) ** 2) * (n / (n - 1))

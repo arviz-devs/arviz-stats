@@ -8,8 +8,8 @@ import numpy as np
 from scipy import stats
 from scipy.special import logsumexp
 
+from arviz_stats.base.circular_utils import circular_diff, circular_var
 from arviz_stats.base.core import _CoreBase
-from arviz_stats.base.stats_utils import _circdiff, _circular_var
 from arviz_stats.base.stats_utils import not_valid as _not_valid
 
 
@@ -782,6 +782,9 @@ class _DiagnosticsBase(_CoreBase):
 
         """
         if scale is None:
+            if circular:
+                raise ValueError("scale must be provided for circular response.")
+
             # Bernoulli-like models: use Tjur’s pseudo-variance
             scale = np.mean(mu_pred * (1 - mu_pred), axis=1)
         else:
@@ -789,7 +792,7 @@ class _DiagnosticsBase(_CoreBase):
                 raise ValueError("scale_kind must be either 'sd' or 'var'")
 
             if np.any(scale < 0):
-                raise ValueError("Variance must be non-negative.")
+                raise ValueError("Scale must be non-negative.")
 
             if scale_kind == "sd":
                 if circular:
@@ -820,7 +823,7 @@ class _DiagnosticsBase(_CoreBase):
         array-like  (sample, dims)
         """
         if circular:
-            return 1 - _circular_var(_circdiff(y_obs, mu_pred))
+            return 1 - circular_var(circular_diff(y_obs, mu_pred))
 
         var_y_est = np.var(mu_pred, axis=1, ddof=1)
         var_e = np.var(y_obs - mu_pred, axis=1, ddof=1)

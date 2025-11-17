@@ -31,6 +31,31 @@ def test_residual_r2_array(datatree_regression):
     assert result.shape == (mu_pred.shape[0],)
 
 
+def test_residual_r2_circular_summary(datatree_regression):
+    result = residual_r2(
+        datatree_regression,
+        pred_mean="mu",
+        obs_name="y",
+        summary=True,
+        circular=True,
+        ci_kind="hdi",
+    )
+    assert isinstance(result, tuple)
+    assert hasattr(result, "_fields")
+    assert "mean" in result._fields
+    assert "hdi_lb" in result._fields
+    assert "hdi_ub" in result._fields
+
+
+def test_residual_r2_circular_array(datatree_regression):
+    mu_pred = azb.extract(datatree_regression, group="posterior")["mu"].values.T
+    result = residual_r2(
+        datatree_regression, pred_mean="mu", obs_name="y", summary=False, circular=True
+    )
+    assert isinstance(result, np.ndarray)
+    assert result.shape == (mu_pred.shape[0],)
+
+
 @pytest.mark.parametrize("point_estimate", ["mean", "median"])
 def test_residual_r2_point_estimate(datatree_regression, point_estimate):
     result = residual_r2(
@@ -86,6 +111,37 @@ def test_bayesian_r2_summary(datatree_regression):
 def test_bayesian_r2_array(datatree_regression):
     mu_pred = azb.extract(datatree_regression, group="posterior")["mu"].values.T
     result = bayesian_r2(datatree_regression, pred_mean="mu", scale="sigma", summary=False)
+    assert isinstance(result, np.ndarray)
+    assert result.shape == (mu_pred.shape[0],)
+
+
+def test_bayesian_r2_circular_summary(datatree_regression):
+    result = bayesian_r2(
+        datatree_regression,
+        pred_mean="mu",
+        scale="sigma",
+        scale_kind="var",
+        summary=True,
+        circular=True,
+        ci_kind="eti",
+    )
+    assert isinstance(result, tuple)
+    assert hasattr(result, "_fields")
+    assert "mean" in result._fields
+    assert "eti_lb" in result._fields
+    assert "eti_ub" in result._fields
+
+
+def test_bayesian_r2_circular_array(datatree_regression):
+    mu_pred = azb.extract(datatree_regression, group="posterior")["mu"].values.T
+    result = bayesian_r2(
+        datatree_regression,
+        pred_mean="mu",
+        scale="sigma",
+        scale_kind="var",
+        summary=False,
+        circular=True,
+    )
     assert isinstance(result, np.ndarray)
     assert result.shape == (mu_pred.shape[0],)
 

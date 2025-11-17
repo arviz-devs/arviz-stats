@@ -250,3 +250,15 @@ def test_loo_r2_ci_kind(datatree_regression, ci_kind):
 def test_loo_r2_ci_prob(datatree_regression, ci_prob):
     result = loo_r2(datatree_regression, var_name="y", summary=True, ci_prob=ci_prob)
     assert hasattr(result, "_fields")
+
+
+@pytest.mark.parametrize("kind", ["circular_mean", "circular_var", "circular_sd"])
+def test_loo_expectations_circular(centered_eight, kind):
+    """Simple parametric checks for circular kinds: shape and finiteness of result and khat."""
+
+    result, khat = loo_expectations(centered_eight, kind=kind)
+
+    assert result.shape == (8,)
+    assert khat.shape == (8,)
+    assert np.all(np.isfinite(result.values))
+    assert np.all(np.isfinite(khat.values))
