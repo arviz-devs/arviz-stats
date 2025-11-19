@@ -5,14 +5,16 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-from arviz_stats import loo
 from arviz_stats.base.array import BaseArray, process_ary_axes, process_chain_none
-from arviz_stats.loo.helper_loo import _get_r_eff, _prepare_loo_inputs
-from arviz_stats.utils import get_log_likelihood_dataset
 
 from ..helpers import importorskip
 
+azb = importorskip("arviz_base")
 einstats = importorskip("xarray_einstats")
+
+from arviz_stats import loo
+from arviz_stats.loo.helper_loo import _get_r_eff, _prepare_loo_inputs
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 @pytest.fixture
