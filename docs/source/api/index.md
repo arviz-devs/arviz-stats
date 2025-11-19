@@ -190,7 +190,15 @@ refer you to other pages for the full argument or algorithm descriptions.
    arviz_stats.base.array_stats.histogram
    arviz_stats.base.array_stats.kde
    arviz_stats.base.array_stats.quantile
+
+#### Model comparison
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   arviz_stats.base.array_stats.loo
 ```
+
 
 #### Other
 ```{eval-rst}
