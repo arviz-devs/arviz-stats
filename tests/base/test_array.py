@@ -712,7 +712,9 @@ class TestLOO:
             log_lik.values, chain_axis=0, draw_axis=1, reff=reff
         )
 
-        lppd_xr = einstats.logsumexp(log_lik, b=1 / loo_inputs.n_samples, dims=["chain", "draw"])
+        lppd_xr = einstats.stats.logsumexp(
+            log_lik, b=1 / loo_inputs.n_samples, dims=["chain", "draw"]
+        )
         p_loo_i_xr = lppd_xr - loo_xr.elpd_i
 
         assert_allclose(elpd_i_array, loo_xr.elpd_i.values, rtol=1e-10)
