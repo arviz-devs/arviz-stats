@@ -192,6 +192,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     elpd_loo_approx: DataArray = None
     log_jacobian: DataArray = None
     influence_pareto_k: DataArray = None
+    n_eff_i: DataArray = None
 
     def __str__(self):
         """Print elpd data in a user friendly way."""
