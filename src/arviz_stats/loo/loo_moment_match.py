@@ -57,6 +57,9 @@ def loo_moment_match(
     The moment matching algorithm is described in [1]_ and the PSIS-LOO-CV method is described in
     [2]_ and [3]_.
 
+    See the EABM chapter on `Moment Matching <https://arviz-devs.github.io/EABM/Chapters/Moment_Matching.html>`_
+    for more details.
+
     Parameters
     ----------
     data : DataTree or InferenceData
@@ -274,59 +277,6 @@ def loo_moment_match(
            ...:     split=True,
            ...: )
            ...: loo_mm
-
-    Notes
-    -----
-    The moment matching algorithm considers three affine transformations of the posterior draws:
-    For a specific draw :math:`\theta^{(s)}`, a generic affine transformation includes a square
-    matrix :math:`\mathbf{A}` representing a linear map and a vector :math:`\mathbf{b}`
-    representing a translation such that
-
-    .. math::
-        T : \theta^{(s)} \mapsto \mathbf{A}\theta^{(s)} + \mathbf{b}
-        =: \theta^{*{(s)}}.
-
-    The first transformation, :math:`T_1`, is a translation that matches the mean of the sample
-    to its importance weighted mean given by
-
-    .. math::
-        \mathbf{\theta^{*{(s)}}} = T_1(\mathbf{\theta^{(s)}}) =
-        \mathbf{\theta^{(s)}} - \bar{\theta} + \bar{\theta}_w,
-
-    where :math:`\bar{\theta}` is the mean of the sample and :math:`\bar{\theta}_w` is the
-    importance weighted mean of the sample. The second transformation, :math:`T_2`, is a scaling
-    that matches the marginal variances in addition to the means given by
-
-    .. math::
-        \mathbf{\theta^{*{(s)}}} = T_2(\mathbf{\theta^{(s)}}) =
-        \mathbf{v}^{1/2}_w \circ \mathbf{v}^{-1/2} \circ (\mathbf{\theta^{(s)}} - \bar{\theta}) +
-        \bar{\theta}_w,
-
-    where :math:`\mathbf{v}` and :math:`\mathbf{v}_w` are the sample and weighted variances, and
-    :math:`\circ` denotes the pointwise product of the elements of two vectors. The third
-    transformation, :math:`T_3`, is a covariance transformation that matches the covariance matrix
-    of the sample to its importance weighted covariance matrix given by
-
-    .. math::
-        \mathbf{\theta^{*{(s)}}} = T_3(\mathbf{\theta^{(s)}}) =
-        \mathbf{L}_w \mathbf{L}^{-1} (\mathbf{\theta^{(s)}} - \bar{\theta}) + \bar{\theta}_w,
-
-    where :math:`\mathbf{L}` and :math:`\mathbf{L}_w` are the Cholesky decompositions of the
-    covariance matrix and the weighted covariance matrix, respectively, e.g.,
-
-    .. math::
-        \mathbf{LL}^T = \mathbf{\Sigma} = \frac{1}{S} \sum_{s=1}^S (\mathbf{\theta^{(s)}} -
-        \bar{\theta}) (\mathbf{\theta^{(s)}} - \bar{\theta})^T
-
-    and
-
-    .. math::
-        \mathbf{L}_w \mathbf{L}_w^T = \mathbf{\Sigma}_w = \frac{\frac{1}{S} \sum_{s=1}^S
-        w^{(s)} (\mathbf{\theta^{(s)}} - \bar{\theta}_w) (\mathbf{\theta^{(s)}} -
-        \bar{\theta}_w)^T}{\sum_{s=1}^S w^{(s)}}.
-
-    We iterate on :math:`T_1` repeatedly and move onto :math:`T_2` and :math:`T_3` only
-    if :math:`T_1` fails to yield a Pareto-k statistic below the threshold.
 
     See Also
     --------
