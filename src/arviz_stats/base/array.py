@@ -10,7 +10,7 @@ import numpy as np
 
 from arviz_stats.base.density import _DensityBase
 from arviz_stats.base.diagnostics import _DiagnosticsBase
-from arviz_stats.base.stats_utils import logsumexp, make_ufunc
+from arviz_stats.base.stats_utils import make_ufunc
 
 
 def process_chain_none(ary, chain_axis, draw_axis):
@@ -750,10 +750,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary,
         chain_axis=-2,
         draw_axis=-1,
-        reff=None,
+        reff=1.0,
         log_weights=None,
         pareto_k=None,
-        log_jacobian=None,
     ):
         """Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
@@ -762,10 +761,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         chain_axis : int, default -2
         draw_axis : int, default -1
-        reff : float, optional
+        reff : float, default 1.0
         log_weights : array-like, optional
         pareto_k : array-like, optional
-        log_jacobian : array-like, optional
 
         Returns
         -------
@@ -775,42 +773,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
-        n_samples = ary.shape[-2] * ary.shape[-1]
 
-        if log_weights is None:
-            if reff is None:
-                reff = 1.0
-            log_weights, pareto_k = self.psislw(ary, r_eff=reff, axis=axes)
-        elif pareto_k is None:
-            raise ValueError("If log_weights is provided, pareto_k must also be provided.")
-
-        good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
-        if np.any(pareto_k > good_k):
-            warnings.warn(
-                f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-                "for one or more samples. You should consider using a more robust model, this is "
-                "because importance sampling is less likely to work well if the marginal posterior "
-                "and LOO posterior are very different. This is more likely to happen with a "
-                "non-robust model and highly influential observations."
-            )
-
-        log_weights_sum = log_weights + ary
-        elpd_i = logsumexp(log_weights_sum, axis=tuple(axes))
-        lppd_i = logsumexp(ary, b=1 / n_samples, axis=tuple(axes))
-
-        if log_jacobian is not None:
-            elpd_i += log_jacobian
-            lppd_i += log_jacobian
-
-        p_loo_i = lppd_i - elpd_i
-
-        if np.equal(np.sum(elpd_i), elpd_i).all():
-            warnings.warn(
-                "The point-wise LOO is the same with the sum LOO, please double check "
-                "the Observed RV in your model to make sure it returns element-wise logp."
-            )
-
-        return elpd_i, pareto_k, p_loo_i
+        loo_ufunc = make_ufunc(self._loo, n_output=3, n_input=1, n_dims=len(axes))
+        return loo_ufunc(ary, r_eff=reff, log_weights=log_weights, pareto_k=pareto_k)
 
 
 array_stats = BaseArray()

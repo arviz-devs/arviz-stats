@@ -368,6 +368,45 @@ class _DiagnosticsBase(_CoreBase):
 
         return ary.reshape(ary_shape), khat
 
+    def _loo(self, ary, r_eff=1.0, log_weights=None, pareto_k=None):
+        """
+        Compute PSIS-LOO-CV for a 2D array (chain, draw).
+
+        Parameters
+        ----------
+        ary : np.ndarray
+            2D array with shape (n_chains, n_draws)
+        r_eff : float, default 1.0
+            Relative effective sample size
+        log_weights : np.ndarray, optional
+            Pre-computed log weights (same shape as ary)
+        pareto_k : float, optional
+            Pre-computed Pareto k value
+
+        Returns
+        -------
+        elpd_i : float
+            Expected log pointwise predictive density
+        pareto_k : float
+            Pareto k diagnostic value
+        p_loo_i : float
+            Effective number of parameters
+        """
+        ary = np.asarray(ary)
+        n_samples = ary.size
+
+        if log_weights is None:
+            log_weights, pareto_k = self._psislw(ary, r_eff)
+        elif pareto_k is None:
+            raise ValueError("If log_weights is provided, pareto_k must also be provided.")
+
+        log_weights_sum = log_weights + ary
+        elpd_i = logsumexp(log_weights_sum)
+        lppd_i = logsumexp(ary, b=1 / n_samples)
+        p_loo_i = lppd_i - elpd_i
+
+        return elpd_i, pareto_k, p_loo_i
+
     def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
         """
         Compute Pareto k-hat diagnostic.
