@@ -1022,7 +1022,7 @@ def _update_loo_data_i(
             loo_data.n_eff_i = xr.full_like(loo_data.elpd_i, np.nan)
         loo_data.n_eff_i[idx_dict] = n_eff_i
 
-    if log_weights_i is not None and loo_data.log_weights is not None:
+    if log_weights_i is not None:
         loo_data.log_weights[idx_dict] = log_weights_i
 
     loo_data.elpd = np.nansum(loo_data.elpd_i.values)
