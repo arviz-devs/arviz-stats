@@ -131,7 +131,8 @@ def loo_moment_match(
         - **pareto_k**: :class:`~xarray.DataArray` with moment-matched Pareto shape values, only if
           ``pointwise=True``.
         - **approx_posterior**: False (not used for standard LOO)
-        - **log_weights**: Smoothed log weights.
+        - **log_weights**: class:`~xarray.DataArray` with smoothed log weights
+          (updated for successfully moment-matched observations).
         - **influence_pareto_k**: :class:`~xarray.DataArray` with original (pre-moment-matching)
           Pareto shape values, only if ``pointwise=True``.
         - **n_eff_i**: :class:`~xarray.DataArray` with effective sample size per observation,
