@@ -17,6 +17,7 @@ def bayesian_r2(
     scale=None,
     scale_kind="sd",
     summary=True,
+    group="posterior",
     point_estimate=None,
     ci_kind=None,
     ci_prob=None,
@@ -67,6 +68,8 @@ def bayesian_r2(
     summary: bool
         Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
+    group : str, optional
+        Group from which to obtain the predicted means (`pred_mean`) and scale (`scale`).
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
@@ -143,9 +146,9 @@ def bayesian_r2(
     if ci_prob is None:
         ci_prob = rcParams["stats.ci_prob"]
 
-    mu_pred = extract(data, group="posterior", var_names=pred_mean).values.T
+    mu_pred = extract(data, group=group, var_names=pred_mean).values.T
     if scale is not None:
-        scale = extract(data, group="posterior", var_names=scale).values.T
+        scale = extract(data, group=group, var_names=scale).values.T
 
     r_squared = array_stats.bayesian_r2(mu_pred, scale, scale_kind, circular)
 
@@ -160,6 +163,7 @@ def residual_r2(
     pred_mean=None,
     obs_name=None,
     summary=True,
+    group="posterior",
     point_estimate=None,
     ci_kind=None,
     ci_prob=None,
@@ -196,13 +200,15 @@ def residual_r2(
     ----------
     data : DataTree or InferenceData
         Input data. It should contain the posterior_predictive and observed_data groups.
-    pred_name : str
+    pred_mean : str
         Name of the variable representing the predicted mean.
     obs_name : str, optional
         Name of the variable representing the observed data.
     summary: bool
         Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
+    group : str, optional
+        Group from which to obtain the predicted means (`pred_name`). Defaults to "posterior".
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
@@ -272,7 +278,7 @@ def residual_r2(
         ci_prob = rcParams["stats.ci_prob"]
 
     y_true = extract(data, group="observed_data", var_names=obs_name, combined=False).values
-    mu_pred = extract(data, group="posterior", var_names=pred_mean).values.T
+    mu_pred = extract(data, group=group, var_names=pred_mean).values.T
 
     r_squared = array_stats.residual_r2(y_true, mu_pred, circular)
 
