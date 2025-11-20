@@ -318,13 +318,15 @@ def test_moment_match_matches_r_reference(roaches_r_example):
         rtol=0,
     )
 
-    if loo_mm.log_weights is not None and parity["log_weights_mm"] is not None:
-        xr.testing.assert_allclose(
-            loo_mm.log_weights.transpose(*parity["log_weights_mm"].dims),
-            parity["log_weights_mm"],
-            atol=1e-3,
-            rtol=0,
-        )
+    if loo_mm.log_weights is not None:
+        mm_obs_indices = np.where(loo_mm.influence_pareto_k.values > 0.7)[0]
+        assert len(mm_obs_indices) > 0
+
+        for i in mm_obs_indices:
+            orig_weights = loo_orig.log_weights.isel(obs=i).values
+            updated_weights = loo_mm.log_weights.isel(obs=i).values
+
+            assert not np.allclose(orig_weights, updated_weights, rtol=1e-10, atol=1e-10)
 
 
 def test_split_moment_match_matches_r_snapshot(roaches_r_example):

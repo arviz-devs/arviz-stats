@@ -131,7 +131,8 @@ def loo_moment_match(
         - **pareto_k**: :class:`~xarray.DataArray` with moment-matched Pareto shape values, only if
           ``pointwise=True``.
         - **approx_posterior**: False (not used for standard LOO)
-        - **log_weights**: Smoothed log weights.
+        - **log_weights**: class:`~xarray.DataArray` with smoothed log weights
+          (updated for successfully moment-matched observations).
         - **influence_pareto_k**: :class:`~xarray.DataArray` with original (pre-moment-matching)
           Pareto shape values, only if ``pointwise=True``.
         - **n_eff_i**: :class:`~xarray.DataArray` with effective sample size per observation,
@@ -433,6 +434,7 @@ def loo_moment_match(
                 n_samples,
                 mm_result.n_eff_i,
                 original_log_liki,
+                mm_result.final_lwi,
                 suppress_warnings=True,
             )
         else:
@@ -991,6 +993,7 @@ def _update_loo_data_i(
     n_samples,
     n_eff_i=None,
     original_log_liki=None,
+    log_weights_i=None,
     suppress_warnings=False,
 ):
     """Update the ELPDData object for a single observation."""
@@ -1010,15 +1013,18 @@ def _update_loo_data_i(
     loo_data.elpd_i[idx_dict] = new_elpd_i
     loo_data.pareto_k[idx_dict] = new_pareto_k
 
-    if not hasattr(loo_data, "p_loo_i") or loo_data.p_loo_i is None:
+    if getattr(loo_data, "p_loo_i", None) is None:
         loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
 
     loo_data.p_loo_i[idx_dict] = p_loo_i
 
     if n_eff_i is not None:
-        if not hasattr(loo_data, "n_eff_i") or loo_data.n_eff_i is None:
+        if getattr(loo_data, "n_eff_i", None) is None:
             loo_data.n_eff_i = xr.full_like(loo_data.elpd_i, np.nan)
         loo_data.n_eff_i[idx_dict] = n_eff_i
+
+    if log_weights_i is not None:
+        loo_data.log_weights[idx_dict] = log_weights_i
 
     loo_data.elpd = np.nansum(loo_data.elpd_i.values)
     loo_data.se = np.sqrt(loo_data.n_data_points * np.nanvar(loo_data.elpd_i.values, ddof=1))
