@@ -198,6 +198,8 @@ refer you to other pages for the full argument or algorithm descriptions.
    :toctree: generated/
 
    arviz_stats.base.array_stats.loo
+   arviz_stats.base.array_stats.loo_approximate_posterior
+   arviz_stats.base.array_stats.loo_score
 ```
 
 

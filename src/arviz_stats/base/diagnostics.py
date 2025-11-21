@@ -407,6 +407,104 @@ class _DiagnosticsBase(_CoreBase):
 
         return elpd_i, pareto_k, p_loo_i
 
+    def _loo_approximate_posterior(self, log_likelihood, log_p, log_q):
+        """
+        Compute PSIS-LOO-CV with approximate posterior correction.
+
+        Parameters
+        ----------
+        log_likelihood : np.ndarray
+            2D array (chain, draw) of log-likelihood values for one observation
+        log_p : np.ndarray
+            2D array (chain, draw) of target log-densities
+        log_q : np.ndarray
+            2D array (chain, draw) of proposal log-densities
+
+        Returns
+        -------
+        elpd_i : float
+            Expected log pointwise predictive density
+        pareto_k : float
+            Pareto k diagnostic value
+        p_loo_i : float
+            Effective number of parameters
+        """
+        log_likelihood = np.asarray(log_likelihood)
+        log_p = np.asarray(log_p)
+        log_q = np.asarray(log_q)
+
+        approx_correction = log_p - log_q
+        approx_correction = approx_correction - approx_correction.max()
+
+        corrected_log_ratios = -log_likelihood + approx_correction
+        corrected_log_ratios = corrected_log_ratios - corrected_log_ratios.max()
+
+        psis_input = -corrected_log_ratios
+        log_weights, pareto_k = self._psislw(psis_input, r_eff=1.0)
+
+        return self._loo(log_likelihood, r_eff=1.0, log_weights=log_weights, pareto_k=pareto_k)
+
+    @staticmethod
+    def _loo_score(y_pred, y_obs, log_weights, kind):
+        """
+        Compute CRPS or SCRPS for a single observation.
+
+        Parameters
+        ----------
+        y_pred : np.ndarray
+            2D array (chain, draw) of posterior predictive samples
+        y_obs : float
+            Observed value
+        log_weights : np.ndarray
+            2D array (chain, draw) of PSIS-LOO log weights
+        kind : str
+            "crps" or "scrps"
+
+        Returns
+        -------
+        score : float
+            The score value (negative CRPS or SCRPS for maximization)
+        """
+        y_pred = np.asarray(y_pred)
+        log_weights = np.asarray(log_weights)
+        y_obs = np.asarray(y_obs).flat[0]
+
+        abs_error = np.abs(y_pred - y_obs)
+
+        log_weights_flat = log_weights.ravel()
+        abs_error_flat = abs_error.ravel()
+        y_pred_flat = y_pred.ravel()
+
+        log_num_abs_error = logsumexp(log_weights_flat, b=abs_error_flat)
+        log_den = logsumexp(log_weights_flat)
+        loo_weighted_abs_error = np.exp(log_num_abs_error - log_den)
+
+        log_num_pred = logsumexp(log_weights_flat, b=y_pred_flat)
+        loo_weighted_mean_prediction = np.exp(log_num_pred - log_den)
+
+        max_logw = log_weights.max()
+        weights = np.exp(log_weights - max_logw)
+        weights_flat = weights.ravel()
+
+        idx = np.argsort(y_pred_flat, kind="mergesort")
+        values_sorted = y_pred_flat[idx]
+        weights_sorted = weights_flat[idx]
+        weights_sorted = weights_sorted / np.sum(weights_sorted)
+
+        cumulative_weights = np.cumsum(weights_sorted)
+        f_minus = cumulative_weights - weights_sorted
+        pwm_first_moment_b1 = np.sum(weights_sorted * values_sorted * f_minus)
+
+        crps = loo_weighted_abs_error + loo_weighted_mean_prediction - 2.0 * pwm_first_moment_b1
+
+        if kind == "crps":
+            return -crps
+
+        cumulative_before = cumulative_weights - weights_sorted
+        bracket = 2.0 * cumulative_before + weights_sorted - 1.0
+        gini_mean_difference = 2.0 * np.sum(weights_sorted * values_sorted * bracket)
+        return -(loo_weighted_abs_error / gini_mean_difference) - 0.5 * np.log(gini_mean_difference)
+
     def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
         """
         Compute Pareto k-hat diagnostic.
