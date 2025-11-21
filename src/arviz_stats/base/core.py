@@ -12,7 +12,7 @@ from scipy.fftpack import next_fast_len
 from scipy.interpolate import CubicSpline
 from scipy.stats import circmean
 
-from arviz_stats.utils import round_num
+from arviz_stats.base.stats_utils import round_num
 
 
 class _CoreBase:

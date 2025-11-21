@@ -8,7 +8,7 @@ from scipy.spatial import cKDTree
 from scipy.stats import wasserstein_distance, wasserstein_distance_nd
 
 from arviz_stats.base import array_stats
-from arviz_stats.utils import round_num
+from arviz_stats.base.stats_utils import round_num
 
 
 def bayesian_r2(

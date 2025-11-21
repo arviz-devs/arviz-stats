@@ -7,13 +7,13 @@ import xarray as xr
 from arviz_base import convert_to_datatree, extract
 from xarray_einstats.stats import logsumexp
 
+from arviz_stats.base.stats_utils import round_num
 from arviz_stats.loo.helper_loo import (
     _get_r_eff,
     _prepare_loo_inputs,
     _validate_crps_input,
     _warn_pareto_k,
 )
-from arviz_stats.utils import round_num
 
 
 def loo_score(
