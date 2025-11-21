@@ -720,7 +720,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         return ary[tuple(slices)]
 
-    def mean(self, ary, round_to=None, axis=None):
+    def mean(self, ary, round_to=None, dropna=False, axis=None):
         """Compute mean of values along the specified axis.
 
         Parameters
@@ -731,6 +731,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             If integer, number of decimal places to round the result. If string of the
             form '2g' number of significant digits to round the result. Defaults to '2g'.
             Use None to return raw numbers.
+        dropna : bool, default False
+            Whether to ignore NaN values when computing the mean.
         axis : int, sequence of int or None, default -1
             Axis or axes along which to compute the mode.
 
@@ -747,9 +749,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=len(axes),
             ravel=False,
         )
-        return mean_ufunc(ary, round_to=round_to)
+        return mean_ufunc(ary, round_to=round_to, dropna=dropna)
 
-    def median(self, ary, round_to=None, axis=None):
+    def median(self, ary, round_to=None, dropna=False, axis=None):
         """Compute median of values along the specified axis.
 
         Parameters
@@ -760,6 +762,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             If integer, number of decimal places to round the result. If string of the
             form '2g' number of significant digits to round the result. Defaults to '2g'.
             Use None to return raw numbers.
+        dropna : bool, default False
+            Whether to ignore NaN values when computing the median.
         axis : int, sequence of int or None, default -1
             Axis or axes along which to compute the mode.
 
@@ -776,9 +780,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=len(axes),
             ravel=False,
         )
-        return median_ufunc(ary, round_to=round_to)
+        return median_ufunc(ary, round_to=round_to, dropna=dropna)
 
-    def mode(self, ary, round_to=None, axis=None):
+    def mode(self, ary, round_to=None, dropna=False, axis=None):
         """Compute mode of values along the specified axis.
 
         Parameters
@@ -789,6 +793,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             If integer, number of decimal places to round the result. If string of the
             form '2g' number of significant digits to round the result. Defaults to '2g'.
             Use None to return raw numbers.
+        dropna : bool, default False
+            Whether to ignore NaN values when computing the mode.
         axis : int, sequence of int or None, default -1
             Axis or axes along which to compute the mode.
 
@@ -805,7 +811,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=len(axes),
             ravel=False,
         )
-        return mode_ufunc(ary, round_to=round_to)
+        return mode_ufunc(ary, round_to=round_to, dropna=dropna)
 
 
 array_stats = BaseArray()

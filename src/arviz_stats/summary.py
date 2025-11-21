@@ -361,6 +361,7 @@ def mean(
     filter_vars=None,
     coords=None,
     round_to=None,
+    dropna=False,
     **kwargs,
 ):
     r"""Compute the mean.
@@ -399,6 +400,8 @@ def mean(
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
+    dropna: bool, default False
+        If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
 
@@ -450,6 +453,7 @@ def mean(
         filter_vars=filter_vars,
         coords=coords,
         round_to=round_to,
+        dropna=dropna,
         **kwargs,
     )
 
@@ -462,6 +466,7 @@ def median(
     filter_vars=None,
     coords=None,
     round_to=None,
+    dropna=False,
     **kwargs,
 ):
     r"""Compute the median.
@@ -500,6 +505,8 @@ def median(
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
+    dropna: bool, default False
+        If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
 
@@ -551,6 +558,7 @@ def median(
         filter_vars=filter_vars,
         coords=coords,
         round_to=round_to,
+        dropna=dropna,
         **kwargs,
     )
 
@@ -563,6 +571,7 @@ def mode(
     filter_vars=None,
     coords=None,
     round_to=None,
+    dropna=False,
     **kwargs,
 ):
     r"""Compute the mode.
@@ -603,6 +612,8 @@ def mode(
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
+    dropna: bool, default False
+        If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
 
@@ -661,5 +672,6 @@ def mode(
         filter_vars=filter_vars,
         coords=coords,
         round_to=round_to,
+        dropna=dropna,
         **kwargs,
     )

@@ -430,7 +430,7 @@ class BaseDataArray:
             output_core_dims=[dims],
         )
 
-    def mean(self, da, round_to=None, dim=None):
+    def mean(self, da, round_to=None, dropna=False, dim=None):
         """Compute mean on DataArray input."""
         dims = validate_dims(dim)
 
@@ -439,10 +439,10 @@ class BaseDataArray:
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"round_to": round_to, "axis": np.arange(-len(dims), 0, 1)},
+            kwargs={"round_to": round_to, "dropna": dropna, "axis": np.arange(-len(dims), 0, 1)},
         )
 
-    def median(self, da, round_to=None, dim=None):
+    def median(self, da, round_to=None, dropna=False, dim=None):
         """Compute median on DataArray input."""
         dims = validate_dims(dim)
 
@@ -451,10 +451,10 @@ class BaseDataArray:
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"round_to": round_to, "axis": np.arange(-len(dims), 0, 1)},
+            kwargs={"round_to": round_to, "dropna": dropna, "axis": np.arange(-len(dims), 0, 1)},
         )
 
-    def mode(self, da, round_to=None, dim=None):
+    def mode(self, da, round_to=None, dropna=False, dim=None):
         """Compute mode on DataArray input."""
         dims = validate_dims(dim)
 
@@ -463,7 +463,7 @@ class BaseDataArray:
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"round_to": round_to, "axis": np.arange(-len(dims), 0, 1)},
+            kwargs={"round_to": round_to, "dropna": dropna, "axis": np.arange(-len(dims), 0, 1)},
         )
 
 
