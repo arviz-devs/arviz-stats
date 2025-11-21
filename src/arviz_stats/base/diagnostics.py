@@ -465,31 +465,22 @@ class _DiagnosticsBase(_CoreBase):
         score : float
             The score value (negative CRPS or SCRPS for maximization)
         """
-        ary = np.asarray(ary)
-        log_weights = np.asarray(log_weights)
+        ary = np.asarray(ary).ravel()
+        log_weights = np.asarray(log_weights).ravel()
         y_obs = np.asarray(y_obs).flat[0]
 
         abs_error = np.abs(ary - y_obs)
 
-        log_weights_flat = log_weights.ravel()
-        abs_error_flat = abs_error.ravel()
-        ary_flat = ary.ravel()
+        log_den = logsumexp(log_weights)
+        loo_weighted_abs_error = np.exp(logsumexp(log_weights, b=abs_error) - log_den)
+        loo_weighted_mean_prediction = np.exp(logsumexp(log_weights, b=ary) - log_den)
 
-        log_num_abs_error = logsumexp(log_weights_flat, b=abs_error_flat)
-        log_den = logsumexp(log_weights_flat)
-        loo_weighted_abs_error = np.exp(log_num_abs_error - log_den)
+        weights = np.exp(log_weights - log_weights.max())
+        weights /= np.sum(weights)
 
-        log_num_pred = logsumexp(log_weights_flat, b=ary_flat)
-        loo_weighted_mean_prediction = np.exp(log_num_pred - log_den)
-
-        max_logw = log_weights.max()
-        weights = np.exp(log_weights - max_logw)
-        weights_flat = weights.ravel()
-
-        idx = np.argsort(ary_flat, kind="mergesort")
-        values_sorted = ary_flat[idx]
-        weights_sorted = weights_flat[idx]
-        weights_sorted = weights_sorted / np.sum(weights_sorted)
+        idx = np.argsort(ary, kind="mergesort")
+        values_sorted = ary[idx]
+        weights_sorted = weights[idx]
 
         cumulative_weights = np.cumsum(weights_sorted)
         f_minus = cumulative_weights - weights_sorted
@@ -500,8 +491,7 @@ class _DiagnosticsBase(_CoreBase):
         if kind == "crps":
             return -crps
 
-        cumulative_before = cumulative_weights - weights_sorted
-        bracket = 2.0 * cumulative_before + weights_sorted - 1.0
+        bracket = 2.0 * f_minus + weights_sorted - 1.0
         gini_mean_difference = 2.0 * np.sum(weights_sorted * values_sorted * bracket)
         return -(loo_weighted_abs_error / gini_mean_difference) - 0.5 * np.log(gini_mean_difference)
 
