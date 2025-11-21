@@ -4,8 +4,7 @@ from functools import lru_cache
 
 import numpy as np
 from arviz_base import dict_to_dataset
-from scipy.special import bdtr, bdtrik  # pylint: disable=no-name-in-module
-from scipy.special._ufuncs import _hypergeom_cdf
+from scipy.special import bdtr, bdtrik, gammaln  # pylint: disable=no-name-in-module
 
 
 def difference_ecdf_pit(dt, data_pairs, group, ci_prob, coverage, randomized, n_simulations):
@@ -191,7 +190,7 @@ def _build_hypergeom_lookup_table(population, draws, successes):
     """Build lookup table for hypergeometric CDF values."""
     max_x = min(draws, successes, population)
     x_values = np.arange(max_x + 1)
-    cdf_values = _hypergeom_cdf(x_values, draws, successes, population)
+    cdf_values = hypergeom_cdf(x_values, draws, successes, population)
     return dict(zip(x_values, cdf_values))
 
 
@@ -210,3 +209,33 @@ def _hypergeometric_cdf_lookup(x_val, population, draws, successes):
     """Vectorized hypergeometric CDF lookup."""
     vectorized_lookup = np.vectorize(_scalar_lookup, otypes=[float])
     return vectorized_lookup(x_val, population, draws, successes)
+
+
+def hypergeom_cdf(x_values, draws, successes, population):
+    """Compute the hypergeometric CDF for given x values."""
+    x_values = np.asarray(x_values)
+
+    k_min = max(0, draws - (population - successes))
+    k_max = min(draws, successes)
+
+    ks = np.arange(k_min, k_max + 1)
+
+    logpmf = (
+        gammaln(successes + 1)
+        - gammaln(ks + 1)
+        - gammaln(successes - ks + 1)
+        + gammaln(population - successes + 1)
+        - gammaln(draws - ks + 1)
+        - gammaln(population - successes - (draws - ks) + 1)
+        - (gammaln(population + 1) - gammaln(draws + 1) - gammaln(population - draws + 1))
+    )
+
+    logpmf -= np.max(logpmf)
+    pmf = np.exp(logpmf)
+
+    cdf = np.cumsum(pmf)
+    cdf /= cdf[-1]
+
+    xv = np.clip(x_values, k_min, k_max)
+
+    return cdf[xv - k_min]
