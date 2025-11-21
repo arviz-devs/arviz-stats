@@ -423,7 +423,7 @@ class _CoreBase:
             )
         return hdi_intervals
 
-    def _mean(self, ary, round_to=None, dropna=False, axis=None):
+    def _mean(self, ary, round_to=None, skipna=False, axis=None):
         """Compute mean of values along the specified axis.
 
         Parameters
@@ -434,16 +434,16 @@ class _CoreBase:
             If integer, number of decimal places to round the result. If string of the
             form '2g' number of significant digits to round the result. Defaults to '2g'.
             Use None to return raw numbers.
-        dropna : bool, default False
+        skipna : bool, default False
             If True, ignore NaN values.
         axis : int, sequence of int or None, default None
             Axis or axes along which to compute the mean.
         """
-        if dropna:
+        if skipna:
             ary = ary[~np.isnan(ary)]
         return round_num(np.mean(ary, axis=axis), round_to)
 
-    def _median(self, ary, round_to=None, dropna=False, axis=None):
+    def _median(self, ary, round_to=None, skipna=False, axis=None):
         """Compute median of values along the specified axis.
 
         Parameters
@@ -454,16 +454,16 @@ class _CoreBase:
             If integer, number of decimal places to round the result. If string of the
             form '2g' number of significant digits to round the result. Defaults to '2g'.
             Use None to return raw numbers.
-        dropna : bool, default False
+        skipna : bool, default False
             If True, ignore NaN values.
         axis : int, sequence of int or None, default None
             Axis or axes along which to compute the median.
         """
-        if dropna:
+        if skipna:
             ary = ary[~np.isnan(ary)]
         return round_num(np.median(ary, axis=axis), round_to)
 
-    def _mode(self, ary, round_to, dropna=False):
+    def _mode(self, ary, round_to, skipna=False):
         ary = ary.flatten()
 
         if ary.size == 0:
@@ -471,7 +471,7 @@ class _CoreBase:
         if ary.size == 1:
             return ary.item()
 
-        if dropna:
+        if skipna:
             ary = ary[~np.isnan(ary)]
 
         if ary.dtype.kind == "f":
