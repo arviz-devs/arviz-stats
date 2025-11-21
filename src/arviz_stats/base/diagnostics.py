@@ -379,7 +379,7 @@ class _DiagnosticsBase(_CoreBase):
         r_eff : float, default 1.0
             Relative effective sample size
         log_weights : np.ndarray, optional
-            Pre-computed log weights (same shape as ary)
+            Pre-computed PSIS-LOO-CV log weights (same shape as ary)
         pareto_k : float, optional
             Pre-computed Pareto k value
 
@@ -407,13 +407,13 @@ class _DiagnosticsBase(_CoreBase):
 
         return elpd_i, pareto_k, p_loo_i
 
-    def _loo_approximate_posterior(self, log_likelihood, log_p, log_q):
+    def _loo_approximate_posterior(self, ary, log_p, log_q):
         """
         Compute PSIS-LOO-CV with approximate posterior correction.
 
         Parameters
         ----------
-        log_likelihood : np.ndarray
+        ary : np.ndarray
             2D array (chain, draw) of log-likelihood values for one observation
         log_p : np.ndarray
             2D array (chain, draw) of target log-densities
@@ -429,34 +429,34 @@ class _DiagnosticsBase(_CoreBase):
         p_loo_i : float
             Effective number of parameters
         """
-        log_likelihood = np.asarray(log_likelihood)
+        ary = np.asarray(ary)
         log_p = np.asarray(log_p)
         log_q = np.asarray(log_q)
 
         approx_correction = log_p - log_q
         approx_correction = approx_correction - approx_correction.max()
 
-        corrected_log_ratios = -log_likelihood + approx_correction
+        corrected_log_ratios = -ary + approx_correction
         corrected_log_ratios = corrected_log_ratios - corrected_log_ratios.max()
 
         psis_input = -corrected_log_ratios
         log_weights, pareto_k = self._psislw(psis_input, r_eff=1.0)
 
-        return self._loo(log_likelihood, r_eff=1.0, log_weights=log_weights, pareto_k=pareto_k)
+        return self._loo(ary, r_eff=1.0, log_weights=log_weights, pareto_k=pareto_k)
 
     @staticmethod
-    def _loo_score(y_pred, y_obs, log_weights, kind):
+    def _loo_score(ary, y_obs, log_weights, kind):
         """
         Compute CRPS or SCRPS for a single observation.
 
         Parameters
         ----------
-        y_pred : np.ndarray
+        ary : np.ndarray
             2D array (chain, draw) of posterior predictive samples
         y_obs : float
             Observed value
         log_weights : np.ndarray
-            2D array (chain, draw) of PSIS-LOO log weights
+            2D array (chain, draw) of PSIS-LOO-CV log weights
         kind : str
             "crps" or "scrps"
 
@@ -465,29 +465,29 @@ class _DiagnosticsBase(_CoreBase):
         score : float
             The score value (negative CRPS or SCRPS for maximization)
         """
-        y_pred = np.asarray(y_pred)
+        ary = np.asarray(ary)
         log_weights = np.asarray(log_weights)
         y_obs = np.asarray(y_obs).flat[0]
 
-        abs_error = np.abs(y_pred - y_obs)
+        abs_error = np.abs(ary - y_obs)
 
         log_weights_flat = log_weights.ravel()
         abs_error_flat = abs_error.ravel()
-        y_pred_flat = y_pred.ravel()
+        ary_flat = ary.ravel()
 
         log_num_abs_error = logsumexp(log_weights_flat, b=abs_error_flat)
         log_den = logsumexp(log_weights_flat)
         loo_weighted_abs_error = np.exp(log_num_abs_error - log_den)
 
-        log_num_pred = logsumexp(log_weights_flat, b=y_pred_flat)
+        log_num_pred = logsumexp(log_weights_flat, b=ary_flat)
         loo_weighted_mean_prediction = np.exp(log_num_pred - log_den)
 
         max_logw = log_weights.max()
         weights = np.exp(log_weights - max_logw)
         weights_flat = weights.ravel()
 
-        idx = np.argsort(y_pred_flat, kind="mergesort")
-        values_sorted = y_pred_flat[idx]
+        idx = np.argsort(ary_flat, kind="mergesort")
+        values_sorted = ary_flat[idx]
         weights_sorted = weights_flat[idx]
         weights_sorted = weights_sorted / np.sum(weights_sorted)
 
