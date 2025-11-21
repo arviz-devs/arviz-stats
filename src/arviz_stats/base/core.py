@@ -463,7 +463,7 @@ class _CoreBase:
             ary = ary[~np.isnan(ary)]
         return round_num(np.median(ary, axis=axis), round_to)
 
-    def _mode(self, ary, round_to, skipna=False):
+    def _mode(self, ary, round_to=None, skipna=False):
         ary = ary.flatten()
 
         if ary.size == 0:
