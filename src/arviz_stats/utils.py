@@ -291,20 +291,23 @@ def round_num(value, precision):
         The value to round. If array assumes it contains a single value.
     precision : int or str
         If an integer, specifies decimal places. If a string ending in 'g',
-        specifies significant digits. Use "None" for no rounding.
+        specifies significant digits. Integers can be negative.
+        Use "None" or "none" for no rounding.
     """
     if isinstance(value, np.ndarray | DataArray):
         value = value.item()
 
-    if precision is not None:
-        if isinstance(precision, int):
-            return round(value, precision)
+    if precision is None or precision in ("None", "none"):
+        return value
 
-        if isinstance(precision, str) and precision.endswith("g"):
-            sig_digits = int(precision[:-1])
-            if value == 0:
-                return 0
-            return round(value, sig_digits - int(np.floor(np.log10(abs(value)))) - 1)
+    if isinstance(precision, int):
+        return round(value, precision)
+
+    if isinstance(precision, str) and precision.endswith("g"):
+        sig_digits = int(precision[:-1])
+        if value == 0:
+            return 0
+        return round(value, sig_digits - int(np.floor(np.log10(abs(value)))) - 1)
 
     return value
 

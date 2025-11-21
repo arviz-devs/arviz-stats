@@ -1,3 +1,4 @@
+# pylint: disable=no-self-use
 """Core stats functions.
 
 Functions that are needed by multiple "organization classes"
@@ -11,15 +12,17 @@ from scipy.fftpack import next_fast_len
 from scipy.interpolate import CubicSpline
 from scipy.stats import circmean
 
+from arviz_stats.utils import round_num
+
 
 class _CoreBase:
-    def fft(self, x):  # pylint: disable=no-self-use
+    def fft(self, x):
         return np.fft.fft(x)
 
-    def rfft(self, ary, n, axis=-1):  # pylint: disable=no-self-use
+    def rfft(self, ary, n, axis=-1):
         return np.fft.rfft(ary, n=n, axis=axis)
 
-    def irfft(self, ary, n, axis=-1):  # pylint: disable=no-self-use
+    def irfft(self, ary, n, axis=-1):
         return np.fft.irfft(ary, n=n, axis=axis)
 
     def autocov(self, ary, axis=-1):
@@ -75,18 +78,18 @@ class _CoreBase:
             corr /= corr[norm]
         return corr
 
-    def circular_mean(self, ary):  # pylint: disable=no-self-use
+    def circular_mean(self, ary):
         """Compute mean of circular variable measured in radians.
 
         The result is between -pi and pi.
         """
         return circmean(ary, high=np.pi, low=-np.pi)
 
-    def _circular_standardize(self, ary):  # pylint: disable=no-self-use
+    def _circular_standardize(self, ary):
         """Standardize circular data to the interval [-pi, pi]."""
         return np.mod(ary + np.pi, 2 * np.pi) - np.pi
 
-    def quantile(self, ary, quantile, axis=-1, method="linear", skipna=False, weights=None):  # pylint: disable=no-self-use
+    def quantile(self, ary, quantile, axis=-1, method="linear", skipna=False, weights=None):
         """Compute the quantile of an array of samples.
 
         Implementation wise, the version in `arviz_stats.base.array_stats`
@@ -146,7 +149,7 @@ class _CoreBase:
             weights=weights,
         )
 
-    def _float_rankdata(self, ary):  # pylint: disable=no-self-use
+    def _float_rankdata(self, ary):
         """Compute ranks on continuous data, assuming there are no ties.
 
         Notes
@@ -263,7 +266,7 @@ class _CoreBase:
             bins = self._get_bins(ary)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
 
-    def _hdi_linear_nearest_common(self, ary, prob):  # pylint: disable=no-self-use
+    def _hdi_linear_nearest_common(self, ary, prob):
         n = len(ary)
 
         ary = np.sort(ary)
@@ -384,7 +387,7 @@ class _CoreBase:
 
         return self._interval_points_to_bounds(intervals, probs_in_interval, dx, circular)
 
-    def _interval_points_to_bounds(self, points, probs, dx, circular, period=2 * np.pi):  # pylint: disable=no-self-use
+    def _interval_points_to_bounds(self, points, probs, dx, circular, period=2 * np.pi):
         cum_probs = probs.cumsum()
 
         is_bound = np.diff(points) > dx * 1.01
@@ -407,7 +410,7 @@ class _CoreBase:
 
         return interval_bounds, interval_probs
 
-    def _pad_hdi_to_maxmodes(self, hdi_intervals, interval_probs, max_modes):  # pylint: disable=no-self-use
+    def _pad_hdi_to_maxmodes(self, hdi_intervals, interval_probs, max_modes):
         if hdi_intervals.shape[0] > max_modes:
             warnings.warn(
                 f"found more modes than {max_modes}, returning only the {max_modes} highest "
@@ -420,7 +423,39 @@ class _CoreBase:
             )
         return hdi_intervals
 
-    def _mode(self, ary):  # pylint: disable=no-self-use
+    def _mean(self, ary, round_to=None, axis=None):
+        """Compute mean of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the mean.
+        """
+        return round_num(np.nanmean(ary, axis=axis), round_to)
+
+    def _median(self, ary, round_to=None, axis=None):
+        """Compute median of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the median.
+        """
+        return round_num(np.nanmedian(ary, axis=axis), round_to)
+
+    def _mode(self, ary, round_to):
         ary = ary.flatten()
 
         if ary.size == 0:
@@ -439,7 +474,7 @@ class _CoreBase:
                 min_idx = np.argmin(widths)
                 x = x[min_idx : min_idx + n]
 
-            return (x[0] + x[1]) / 2
+            return round_num((x[0] + x[1]) / 2, round_to)
         # For discrete data, we use the most frequent value.
         vals, cnts = np.unique(ary, return_counts=True)
         return vals[cnts.argmax()]

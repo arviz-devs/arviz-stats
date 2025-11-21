@@ -8,7 +8,7 @@ from xarray_einstats import stats
 from arviz_stats.utils import _apply_multi_input_function
 from arviz_stats.validate import validate_dims
 
-__all__ = ["summary", "ci_in_rope"]
+__all__ = ["summary", "ci_in_rope", "mean", "median", "mode"]
 
 
 def summary(
@@ -141,7 +141,9 @@ def summary(
     to_concat = []
 
     if kind in ["stats", "all"]:
-        mean = dataset.mean(dim=sample_dims, skipna=skipna).expand_dims(summary=["mean"])
+        mean_value = dataset.azstats.mean(dim=sample_dims, skipna=skipna).expand_dims(
+            summary=["mean"]
+        )
         std = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
         ci = (
             dataset.azstats.eti(prob=ci_prob, dim=sample_dims, skipna=skipna)
@@ -149,7 +151,7 @@ def summary(
             .assign_coords(summary=[f"{ci_kind}{ci_perc}_lb", f"{ci_kind}{ci_perc}_ub"])
         )
 
-        to_concat.extend((mean, std, ci))
+        to_concat.extend((mean_value, std, ci))
 
     if kind in ["diagnostics", "all"]:
         ess_bulk = dataset.azstats.ess(sample_dims=sample_dims, method="bulk").expand_dims(
@@ -169,7 +171,9 @@ def summary(
         to_concat.extend((ess_bulk, ess_tail, rhat, mcse_mean, mcse_sd))
 
     if kind in ["stats_median", "all_median"]:
-        median = dataset.median(dim=sample_dims, skipna=skipna).expand_dims(summary=["median"])
+        median_value = dataset.azstats.median(dim=sample_dims, skipna=skipna).expand_dims(
+            summary=["median"]
+        )
         mad = stats.median_abs_deviation(
             dataset, dims=("chain", "draw"), nan_policy="omit" if skipna else "propagate"
         ).expand_dims(summary=["mad"])
@@ -179,7 +183,7 @@ def summary(
             .assign_coords(summary=[f"eti{ci_perc}_lb", f"eti{ci_perc}_ub"])
         )
 
-        to_concat.extend((median, mad, ci))
+        to_concat.extend((median_value, mad, ci))
 
     if kind in ["diagnostics_median", "all_median"]:
         ess_median = dataset.azstats.ess(sample_dims=sample_dims, method="median").expand_dims(
@@ -349,6 +353,208 @@ def ci_in_rope(
     return proportion
 
 
+def mean(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    round_to=None,
+    **kwargs,
+):
+    r"""Compute the mean.
+
+    The mean is the average value of a set of numbers, calculated by adding them together
+    and dividing by the number of values.
+
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the mode
+    var_names : str or list of str, optional
+        Names of the variables for which the mode should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
+    **kwargs : any, optional
+        Forwarded to the array or dataarray interface for mode.
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested mode of the provided input.
+
+    See Also
+    --------
+    :func:`arviz_stats.median`, :func:`arviz_stats.mode`
+
+
+    Examples
+    --------
+    Calculate the mean of a Normal random variable:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: import numpy as np
+           ...: data = np.random.default_rng().normal(size=2000)
+           ...: azs.mean(data)
+
+    Calculate the means for specific variables:
+
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: dt = azb.load_arviz_data("centered_eight")
+           ...: azs.mean(dt, var_names=["mu", "theta"])
+
+    Calculate the means excluding the school dimension:
+
+    .. ipython::
+
+        In [1]: azs.mean(dt, dim=["chain", "draw"])
+    """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
+    return _apply_multi_input_function(
+        "mean",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        round_to=round_to,
+        **kwargs,
+    )
+
+
+def median(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    round_to=None,
+    **kwargs,
+):
+    r"""Compute the median.
+
+    The median is the middle value of a set of numbers, half of the numbers are above the median
+    and half are below.
+
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the mode
+    var_names : str or list of str, optional
+        Names of the variables for which the mode should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
+    **kwargs : any, optional
+        Forwarded to the array or dataarray interface for mode.
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested mode of the provided input.
+
+    See Also
+    --------
+    :func:`arviz_stats.mean`, :func:`arviz_stats.mode`
+
+
+    Examples
+    --------
+    Calculate the median of a Normal random variable:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: import numpy as np
+           ...: data = np.random.default_rng().normal(size=2000)
+           ...: azs.median(data)
+
+    Calculate the medians for specific variables:
+
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: dt = azb.load_arviz_data("centered_eight")
+           ...: azs.median(dt, var_names=["mu", "theta"])
+
+    Calculate the medians excluding the school dimension:
+
+    .. ipython::
+
+        In [1]: azs.median(dt, dim=["chain", "draw"])
+    """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
+    return _apply_multi_input_function(
+        "median",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        round_to=round_to,
+        **kwargs,
+    )
+
+
 def mode(
     data,
     dim=None,
@@ -356,6 +562,7 @@ def mode(
     var_names=None,
     filter_vars=None,
     coords=None,
+    round_to=None,
     **kwargs,
 ):
     r"""Compute the mode.
@@ -391,6 +598,11 @@ def mode(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
 
@@ -401,7 +613,7 @@ def mode(
 
     See Also
     --------
-    :func:`xarray.Dataset.mean`, :func:`xarray.Dataset.median`
+    :func:`arviz_stats.mean`, :func:`arviz_stats.median`
 
 
     References
@@ -436,6 +648,9 @@ def mode(
 
         In [1]: azs.mode(dt, dim=["chain", "draw"])
     """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
     return _apply_multi_input_function(
         "mode",
         data,
@@ -445,5 +660,6 @@ def mode(
         var_names=var_names,
         filter_vars=filter_vars,
         coords=coords,
+        round_to=round_to,
         **kwargs,
     )

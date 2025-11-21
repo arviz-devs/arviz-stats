@@ -23,7 +23,7 @@ def loo_score(
     pareto_k=None,
     kind="crps",
     pointwise=False,
-    round_to="2g",
+    round_to=None,
 ):
     r"""Compute PWM-based CRPS/SCRPS with PSIS-LOO-CV weights.
 
