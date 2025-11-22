@@ -788,7 +788,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
     def loo_approximate_posterior(
         self,
-        log_likelihood,
+        ary,
         log_p,
         log_q,
         chain_axis=-2,
@@ -810,22 +810,22 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         pareto_k : array-like
         p_loo_i : array-like
         """
-        log_likelihood, log_p, log_q, chain_axis, draw_axis = process_chain_none_multi(
-            log_likelihood, log_p, log_q, chain_axis=chain_axis, draw_axis=draw_axis
+        ary, log_p, log_q, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_p, log_q, chain_axis=chain_axis, draw_axis=draw_axis
         )
 
-        log_likelihood, axes = process_ary_axes(log_likelihood, [chain_axis, draw_axis])
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
         log_p, _ = process_ary_axes(log_p, [chain_axis, draw_axis])
         log_q, _ = process_ary_axes(log_q, [chain_axis, draw_axis])
 
         loo_approx_ufunc = make_ufunc(
             self._loo_approximate_posterior, n_output=3, n_input=3, n_dims=len(axes)
         )
-        return loo_approx_ufunc(log_likelihood, log_p, log_q)
+        return loo_approx_ufunc(ary, log_p, log_q)
 
     def loo_score(
         self,
-        y_pred,
+        ary,
         y_obs,
         log_weights,
         kind="crps",
@@ -836,7 +836,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        y_pred : array-like
+        ary : array-like
             Posterior predictive samples
         y_obs : array-like
             Observed values
@@ -854,15 +854,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         scores : array-like
             Score values (negative CRPS or SCRPS for maximization)
         """
-        y_pred, log_weights, chain_axis, draw_axis = process_chain_none_multi(
-            y_pred, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
         )
 
-        y_pred, axes = process_ary_axes(y_pred, [chain_axis, draw_axis])
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
         log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
 
         loo_score_ufunc = make_ufunc(self._loo_score, n_output=1, n_input=3, n_dims=len(axes))
-        return loo_score_ufunc(y_pred, y_obs, log_weights, kind)
+        return loo_score_ufunc(ary, y_obs, log_weights, kind)
 
 
 array_stats = BaseArray()
