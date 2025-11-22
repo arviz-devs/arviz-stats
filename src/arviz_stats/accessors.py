@@ -163,6 +163,14 @@ class _BaseAccessor:
         """Compute autocorrelation for all variables in the dataset."""
         return self._apply("autocorr", dim=dim, **kwargs)
 
+    def mean(self, dim=None, **kwargs):
+        """Compute mean for all variables in the dataset."""
+        return self._apply("mean", dim=dim, **kwargs)
+
+    def median(self, dim=None, **kwargs):
+        """Compute median for all variables in the dataset."""
+        return self._apply("median", dim=dim, **kwargs)
+
     def mode(self, dim=None, **kwargs):
         """Compute mode for all variables in the dataset."""
         return self._apply("mode", dim=dim, **kwargs)

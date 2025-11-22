@@ -8,7 +8,7 @@ from scipy.spatial import cKDTree
 from scipy.stats import wasserstein_distance, wasserstein_distance_nd
 
 from arviz_stats.base import array_stats
-from arviz_stats.utils import round_num
+from arviz_stats.base.stats_utils import round_num
 
 
 def bayesian_r2(
@@ -22,7 +22,7 @@ def bayesian_r2(
     ci_kind=None,
     ci_prob=None,
     circular=False,
-    round_to="2g",
+    round_to=None,
 ):
     r"""Bayesian :math:`R^2` for regression models.
 
@@ -90,10 +90,11 @@ def bayesian_r2(
         We avoid using the term math::`\mathrm{Var}_{\mu}`, because as the dispersion of the
         circular data increases the dispersion of the mean also increase so even for a model
         that does not explain any of the data :math:`R^2` can be much higher than 0.
-    round_to: int or str, optional
-        If integer, number of decimal places to round the result. If string of the
-        form '2g' number of significant digits to round the result. Defaults to '2g'.
-        Use None to return raw numbers.
+    round_to: int or str or None, optional
+        If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
 
     Returns
     -------
@@ -145,6 +146,8 @@ def bayesian_r2(
         ci_kind = rcParams["stats.ci_kind"]
     if ci_prob is None:
         ci_prob = rcParams["stats.ci_prob"]
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
 
     mu_pred = extract(data, group=group, var_names=pred_mean).values.T
     if scale is not None:
@@ -168,7 +171,7 @@ def residual_r2(
     ci_kind=None,
     ci_prob=None,
     circular=False,
-    round_to="2g",
+    round_to=None,
 ):
     r"""Residual :math:`R^2` for Bayesian regression models.
 
@@ -229,10 +232,11 @@ def residual_r2(
         We avoid using the term math::`\mathrm{Var}_{\mu}`, because as the dispersion of the
         circular data increases the dispersion of the mean also increase so even for a model
         that does not explain any of the data :math:`R^2` can be much higher than 0.
-    round_to: int or str, optional
-        If integer, number of decimal places to round the result. If string of the
-        form '2g' number of significant digits to round the result. Defaults to '2g'.
-        Use None to return raw numbers.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
 
     Returns
     -------
@@ -276,6 +280,8 @@ def residual_r2(
         ci_kind = rcParams["stats.ci_kind"]
     if ci_prob is None:
         ci_prob = rcParams["stats.ci_prob"]
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
 
     y_true = extract(data, group="observed_data", var_names=obs_name, combined=False).values
     mu_pred = extract(data, group=group, var_names=pred_mean).values.T
@@ -288,7 +294,7 @@ def residual_r2(
     return r_squared
 
 
-def metrics(data, kind="rmse", var_name=None, sample_dims=None, round_to="2g"):
+def metrics(data, kind="rmse", var_name=None, sample_dims=None, round_to=None):
     """
     Compute performace metrics.
 
@@ -314,10 +320,11 @@ def metrics(data, kind="rmse", var_name=None, sample_dims=None, round_to="2g"):
     sample_dims: iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
-    round_to: int or str, optional
-        If integer, number of decimal places to round the result. If string of the
-        form '2g' number of significant digits to round the result. Defaults to '2g'.
-        Use None to return raw numbers.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
 
     Returns
     -------
@@ -350,6 +357,8 @@ def metrics(data, kind="rmse", var_name=None, sample_dims=None, round_to="2g"):
     """
     if sample_dims is None:
         sample_dims = rcParams["data.sample_dims"]
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
 
     if var_name is None:
         var_name = list(data.observed_data.data_vars.keys())[0]
@@ -367,7 +376,7 @@ def kl_divergence(
     var_names=None,
     sample_dims=None,
     num_samples=500,
-    round_to="2g",
+    round_to=None,
     random_seed=212480,
 ):
     """Compute the Kullback-Leibler (KL) divergence.
@@ -391,10 +400,11 @@ def kl_divergence(
         Default ``rcParams["data.sample_dims"]``.
     num_samples : int
         Number of samples to use for the distance calculation. Default is 500.
-    round_to: int or str, optional
-        If integer, number of decimal places to round the result. If string of the
-        form '2g' number of significant digits to round the result. Defaults to '2g'.
-        Use None to return raw numbers.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
     random_seed : int
         Random seed for reproducibility. Use None for no seed.
 
@@ -423,6 +433,9 @@ def kl_divergence(
         https://doi.org/10.1109/ISIT.2008.4595271.
         preprint https://www.tsc.uc3m.es/~fernando/bare_conf3.pdf
     """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
     dist1, dist2 = _prepare_distribution_pair(
         data1,
         data2,
@@ -435,10 +448,7 @@ def kl_divergence(
 
     kl_d = _kld(dist1, dist2)
 
-    if round_to is not None and round_to not in ("None", "none"):
-        kl_d = round_num(kl_d, round_to)
-
-    return kl_d
+    return round_num(kl_d, round_to)
 
 
 def wasserstein(
@@ -449,7 +459,7 @@ def wasserstein(
     sample_dims=None,
     joint=True,
     num_samples=500,
-    round_to="2g",
+    round_to=None,
     random_seed=212480,
 ):
     """Compute the Wasserstein-1 distance.
@@ -472,10 +482,11 @@ def wasserstein(
         or over the marginals (False)
     num_samples : int
         Number of samples to use for the distance calculation. Default is 500.
-    round_to: int or str, optional
-        If integer, number of decimal places to round the result. If string of the
-        form '2g' number of significant digits to round the result. Defaults to '2g'.
-        Use None to return raw numbers.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
     random_seed : int
         Random seed for reproducibility. Use None for no seed.
 
@@ -509,6 +520,9 @@ def wasserstein(
     .. [1] "Wasserstein metric",
            https://en.wikipedia.org/wiki/Wasserstein_metric
     """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
     dist1, dist2 = _prepare_distribution_pair(
         data1,
         data2,
@@ -528,10 +542,7 @@ def wasserstein(
             distance += wasserstein_distance(var1, var2)
         distance = distance.item()
 
-    if round_to is not None and round_to not in ("None", "none"):
-        distance = round_num(distance, round_to)
-
-    return distance
+    return round_num(distance, round_to)
 
 
 def _prepare_distribution_pair(
@@ -665,16 +676,20 @@ def _metrics(observed, predicted, kind, round_to):
         - 'rmse': root mean squared error. Default.
         - 'acc': classification accuracy.
         - 'acc_balanced': balanced classification accuracy.
-    round_to: int or str, optional
-        If integer, number of decimal places to round the result. If string of the
-        form '2g' number of significant digits to round the result. Defaults to '2g'.
-        Use None to return raw numbers.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
 
     Returns
     -------
     estimate: namedtuple
         A namedtuple with the mean of the computed metric and its standard error.
     """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
     valid_kind = ["mae", "rmse", "mse", "acc", "acc_balanced"]
     if kind not in valid_kind:
         raise ValueError(f"kind must be one of {valid_kind}")
@@ -690,8 +705,7 @@ def _summary_r2(name, r_squared, point_estimate, ci_kind, ci_prob, round_to):
     c_i = getattr(array_stats, ci_kind)(r_squared, ci_prob)
 
     r2_summary = namedtuple(f"{name}_R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
-    if (round_to is not None) and (round_to not in ("None", "none")):
-        estimate = round_num(estimate, round_to)
-        c_i = (round_num(c_i[0].item(), round_to), round_num(c_i[1].item(), round_to))
+    estimate = round_num(estimate, round_to)
+    c_i = (round_num(c_i[0].item(), round_to), round_num(c_i[1].item(), round_to))
 
     return r2_summary(estimate, c_i[0], c_i[1])

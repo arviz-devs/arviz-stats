@@ -7,13 +7,13 @@ import xarray as xr
 from arviz_base import convert_to_datatree, extract
 from xarray_einstats.stats import logsumexp
 
+from arviz_stats.base.stats_utils import round_num
 from arviz_stats.loo.helper_loo import (
     _get_r_eff,
     _prepare_loo_inputs,
     _validate_crps_input,
     _warn_pareto_k,
 )
-from arviz_stats.utils import round_num
 
 
 def loo_score(
@@ -23,7 +23,7 @@ def loo_score(
     pareto_k=None,
     kind="crps",
     pointwise=False,
-    round_to="2g",
+    round_to=None,
 ):
     r"""Compute PWM-based CRPS/SCRPS with PSIS-LOO-CV weights.
 
@@ -68,9 +68,10 @@ def loo_score(
         - 'scrps': scale-invariant continuous ranked probability score.
     pointwise : bool, default False
         If True, include per-observation score values in the return object.
-    round_to : int or str, default "2g"
-        If integer, number of decimal places to round the result. If string of the form ``"2g"``,
-        number of significant digits to round the result. Use None to return raw numbers.
+    round_to : int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
 
     Returns
     -------

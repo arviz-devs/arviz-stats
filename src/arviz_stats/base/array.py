@@ -720,13 +720,81 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         return ary[tuple(slices)]
 
-    def mode(self, ary, axis=None):
+    def mean(self, ary, round_to=None, skipna=False, axis=None):
+        """Compute mean of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            Whether to ignore NaN values when computing the mean.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to compute the mode.
+
+        Returns
+        -------
+        mean : array-like
+            Mean of the input values along the specified axis.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        mean_ufunc = make_ufunc(
+            self._mean,
+            n_output=1,
+            n_input=1,
+            n_dims=len(axes),
+            ravel=False,
+        )
+        return mean_ufunc(ary, round_to=round_to, skipna=skipna)
+
+    def median(self, ary, round_to=None, skipna=False, axis=None):
+        """Compute median of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            Whether to ignore NaN values when computing the median.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to compute the mode.
+
+        Returns
+        -------
+        median : array-like
+            Median of the input values along the specified axis.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        median_ufunc = make_ufunc(
+            self._median,
+            n_output=1,
+            n_input=1,
+            n_dims=len(axes),
+            ravel=False,
+        )
+        return median_ufunc(ary, round_to=round_to, skipna=skipna)
+
+    def mode(self, ary, round_to=None, skipna=False, axis=None):
         """Compute mode of values along the specified axis.
 
         Parameters
         ----------
         values : array-like
             Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            Whether to ignore NaN values when computing the mode.
         axis : int, sequence of int or None, default -1
             Axis or axes along which to compute the mode.
 
@@ -743,7 +811,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=len(axes),
             ravel=False,
         )
-        return mode_ufunc(ary)
+        return mode_ufunc(ary, round_to=round_to, skipna=skipna)
 
 
 array_stats = BaseArray()

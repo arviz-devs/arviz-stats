@@ -210,7 +210,7 @@ def test_loo_metrics_explicit_var_name(centered_eight):
 
 
 def test_loo_metrics_round_to(centered_eight):
-    result_2g = loo_metrics(centered_eight, kind="rmse", round_to="2g")
+    result_2g = loo_metrics(centered_eight, kind="rmse", round_to=None)
     result_3 = loo_metrics(centered_eight, kind="rmse", round_to=3)
 
     assert hasattr(result_2g, "mean")

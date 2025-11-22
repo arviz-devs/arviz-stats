@@ -87,7 +87,7 @@ def test_residual_r2_ci_prob(datatree_regression, ci_prob):
 
 def test_residual_r2_no_rounding(datatree_regression):
     result = residual_r2(
-        datatree_regression, pred_mean="mu", obs_name="y", summary=True, round_to=None
+        datatree_regression, pred_mean="mu", obs_name="y", summary=True, round_to="None"
     )
     assert isinstance(result.mean, float)
 
@@ -189,7 +189,7 @@ def test_bayesian_r2_ci_prob(datatree_regression, ci_prob):
     [
         ("mae", 2, 2.64, 0.38),
         ("mse", "2g", 11.0, 2.6),
-        ("rmse", None, 3.3379, 0.3967),
+        ("rmse", "None", 3.3379, 0.3967),
     ],
 )
 def test_metrics(datatree, kind, round_to, expected_mean, expected_se):
@@ -217,7 +217,7 @@ def test_metrics_invalid_kind(datatree):
 
 
 def test_metrics_no_rounding(datatree):
-    result = metrics(datatree, kind="rmse", round_to=None)
+    result = metrics(datatree, kind="rmse", round_to="None")
     assert isinstance(result.mean, float)
     assert isinstance(result.se, float)
 
@@ -234,7 +234,7 @@ def test_wasserstein_var_names(fake_dt):
 
 
 def test_wasserstein_no_rounding(fake_dt):
-    result = wasserstein(fake_dt, fake_dt, num_samples=100, round_to=None)
+    result = wasserstein(fake_dt, fake_dt, num_samples=100, round_to="None")
     assert isinstance(result, float)
 
 
@@ -260,7 +260,7 @@ def test_kl_divergence_var_names(fake_dt):
 
 
 def test_kl_divergence_no_rounding(fake_dt):
-    result = kl_divergence(fake_dt, fake_dt, num_samples=100, round_to=None)
+    result = kl_divergence(fake_dt, fake_dt, num_samples=100, round_to="None")
     assert isinstance(result, float)
 
 

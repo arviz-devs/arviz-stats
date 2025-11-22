@@ -430,7 +430,31 @@ class BaseDataArray:
             output_core_dims=[dims],
         )
 
-    def mode(self, da, dim=None):
+    def mean(self, da, round_to=None, skipna=False, dim=None):
+        """Compute mean on DataArray input."""
+        dims = validate_dims(dim)
+
+        return apply_ufunc(
+            self.array_class.mean,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[]],
+            kwargs={"round_to": round_to, "skipna": skipna, "axis": np.arange(-len(dims), 0, 1)},
+        )
+
+    def median(self, da, round_to=None, skipna=False, dim=None):
+        """Compute median on DataArray input."""
+        dims = validate_dims(dim)
+
+        return apply_ufunc(
+            self.array_class.median,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[]],
+            kwargs={"round_to": round_to, "skipna": skipna, "axis": np.arange(-len(dims), 0, 1)},
+        )
+
+    def mode(self, da, round_to=None, skipna=False, dim=None):
         """Compute mode on DataArray input."""
         dims = validate_dims(dim)
 
@@ -439,7 +463,7 @@ class BaseDataArray:
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"axis": np.arange(-len(dims), 0, 1)},
+            kwargs={"round_to": round_to, "skipna": skipna, "axis": np.arange(-len(dims), 0, 1)},
         )
 
 

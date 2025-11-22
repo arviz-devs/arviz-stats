@@ -12,6 +12,7 @@ xr = importorskip("xarray")
 
 from arviz_stats.base.array import array_stats
 from arviz_stats.base.dataarray import dataarray_stats
+from arviz_stats.base.stats_utils import round_num
 from arviz_stats.utils import (
     ELPDData,
     get_array_function,
@@ -20,7 +21,6 @@ from arviz_stats.utils import (
     get_log_likelihood_dataarray,
     get_log_likelihood_dataset,
     get_log_prior,
-    round_num,
 )
 
 
