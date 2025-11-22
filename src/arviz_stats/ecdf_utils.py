@@ -213,10 +213,11 @@ def _hypergeometric_cdf_lookup(x_val, population, draws, successes):
 
 def hypergeom_cdf(x_values, draws, successes, population):
     """Compute the hypergeometric CDF for given x values."""
-    x_values = np.asarray(x_values)
-
     k_min = max(0, draws - (population - successes))
     k_max = min(draws, successes)
+
+    if k_max < k_min:
+        return np.where(x_values >= k_min, 1.0, 0.0)
 
     ks = np.arange(k_min, k_max + 1)
 
@@ -237,5 +238,4 @@ def hypergeom_cdf(x_values, draws, successes, population):
     cdf /= cdf[-1]
 
     xv = np.clip(x_values, k_min, k_max)
-
     return cdf[xv - k_min]
