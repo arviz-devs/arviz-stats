@@ -7,8 +7,8 @@ import pytest
 from numpy.testing import assert_array_almost_equal
 from scipy.special import logsumexp
 
+from arviz_stats.base.stats_utils import calculate_khat_bin_edges, make_ufunc, not_valid
 from arviz_stats.base.stats_utils import logsumexp as _logsumexp
-from arviz_stats.base.stats_utils import make_ufunc, not_valid
 
 
 @pytest.mark.parametrize("ary_dtype", [np.float64, np.float32, np.int32, np.int64])
@@ -488,3 +488,23 @@ def test_logsumexp_loo_bounds(rng):
 
     assert np.all(result <= max_vals)
     assert np.all(result >= mean_vals - 5)
+
+
+def test_calculate_khat_bin_edges():
+    values = np.array([0.3, 0.5, 0.8, 0.9, 1.2, 1.5])
+    thresholds = [0.7, 1.0]
+    bin_edges = calculate_khat_bin_edges(values, thresholds)
+
+    assert bin_edges is not None
+    assert len(bin_edges) == 4
+    assert bin_edges[0] == 0.3
+    assert bin_edges[1] == 0.7
+    assert bin_edges[2] == 1.0
+    assert bin_edges[3] == 1.5
+
+    assert calculate_khat_bin_edges(np.array([]), thresholds) is None
+
+    nan_values = np.array([0.3, 0.5, np.nan, 0.9])
+    bin_edges_nan = calculate_khat_bin_edges(nan_values, thresholds)
+    assert bin_edges_nan is not None
+    assert len(bin_edges_nan) == 3
