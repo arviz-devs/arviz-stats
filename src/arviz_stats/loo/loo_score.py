@@ -68,9 +68,10 @@ def loo_score(
         - 'scrps': scale-invariant continuous ranked probability score.
     pointwise : bool, default False
         If True, include per-observation score values in the return object.
-    round_to : int or str, default "2g"
-        If integer, number of decimal places to round the result. If string of the form ``"2g"``,
-        number of significant digits to round the result. Use None to return raw numbers.
+    round_to : int or str, optional
+        If integer, number of decimal places to round the result. If string of the
+        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        Use None to return raw numbers.
 
     Returns
     -------
