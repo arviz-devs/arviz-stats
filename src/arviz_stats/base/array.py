@@ -864,5 +864,101 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         loo_score_ufunc = make_ufunc(self._loo_score, n_output=1, n_input=3, n_dims=len(axes))
         return loo_score_ufunc(ary, y_obs, log_weights, kind)
 
+    def loo_expectation(
+        self,
+        ary,
+        log_likelihood=None,
+        log_weights=None,
+        kind="mean",
+        probs=None,
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute LOO-weighted expectations at array level.
+
+        Parameters
+        ----------
+        ary : array-like
+            Values array (e.g., posterior predictive samples)
+        log_likelihood : array-like, optional
+            Log-likelihood array. If provided and log_weights is None,
+            PSIS weights will be computed from this.
+        log_weights : array-like, optional
+            Pre-computed PSIS-LOO log weights. If None, will be computed
+            from log_likelihood.
+        kind : str, default "mean"
+            Type of expectation: "mean", "median", "var", "sd", "quantile",
+            "circular_mean", "circular_var", "circular_sd"
+        probs : float or array-like, optional
+            Quantile(s) to compute when kind="quantile"
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+
+        Returns
+        -------
+        expectation : array-like
+            LOO-weighted expectation
+        khat : array-like
+            Function-specific Pareto k-hat diagnostics
+        """
+        valid_kinds = {
+            "mean",
+            "median",
+            "var",
+            "sd",
+            "quantile",
+            "circular_mean",
+            "circular_var",
+            "circular_sd",
+        }
+        if kind not in valid_kinds:
+            raise ValueError(f"kind must be one of {valid_kinds}")
+
+        if kind == "quantile" and probs is None:
+            raise ValueError("probs must be provided when kind='quantile'")
+
+        if log_weights is None:
+            if log_likelihood is None:
+                raise ValueError("Either log_weights or log_likelihood must be provided")
+            ary, log_likelihood, chain_axis, draw_axis = process_chain_none_multi(
+                ary, log_likelihood, chain_axis=chain_axis, draw_axis=draw_axis
+            )
+            ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+            log_likelihood, _ = process_ary_axes(log_likelihood, [chain_axis, draw_axis])
+            log_weights, _ = self.psislw(log_likelihood, axis=list(range(-len(axes), 0)))
+        else:
+            ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+                ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+            )
+            ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+            log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+
+        out_shape = None
+        if kind == "quantile" and np.ndim(probs) > 0:
+            out_shape = (len(probs),) if isinstance(probs, list | tuple) else (probs.size,)
+
+        exp_ufunc = make_ufunc(self._loo_expectation, n_output=1, n_input=2, n_dims=len(axes))
+        func_kwargs = {"kind": kind, "q": probs} if kind == "quantile" else {"kind": kind}
+        expectation = exp_ufunc(ary, log_weights, out_shape=out_shape, **func_kwargs)
+
+        if kind == "quantile" and out_shape is not None:
+            expectation = np.moveaxis(expectation, -1, 0)
+
+        if kind in ["var", "sd"]:
+            ess_correction = 1.0 - np.sum(np.exp(log_weights) ** 2)
+            expectation = (
+                expectation / ess_correction
+                if kind == "var"
+                else np.sqrt(expectation**2 / ess_correction)
+            )
+
+        if log_likelihood is None:
+            return expectation, np.full_like(expectation, np.nan)
+
+        khat_ufunc = make_ufunc(self._loo_expectation_khat, n_output=1, n_input=2, n_dims=len(axes))
+        khat = khat_ufunc(ary, -log_likelihood, kind=kind)
+
+        return expectation, khat
+
 
 array_stats = BaseArray()

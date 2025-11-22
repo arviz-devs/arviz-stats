@@ -8,7 +8,7 @@ import numpy as np
 from scipy import stats
 from scipy.special import logsumexp
 
-from arviz_stats.base.circular_utils import circular_diff, circular_var
+from arviz_stats.base.circular_utils import circular_diff, circular_mean, circular_sd, circular_var
 from arviz_stats.base.core import _CoreBase
 from arviz_stats.base.stats_utils import not_valid as _not_valid
 
@@ -494,6 +494,130 @@ class _DiagnosticsBase(_CoreBase):
         bracket = 2.0 * f_minus + weights_sorted - 1.0
         gini_mean_difference = 2.0 * np.sum(weights_sorted * values_sorted * bracket)
         return -(loo_weighted_abs_error / gini_mean_difference) - 0.5 * np.log(gini_mean_difference)
+
+    @staticmethod
+    def _loo_expectation(ary, log_weights, kind="mean", q=None):  # pylint: disable=too-many-return-statements
+        """
+        Compute LOO-weighted expectations for a 2D array (chain, draw).
+
+        Parameters
+        ----------
+        ary : np.ndarray
+            2D array with shape (n_chains, n_draws) of values
+        log_weights : np.ndarray
+            2D array with shape (n_chains, n_draws) of PSIS-LOO log weights
+        kind : str, default "mean"
+            Type of expectation: "mean", "median", "var", "sd", "quantile",
+            "circular_mean", "circular_var", "circular_sd"
+        q : float or array-like, optional
+            Quantile(s) to compute when kind="quantile"
+
+        Returns
+        -------
+        float or np.ndarray
+            LOO-weighted expectation
+        """
+        ary = np.asarray(ary).ravel()
+        log_weights = np.asarray(log_weights).ravel()
+
+        weights = np.exp(log_weights - log_weights.max())
+        weights = weights / np.sum(weights)
+
+        if kind == "mean":
+            return np.sum(weights * ary)
+
+        if kind == "median":
+            return np.quantile(ary, 0.5, weights=weights, method="inverted_cdf")
+
+        if kind == "var":
+            weighted_mean = np.sum(weights * ary)
+            return np.sum(weights * (ary - weighted_mean) ** 2)
+
+        if kind == "sd":
+            weighted_mean = np.sum(weights * ary)
+            weighted_var = np.sum(weights * (ary - weighted_mean) ** 2)
+            return np.sqrt(weighted_var)
+
+        if kind == "quantile":
+            if q is None:
+                raise ValueError("q must be provided for quantile computation")
+            return np.quantile(ary, q, weights=weights, method="inverted_cdf")
+
+        if kind in ["circular_mean", "circular_var", "circular_sd"]:
+            if kind == "circular_mean":
+                return circular_mean(ary.reshape(1, -1), weights=weights.reshape(1, -1), dims=1)
+            if kind == "circular_var":
+                return circular_var(ary.reshape(1, -1), weights=weights.reshape(1, -1), dims=1)
+            return circular_sd(ary.reshape(1, -1), weights=weights.reshape(1, -1), dims=1)
+
+        raise ValueError(
+            f"Unknown kind: {kind}. Must be one of: mean, median, var, sd, "
+            f"quantile, circular_mean, circular_var, circular_sd"
+        )
+
+    def _loo_expectation_khat(self, values, log_ratios, kind):  # pylint: disable=too-many-return-statements
+        """
+        Compute function-specific k-hat diagnostics for LOO expectations.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Values of the posterior predictive distribution, 2D array (chain, draw)
+        log_ratios : np.ndarray
+            Raw log ratios (negative log-likelihood), 2D array (chain, draw)
+        kind : str
+            Type of expectation being computed ('mean', 'median', 'var', 'sd', 'quantile',
+            'circular_mean', 'circular_var', 'circular_sd')
+
+        Returns
+        -------
+        khat : float
+            Function-specific k-hat estimate
+        """
+        values = np.asarray(values).ravel()
+        log_ratios = np.asarray(log_ratios).ravel()
+
+        r_theta = np.exp(log_ratios - np.max(log_ratios))
+
+        try:
+            _, khat_r = self._pareto_khat(
+                r_theta.reshape(1, -1), r_eff=None, tail="right", log_weights=False
+            )
+        except ValueError:
+            khat_r = np.nan
+
+        if kind in ["quantile", "median"]:
+            return khat_r
+
+        if kind in ["mean", "circular_mean"]:
+            h_theta_values = values
+        elif kind in ["var", "sd", "circular_var", "circular_sd"]:
+            h_theta_values = values**2
+        else:
+            return khat_r
+
+        unique_h = np.unique(h_theta_values[np.isfinite(h_theta_values)])
+
+        if len(unique_h) <= 1:
+            return khat_r
+        if len(unique_h) == 2:
+            return khat_r
+        if np.any(~np.isfinite(h_theta_values)):
+            return khat_r
+
+        hr_theta = h_theta_values * r_theta
+
+        try:
+            _, khat_hr = self._pareto_khat(
+                hr_theta.reshape(1, -1), r_eff=None, tail="both", log_weights=False
+            )
+        except ValueError:
+            khat_hr = np.nan
+
+        if np.isnan(khat_hr) and np.isnan(khat_r):
+            return np.nan
+
+        return np.nanmax([khat_hr, khat_r])
 
     def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
         """

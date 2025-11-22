@@ -17,7 +17,7 @@ azb = importorskip("arviz_base")
 einstats = importorskip("xarray_einstats")
 xr = importorskip("xarray")
 
-from arviz_stats import loo, loo_approximate_posterior, loo_score
+from arviz_stats import loo, loo_approximate_posterior, loo_expectations, loo_score
 from arviz_stats.loo.helper_loo import _get_r_eff, _prepare_loo_inputs
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -915,3 +915,193 @@ class TestLOOScore:
         )
 
         assert_allclose(scores_array, loo_score_xr.pointwise.values, rtol=1e-10)
+
+
+class TestLOOExpectation:
+    @pytest.mark.parametrize("kind", ["mean", "median", "var", "sd"])
+    def test_loo_expectation_basic(self, array_stats, rng, kind):
+        y_pred = rng.normal(0, 1, size=(4, 100))
+        log_lik = rng.normal(-2, 1, size=(4, 100))
+
+        expectation, khat = array_stats.loo_expectation(
+            y_pred, log_likelihood=log_lik, kind=kind, chain_axis=0, draw_axis=1
+        )
+
+        assert expectation.shape == ()
+        assert khat.shape == ()
+        assert np.isfinite(expectation)
+        assert np.isfinite(khat)
+
+    def test_loo_expectation_quantile_single(self, array_stats, rng):
+        y_pred = rng.normal(0, 1, size=(4, 100))
+        log_lik = rng.normal(-2, 1, size=(4, 100))
+
+        expectation, khat = array_stats.loo_expectation(
+            y_pred, log_likelihood=log_lik, kind="quantile", probs=0.5, chain_axis=0, draw_axis=1
+        )
+
+        assert expectation.shape == ()
+        assert khat.shape == ()
+        assert np.isfinite(expectation)
+        assert np.isfinite(khat)
+
+    def test_loo_expectation_quantile_multiple(self, array_stats, rng):
+        y_pred = rng.normal(0, 1, size=(4, 100))
+        log_lik = rng.normal(-2, 1, size=(4, 100))
+        probs = [0.25, 0.5, 0.75]
+
+        expectation, khat = array_stats.loo_expectation(
+            y_pred, log_likelihood=log_lik, kind="quantile", probs=probs, chain_axis=0, draw_axis=1
+        )
+
+        assert expectation.shape == (3,)
+        assert khat.shape == ()
+        assert np.all(np.isfinite(expectation))
+        assert np.isfinite(khat)
+
+    @pytest.mark.parametrize("kind", ["mean", "median", "var", "sd"])
+    def test_loo_expectation_multiple_obs(self, array_stats, rng, kind):
+        y_pred = rng.normal(0, 1, size=(4, 100, 8))
+        log_lik = rng.normal(-2, 1, size=(4, 100, 8))
+
+        expectation, khat = array_stats.loo_expectation(
+            y_pred, log_likelihood=log_lik, kind=kind, chain_axis=0, draw_axis=1
+        )
+
+        assert expectation.shape == (8,)
+        assert khat.shape == (8,)
+        assert np.all(np.isfinite(expectation))
+        assert np.all(np.isfinite(khat))
+
+    def test_loo_expectation_quantile_multiple_obs(self, array_stats, rng):
+        y_pred = rng.normal(0, 1, size=(4, 100, 8))
+        log_lik = rng.normal(-2, 1, size=(4, 100, 8))
+        probs = [0.25, 0.75]
+
+        expectation, khat = array_stats.loo_expectation(
+            y_pred, log_likelihood=log_lik, kind="quantile", probs=probs, chain_axis=0, draw_axis=1
+        )
+
+        assert expectation.shape == (2, 8)
+        assert khat.shape == (8,)
+        assert np.all(np.isfinite(expectation))
+        assert np.all(np.isfinite(khat))
+
+    def test_loo_expectation_chain_axis_none(self, array_stats, rng):
+        y_pred = rng.normal(0, 1, size=(100,))
+        log_lik = rng.normal(-2, 1, size=(100,))
+
+        expectation, khat = array_stats.loo_expectation(
+            y_pred, log_likelihood=log_lik, kind="mean", chain_axis=None, draw_axis=-1
+        )
+
+        assert expectation.shape == ()
+        assert khat.shape == ()
+        assert np.isfinite(expectation)
+        assert np.isfinite(khat)
+
+    def test_loo_expectation_diff_axes(self, array_stats, rng):
+        y_pred = rng.normal(0, 1, size=(5, 4, 100))
+        log_lik = rng.normal(-2, 1, size=(5, 4, 100))
+
+        expectation, khat = array_stats.loo_expectation(
+            y_pred, log_likelihood=log_lik, kind="mean", chain_axis=1, draw_axis=2
+        )
+
+        assert expectation.shape == (5,)
+        assert khat.shape == (5,)
+        assert np.all(np.isfinite(expectation))
+        assert np.all(np.isfinite(khat))
+
+    def test_loo_expectation_precomputed_weights(self, array_stats, rng):
+        y_pred = rng.normal(0, 1, size=(4, 100))
+        log_lik = rng.normal(-2, 1, size=(4, 100))
+
+        log_weights, _ = array_stats.psislw(log_lik, axis=[0, 1])
+
+        expectation, khat = array_stats.loo_expectation(
+            y_pred, log_weights=log_weights, kind="mean", chain_axis=0, draw_axis=1
+        )
+
+        assert expectation.shape == ()
+        assert khat.shape == ()
+        assert np.isfinite(expectation)
+        assert np.isnan(khat)
+
+    def test_loo_expectation_no_inputs_error(self, array_stats, rng):
+        y_pred = rng.normal(0, 1, size=(4, 100))
+
+        with pytest.raises(
+            ValueError, match="Either log_weights or log_likelihood must be provided"
+        ):
+            array_stats.loo_expectation(y_pred, kind="mean", chain_axis=0, draw_axis=1)
+
+    def test_loo_expectation_invalid_kind_error(self, array_stats, rng):
+        y_pred = rng.normal(0, 1, size=(4, 100))
+        log_lik = rng.normal(-2, 1, size=(4, 100))
+
+        with pytest.raises(ValueError, match="kind must be one of"):
+            array_stats.loo_expectation(
+                y_pred, log_likelihood=log_lik, kind="invalid", chain_axis=0, draw_axis=1
+            )
+
+    def test_loo_expectation_quantile_missing_probs_error(self, array_stats, rng):
+        y_pred = rng.normal(0, 1, size=(4, 100))
+        log_lik = rng.normal(-2, 1, size=(4, 100))
+
+        with pytest.raises(ValueError, match="probs must be provided"):
+            array_stats.loo_expectation(
+                y_pred, log_likelihood=log_lik, kind="quantile", chain_axis=0, draw_axis=1
+            )
+
+    @pytest.mark.parametrize("kind", ["mean", "var", "sd"])
+    def test_loo_expectation_matches_xarray(self, array_stats, centered_eight, kind):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        y_pred = centered_eight.posterior_predictive["obs"]
+
+        loo_expec_xr, khat_xr = loo_expectations(
+            centered_eight, var_name="obs", kind=kind, log_weights=None
+        )
+
+        expectation_array, khat_array = array_stats.loo_expectation(
+            y_pred.values, log_likelihood=log_lik.values, kind=kind, chain_axis=0, draw_axis=1
+        )
+
+        assert_allclose(expectation_array, loo_expec_xr.values, rtol=1e-10)
+        assert_allclose(khat_array, khat_xr.values, rtol=1e-10)
+
+    def test_loo_expectation_median_matches_xarray(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        y_pred = centered_eight.posterior_predictive["obs"]
+
+        loo_expec_xr, khat_xr = loo_expectations(
+            centered_eight, var_name="obs", kind="median", log_weights=None
+        )
+
+        expectation_array, khat_array = array_stats.loo_expectation(
+            y_pred.values, log_likelihood=log_lik.values, kind="median", chain_axis=0, draw_axis=1
+        )
+
+        assert_allclose(expectation_array, loo_expec_xr.values, rtol=1e-2)
+        assert_allclose(khat_array, khat_xr.values, rtol=1e-10)
+
+    def test_loo_expectation_quantile_matches_xarray(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        y_pred = centered_eight.posterior_predictive["obs"]
+        probs = [0.25, 0.5, 0.75]
+
+        loo_expec_xr, khat_xr = loo_expectations(
+            centered_eight, var_name="obs", kind="quantile", probs=probs, log_weights=None
+        )
+
+        expectation_array, khat_array = array_stats.loo_expectation(
+            y_pred.values,
+            log_likelihood=log_lik.values,
+            kind="quantile",
+            probs=probs,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert_allclose(expectation_array, loo_expec_xr.values, rtol=1e-2)
+        assert_allclose(khat_array, khat_xr.values, rtol=1e-10)
