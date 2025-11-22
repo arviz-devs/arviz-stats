@@ -217,7 +217,7 @@ def hypergeom_cdf(x_values, draws, successes, population):
     k_max = min(draws, successes)
 
     if k_max < k_min:
-        return np.where(x_values >= k_min, 1.0, 0.0)
+        return np.where(x_values >= k_min, 1.0, np.nan)
 
     ks = np.arange(k_min, k_max + 1)
 
