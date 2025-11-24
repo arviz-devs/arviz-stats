@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-__all__ = ["make_ufunc"]
+__all__ = ["make_ufunc", "calculate_khat_bin_edges"]
 
 _log = logging.getLogger(__name__)
 
@@ -298,6 +298,50 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
             _log.info(error_msg)
 
     return nan_error | chain_error | draw_error
+
+
+def calculate_khat_bin_edges(ary, thresholds, tolerance=1e-9):
+    """Calculate edges for Pareto k diagnostic bins.
+
+    Parameters
+    ----------
+    ary : array_like
+        Pareto k values to bin
+    thresholds : sequence of float
+        Diagnostic threshold values to use as potential bin edges (e.g., [0.7, 1.0])
+    tolerance : float, default 1e-9
+        Numerical tolerance for edge comparisons to avoid duplicate edges
+
+    Returns
+    -------
+    bin_edges : list of float or None
+        Calculated bin edges suitable for np.histogram, or None if edges cannot
+        be computed.
+    """
+    if not ary.size:
+        return None
+
+    ymin = np.nanmin(ary)
+    ymax = np.nanmax(ary)
+
+    if not (np.isfinite(ymin) and np.isfinite(ymax)):
+        return None
+
+    bin_edges = [ymin]
+
+    for edge in thresholds:
+        if (
+            edge is not None
+            and np.isfinite(edge)
+            and bin_edges[-1] + tolerance < edge < ymax - tolerance
+        ):
+            bin_edges.append(edge)
+
+    if ymax > bin_edges[-1] + tolerance:
+        bin_edges.append(ymax)
+    else:
+        bin_edges[-1] = ymax
+    return bin_edges if len(bin_edges) > 1 else None
 
 
 def round_num(value, precision):
