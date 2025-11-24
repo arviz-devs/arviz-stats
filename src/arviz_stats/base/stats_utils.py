@@ -342,3 +342,36 @@ def calculate_khat_bin_edges(ary, thresholds, tolerance=1e-9):
     else:
         bin_edges[-1] = ymax
     return bin_edges if len(bin_edges) > 1 else None
+
+
+def round_num(value, precision):
+    """Round a number to a given precision.
+
+    Parameters
+    ----------
+    value : float, numpy array or DataArray
+        The value to round. If array assumes it contains a single value.
+    precision : int or str
+        If an integer, specifies decimal places. If a string ending in 'g',
+        specifies significant digits. Integers can be negative.
+        Use "None" or "none" for no rounding.
+    """
+    try:
+        value = value.item()
+    except AttributeError:
+        pass
+
+    if precision is None or precision in ("None", "none"):
+        return value
+
+    if isinstance(precision, int):
+        return round(value, precision)
+
+    if isinstance(precision, str) and precision.endswith("g"):
+        sig_digits = int(precision[:-1])
+        if value == 0:
+            return 0
+        return round(value, sig_digits - int(np.floor(np.log10(abs(value)))) - 1)
+
+    return value
+  

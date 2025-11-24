@@ -181,7 +181,7 @@ def loo_expectations(
     return loo_expec, khat
 
 
-def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to="2g"):
+def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to=None):
     """Compute predictive metrics using the PSIS-LOO-CV method.
 
     Currently supported metrics are mean absolute error, mean squared error and
@@ -213,7 +213,7 @@ def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to="2g
         - An ELPDData object from a previous :func:`arviz_stats.loo` call.
 
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
-    round_to: int or str, optional
+    round_to: int or str or None, optional
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.
 
@@ -251,6 +251,9 @@ def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to="2g
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
     if var_name is None:
         var_name = list(data.observed_data.data_vars.keys())[0]
 
@@ -269,7 +272,7 @@ def loo_r2(
     ci_kind=None,
     ci_prob=None,
     circular=False,
-    round_to="2g",
+    round_to=None,
 ):
     """Compute LOO-adjusted :math:`R^2`.
 
@@ -303,10 +306,11 @@ def loo_r2(
         It's assumed that the circular data is in radians and ranges from -π to π.
         We use the same definition of :math:`R^2` for circular data as in the linear case,
         but using circular variance instead of regular variance.
-    round_to: int or str, optional
-        If integer, number of decimal places to round the result. If string of the
-        form '2g' number of significant digits to round the result. Defaults to '2g'.
-        Use None to return raw numbers.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
 
     Returns
     -------
@@ -343,6 +347,8 @@ def loo_r2(
         ci_kind = rcParams["stats.ci_kind"]
     if ci_prob is None:
         ci_prob = rcParams["stats.ci_prob"]
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
 
     y = data.observed_data[var_name].values
 

@@ -26,7 +26,7 @@ try:
     from arviz_stats.psense import psense, psense_summary
     from arviz_stats.metrics import bayesian_r2, kl_divergence, metrics, residual_r2, wasserstein
     from arviz_stats.sampling_diagnostics import ess, mcse, rhat, rhat_nested
-    from arviz_stats.summary import summary, ci_in_rope, mode
+    from arviz_stats.summary import summary, ci_in_rope, mean, median, mode
     from arviz_stats.manipulation import thin
     from arviz_stats.bayes_factor import bayes_factor
     from arviz_stats.visualization import ecdf, eti, hdi, histogram, kde, qds
