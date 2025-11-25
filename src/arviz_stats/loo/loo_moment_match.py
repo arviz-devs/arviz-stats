@@ -369,7 +369,11 @@ def loo_moment_match(
 
     loo_data.influence_pareto_k = loo_data.pareto_k.copy()
 
-    ks = loo_data.pareto_k.stack(__obs__=obs_dims).transpose("__obs__").values
+    ks = (
+        loo_data.pareto_k.stack(__pareto_obs_stacked__=obs_dims)
+        .transpose("__pareto_obs_stacked__")
+        .values
+    )
     bad_obs_indices = np.where(ks > k_threshold)[0]
 
     if len(bad_obs_indices) == 0:
@@ -452,7 +456,11 @@ def loo_moment_match(
                     idx_dict = dict(zip(obs_dims, coords))
                 loo_data.p_loo_i[idx_dict] = loo_orig.p_loo_i[idx_dict]
 
-    final_ks = loo_data.pareto_k.stack(__obs__=obs_dims).transpose("__obs__").values
+    final_ks = (
+        loo_data.pareto_k.stack(__pareto_obs_stacked__=obs_dims)
+        .transpose("__pareto_obs_stacked__")
+        .values
+    )
 
     if np.any(final_ks[bad_obs_indices] > k_threshold):
         warnings.warn(
