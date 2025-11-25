@@ -337,7 +337,7 @@ def _extract_loo_data(loo_orig):
 
     sample_dims = ["chain", "draw"]
     obs_dims = [dim for dim in elpd_values.dims if dim not in sample_dims]
-    stacked_obs_dim = "__obs__"
+    stacked_obs_dim = "__pareto_obs_stacked__"
 
     if len(obs_dims) == 1:
         obs_dim = obs_dims[0]
