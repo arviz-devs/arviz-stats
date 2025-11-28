@@ -27,13 +27,10 @@ def isotonic_fit(dt, var_names, group, ci_prob, data_type="binary", residuals=Fa
     data_type : str
         Defaults to "binary", other options are "categorical" and "ordinal".
     residuals : bool, optional
-        If True, compute residuals (CEP - predicted probabilities) instead of CEP.
+        If True, compute residuals instead of CEP.
         Defaults to False.
-    x_var : str or array-like, optional
-        Variable to use for x-axis. Can be either:
-        - str: Name of variable in DataTree to use for x-axis
-        - array-like: Direct array of x values (must match observation length)
-        - None: Uses predicted probabilities (default)
+    x_var : array-like, optional
+        Variable to use for x-axis when computing residuals
     """
     pp = extract(dt, group=group, keep_dataset=True)
     dictio = {}
@@ -142,7 +139,7 @@ def _isotonic_fit(pred, obs, ci_prob, residuals, preds, x_var):
     preds : array-like
         Full posterior predictive samples. Will be transposed if needed to shape (n_samples, n_obs).
     x_var : array-like
-        External variable to use for x-axis.
+        Variable to use for x-axis.
     """
     pred = np.asarray(pred)
     obs = np.asarray(obs)
