@@ -70,7 +70,6 @@ def test_isotonic_fit_binary(binary_datatree):
         binary_datatree,
         var_names=["y"],
         group="posterior_predictive",
-        n_bootstrap=10,
         ci_prob=0.94,
         data_type="binary",
     )
@@ -86,7 +85,6 @@ def test_isotonic_fit_binary_string_var_name(binary_datatree):
         binary_datatree,
         var_names="y",
         group="posterior_predictive",
-        n_bootstrap=10,
         ci_prob=0.94,
         data_type="binary",
     )
@@ -98,7 +96,6 @@ def test_isotonic_fit_categorical(categorical_datatree):
         categorical_datatree,
         var_names=["y"],
         group="posterior_predictive",
-        n_bootstrap=10,
         ci_prob=0.94,
         data_type="categorical",
     )
@@ -112,7 +109,6 @@ def test_isotonic_fit_ordinal(categorical_datatree):
         categorical_datatree,
         var_names=["y"],
         group="posterior_predictive",
-        n_bootstrap=10,
         ci_prob=0.94,
         data_type="ordinal",
     )
@@ -126,7 +122,6 @@ def test_isotonic_fit_invalid_data_type(binary_datatree):
             binary_datatree,
             var_names=["y"],
             group="posterior_predictive",
-            n_bootstrap=10,
             ci_prob=0.94,
             data_type="invalid",
         )
@@ -137,7 +132,6 @@ def test_isotonic_fit_none_var_names(binary_datatree):
         binary_datatree,
         var_names=None,
         group="posterior_predictive",
-        n_bootstrap=10,
         ci_prob=0.94,
         data_type="binary",
     )
@@ -151,7 +145,6 @@ def test_isotonic_fit_categorical_with_continuous_data(continuous_datatree):
                 continuous_datatree,
                 var_names=["y"],
                 group="posterior_predictive",
-                n_bootstrap=10,
                 ci_prob=0.94,
                 data_type="categorical",
             )
@@ -164,7 +157,6 @@ def test_isotonic_fit_categorical_with_binary_data(binary_datatree):
             binary_datatree,
             var_names=["y"],
             group="posterior_predictive",
-            n_bootstrap=10,
             ci_prob=0.94,
             data_type="categorical",
         )
@@ -175,7 +167,6 @@ def test_isotonic_fit_ci_bounds(binary_datatree):
         binary_datatree,
         var_names=["y"],
         group="posterior_predictive",
-        n_bootstrap=10,
         ci_prob=0.94,
         data_type="binary",
     )
@@ -261,7 +252,6 @@ def test_isotonic_fit_output_shape_consistency(binary_datatree):
         binary_datatree,
         var_names=["y"],
         group="posterior_predictive",
-        n_bootstrap=5,
         ci_prob=0.89,
         data_type="binary",
     )
