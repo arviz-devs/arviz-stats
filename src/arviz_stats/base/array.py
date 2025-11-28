@@ -22,6 +22,15 @@ def process_chain_none(ary, chain_axis, draw_axis):
     return ary, chain_axis, draw_axis
 
 
+def process_chain_none_multi(*arys, chain_axis, draw_axis):
+    """Process multiple arrays with chain and draw axis to cover the case ``chain_axis=None``."""
+    if chain_axis is None:
+        arys = tuple(np.expand_dims(ary, axis=0) for ary in arys)
+        chain_axis = 0
+        draw_axis = draw_axis + 1 if draw_axis >= 0 else draw_axis
+    return (*arys, chain_axis, draw_axis)
+
+
 def process_ary_axes(ary, axes):
     """Process input array and axes to ensure input core dims are the last ones.
 
@@ -812,6 +821,116 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             ravel=False,
         )
         return mode_ufunc(ary, round_to=round_to, skipna=skipna)
+
+    def loo(
+        self,
+        ary,
+        chain_axis=-2,
+        draw_axis=-1,
+        reff=1.0,
+        log_weights=None,
+        pareto_k=None,
+    ):
+        """Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        reff : float, default 1.0
+        log_weights : array-like, optional
+        pareto_k : array-like, optional
+
+        Returns
+        -------
+        elpd_i : array-like
+        pareto_k : array-like
+        p_loo_i : array-like
+        """
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+
+        loo_ufunc = make_ufunc(self._loo, n_output=3, n_input=1, n_dims=len(axes))
+        return loo_ufunc(ary, r_eff=reff, log_weights=log_weights, pareto_k=pareto_k)
+
+    def loo_approximate_posterior(
+        self,
+        ary,
+        log_p,
+        log_q,
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute PSIS-LOO-CV with approximate posterior correction.
+
+        Parameters
+        ----------
+        log_likelihood : array-like
+        log_p : array-like
+        log_q : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+
+        Returns
+        -------
+        elpd_i : array-like
+        pareto_k : array-like
+        p_loo_i : array-like
+        """
+        ary, log_p, log_q, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_p, log_q, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+        log_p, _ = process_ary_axes(log_p, [chain_axis, draw_axis])
+        log_q, _ = process_ary_axes(log_q, [chain_axis, draw_axis])
+
+        loo_approx_ufunc = make_ufunc(
+            self._loo_approximate_posterior, n_output=3, n_input=3, n_dims=len(axes)
+        )
+        return loo_approx_ufunc(ary, log_p, log_q)
+
+    def loo_score(
+        self,
+        ary,
+        y_obs,
+        log_weights,
+        kind="crps",
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute CRPS or SCRPS with PSIS-LOO-CV weights.
+
+        Parameters
+        ----------
+        ary : array-like
+            Posterior predictive samples
+        y_obs : array-like
+            Observed values
+        log_weights : array-like
+            PSIS-LOO log weights
+        kind : str, default "crps"
+            "crps" or "scrps"
+        chain_axis : int, default -2
+            Axis for chains
+        draw_axis : int, default -1
+            Axis for draws
+
+        Returns
+        -------
+        scores : array-like
+            Score values (negative CRPS or SCRPS for maximization)
+        """
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+        log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+
+        loo_score_ufunc = make_ufunc(self._loo_score, n_output=1, n_input=3, n_dims=len(axes))
+        return loo_score_ufunc(ary, y_obs, log_weights, kind)
 
 
 array_stats = BaseArray()
