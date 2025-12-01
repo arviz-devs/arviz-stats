@@ -1,7 +1,6 @@
 """Test PSIS-LOO-CV."""
 
 # pylint: disable=redefined-outer-name, unused-argument
-import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
 
@@ -10,6 +9,7 @@ from ..helpers import importorskip
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 sp = importorskip("scipy")
+np = importorskip("numpy")
 
 from arviz_stats import loo, loo_i
 
@@ -435,3 +435,25 @@ def test_loo_i_with_different_var_names():
     assert result_y2.elpd is not None
 
     assert result_y1.elpd != result_y2.elpd
+
+
+def test_loo_mixture(centered_eight):
+    result_psis = loo(centered_eight, pointwise=True)
+
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        result_mix = loo(centered_eight, mixture=True, pointwise=True)
+
+    assert result_mix.kind == "loo"
+    assert result_mix.scale == "log"
+    assert result_mix.n_samples == result_psis.n_samples
+    assert result_mix.n_data_points == result_psis.n_data_points
+
+    assert result_mix.elpd != result_psis.elpd
+    assert not np.array_equal(result_mix.elpd_i.values, result_psis.elpd_i.values)
+
+    assert_almost_equal(result_mix.elpd, result_mix.elpd_i.sum().item(), decimal=10)
+    assert_almost_equal(result_psis.elpd, result_psis.elpd_i.sum().item(), decimal=10)
+
+    assert np.isfinite(result_mix.elpd)
+    assert np.all(np.isfinite(result_mix.elpd_i.values))
+    assert np.all(np.isfinite(result_mix.pareto_k.values))

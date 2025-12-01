@@ -1,5 +1,8 @@
 """Pareto-smoothed importance sampling LOO (PSIS-LOO-CV)."""
 
+import warnings
+
+import numpy as np
 from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
@@ -12,6 +15,7 @@ from arviz_stats.loo.helper_loo import (
     _log_lik_i,
     _prepare_loo_inputs,
     _warn_pareto_k,
+    _warn_pointwise_loo,
 )
 from arviz_stats.utils import ELPDData
 
@@ -24,13 +28,14 @@ def loo(
     log_weights=None,
     pareto_k=None,
     log_jacobian=None,
+    mixture=False,
 ):
     r"""Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV). Also calculates LOO's
-    standard error and the effective number of parameters. The method is described in [1]_
-    and [2]_.
+    standard error and the effective number of parameters. The method is described in [2]_
+    and [3]_.
 
     Parameters
     ----------
@@ -59,6 +64,10 @@ def loo(
         original response scale :math:`y`. The value should be :math:`\log|\frac{dz}{dy}|`
         (the log absolute value of the derivative of the transformation). Must be a DataArray
         with dimensions matching the observation dimensions.
+    mixture : bool, optional
+        If True, use mixture importance sampling LOO (Mix-IS-LOO) instead of PSIS-LOO.
+        This is appropriate when the log-likelihood was generated from a mixture distribution.
+        The method is described in [1]_. Defaults to False.
 
     Returns
     -------
@@ -136,11 +145,16 @@ def loo(
     References
     ----------
 
-    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+    .. [1] Silva and Zanella. *Robust Leave-One-Out Cross-Validation for High-Dimensional
+       Bayesian Models*. Journal of the American Statistical Association. 119(547) (2023)
+       2369-2381. https://doi.org/10.1080/01621459.2023.2257893
+       arXiv preprint https://arxiv.org/abs/2209.09190
+
+    .. [2] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
        arXiv preprint https://arxiv.org/abs/1507.04544.
 
-    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+    .. [3] Vehtari et al. *Pareto Smoothed Importance Sampling*.
        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
        arXiv preprint https://arxiv.org/abs/1507.02646
     """
@@ -159,6 +173,63 @@ def loo(
     if log_weights is None and pareto_k is None:
         log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
             r_eff=reff, dim=loo_inputs.sample_dims
+        )
+
+    if mixture:
+        warnings.warn(
+            "Using mixture=True assumes the log-likelihood values were computed from samples "
+            "drawn from a mixture posterior distribution. "
+            "See Silva and Zanella (2023) https://doi.org/10.1080/01621459.2023.2257893 "
+            "for details on how to sample from the mixture posterior.",
+            UserWarning,
+            stacklevel=2,
+        )
+        log_lik = loo_inputs.log_likelihood
+        sample_dims = loo_inputs.sample_dims
+        obs_dims = loo_inputs.obs_dims
+        n_samples = loo_inputs.n_samples
+        n_data_points = loo_inputs.n_data_points
+
+        l_common = logsumexp(-log_lik, dims=obs_dims)
+        mix_log_weights = -log_lik - l_common
+
+        log_norm = logsumexp(-l_common, dims=sample_dims)
+        elpd_i = log_norm - logsumexp(mix_log_weights, dims=sample_dims)
+
+        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+        if jacobian_da is not None:
+            elpd_i = elpd_i + jacobian_da
+
+        elpd = elpd_i.sum().item()
+
+        lppd_da = logsumexp(log_lik, b=1 / n_samples, dims=sample_dims)
+        if jacobian_da is not None:
+            lppd_da = lppd_da + jacobian_da
+        lppd = lppd_da.sum().item()
+
+        p_loo = lppd - elpd
+        elpd_se = (n_data_points * np.var(elpd_i.values)) ** 0.5
+
+        _, mix_pareto_k = mix_log_weights.azstats.psislw(r_eff=reff, dim=sample_dims)
+        warn_mg, good_k = _warn_pareto_k(mix_pareto_k, n_samples)
+
+        if pointwise:
+            _warn_pointwise_loo(elpd, elpd_i.values)
+
+        return ELPDData(
+            kind="loo",
+            elpd=elpd,
+            se=elpd_se,
+            p=p_loo,
+            n_samples=n_samples,
+            n_data_points=n_data_points,
+            scale="log",
+            warning=warn_mg,
+            good_k=good_k,
+            elpd_i=elpd_i if pointwise else None,
+            pareto_k=mix_pareto_k if pointwise else None,
+            approx_posterior=False,
+            log_weights=mix_log_weights,
         )
 
     return _compute_loo_results(
