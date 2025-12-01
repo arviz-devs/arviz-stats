@@ -5,7 +5,21 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-from arviz_stats.base.array import BaseArray, process_ary_axes, process_chain_none
+from arviz_stats.base.array import (
+    BaseArray,
+    process_ary_axes,
+    process_chain_none,
+)
+
+from ..helpers import importorskip
+
+azb = importorskip("arviz_base")
+einstats = importorskip("xarray_einstats")
+xr = importorskip("xarray")
+
+from arviz_stats import loo, loo_approximate_posterior, loo_score
+from arviz_stats.loo.helper_loo import _get_r_eff, _prepare_loo_inputs
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 @pytest.fixture
@@ -623,3 +637,281 @@ class TestMetrics:
         y_pred = rng.normal(size=(4, 100))
         result = array_stats.residual_r2(y_true, y_pred)
         assert result.shape == (4,)
+
+
+class TestLOO:
+    def test_loo_basic(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(4, 100))
+        elpd_i, pareto_k, p_loo_i = array_stats.loo(ary)
+
+        assert elpd_i.shape == ()
+        assert pareto_k.shape == ()
+        assert p_loo_i.shape == ()
+        assert np.isfinite(elpd_i)
+        assert np.isfinite(pareto_k)
+        assert np.isfinite(p_loo_i)
+
+    def test_loo_multiple_obs(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(4, 100, 8))
+        elpd_i, pareto_k, p_loo_i = array_stats.loo(ary, chain_axis=0, draw_axis=1)
+
+        assert elpd_i.shape == (8,)
+        assert pareto_k.shape == (8,)
+        assert p_loo_i.shape == (8,)
+        assert np.all(np.isfinite(elpd_i))
+        assert np.all(np.isfinite(pareto_k))
+        assert np.all(np.isfinite(p_loo_i))
+
+    def test_loo_chain_axis_none(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(100,))
+        elpd_i, pareto_k, p_loo_i = array_stats.loo(ary, chain_axis=None, draw_axis=-1)
+
+        assert elpd_i.shape == ()
+        assert pareto_k.shape == ()
+        assert p_loo_i.shape == ()
+
+    def test_loo_diff_chain_draw_axes(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(5, 4, 100))
+        elpd_i, pareto_k, p_loo_i = array_stats.loo(ary, chain_axis=1, draw_axis=2)
+
+        assert elpd_i.shape == (5,)
+        assert pareto_k.shape == (5,)
+        assert p_loo_i.shape == (5,)
+        assert np.all(np.isfinite(elpd_i))
+        assert np.all(np.isfinite(pareto_k))
+        assert np.all(np.isfinite(p_loo_i))
+
+    def test_loo_with_reff(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(4, 100))
+
+        elpd_i_1, pareto_k_1, _ = array_stats.loo(ary, reff=0.5)
+        elpd_i_2, pareto_k_2, _ = array_stats.loo(ary, reff=1.0)
+
+        assert not np.isclose(pareto_k_1, pareto_k_2) or not np.isclose(elpd_i_1, elpd_i_2)
+
+    def test_loo_with_log_weights_error(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(4, 100))
+        log_weights = rng.normal(0, 1, size=(4, 100))
+
+        with pytest.raises(ValueError, match="pareto_k must also be provided"):
+            array_stats.loo(ary, log_weights=log_weights)
+
+    def test_loo_matches_xarray(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        loo_inputs = _prepare_loo_inputs(centered_eight, var_name="obs")
+        reff = _get_r_eff(centered_eight, loo_inputs.n_samples)
+
+        loo_xr = loo(centered_eight, pointwise=True, var_name="obs")
+        elpd_i_array, pareto_k_array, p_loo_i_array = array_stats.loo(
+            log_lik.values, chain_axis=0, draw_axis=1, reff=reff
+        )
+
+        lppd_xr = einstats.stats.logsumexp(
+            log_lik, b=1 / loo_inputs.n_samples, dims=["chain", "draw"]
+        )
+        p_loo_i_xr = lppd_xr - loo_xr.elpd_i
+
+        assert_allclose(elpd_i_array, loo_xr.elpd_i.values, rtol=1e-10)
+        assert_allclose(pareto_k_array, loo_xr.pareto_k.values, rtol=1e-10)
+        assert_allclose(p_loo_i_array, p_loo_i_xr.values, rtol=1e-10)
+
+
+class TestLOOApproximatePosterior:
+    def test_loo_approximate_posterior_basic(self, array_stats, rng):
+        log_lik = rng.normal(-2, 1, size=(4, 100))
+        log_p = rng.normal(0, 1, size=(4, 100))
+        log_q = rng.normal(-1, 1, size=(4, 100))
+
+        elpd_i, pareto_k, p_loo_i = array_stats.loo_approximate_posterior(log_lik, log_p, log_q)
+
+        assert elpd_i.shape == ()
+        assert pareto_k.shape == ()
+        assert p_loo_i.shape == ()
+        assert np.isfinite(elpd_i)
+        assert np.isfinite(pareto_k)
+        assert np.isfinite(p_loo_i)
+
+    def test_loo_approximate_posterior_multiple_obs(self, array_stats, rng):
+        log_lik = rng.normal(-2, 1, size=(4, 100, 8))
+        log_p = rng.normal(0, 1, size=(4, 100, 8))
+        log_q = rng.normal(-1, 1, size=(4, 100, 8))
+
+        elpd_i, pareto_k, p_loo_i = array_stats.loo_approximate_posterior(
+            log_lik, log_p, log_q, chain_axis=0, draw_axis=1
+        )
+
+        assert elpd_i.shape == (8,)
+        assert pareto_k.shape == (8,)
+        assert p_loo_i.shape == (8,)
+        assert np.all(np.isfinite(elpd_i))
+        assert np.all(np.isfinite(pareto_k))
+        assert np.all(np.isfinite(p_loo_i))
+
+    def test_loo_approximate_posterior_chain_axis_none(self, array_stats, rng):
+        log_lik = rng.normal(-2, 1, size=(100,))
+        log_p = rng.normal(0, 1, size=(100,))
+        log_q = rng.normal(-1, 1, size=(100,))
+
+        elpd_i, pareto_k, p_loo_i = array_stats.loo_approximate_posterior(
+            log_lik, log_p, log_q, chain_axis=None, draw_axis=-1
+        )
+
+        assert elpd_i.shape == ()
+        assert pareto_k.shape == ()
+        assert p_loo_i.shape == ()
+
+    def test_loo_approximate_posterior_diff_axes(self, array_stats, rng):
+        log_lik = rng.normal(-2, 1, size=(5, 4, 100))
+        log_p = rng.normal(0, 1, size=(5, 4, 100))
+        log_q = rng.normal(-1, 1, size=(5, 4, 100))
+
+        elpd_i, pareto_k, p_loo_i = array_stats.loo_approximate_posterior(
+            log_lik, log_p, log_q, chain_axis=1, draw_axis=2
+        )
+
+        assert elpd_i.shape == (5,)
+        assert pareto_k.shape == (5,)
+        assert p_loo_i.shape == (5,)
+        assert np.all(np.isfinite(elpd_i))
+        assert np.all(np.isfinite(pareto_k))
+        assert np.all(np.isfinite(p_loo_i))
+
+    def test_loo_approximate_posterior_matches_xarray(self, array_stats, centered_eight, rng):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+
+        log_p = xr.DataArray(
+            rng.normal(0, 1, size=(log_lik.chain.size, log_lik.draw.size)),
+            dims=["chain", "draw"],
+            coords={"chain": log_lik.chain, "draw": log_lik.draw},
+        )
+        log_q = xr.DataArray(
+            rng.normal(-1, 1, size=(log_lik.chain.size, log_lik.draw.size)),
+            dims=["chain", "draw"],
+            coords={"chain": log_lik.chain, "draw": log_lik.draw},
+        )
+
+        loo_approx_xr = loo_approximate_posterior(
+            centered_eight, log_p=log_p, log_q=log_q, var_name="obs", pointwise=True
+        )
+
+        n_obs = log_lik.shape[2]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        log_p_broadcast = np.repeat(log_p.values[..., np.newaxis], n_obs, axis=2)
+        log_q_broadcast = np.repeat(log_q.values[..., np.newaxis], n_obs, axis=2)
+
+        elpd_i_array, pareto_k_array, p_loo_i_array = array_stats.loo_approximate_posterior(
+            log_lik.values, log_p_broadcast, log_q_broadcast, chain_axis=0, draw_axis=1
+        )
+
+        lppd_xr = einstats.stats.logsumexp(log_lik, b=1 / n_samples, dims=["chain", "draw"])
+        p_loo_i_xr = lppd_xr - loo_approx_xr.elpd_i
+
+        assert_allclose(elpd_i_array, loo_approx_xr.elpd_i.values, rtol=1e-10)
+        assert_allclose(pareto_k_array, loo_approx_xr.pareto_k.values, rtol=1e-10)
+        assert_allclose(p_loo_i_array, p_loo_i_xr.values, rtol=1e-10)
+
+
+class TestLOOScore:
+    @pytest.mark.parametrize("kind", ["crps", "scrps"])
+    def test_loo_score_basic(self, array_stats, centered_eight, kind):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values[:, :, :1]
+        y_obs = centered_eight.observed_data["obs"].values[:1]
+        log_weights = log_weights_xr.values[:, :, :1]
+
+        scores = array_stats.loo_score(
+            y_pred, y_obs, log_weights, kind=kind, chain_axis=0, draw_axis=1
+        )
+
+        assert scores.shape == (1,)
+        assert np.isfinite(scores[0])
+
+    def test_loo_score_multiple_obs(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        y_obs = centered_eight.observed_data["obs"].values
+        log_weights = log_weights_xr.values
+
+        scores = array_stats.loo_score(
+            y_pred, y_obs, log_weights, kind="crps", chain_axis=0, draw_axis=1
+        )
+
+        assert scores.shape == (8,)
+        assert np.all(np.isfinite(scores))
+
+    def test_loo_score_chain_axis_none(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        y_obs = centered_eight.observed_data["obs"].values
+        log_weights = log_weights_xr.values
+
+        y_pred_flat = y_pred.reshape(-1, y_pred.shape[-1])
+        log_weights_flat = log_weights.reshape(-1, log_weights.shape[-1])
+
+        scores = array_stats.loo_score(
+            y_pred_flat, y_obs, log_weights_flat, kind="crps", chain_axis=None, draw_axis=0
+        )
+
+        assert scores.shape == (8,)
+        assert np.all(np.isfinite(scores))
+
+    def test_loo_score_diff_axes(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        y_obs = centered_eight.observed_data["obs"].values
+        log_weights = log_weights_xr.values
+
+        y_pred_reorder = np.transpose(y_pred, (2, 0, 1))
+        log_weights_reorder = np.transpose(log_weights, (2, 0, 1))
+
+        scores = array_stats.loo_score(
+            y_pred_reorder, y_obs, log_weights_reorder, kind="crps", chain_axis=1, draw_axis=2
+        )
+
+        assert scores.shape == (8,)
+        assert np.all(np.isfinite(scores))
+
+    @pytest.mark.parametrize("kind", ["crps", "scrps"])
+    def test_loo_score_matches_xarray(self, array_stats, centered_eight, kind):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        loo_score_xr = loo_score(centered_eight, kind=kind, pointwise=True)
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        y_obs = centered_eight.observed_data["obs"].values
+        log_weights = log_weights_xr.values
+
+        scores_array = array_stats.loo_score(
+            y_pred, y_obs, log_weights, kind=kind, chain_axis=0, draw_axis=1
+        )
+
+        assert_allclose(scores_array, loo_score_xr.pointwise.values, rtol=1e-10)
