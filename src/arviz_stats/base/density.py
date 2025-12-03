@@ -799,7 +799,7 @@ class _DensityBase(_CoreBase):
         if npoints is None:
             npoints = min(total_points, 200)
 
-        if len(ary) == 0:
+        if total_points == 0:
             eval_points = np.full(npoints, np.nan)
             ecdf = np.full(npoints, np.nan)
             return eval_points, ecdf
