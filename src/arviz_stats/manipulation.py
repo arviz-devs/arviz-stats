@@ -2,7 +2,7 @@
 
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_dataset
+from arviz_base import convert_to_dataset, extract, from_dict
 
 from arviz_stats.utils import get_array_function
 from arviz_stats.validate import validate_dims
@@ -123,3 +123,70 @@ def thin(
         data = data.sel(coords)
 
     return data.azstats.thin(sample_dims=sample_dims, factor=factor)
+
+
+def weight_predictions(dts, weights=None):
+    """Generate weighted posterior predictive samples.
+
+    Parameters
+    ----------
+    dts : list[DataTree] or list[InferenceData]
+        Elements in the list should contain the groups `posterior_predictive`
+        and `observed_data`. Observations should be the same for all models.
+    weights : array-like, optional
+        Individual weights for each model. Weights should be positive. If they do not sum up to 1,
+        they will be normalized. Default, same weight for each model.
+        Weights can be computed using many different methods including those in
+        :func:`arviz.compare`.
+
+    Returns
+    -------
+    dt: DataTree
+        DataTree object with the groups `posterior_predictive` and `observed_data`.
+
+    See Also
+    --------
+    compare :  Compare models based on PSIS-LOO-CV `loo`
+    """
+    if len(dts) < 2:
+        raise ValueError("You should provide a list with at least two elements")
+
+    if not all("posterior_predictive" in dt.groups() for dt in dts):
+        raise ValueError("All the DataTree objects must contain the `posterior_predictive` group")
+
+    if not all(dts[0].observed_data.equals(dt.observed_data) for dt in dts[1:]):
+        raise ValueError("The observed data should be the same for all DataTree objects")
+
+    if weights is None:
+        weights = np.ones(len(dts)) / len(dts)
+    elif len(dts) != len(weights):
+        raise ValueError(
+            "The number of weights should be the same as the number of InferenceData objects"
+        )
+
+    weights = np.array(weights, dtype=float)
+    weights /= weights.sum()
+
+    len_data = [
+        dt.posterior_predictive.sizes["chain"] * dt.posterior_predictive.sizes["draw"] for dt in dts
+    ]
+
+    if not all(len_data):
+        raise ValueError("At least one of your DataTree objects has 0 samples")
+
+    new_samples = (np.min(len_data) * weights).astype(int)
+
+    new_idatas = [
+        extract(dt, group="posterior_predictive", num_samples=samples).reset_coords()
+        for samples, dt in zip(new_samples, dts)
+    ]
+
+    weighted_samples = from_dict(
+        {
+            "posterior_predictive": xr.concat(new_idatas, dim="sample"),
+            "observed_data": dts[0].observed_data,
+        },
+        sample_dims=list(new_idatas[0].dims.keys()),
+    )
+
+    return weighted_samples
