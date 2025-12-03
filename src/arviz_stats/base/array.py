@@ -398,8 +398,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         # TODO: improve handling of array_like bins
         x_min, x_max, width = get_bininfo_ufunc(ary, bins=bins)
-        n_bins = np.ceil((x_max - x_min) / width)
-        n_bins = np.ceil(np.mean(n_bins)).astype(int)
+        mask = np.isfinite(width) & (width > 0)
+
+        valid_n_bins = np.ceil((x_max[mask] - x_min[mask]) / width[mask])
+        n_bins = np.ceil(np.mean(valid_n_bins)).astype(int)
         return np.moveaxis(np.linspace(x_min, x_max, n_bins + 1), 0, -1)
 
     # pylint: disable=redefined-builtin, too-many-return-statements
