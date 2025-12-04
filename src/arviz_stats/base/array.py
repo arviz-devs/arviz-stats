@@ -879,13 +879,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        log_likelihood : array-like
+        ary : array-like
         log_p : array-like
         log_q : array-like
         chain_axis : int, default -2
         draw_axis : int, default -1
         log_jacobian : float, optional
-            Log-Jacobian adjustment for this observation
+            Log-Jacobian adjustment for variable transformations
 
         Returns
         -------
@@ -989,7 +989,26 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return loo_score_ufunc(ary, y_obs, log_weights, kind)
 
     def loo_summary(self, elpd_i, p_loo_i):
-        """Aggregate pointwise LOO values."""
+        """Aggregate pointwise LOO values.
+
+        Parameters
+        ----------
+        elpd_i : array-like
+            Pointwise expected log predictive density
+        p_loo_i : array-like
+            Pointwise effective number of parameters
+
+        Returns
+        -------
+        elpd : float
+            Total expected log predictive density
+        elpd_se : float
+            Standard error of elpd
+        p_loo : float
+            Total effective number of parameters
+        lppd : float
+            Log pointwise predictive density
+        """
         return self._loo_summary(elpd_i, p_loo_i)
 
 
