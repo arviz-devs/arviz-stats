@@ -152,7 +152,7 @@ class _BaseAccessor:
         return self._apply("pareto_khat", sample_dims=sample_dims, **kwargs)
 
     def loo(self, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None):
-        """Compute PSIS-LOO-CV for all variables in the dataset."""
+        """Compute PSIS-LOO-CV."""
         return self._apply(
             "loo",
             sample_dims=sample_dims,
