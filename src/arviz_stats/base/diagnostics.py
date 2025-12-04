@@ -368,7 +368,7 @@ class _DiagnosticsBase(_CoreBase):
 
         return ary.reshape(ary_shape), khat
 
-    def _loo(self, ary, r_eff=1.0, log_weights=None, pareto_k=None):
+    def _loo(self, ary, r_eff=1.0, log_weights=None, pareto_k=None, log_jacobian=None):
         """
         Compute PSIS-LOO-CV for a 2D array (chain, draw).
 
@@ -382,6 +382,8 @@ class _DiagnosticsBase(_CoreBase):
             Pre-computed PSIS-LOO-CV log weights (same shape as ary)
         pareto_k : float, optional
             Pre-computed Pareto k value
+        log_jacobian : float, optional
+            Log-Jacobian adjustment for variable transformations
 
         Returns
         -------
@@ -405,9 +407,12 @@ class _DiagnosticsBase(_CoreBase):
         lppd_i = logsumexp(ary, b=1 / n_samples)
         p_loo_i = lppd_i - elpd_i
 
+        if log_jacobian is not None:
+            elpd_i = elpd_i + log_jacobian
+
         return elpd_i, pareto_k, p_loo_i
 
-    def _loo_approximate_posterior(self, ary, log_p, log_q):
+    def _loo_approximate_posterior(self, ary, log_p, log_q, log_jacobian=None):
         """
         Compute PSIS-LOO-CV with approximate posterior correction.
 
@@ -419,6 +424,8 @@ class _DiagnosticsBase(_CoreBase):
             2D array (chain, draw) of target log-densities
         log_q : np.ndarray
             2D array (chain, draw) of proposal log-densities
+        log_jacobian : float, optional
+            Log-Jacobian adjustment for this observation
 
         Returns
         -------
@@ -442,7 +449,9 @@ class _DiagnosticsBase(_CoreBase):
         psis_input = -corrected_log_ratios
         log_weights, pareto_k = self._psislw(psis_input, r_eff=1.0)
 
-        return self._loo(ary, r_eff=1.0, log_weights=log_weights, pareto_k=pareto_k)
+        return self._loo(
+            ary, r_eff=1.0, log_weights=log_weights, pareto_k=pareto_k, log_jacobian=log_jacobian
+        )
 
     @staticmethod
     def _loo_score(ary, y_obs, log_weights, kind):
@@ -494,6 +503,38 @@ class _DiagnosticsBase(_CoreBase):
         bracket = 2.0 * f_minus + weights_sorted - 1.0
         gini_mean_difference = 2.0 * np.sum(weights_sorted * values_sorted * bracket)
         return -(loo_weighted_abs_error / gini_mean_difference) - 0.5 * np.log(gini_mean_difference)
+
+    @staticmethod
+    def _loo_summary(elpd_i, p_loo_i):
+        """
+        Aggregate pointwise LOO values.
+
+        Parameters
+        ----------
+        elpd_i : np.ndarray
+            Pointwise expected log predictive density values
+        p_loo_i : np.ndarray
+            Pointwise effective number of parameters
+
+        Returns
+        -------
+        elpd : float
+            Total expected log predictive density
+        se : float
+            Standard error of elpd
+        p_loo : float
+            Total effective number of parameters
+        lppd : float
+            Log pointwise predictive density
+        """
+        elpd_i = np.asarray(elpd_i).ravel()
+        p_loo_i = np.asarray(p_loo_i).ravel()
+        n = len(elpd_i)
+        elpd = np.sum(elpd_i)
+        se = np.sqrt(n * np.var(elpd_i))
+        p_loo = np.sum(p_loo_i)
+        lppd = elpd + p_loo
+        return elpd, se, p_loo, lppd
 
     def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
         """

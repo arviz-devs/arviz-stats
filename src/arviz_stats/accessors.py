@@ -151,6 +151,43 @@ class _BaseAccessor:
         """Compute Pareto k-hat diagnostic."""
         return self._apply("pareto_khat", sample_dims=sample_dims, **kwargs)
 
+    def loo(self, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None):
+        """Compute PSIS-LOO-CV for all variables in the dataset."""
+        return self._apply(
+            "loo",
+            sample_dims=sample_dims,
+            reff=reff,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+            log_jacobian=log_jacobian,
+        )
+
+    def loo_approximate_posterior(self, log_p, log_q, sample_dims=None, log_jacobian=None):
+        """Compute PSIS-LOO-CV with approximate posterior correction."""
+        return self._apply(
+            "loo_approximate_posterior",
+            log_p=log_p,
+            log_q=log_q,
+            sample_dims=sample_dims,
+            log_jacobian=log_jacobian,
+        )
+
+    def loo_score(self, y_obs, log_weights, kind="crps", sample_dims=None, **kwargs):
+        """Compute CRPS or SCRPS with PSIS-LOO-CV weights."""
+        return self._apply(
+            "loo_score",
+            y_obs=y_obs,
+            log_weights=log_weights,
+            kind=kind,
+            sample_dims=sample_dims,
+            **kwargs,
+        )
+
+    @staticmethod
+    def loo_summary(elpd_i, p_loo_i):
+        """Aggregate pointwise LOO values."""
+        return get_function("loo_summary")(elpd_i, p_loo_i)
+
     def power_scale_lw(self, dim=None, **kwargs):
         """Compute log weights for power-scaling of the DataTree."""
         return self._apply("power_scale_lw", dim=dim, **kwargs)

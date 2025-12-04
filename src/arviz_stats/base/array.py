@@ -832,6 +832,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         reff=1.0,
         log_weights=None,
         pareto_k=None,
+        log_jacobian=None,
     ):
         """Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
@@ -843,6 +844,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         reff : float, default 1.0
         log_weights : array-like, optional
         pareto_k : array-like, optional
+        log_jacobian : array-like, optional
+            Log-Jacobian adjustment for variable transformations
 
         Returns
         -------
@@ -853,8 +856,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
 
+        if log_weights is not None:
+            log_weights = np.asarray(log_weights)
+            log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+            log_weights = log_weights.ravel()
+
         loo_ufunc = make_ufunc(self._loo, n_output=3, n_input=1, n_dims=len(axes))
-        return loo_ufunc(ary, r_eff=reff, log_weights=log_weights, pareto_k=pareto_k)
+        return loo_ufunc(
+            ary, r_eff=reff, log_weights=log_weights, pareto_k=pareto_k, log_jacobian=log_jacobian
+        )
 
     def loo_approximate_posterior(
         self,
@@ -863,6 +873,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         log_q,
         chain_axis=-2,
         draw_axis=-1,
+        log_jacobian=None,
     ):
         """Compute PSIS-LOO-CV with approximate posterior correction.
 
@@ -873,6 +884,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         log_q : array-like
         chain_axis : int, default -2
         draw_axis : int, default -1
+        log_jacobian : float, optional
+            Log-Jacobian adjustment for this observation
 
         Returns
         -------
@@ -891,7 +904,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         loo_approx_ufunc = make_ufunc(
             self._loo_approximate_posterior, n_output=3, n_input=3, n_dims=len(axes)
         )
-        return loo_approx_ufunc(ary, log_p, log_q)
+        return loo_approx_ufunc(ary, log_p, log_q, log_jacobian=log_jacobian)
 
     def loo_score(
         self,
@@ -933,6 +946,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         loo_score_ufunc = make_ufunc(self._loo_score, n_output=1, n_input=3, n_dims=len(axes))
         return loo_score_ufunc(ary, y_obs, log_weights, kind)
+
+    def loo_summary(self, elpd_i, p_loo_i):
+        """Aggregate pointwise LOO values."""
+        return self._loo_summary(elpd_i, p_loo_i)
 
 
 array_stats = BaseArray()
