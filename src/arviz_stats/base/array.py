@@ -936,7 +936,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         mix_log_weights : array-like
             Mixture log weights
         """
-        ary = np.asarray(ary)
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ndim = ary.ndim
         chain_axis = chain_axis % ndim
         draw_axis = draw_axis % ndim
