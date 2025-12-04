@@ -191,10 +191,9 @@ class _BaseAccessor:
             **kwargs,
         )
 
-    @staticmethod
-    def loo_summary(elpd_i, p_loo_i):
+    def loo_summary(self, p_loo_i):
         """Aggregate pointwise LOO values."""
-        return get_function("loo_summary")(elpd_i, p_loo_i)
+        return self._apply("loo_summary", p_loo_i=p_loo_i)
 
     def power_scale_lw(self, dim=None, **kwargs):
         """Compute log weights for power-scaling of the DataTree."""

@@ -398,7 +398,7 @@ class BaseDataArray:
     def loo(
         self, da, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None
     ):
-        """Compute PSIS-LOO-CV on DataArray input.
+        """Compute PSIS-LOO-CV.
 
         Parameters
         ----------
@@ -473,7 +473,7 @@ class BaseDataArray:
         )
 
     def loo_approximate_posterior(self, da, log_p, log_q, sample_dims=None, log_jacobian=None):
-        """Compute PSIS-LOO-CV with approximate posterior correction on DataArray input.
+        """Compute PSIS-LOO-CV with approximate posterior correction.
 
         Parameters
         ----------
@@ -575,7 +575,7 @@ class BaseDataArray:
         return elpd_i, p_loo_i, mix_log_weights
 
     def loo_score(self, da, y_obs, log_weights, kind="crps", sample_dims=None):
-        """Compute CRPS or SCRPS with PSIS-LOO-CV weights on DataArray input.
+        """Compute CRPS or SCRPS with PSIS-LOO-CV weights.
 
         Parameters
         ----------
@@ -610,13 +610,13 @@ class BaseDataArray:
             },
         )
 
-    def loo_summary(self, elpd_i, p_loo_i):
+    def loo_summary(self, da, p_loo_i):
         """Aggregate pointwise LOO values.
 
         Parameters
         ----------
-        elpd_i : DataArray
-            Pointwise expected log predictive density values
+        da : DataArray
+            Pointwise expected log predictive density values (elpd_i)
         p_loo_i : DataArray
             Pointwise effective number of parameters
 
@@ -631,7 +631,7 @@ class BaseDataArray:
         lppd : float
             Log pointwise predictive density
         """
-        return self.array_class.loo_summary(elpd_i.values, p_loo_i.values)
+        return self.array_class.loo_summary(da.values, p_loo_i.values)
 
     def power_scale_lw(self, da, alpha=0, dim=None):
         """Compute log weights for power-scaling component by alpha."""

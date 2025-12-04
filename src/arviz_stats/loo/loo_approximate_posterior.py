@@ -176,7 +176,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
     )
 
     warn_mg, good_k = _warn_pareto_k(pareto_k, loo_inputs.n_samples)
-    elpd, elpd_se, p_loo, _ = log_likelihood.azstats.loo_summary(elpd_i, p_loo_i)
+    elpd, elpd_se, p_loo, _ = elpd_i.azstats.loo_summary(p_loo_i)
 
     if pointwise:
         _warn_pointwise_loo(elpd, elpd_i.values)

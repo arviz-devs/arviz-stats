@@ -139,7 +139,7 @@ def _compute_loo_results(
     if return_pointwise:
         return elpd_i, pareto_k, approx_posterior
 
-    elpd, elpd_se, p_loo, _ = log_likelihood_da.azstats.loo_summary(elpd_i, p_loo_i)
+    elpd, elpd_se, p_loo, _ = elpd_i.azstats.loo_summary(p_loo_i)
 
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
     if pointwise:
