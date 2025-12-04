@@ -906,6 +906,47 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return loo_approx_ufunc(ary, log_p, log_q, log_jacobian=log_jacobian)
 
+    def loo_mixture(
+        self,
+        ary,
+        obs_axes,
+        chain_axis=-2,
+        draw_axis=-1,
+        log_jacobian=None,
+    ):
+        """Compute mixture importance sampling LOO (Mix-IS-LOO).
+
+        Parameters
+        ----------
+        ary : array-like
+            Full log-likelihood array
+        obs_axes : tuple of int
+            Axes corresponding to observation dimensions
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        log_jacobian : array-like, optional
+            Log-Jacobian adjustment for variable transformations
+
+        Returns
+        -------
+        elpd_i : array-like
+            Pointwise expected log predictive density
+        p_loo_i : array-like
+            Pointwise effective number of parameters
+        mix_log_weights : array-like
+            Mixture log weights
+        """
+        ary = np.asarray(ary)
+        ndim = ary.ndim
+        chain_axis = chain_axis % ndim
+        draw_axis = draw_axis % ndim
+        obs_axes = tuple(ax % ndim for ax in obs_axes)
+        sample_axes = (chain_axis, draw_axis)
+
+        return self._loo_mixture(
+            ary, obs_axes=obs_axes, sample_axes=sample_axes, log_jacobian=log_jacobian
+        )
+
     def loo_score(
         self,
         ary,

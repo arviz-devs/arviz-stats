@@ -454,6 +454,53 @@ class _DiagnosticsBase(_CoreBase):
         )
 
     @staticmethod
+    def _loo_mixture(ary, obs_axes, sample_axes, log_jacobian=None):
+        """
+        Compute mixture importance sampling LOO (Mix-IS-LOO).
+
+        Parameters
+        ----------
+        ary : np.ndarray
+            Full log-likelihood array
+        obs_axes : tuple of int
+            Axes corresponding to observation dimensions
+        sample_axes : tuple of int
+            Axes corresponding to sample dimensions (chain, draw)
+        log_jacobian : np.ndarray, optional
+            Log-Jacobian adjustment
+
+        Returns
+        -------
+        elpd_i : np.ndarray
+            Pointwise expected log predictive density
+        p_loo_i : np.ndarray
+            Pointwise effective number of parameters
+        mix_log_weights : np.ndarray
+            Mixture log weights
+        """
+        ary = np.asarray(ary)
+        n_samples = np.prod([ary.shape[ax] for ax in sample_axes])
+
+        l_common = logsumexp(-ary, axis=obs_axes, keepdims=True)
+        mix_log_weights = -ary - l_common
+
+        l_common_squeezed = l_common.squeeze(axis=obs_axes)
+
+        log_norm = logsumexp(-l_common_squeezed, axis=sample_axes)
+        elpd_i = log_norm - logsumexp(mix_log_weights, axis=sample_axes)
+
+        lppd_i = logsumexp(ary, axis=sample_axes, b=1 / n_samples)
+
+        if log_jacobian is not None:
+            log_jacobian = np.asarray(log_jacobian)
+            elpd_i = elpd_i + log_jacobian
+            lppd_i = lppd_i + log_jacobian
+
+        p_loo_i = lppd_i - elpd_i
+
+        return elpd_i, p_loo_i, mix_log_weights
+
+    @staticmethod
     def _loo_score(ary, y_obs, log_weights, kind):
         """
         Compute CRPS or SCRPS for a single observation.

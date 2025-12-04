@@ -398,7 +398,7 @@ class BaseDataArray:
     def loo(
         self, da, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None
     ):
-        """Compute PSIS-LOO-CV on DataArray input.
+        """Compute PSIS-LOO-CV.
 
         Parameters
         ----------
@@ -473,7 +473,7 @@ class BaseDataArray:
         )
 
     def loo_approximate_posterior(self, da, log_p, log_q, sample_dims=None, log_jacobian=None):
-        """Compute PSIS-LOO-CV with approximate posterior correction on DataArray input.
+        """Compute PSIS-LOO-CV with approximate posterior correction.
 
         Parameters
         ----------
@@ -530,8 +530,52 @@ class BaseDataArray:
             kwargs=kwargs,
         )
 
+    def loo_mixture(self, da, sample_dims=None, log_jacobian=None):
+        """Compute mixture importance sampling LOO (Mix-IS-LOO).
+
+        Parameters
+        ----------
+        da : DataArray
+            Log-likelihood values
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"]
+        log_jacobian : DataArray, optional
+            Log-Jacobian adjustment for variable transformations
+
+        Returns
+        -------
+        elpd_i : DataArray
+            Pointwise expected log predictive density
+        p_loo_i : DataArray
+            Pointwise effective number of parameters
+        mix_log_weights : DataArray
+            Mixture log weights
+        """
+        dims, _, _ = validate_dims_chain_draw_axis(sample_dims)
+        obs_dims = [d for d in da.dims if d not in dims]
+
+        obs_axes = tuple(da.dims.index(d) for d in obs_dims)
+        sample_axes = (da.dims.index(dims[0]), da.dims.index(dims[1]))
+
+        jac_values = log_jacobian.values if log_jacobian is not None else None
+
+        elpd_i_vals, p_loo_i_vals, mix_lw_vals = self.array_class.loo_mixture(
+            da.values,
+            obs_axes=obs_axes,
+            chain_axis=sample_axes[0],
+            draw_axis=sample_axes[1],
+            log_jacobian=jac_values,
+        )
+
+        obs_coords = {d: da.coords[d] for d in obs_dims}
+        elpd_i = DataArray(elpd_i_vals, dims=obs_dims, coords=obs_coords)
+        p_loo_i = DataArray(p_loo_i_vals, dims=obs_dims, coords=obs_coords)
+        mix_log_weights = DataArray(mix_lw_vals, dims=da.dims, coords=da.coords)
+
+        return elpd_i, p_loo_i, mix_log_weights
+
     def loo_score(self, da, y_obs, log_weights, kind="crps", sample_dims=None):
-        """Compute CRPS or SCRPS with PSIS-LOO-CV weights on DataArray input.
+        """Compute CRPS or SCRPS with PSIS-LOO-CV weights.
 
         Parameters
         ----------
@@ -566,13 +610,13 @@ class BaseDataArray:
             },
         )
 
-    def loo_summary(self, elpd_i, p_loo_i):
+    def loo_summary(self, da, p_loo_i):
         """Aggregate pointwise LOO values.
 
         Parameters
         ----------
-        elpd_i : DataArray
-            Pointwise expected log predictive density values
+        da : DataArray
+            Pointwise expected log predictive density values (elpd_i)
         p_loo_i : DataArray
             Pointwise effective number of parameters
 
@@ -587,7 +631,7 @@ class BaseDataArray:
         lppd : float
             Log pointwise predictive density
         """
-        return self.array_class.loo_summary(elpd_i.values, p_loo_i.values)
+        return self.array_class.loo_summary(da.values, p_loo_i.values)
 
     def power_scale_lw(self, da, alpha=0, dim=None):
         """Compute log weights for power-scaling component by alpha."""
