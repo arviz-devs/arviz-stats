@@ -152,7 +152,7 @@ class _BaseAccessor:
         return self._apply("pareto_khat", sample_dims=sample_dims, **kwargs)
 
     def loo(self, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None):
-        """Compute PSIS-LOO-CV."""
+        """Compute PSIS-LOO-CV for all variables in the dataset."""
         return self._apply(
             "loo",
             sample_dims=sample_dims,
@@ -191,9 +191,10 @@ class _BaseAccessor:
             **kwargs,
         )
 
-    def loo_summary(self, p_loo_i):
+    @staticmethod
+    def loo_summary(elpd_i, p_loo_i):
         """Aggregate pointwise LOO values."""
-        return self._apply("loo_summary", p_loo_i=p_loo_i)
+        return get_function("loo_summary")(elpd_i, p_loo_i)
 
     def power_scale_lw(self, dim=None, **kwargs):
         """Compute log weights for power-scaling of the DataTree."""

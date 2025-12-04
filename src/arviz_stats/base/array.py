@@ -992,26 +992,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return loo_score_ufunc(ary, y_obs, log_weights, kind)
 
     def loo_summary(self, elpd_i, p_loo_i):
-        """Aggregate pointwise LOO values.
-
-        Parameters
-        ----------
-        elpd_i : array-like
-            Pointwise expected log predictive density
-        p_loo_i : array-like
-            Pointwise effective number of parameters
-
-        Returns
-        -------
-        elpd : float
-            Total expected log predictive density
-        elpd_se : float
-            Standard error of elpd
-        p_loo : float
-            Total effective number of parameters
-        lppd : float
-            Log pointwise predictive density
-        """
+        """Aggregate pointwise LOO values."""
         return self._loo_summary(elpd_i, p_loo_i)
 
 
