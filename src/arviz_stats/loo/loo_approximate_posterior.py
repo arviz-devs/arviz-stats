@@ -20,6 +20,9 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
     The PSIS-LOO-CV method is described in [1]_ and [2]_. The approximate posterior correction
     is computed using the method described in [3]_.
 
+    See the EABM chapter on `Model Comparison for Large Data <https://arviz-devs.github.io/EABM/Chapters/Model_comparison_large_data.html>`_
+    for more details.
+
     Parameters
     ----------
     data : DataTree or InferenceData
