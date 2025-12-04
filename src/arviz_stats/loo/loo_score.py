@@ -3,9 +3,7 @@
 from collections import namedtuple
 
 import numpy as np
-import xarray as xr
 from arviz_base import convert_to_datatree, extract
-from xarray_einstats.stats import logsumexp
 
 from arviz_stats.base.stats_utils import round_num
 from arviz_stats.loo.helper_loo import (
@@ -212,31 +210,11 @@ def loo_score(
     else:
         log_weights_da = log_weights
 
-    abs_error = np.abs(y_pred - y_obs)
-
-    loo_weighted_abs_error = _loo_weighted_mean(abs_error, log_weights_da, sample_dims)
-    loo_weighted_mean_prediction = _loo_weighted_mean(y_pred, log_weights_da, sample_dims)
-    pwm_first_moment_b1 = _apply_pointwise_weighted_statistic(
-        y_pred, log_weights_da, sample_dims, _compute_pwm_first_moment_b1
+    pointwise_scores = y_pred.azstats.loo_score(
+        y_obs=y_obs, log_weights=log_weights_da, kind=kind, sample_dims=sample_dims
     )
 
-    crps_pointwise = (
-        loo_weighted_abs_error + loo_weighted_mean_prediction - 2.0 * pwm_first_moment_b1
-    )
-
-    if kind == "crps":
-        pointwise_scores = -crps_pointwise
-        khat_da = pareto_k
-    else:
-        gini_mean_difference = _apply_pointwise_weighted_statistic(
-            y_pred, log_weights_da, sample_dims, _compute_weighted_gini_mean_difference
-        )
-        pointwise_scores = -(loo_weighted_abs_error / gini_mean_difference) - 0.5 * np.log(
-            gini_mean_difference
-        )
-        khat_da = pareto_k
-
-    _warn_pareto_k(khat_da, n_samples)
+    _warn_pareto_k(pareto_k, n_samples)
 
     n_pts = int(np.prod([pointwise_scores.sizes[d] for d in pointwise_scores.dims]))
     mean = pointwise_scores.mean().values.item()
@@ -253,54 +231,3 @@ def loo_score(
         round_num(mean, round_to),
         round_num(se, round_to),
     )
-
-
-def _compute_pwm_first_moment_b1(values_sorted, weights):
-    """Compute first PWM using a left-continuous weighted CDF."""
-    values_sorted, weights_sorted = _sort_values_and_normalize_weights(values_sorted, weights)
-    cumulative_weights = np.cumsum(weights_sorted)
-    f_minus = cumulative_weights - weights_sorted
-    return np.sum(weights_sorted * values_sorted * f_minus).item()
-
-
-def _compute_weighted_gini_mean_difference(values, weights):
-    """Compute PSIS-LOO-CV weighted Gini mean difference."""
-    values_sorted, weights_sorted = _sort_values_and_normalize_weights(values, weights)
-    cumulative_weights = np.cumsum(weights_sorted)
-    cumulative_before = cumulative_weights - weights_sorted
-    bracket = 2.0 * cumulative_before + weights_sorted - 1.0
-    return (2.0 * np.sum(weights_sorted * values_sorted * bracket)).item()
-
-
-def _loo_weighted_mean(values, log_weights, dim):
-    """Compute PSIS-LOO-CV weighted mean."""
-    log_num = logsumexp(log_weights, dims=dim, b=values)
-    log_den = logsumexp(log_weights, dims=dim)
-    return np.exp(log_num - log_den)
-
-
-def _apply_pointwise_weighted_statistic(x, log_weights, sample_dims, stat_func):
-    """Apply a weighted statistic over sample dims."""
-    max_logw = log_weights.max(dim=sample_dims)
-    weights = np.exp(log_weights - max_logw)
-    stacked = "__sample__"
-    xs = x.stack({stacked: sample_dims})
-    ws = weights.stack({stacked: sample_dims})
-    return xr.apply_ufunc(
-        stat_func,
-        xs,
-        ws,
-        input_core_dims=[[stacked], [stacked]],
-        output_core_dims=[[]],
-        vectorize=True,
-        output_dtypes=[float],
-    )
-
-
-def _sort_values_and_normalize_weights(values, weights):
-    """Sort values by ascending order and normalize weights."""
-    idx = np.argsort(values, kind="mergesort")
-    values_sorted = values[idx]
-    weights_sorted = weights[idx]
-    weights_sorted = weights_sorted / np.sum(weights_sorted)
-    return values_sorted, weights_sorted
