@@ -566,7 +566,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_input=1,
             n_dims=len(axes),
         )
-        out_s = min(nquantiles, ary.shape[axes[-1]])
+
+        out_s = min(nquantiles, np.prod([ary.shape[ax] for ax in axes]))
+
         return qd_ufunc(
             ary,
             out_shape=((out_s,), (out_s,), ()),
