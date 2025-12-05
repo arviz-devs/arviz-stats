@@ -786,6 +786,10 @@ class _DensityBase(_CoreBase):
         x = x.flatten()
         x = x[np.isfinite(x)]
         qvalues, binwidth = self._compute_quantiles_and_binwidth(x, nquantiles, binwidth)
+
+        if np.isnan(binwidth):
+            return np.full(nquantiles, np.nan), np.full(nquantiles, np.nan), np.nan
+
         stack_locs, stack_counts = self._wilkinson_algorithm(qvalues, binwidth)
         x, y = self._layout_stacks(stack_locs, stack_counts, binwidth, stackratio)
         radius = dotsize * binwidth / 2
@@ -842,6 +846,9 @@ class _DensityBase(_CoreBase):
                 UserWarning,
             )
             nquantiles = len_values
+
+        if nquantiles < 1:
+            return np.array([]), np.nan
 
         qlist = np.linspace(1 / (2 * nquantiles), 1 - 1 / (2 * nquantiles), nquantiles)
         qvalues = np.quantile(values, qlist)
