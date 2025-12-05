@@ -81,8 +81,6 @@ def _compute_loo_results(
     log_weights=None,
     pareto_k=None,
     reff=None,
-    log_p=None,
-    log_q=None,
     approx_posterior=False,
     return_pointwise=False,
     log_jacobian=None,
@@ -98,26 +96,6 @@ def _compute_loo_results(
         log_likelihood_da = log_likelihood
 
     obs_dims = [dim for dim in log_likelihood_da.dims if dim not in sample_dims]
-
-    if log_p is not None and log_q is not None:
-        from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
-
-        data = xr.DataTree()
-        data["log_likelihood"] = log_likelihood
-
-        loo_results = loo_approximate_posterior(
-            data=data, log_p=log_p, log_q=log_q, pointwise=True, var_name=var_name
-        )
-
-        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
-
-        if jacobian_da is not None:
-            loo_results.elpd_i = loo_results.elpd_i + jacobian_da
-            loo_results.elpd = loo_results.elpd_i.sum().item()
-
-        if return_pointwise:
-            return loo_results.elpd_i, loo_results.pareto_k, True
-        return loo_results
 
     if log_weights is not None:
         if isinstance(log_weights, xr.Dataset):
@@ -145,31 +123,23 @@ def _compute_loo_results(
                     f"must match log_likelihood size ({log_likelihood_da.sizes[dim]})"
                 )
 
-    if log_weights is None or pareto_k is None:
-        log_weights, pareto_k = log_likelihood_da.azstats.psislw(r_eff=reff, dim=sample_dims)
+    elpd_i, pareto_k, p_loo_i = log_likelihood_da.azstats.loo(
+        sample_dims=sample_dims,
+        reff=reff,
+        log_weights=log_weights,
+        pareto_k=pareto_k,
+        log_jacobian=log_jacobian,
+    )
+
+    if log_weights is None:
+        log_weights, _ = log_likelihood_da.azstats.psislw(r_eff=reff, dim=sample_dims)
 
     warn_mg, good_k = _warn_pareto_k(pareto_k, n_samples)
-
-    log_weights_sum = log_weights + log_likelihood_da
-    elpd_i = logsumexp(log_weights_sum, dims=sample_dims)
-
-    jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
-    if jacobian_da is not None:
-        elpd_i = elpd_i + jacobian_da
-
-    elpd = elpd_i.sum().item()
-
-    lppd_da = logsumexp(log_likelihood_da, b=1 / n_samples, dims=sample_dims)
-    if jacobian_da is not None:
-        lppd_da = lppd_da + jacobian_da
-    lppd = lppd_da.sum().item()
-
-    p_loo = lppd - elpd
 
     if return_pointwise:
         return elpd_i, pareto_k, approx_posterior
 
-    elpd_se = (n_data_points * np.var(elpd_i.values)) ** 0.5
+    elpd, elpd_se, p_loo, _ = elpd_i.azstats.loo_summary(p_loo_i)
 
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
     if pointwise:

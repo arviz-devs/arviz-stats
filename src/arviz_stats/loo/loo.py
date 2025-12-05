@@ -2,7 +2,6 @@
 
 import warnings
 
-import numpy as np
 from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
@@ -170,6 +169,8 @@ def loo(
             "Only one was provided."
         )
 
+    jacobian_da = _check_log_jacobian(log_jacobian, loo_inputs.obs_dims)
+
     if log_weights is None and pareto_k is None:
         log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
             r_eff=reff, dim=loo_inputs.sample_dims
@@ -186,29 +187,14 @@ def loo(
         )
         log_lik = loo_inputs.log_likelihood
         sample_dims = loo_inputs.sample_dims
-        obs_dims = loo_inputs.obs_dims
         n_samples = loo_inputs.n_samples
         n_data_points = loo_inputs.n_data_points
 
-        l_common = logsumexp(-log_lik, dims=obs_dims)
-        mix_log_weights = -log_lik - l_common
+        elpd_i, p_loo_i, mix_log_weights = log_lik.azstats.loo_mixture(
+            sample_dims=sample_dims, log_jacobian=jacobian_da
+        )
 
-        log_norm = logsumexp(-l_common, dims=sample_dims)
-        elpd_i = log_norm - logsumexp(mix_log_weights, dims=sample_dims)
-
-        jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
-        if jacobian_da is not None:
-            elpd_i = elpd_i + jacobian_da
-
-        elpd = elpd_i.sum().item()
-
-        lppd_da = logsumexp(log_lik, b=1 / n_samples, dims=sample_dims)
-        if jacobian_da is not None:
-            lppd_da = lppd_da + jacobian_da
-        lppd = lppd_da.sum().item()
-
-        p_loo = lppd - elpd
-        elpd_se = (n_data_points * np.var(elpd_i.values)) ** 0.5
+        elpd, elpd_se, p_loo, _ = elpd_i.azstats.loo_summary(p_loo_i)
 
         _, mix_pareto_k = mix_log_weights.azstats.psislw(r_eff=reff, dim=sample_dims)
         warn_mg, good_k = _warn_pareto_k(mix_pareto_k, n_samples)
@@ -242,7 +228,7 @@ def loo(
         log_weights=log_weights,
         pareto_k=pareto_k,
         approx_posterior=False,
-        log_jacobian=log_jacobian,
+        log_jacobian=jacobian_da,
     )
 
 

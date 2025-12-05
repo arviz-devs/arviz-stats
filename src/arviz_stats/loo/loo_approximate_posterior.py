@@ -2,11 +2,14 @@
 
 from arviz_base import rcParams
 
-from arviz_stats.loo.helper_loo import (  # pylint: disable=cyclic-import
+from arviz_stats.loo.helper_loo import (
     _check_log_density,
-    _compute_loo_results,
+    _check_log_jacobian,
     _prepare_loo_inputs,
+    _warn_pareto_k,
+    _warn_pointwise_loo,
 )
+from arviz_stats.utils import ELPDData
 
 
 def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None, log_jacobian=None):
@@ -160,38 +163,35 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     log_likelihood = loo_inputs.log_likelihood
-    log_p = _check_log_density(
-        log_p, "log_p", log_likelihood, loo_inputs.n_samples, loo_inputs.sample_dims
+    sample_dims = loo_inputs.sample_dims
+    obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
+
+    log_p = _check_log_density(log_p, "log_p", log_likelihood, loo_inputs.n_samples, sample_dims)
+    log_q = _check_log_density(log_q, "log_q", log_likelihood, loo_inputs.n_samples, sample_dims)
+
+    jacobian_da = _check_log_jacobian(log_jacobian, obs_dims)
+
+    elpd_i, pareto_k, p_loo_i = log_likelihood.azstats.loo_approximate_posterior(
+        log_p=log_p, log_q=log_q, sample_dims=sample_dims, log_jacobian=jacobian_da
     )
-    log_q = _check_log_density(
-        log_q, "log_q", log_likelihood, loo_inputs.n_samples, loo_inputs.sample_dims
-    )
 
-    approx_correction = log_p - log_q
+    warn_mg, good_k = _warn_pareto_k(pareto_k, loo_inputs.n_samples)
+    elpd, elpd_se, p_loo, _ = elpd_i.azstats.loo_summary(p_loo_i)
 
-    # Handle underflow/overflow
-    approx_correction = approx_correction - approx_correction.max()
+    if pointwise:
+        _warn_pointwise_loo(elpd, elpd_i.values)
 
-    corrected_log_ratios = -log_likelihood.copy()
-    corrected_log_ratios = corrected_log_ratios + approx_correction
-
-    # Handle underflow/overflow
-    log_ratio_max = corrected_log_ratios.max(dim=loo_inputs.sample_dims)
-    corrected_log_ratios = corrected_log_ratios - log_ratio_max
-
-    # ignore r_eff here, set to r_eff=1.0
-    psis_input = -corrected_log_ratios
-    log_weights, pareto_k = psis_input.azstats.psislw(r_eff=1.0, dim=loo_inputs.sample_dims)
-
-    return _compute_loo_results(
-        log_likelihood=loo_inputs.log_likelihood,
-        var_name=loo_inputs.var_name,
-        pointwise=pointwise,
-        sample_dims=loo_inputs.sample_dims,
-        n_samples=loo_inputs.n_samples,
-        n_data_points=loo_inputs.n_data_points,
-        log_weights=log_weights,
-        pareto_k=pareto_k,
+    return ELPDData(
+        "loo",
+        elpd,
+        elpd_se,
+        p_loo,
+        loo_inputs.n_samples,
+        loo_inputs.n_data_points,
+        "log",
+        warn_mg,
+        good_k,
+        elpd_i if pointwise else None,
+        pareto_k if pointwise else None,
         approx_posterior=True,
-        log_jacobian=log_jacobian,
     )
