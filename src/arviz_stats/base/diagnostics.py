@@ -368,6 +368,13 @@ class _DiagnosticsBase(_CoreBase):
 
         return ary.reshape(ary_shape), khat
 
+    def _bfmi(self, ary):  # pylint: disable=no-self-use
+        """Calculate the estimated Bayesian fraction of missing information."""
+        ary_mat = np.atleast_2d(ary)
+        num = np.square(np.diff(ary_mat, axis=1)).mean(axis=1)
+        den = np.var(ary, axis=1, ddof=1)
+        return num / den
+
     def _loo(self, ary, r_eff=1.0, log_weights=None, pareto_k=None, log_jacobian=None):
         """
         Compute PSIS-LOO-CV for a 2D array (chain, draw).

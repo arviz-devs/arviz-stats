@@ -376,6 +376,20 @@ class BaseDataArray:
             kwargs={"axis": np.arange(-len(dims), 0, 1)},
         )
 
+    def bfmi(self, da, sample_dims=None):
+        """Calculate the estimated Bayesian fraction of missing information (BFMI)."""
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        return apply_ufunc(
+            self.array_class.bfmi,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[dims[chain_axis]]],
+            kwargs={
+                "chain_axis": chain_axis,
+                "draw_axis": draw_axis,
+            },
+        )
+
     def pareto_khat(self, da, sample_dims=None, r_eff=None, tail="both", log_weights=False):
         """Compute Pareto k-hat diagnostic on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)

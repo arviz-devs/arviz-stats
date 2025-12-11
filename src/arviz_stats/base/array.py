@@ -293,6 +293,19 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return psl_ufunc(ary, out_shape=[(ary.shape[i] for i in axes), []], r_eff=r_eff)
 
+    def bfmi(self, ary, chain_axis=-2, draw_axis=-1):
+        """Calculate the estimated Bayesian fraction of missing information."""
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
+        ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
+        bfmi_ufunc = make_ufunc(
+            self._bfmi,
+            n_output=1,
+            n_input=1,
+            n_dims=2,
+            ravel=False,
+        )
+        return bfmi_ufunc(ary, out_shape=(ary.shape[chain_axis],))
+
     def pareto_khat(
         self, ary, chain_axis=-2, draw_axis=-1, r_eff=None, tail="both", log_weights=False
     ):

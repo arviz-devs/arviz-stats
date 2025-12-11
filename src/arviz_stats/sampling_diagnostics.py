@@ -449,7 +449,7 @@ def mcse(
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the ESS.
+        Group on which to compute the MCSE.
     var_names : str or list of str, optional
         Names of the variables for which the mcse should be computed.
     filter_vars : {None, "like", "regex"}, default None
@@ -540,3 +540,101 @@ def mcse(
         data = data.sel(coords)
 
     return data.azstats.mcse(sample_dims=sample_dims, method=method, prob=prob)
+
+
+def bfmi(
+    data,
+    sample_dims=None,
+    group="sample_stats",
+    var_names="energy",
+    filter_vars=None,
+    coords=None,
+    chain_axis=0,
+    draw_axis=1,
+):
+    """Calculate the estimated Bayesian fraction of missing information (BFMI).
+
+    BFMI quantifies how well momentum resampling matches the marginal energy distribution as
+    explained in [1]_. As a rule of thumb, BFMI values smaller than 0.3 are indicative of poor
+    sampling.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset`
+
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions and are to be reduced.
+        Default ``rcParams["data.sample_dims"]``.
+    group : hashable, default "sample_stats"
+        Group on which to compute the BFMI.
+    var_names : str or list of str, optional
+        Names of the variables for which the BFMI should be computed. Defaults to "energy".
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+
+    Examples
+    --------
+    Compute the BFMI for the 'radon' example:
+
+    .. ipython::
+
+        In [1]: from arviz_base import load_arviz_data
+           ...: import arviz_stats as azs
+           ...: data = load_arviz_data('radon')
+           ...: azs.bfmi(data)
+
+    References
+    ----------
+    .. [1] Betancourt. Diagnosing Suboptimal Cotangent Disintegrations in
+        Hamiltonian Monte Carlo. (2016) https://arxiv.org/abs/1604.00695
+    """
+    if isinstance(data, list | tuple | np.ndarray):
+        data = np.array(data)
+        return get_array_function("bfmi")(
+            data,
+            chain_axis=chain_axis,
+            draw_axis=draw_axis,
+        )
+
+    if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
+        # Make sure the grouped dimension is added as one of the dimensions to be reduced
+        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
+        return data.map(
+            rhat_nested,
+            sample_dims=sample_dims,
+            var_names=var_names,
+            coords=coords,
+        )
+
+    if isinstance(data, xr.DataArray):
+        if coords is not None:
+            data = data.sel(coords)
+        return data.azstats.bfmi(
+            sample_dims=sample_dims,
+        )
+
+    if isinstance(data, xr.DataTree):
+        data = data.azstats.filter_vars(
+            group=group, var_names=var_names, filter_vars=filter_vars
+        ).datatree
+        if coords is not None:
+            data = data.sel(coords)
+        return data.azstats.bfmi(
+            sample_dims=sample_dims,
+            group=group,
+        )
+
+    data = convert_to_dataset(data, group=group)
+
+    data = data.azstats.filter_vars(var_names=var_names, filter_vars=filter_vars).dataset
+    if coords is not None:
+        data = data.sel(coords)
+
+    return data.azstats.bfmi(sample_dims=sample_dims)
