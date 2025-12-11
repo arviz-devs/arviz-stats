@@ -2,7 +2,7 @@
 
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_dataset
+from arviz_base import convert_to_dataset, convert_to_datatree, extract, from_dict, rcParams
 
 from arviz_stats.utils import get_array_function
 from arviz_stats.validate import validate_dims
@@ -123,3 +123,82 @@ def thin(
         data = data.sel(coords)
 
     return data.azstats.thin(sample_dims=sample_dims, factor=factor)
+
+
+def weight_predictions(
+    dts, weights=None, group="posterior_predictive", sample_dims=None, random_seed=None
+):
+    """Generate weighted posterior predictive samples.
+
+    Parameters
+    ----------
+    dts : list[DataTree] or list[InferenceData]
+        Elements in the list should contain the groups `posterior_predictive`
+        and `observed_data`. Observations should be the same for all models.
+    weights : array-like, optional
+        Individual weights for each model. Weights should be positive. If they do not sum up to 1,
+        they will be normalized. Default, same weight for each model.
+        Weights can be computed using many different methods including those in
+        :func:`arviz.compare`.
+    group : str, optional
+        Group from which to extract predictions to weight. Default to `posterior_predictive`.
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions and are to be reduced.
+        Default ``rcParams["data.sample_dims"]``.
+    random_seed : int, optional
+        Random seed for reproducibility. Default is None.
+
+    Returns
+    -------
+    dt: DataTree
+        DataTree object with the groups `posterior_predictive` and `observed_data`.
+
+    See Also
+    --------
+    compare :  Compare models based on PSIS-LOO-CV `loo`
+    """
+    dts = [convert_to_datatree(dt) for dt in dts]
+    if len(dts) < 2:
+        raise ValueError("You should provide a list with at least two elements")
+
+    if not all(group in dt for dt in dts):
+        raise ValueError(f"All the objects must contain the `{group}` group")
+
+    # For InferenceData objects this only checks the values but for DataTree objects
+    # this also checks the coords and dims
+    # if not all(dts[0].observed_data.equals(dt.observed_data) for dt in dts[1:]):
+    #     raise ValueError("The observed data should be the same for all DataTree objects")
+
+    if sample_dims is None:
+        sample_dims = rcParams["data.sample_dims"]
+
+    if weights is None:
+        weights = np.ones(len(dts)) / len(dts)
+    elif len(dts) != len(weights):
+        raise ValueError(
+            "The number of weights should be the same as the number of elements in the dts list"
+        )
+
+    weights = np.array(weights, dtype=float)
+    weights /= weights.sum()
+    len_data = np.array([np.prod([dt[group].sizes[dim] for dim in sample_dims]) for dt in dts])
+
+    if not all(len_data):
+        raise ValueError("At least one of your DataTree objects has 0 samples")
+
+    new_samples = (np.min(len_data) * weights).astype(int)
+
+    new_idatas = [
+        extract(dt, group=group, num_samples=samples, random_seed=random_seed).reset_coords()
+        for samples, dt in zip(new_samples, dts)
+    ]
+
+    weighted_samples = from_dict(
+        {
+            group: xr.concat(new_idatas, dim="sample"),
+            "observed_data": dts[0].observed_data,
+        },
+        sample_dims=list(new_idatas[0].dims.keys()),
+    )
+
+    return weighted_samples
