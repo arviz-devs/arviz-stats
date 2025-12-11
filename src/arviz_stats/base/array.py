@@ -835,6 +835,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         reff=1.0,
         log_weights=None,
         pareto_k=None,
+        log_jacobian=None,
     ):
         """Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
@@ -846,6 +847,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         reff : float, default 1.0
         log_weights : array-like, optional
         pareto_k : array-like, optional
+        log_jacobian : array-like, optional
+            Log-Jacobian adjustment for variable transformations
 
         Returns
         -------
@@ -856,8 +859,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
 
+        if log_weights is not None:
+            log_weights = np.asarray(log_weights)
+            log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+            log_weights = log_weights.ravel()
+
         loo_ufunc = make_ufunc(self._loo, n_output=3, n_input=1, n_dims=len(axes))
-        return loo_ufunc(ary, r_eff=reff, log_weights=log_weights, pareto_k=pareto_k)
+        return loo_ufunc(
+            ary, r_eff=reff, log_weights=log_weights, pareto_k=pareto_k, log_jacobian=log_jacobian
+        )
 
     def loo_approximate_posterior(
         self,
@@ -866,16 +876,19 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         log_q,
         chain_axis=-2,
         draw_axis=-1,
+        log_jacobian=None,
     ):
         """Compute PSIS-LOO-CV with approximate posterior correction.
 
         Parameters
         ----------
-        log_likelihood : array-like
+        ary : array-like
         log_p : array-like
         log_q : array-like
         chain_axis : int, default -2
         draw_axis : int, default -1
+        log_jacobian : float, optional
+            Log-Jacobian adjustment for variable transformations
 
         Returns
         -------
@@ -894,7 +907,48 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         loo_approx_ufunc = make_ufunc(
             self._loo_approximate_posterior, n_output=3, n_input=3, n_dims=len(axes)
         )
-        return loo_approx_ufunc(ary, log_p, log_q)
+        return loo_approx_ufunc(ary, log_p, log_q, log_jacobian=log_jacobian)
+
+    def loo_mixture(
+        self,
+        ary,
+        obs_axes,
+        chain_axis=-2,
+        draw_axis=-1,
+        log_jacobian=None,
+    ):
+        """Compute mixture importance sampling LOO (Mix-IS-LOO).
+
+        Parameters
+        ----------
+        ary : array-like
+            Full log-likelihood array
+        obs_axes : tuple of int
+            Axes corresponding to observation dimensions
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        log_jacobian : array-like, optional
+            Log-Jacobian adjustment for variable transformations
+
+        Returns
+        -------
+        elpd_i : array-like
+            Pointwise expected log predictive density
+        p_loo_i : array-like
+            Pointwise effective number of parameters
+        mix_log_weights : array-like
+            Mixture log weights
+        """
+        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
+        ndim = ary.ndim
+        chain_axis = chain_axis % ndim
+        draw_axis = draw_axis % ndim
+        obs_axes = tuple(ax % ndim for ax in obs_axes)
+        sample_axes = (chain_axis, draw_axis)
+
+        return self._loo_mixture(
+            ary, obs_axes=obs_axes, sample_axes=sample_axes, log_jacobian=log_jacobian
+        )
 
     def loo_score(
         self,
@@ -936,6 +990,29 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         loo_score_ufunc = make_ufunc(self._loo_score, n_output=1, n_input=3, n_dims=len(axes))
         return loo_score_ufunc(ary, y_obs, log_weights, kind)
+
+    def loo_summary(self, elpd_i, p_loo_i):
+        """Aggregate pointwise LOO values.
+
+        Parameters
+        ----------
+        elpd_i : array-like
+            Pointwise expected log predictive density
+        p_loo_i : array-like
+            Pointwise effective number of parameters
+
+        Returns
+        -------
+        elpd : float
+            Total expected log predictive density
+        elpd_se : float
+            Standard error of elpd
+        p_loo : float
+            Total effective number of parameters
+        lppd : float
+            Log pointwise predictive density
+        """
+        return self._loo_summary(elpd_i, p_loo_i)
 
 
 array_stats = BaseArray()

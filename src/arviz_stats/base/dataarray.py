@@ -395,6 +395,244 @@ class BaseDataArray:
             output_dtypes=[float],
         ).rename("pareto_k")
 
+    def loo(
+        self, da, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None
+    ):
+        """Compute PSIS-LOO-CV.
+
+        Parameters
+        ----------
+        da : DataArray
+            Log-likelihood values with shape (chain, draw, *obs_dims)
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"]
+        reff : float, default 1.0
+            Relative effective sample size
+        log_weights : DataArray, optional
+            Pre-computed PSIS log weights (same shape as da)
+        pareto_k : DataArray, optional
+            Pre-computed Pareto k values (shape: obs_dims only)
+        log_jacobian : DataArray, optional
+            Log-Jacobian adjustment (shape: obs_dims only)
+
+        Returns
+        -------
+        tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
+            Pointwise LOO values for each observation
+        """
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        kwargs = {
+            "chain_axis": chain_axis,
+            "draw_axis": draw_axis,
+            "reff": reff,
+        }
+
+        if log_weights is not None and pareto_k is not None:
+
+            def loo_with_weights(ary, lw, pk, lj=None, **kw):
+                return self.array_class.loo(ary, log_weights=lw, pareto_k=pk, log_jacobian=lj, **kw)
+
+            inputs = [da, log_weights, pareto_k]
+            input_dims = [dims, dims, []]
+            if log_jacobian is not None:
+                inputs.append(log_jacobian)
+                input_dims.append([])
+
+            return apply_ufunc(
+                loo_with_weights,
+                *inputs,
+                input_core_dims=input_dims,
+                output_core_dims=[[], [], []],
+                vectorize=True,
+                join="left",
+                kwargs=kwargs,
+            )
+
+        if log_jacobian is not None:
+
+            def loo_with_jacobian(ary, lj, **kw):
+                return self.array_class.loo(ary, log_jacobian=lj, **kw)
+
+            return apply_ufunc(
+                loo_with_jacobian,
+                da,
+                log_jacobian,
+                input_core_dims=[dims, []],
+                output_core_dims=[[], [], []],
+                vectorize=True,
+                join="left",
+                kwargs=kwargs,
+            )
+
+        return apply_ufunc(
+            self.array_class.loo,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[], [], []],
+            kwargs=kwargs,
+        )
+
+    def loo_approximate_posterior(self, da, log_p, log_q, sample_dims=None, log_jacobian=None):
+        """Compute PSIS-LOO-CV with approximate posterior correction.
+
+        Parameters
+        ----------
+        da : DataArray
+            Log-likelihood values
+        log_p : DataArray
+            Target log-density values (chain, draw)
+        log_q : DataArray
+            Proposal log-density values (chain, draw)
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"]
+        log_jacobian : DataArray, optional
+            Log-Jacobian adjustment for variable transformations
+
+        Returns
+        -------
+        tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
+            Pointwise LOO values for each observation
+        """
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        kwargs = {
+            "chain_axis": chain_axis,
+            "draw_axis": draw_axis,
+        }
+
+        if log_jacobian is not None:
+
+            def loo_approx_with_jacobian(ary, lp, lq, lj, **kw):
+                return self.array_class.loo_approximate_posterior(
+                    ary, lp, lq, log_jacobian=lj, **kw
+                )
+
+            return apply_ufunc(
+                loo_approx_with_jacobian,
+                da,
+                log_p,
+                log_q,
+                log_jacobian,
+                input_core_dims=[dims, dims, dims, []],
+                output_core_dims=[[], [], []],
+                vectorize=True,
+                join="left",
+                kwargs=kwargs,
+            )
+
+        return apply_ufunc(
+            self.array_class.loo_approximate_posterior,
+            da,
+            log_p,
+            log_q,
+            input_core_dims=[dims, dims, dims],
+            output_core_dims=[[], [], []],
+            vectorize=True,
+            kwargs=kwargs,
+        )
+
+    def loo_mixture(self, da, sample_dims=None, log_jacobian=None):
+        """Compute mixture importance sampling LOO (Mix-IS-LOO).
+
+        Parameters
+        ----------
+        da : DataArray
+            Log-likelihood values
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"]
+        log_jacobian : DataArray, optional
+            Log-Jacobian adjustment for variable transformations
+
+        Returns
+        -------
+        elpd_i : DataArray
+            Pointwise expected log predictive density
+        p_loo_i : DataArray
+            Pointwise effective number of parameters
+        mix_log_weights : DataArray
+            Mixture log weights
+        """
+        dims, _, _ = validate_dims_chain_draw_axis(sample_dims)
+        obs_dims = [d for d in da.dims if d not in dims]
+
+        obs_axes = tuple(da.dims.index(d) for d in obs_dims)
+        sample_axes = (da.dims.index(dims[0]), da.dims.index(dims[1]))
+
+        jac_values = log_jacobian.values if log_jacobian is not None else None
+
+        elpd_i_vals, p_loo_i_vals, mix_lw_vals = self.array_class.loo_mixture(
+            da.values,
+            obs_axes=obs_axes,
+            chain_axis=sample_axes[0],
+            draw_axis=sample_axes[1],
+            log_jacobian=jac_values,
+        )
+
+        obs_coords = {d: da.coords[d] for d in obs_dims}
+        elpd_i = DataArray(elpd_i_vals, dims=obs_dims, coords=obs_coords)
+        p_loo_i = DataArray(p_loo_i_vals, dims=obs_dims, coords=obs_coords)
+        mix_log_weights = DataArray(mix_lw_vals, dims=da.dims, coords=da.coords)
+
+        return elpd_i, p_loo_i, mix_log_weights
+
+    def loo_score(self, da, y_obs, log_weights, kind="crps", sample_dims=None):
+        """Compute CRPS or SCRPS with PSIS-LOO-CV weights.
+
+        Parameters
+        ----------
+        da : DataArray
+            Posterior predictive samples
+        y_obs : DataArray or scalar
+            Observed values
+        log_weights : DataArray
+            PSIS-LOO log weights
+        kind : str, default "crps"
+            "crps" or "scrps"
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"]
+
+        Returns
+        -------
+        scores : DataArray
+            Score values (negative CRPS or SCRPS for maximization)
+        """
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        return apply_ufunc(
+            self.array_class.loo_score,
+            da,
+            y_obs,
+            log_weights,
+            input_core_dims=[dims, [], dims],
+            output_core_dims=[[]],
+            kwargs={
+                "kind": kind,
+                "chain_axis": chain_axis,
+                "draw_axis": draw_axis,
+            },
+        )
+
+    def loo_summary(self, da, p_loo_i):
+        """Aggregate pointwise LOO values.
+
+        Parameters
+        ----------
+        da : DataArray
+            Pointwise expected log predictive density values (elpd_i)
+        p_loo_i : DataArray
+            Pointwise effective number of parameters
+
+        Returns
+        -------
+        elpd : float
+            Total expected log predictive density
+        se : float
+            Standard error of elpd
+        p_loo : float
+            Total effective number of parameters
+        lppd : float
+            Log pointwise predictive density
+        """
+        return self.array_class.loo_summary(da.values, p_loo_i.values)
+
     def power_scale_lw(self, da, alpha=0, dim=None):
         """Compute log weights for power-scaling component by alpha."""
         dims = validate_dims(dim)

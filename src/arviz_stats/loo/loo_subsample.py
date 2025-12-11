@@ -609,19 +609,32 @@ def update_subsample(
             jacobian_da, update_data.new_indices, loo_inputs.obs_dims, "__obs__"
         )
 
-    elpd_loo_i_new_da, pareto_k_new_da, approx_posterior = _compute_loo_results(
-        log_likelihood=update_data.log_likelihood_new,
-        var_name=loo_inputs.var_name,
-        sample_dims=loo_inputs.sample_dims,
-        n_samples=loo_inputs.n_samples,
-        n_data_points=len(update_data.new_indices),
-        log_weights=log_weights_new,
-        reff=reff,
-        log_p=log_p,
-        log_q=log_q,
-        return_pointwise=True,
-        log_jacobian=jacobian_new,
-    )
+    if log_p is not None and log_q is not None:
+        approx_data = xr.DataTree()
+        approx_data["log_likelihood"] = update_data.log_likelihood_new
+        loo_results = loo_approximate_posterior(
+            data=approx_data,
+            log_p=log_p,
+            log_q=log_q,
+            pointwise=True,
+            var_name=loo_inputs.var_name,
+            log_jacobian=jacobian_new,
+        )
+        elpd_loo_i_new_da = loo_results.elpd_i
+        pareto_k_new_da = loo_results.pareto_k
+        approx_posterior = True
+    else:
+        elpd_loo_i_new_da, pareto_k_new_da, approx_posterior = _compute_loo_results(
+            log_likelihood=update_data.log_likelihood_new,
+            var_name=loo_inputs.var_name,
+            sample_dims=loo_inputs.sample_dims,
+            n_samples=loo_inputs.n_samples,
+            n_data_points=len(update_data.new_indices),
+            log_weights=log_weights_new,
+            reff=reff,
+            return_pointwise=True,
+            log_jacobian=jacobian_new,
+        )
 
     combined_elpd_i_da = xr.concat(
         [update_data.old_elpd_i, elpd_loo_i_new_da], dim=update_data.concat_dim
