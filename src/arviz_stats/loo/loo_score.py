@@ -37,7 +37,11 @@ def loo_score(
         \operatorname{CRPS}_{\text{loo}}(F, y)
         = E_{\text{loo}}\left[|X - y|\right]
         + E_{\text{loo}}[X]
-        - 2\cdot E_{\text{loo}} \left[X\,F_{\text{loo}}(X') \right].
+        - 2\cdot E_{\text{loo}} \left[X\,F_{\text{mid}}(X) \right],
+
+    where :math:`F_{\text{mid}}` is the midpoint CDF estimator defined as
+    :math:`F_{\text{mid}}(x_{(i)}) := F^-_{(i)} + w_{(i)}/2`. This midpoint formulation
+    provides improved accuracy for weighted samples compared to the left-continuous CDF.
 
     The PWM identity is described in [3]_, traditional CRPS and SCRPS are described in
     [1]_ and [2]_, and the PSIS-LOO-CV method is described in [4]_ and [5]_.
@@ -111,16 +115,23 @@ def loo_score(
     -----
     For a single observation with posterior-predictive draws :math:`x_1, \ldots, x_S`
     and PSIS-LOO-CV weights :math:`w_i \propto \exp(\ell_i)` normalized so that
-    :math:`\sum_{i=1}^S w_i = 1`, define the PSIS-LOO-CV expectation and the left-continuous
-    weighted CDF as
+    :math:`\sum_{i=1}^S w_i = 1`, define the PSIS-LOO-CV expectation as
 
     .. math::
 
-        E_{\text{loo}}[g(X)] := \sum_{i=1}^S w_i\, g(x_i), \quad
-        F_{\text{loo}}(x') := \sum_{i: x_i < x} w_i.
+        E_{\text{loo}}[g(X)] := \sum_{i=1}^S w_i\, g(x_i).
 
-    The first probability-weighted moment is
-    :math:`b_1 := E_{\text{loo}}\left[X\,F_{\text{loo}}(X')\right]`.
+    For weighted samples, we use the midpoint CDF estimator rather than the left-continuous CDF.
+    Given sorted values :math:`x_{(1)} \leq \cdots \leq x_{(S)}` with corresponding weights
+    :math:`w_{(i)}`, define the left-cumulative weight :math:`F^-_{(i)} = \sum_{j<i} w_{(j)}`
+    and the midpoint CDF as
+
+    .. math::
+
+        F_{\text{mid}}(x_{(i)}) := F^-_{(i)} + \frac{w_{(i)}}{2}.
+
+    The first probability-weighted moment using the midpoint CDF is
+    :math:`b_1 := \sum_{i=1}^S w_{(i)}\, x_{(i)}\, F_{\text{mid}}(x_{(i)})`.
     With this, the nonnegative CRPS under PSIS-LOO-CV is
 
     .. math::
