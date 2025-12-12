@@ -557,6 +557,49 @@ class _DiagnosticsBase(_CoreBase):
         return -(loo_weighted_abs_error / gini_mean_difference) - 0.5 * np.log(gini_mean_difference)
 
     @staticmethod
+    def _loo_pit(ary, y_obs, log_weights, rng=None):
+        """
+        Compute LOO-PIT value for a single observation.
+
+        Parameters
+        ----------
+        ary : np.ndarray
+            1D array of posterior predictive samples (flattened chain*draw)
+        y_obs : float
+            Single observed value
+        log_weights : np.ndarray
+            1D array of PSIS-LOO log weights (same length as ary)
+        rng : np.random.Generator, optional
+            Random number generator for tie-breaking. If None, uses midpoint
+            of the interval when ties exist.
+
+        Returns
+        -------
+        pit : float
+            LOO-PIT value in [0, 1]
+        """
+        ary = np.asarray(ary).ravel()
+        log_weights = np.asarray(log_weights).ravel()
+        y_obs_val = float(np.asarray(y_obs).flat[0])
+
+        log_norm = logsumexp(log_weights)
+        weights = np.exp(log_weights - log_norm)
+
+        sel_below = ary < y_obs_val
+        pit_lower = np.sum(weights[sel_below])
+
+        sel_equal = ary == y_obs_val
+        if np.any(sel_equal):
+            pit_at_obs = np.sum(weights[sel_equal])
+            pit_upper = pit_lower + pit_at_obs
+
+            if rng is not None:
+                return rng.uniform(pit_lower, pit_upper)
+            return (pit_lower + pit_upper) / 2.0
+
+        return pit_lower
+
+    @staticmethod
     def _loo_summary(elpd_i, p_loo_i):
         """
         Aggregate pointwise LOO values.

@@ -1015,6 +1015,46 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         loo_score_ufunc = make_ufunc(self._loo_score, n_output=1, n_input=3, n_dims=len(axes))
         return loo_score_ufunc(ary, y_obs, log_weights, kind)
 
+    def loo_pit(
+        self,
+        ary,
+        y_obs,
+        log_weights,
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute LOO-PIT values with PSIS-LOO-CV weights.
+
+        Parameters
+        ----------
+        ary : array-like
+            Posterior predictive samples
+        y_obs : array-like
+            Observed values (no sample dims)
+        log_weights : array-like
+            PSIS-LOO log weights
+        chain_axis : int, default -2
+            Axis for chains
+        draw_axis : int, default -1
+            Axis for draws
+
+        Returns
+        -------
+        pit_values : array-like
+            LOO-PIT values, one per observation
+        """
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+        log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+
+        rng = np.random.default_rng(214)
+
+        loo_pit_ufunc = make_ufunc(self._loo_pit, n_output=1, n_input=3, n_dims=len(axes))
+        return loo_pit_ufunc(ary, y_obs, log_weights, rng)
+
     def loo_summary(self, elpd_i, p_loo_i):
         """Aggregate pointwise LOO values.
 
