@@ -537,7 +537,8 @@ class _DiagnosticsBase(_CoreBase):
 
         cumulative_weights = np.cumsum(weights_sorted)
         f_minus = cumulative_weights - weights_sorted
-        pwm_first_moment_b1 = np.sum(weights_sorted * values_sorted * f_minus)
+        f_mid = f_minus + weights_sorted / 2
+        pwm_first_moment_b1 = np.sum(weights_sorted * values_sorted * f_mid)
 
         crps = loo_weighted_abs_error + loo_weighted_mean_prediction - 2.0 * pwm_first_moment_b1
 
