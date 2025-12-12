@@ -1,9 +1,7 @@
 """Compute leave one out (PSIS-LOO) probability integral transform (PIT) values."""
 
-import numpy as np
 import xarray as xr
 from arviz_base import convert_to_datatree, extract
-from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.helper_loo import _get_r_eff
 from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
@@ -82,7 +80,6 @@ def loo_pit(
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
     data = convert_to_datatree(data)
-    rng = np.random.default_rng(214)
 
     if var_names is None:
         var_names = list(data.observed_data.data_vars.keys())
@@ -116,32 +113,18 @@ def loo_pit(
         keep_dataset=True,
     )
 
-    sel_min = {}
-    sel_sup = {}
+    sample_dims = ["chain", "draw"]
+    loo_pit_values = xr.Dataset(coords=observed_data.coords)
+
     for var in var_names:
         pred = posterior_predictive[var]
         obs = observed_data[var]
-        sel_min[var] = pred < obs
-        sel_sup[var] = pred == obs
+        lw = log_weights[var] if isinstance(log_weights, xr.Dataset) else log_weights
 
-    sel_min = xr.Dataset(sel_min)
-    sel_sup = xr.Dataset(sel_sup)
-
-    pit = np.exp(logsumexp(log_weights.where(sel_min, -np.inf), dims=["chain", "draw"]))
-
-    loo_pit_values = xr.Dataset(coords=observed_data.coords)
-    for var in var_names:
-        pit_lower = pit[var].values
-
-        if sel_sup[var].any():
-            pit_sup_addition = np.exp(
-                logsumexp(log_weights.where(sel_sup[var], -np.inf), dims=["chain", "draw"])
-            )
-
-            pit_upper = pit_lower + pit_sup_addition[var].values
-            random_value = rng.uniform(pit_lower, pit_upper)
-            loo_pit_values[var] = observed_data[var].copy(data=random_value)
-        else:
-            loo_pit_values[var] = observed_data[var].copy(data=pit_lower)
+        loo_pit_values[var] = pred.azstats.loo_pit(
+            y_obs=obs,
+            log_weights=lw,
+            sample_dims=sample_dims,
+        )
 
     return loo_pit_values

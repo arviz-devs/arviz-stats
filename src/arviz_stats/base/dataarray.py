@@ -635,6 +635,39 @@ class BaseDataArray:
             },
         )
 
+    def loo_pit(self, da, y_obs, log_weights, sample_dims=None):
+        """Compute LOO-PIT values on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+            Posterior predictive samples
+        y_obs : DataArray
+            Observed values (no sample dims)
+        log_weights : DataArray
+            PSIS-LOO log weights
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"]
+
+        Returns
+        -------
+        pit_values : DataArray
+            LOO-PIT values
+        """
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        return apply_ufunc(
+            self.array_class.loo_pit,
+            da,
+            y_obs,
+            log_weights,
+            input_core_dims=[dims, [], dims],
+            output_core_dims=[[]],
+            kwargs={
+                "chain_axis": chain_axis,
+                "draw_axis": draw_axis,
+            },
+        )
+
     def loo_summary(self, da, p_loo_i):
         """Aggregate pointwise LOO values.
 

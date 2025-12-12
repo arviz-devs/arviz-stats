@@ -195,6 +195,16 @@ class _BaseAccessor:
             **kwargs,
         )
 
+    def loo_pit(self, y_obs, log_weights, sample_dims=None, **kwargs):
+        """Compute LOO-PIT values with PSIS-LOO-CV weights."""
+        return self._apply(
+            "loo_pit",
+            y_obs=y_obs,
+            log_weights=log_weights,
+            sample_dims=sample_dims,
+            **kwargs,
+        )
+
     def loo_summary(self, p_loo_i):
         """Aggregate pointwise LOO values."""
         return self._apply("loo_summary", p_loo_i=p_loo_i)
