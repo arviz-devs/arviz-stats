@@ -350,7 +350,7 @@ def _apply_multi_input_function(
         if coords is not None:
             data = data.sel(coords)
         _warn_non_unique_coords(data, dims)
-        return getattr(data.azstats, name)(**all_kwargs)
+        return getattr(data.azstats, name)(**all_kwargs, group=group)
 
     data = convert_to_dataset(data, group=group)
 

@@ -27,6 +27,7 @@ you should jump to {ref}`array_stats_api` and read forward.
 .. autosummary::
    :toctree: generated/
 
+   arviz_stats.bfmi
    arviz_stats.ess
    arviz_stats.loo_pit
    arviz_stats.mcse

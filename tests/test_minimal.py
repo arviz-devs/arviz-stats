@@ -181,6 +181,15 @@ def test_mcse_no_chain(data_c0d1):
     assert np.all(mcse < 0.09)
 
 
+def test_bfmi_datatree_returns_datatree():
+    arr0 = np.random.normal(size=(4, 1000))
+    arr1 = np.cumsum(arr0, axis=1)
+    result0 = array_stats.bfmi(arr0)
+    assert np.all(result0 > 1)
+    assert np.all(array_stats.bfmi(arr1) < 0.3)
+    assert result0.shape == (4,)
+
+
 @pytest.mark.parametrize("axis", ["01", "20"])
 def test_pareto_min_ss_axes(axis, data_c0d1, data_c2d0):
     if axis == "01":

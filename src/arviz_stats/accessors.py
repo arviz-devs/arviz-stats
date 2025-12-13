@@ -147,6 +147,10 @@ class _BaseAccessor:
         """Pareto smoothed importance sampling."""
         return self._apply("psislw", dim=dim, **kwargs)
 
+    def bfmi(self, sample_dims=None, **kwargs):
+        """Calculate the estimated Bayesian fraction of missing information (BFMI)."""
+        return self._apply("bfmi", sample_dims=sample_dims, **kwargs)
+
     def pareto_khat(self, sample_dims=None, **kwargs):
         """Compute Pareto k-hat diagnostic."""
         return self._apply("pareto_khat", sample_dims=sample_dims, **kwargs)
