@@ -557,6 +557,9 @@ def bfmi(
     explained in [1]_. As a rule of thumb, BFMI values smaller than 0.3 are indicative of poor
     sampling.
 
+    See the EABM chapter on MCMC diagnostic `of gradient-based algorithms <https://arviz-devs.github.io/EABM/Chapters/MCMC_diagnostics.html#diagnosis-of-gradient-based-algorithms>`_
+    for more details.
+
     Parameters
     ----------
     data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
