@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 from arviz_base import convert_to_dataset
 
-from arviz_stats.utils import get_array_function
+from arviz_stats.utils import _apply_multi_input_function, get_array_function
 from arviz_stats.validate import validate_dims
 
 
@@ -549,8 +549,7 @@ def bfmi(
     var_names="energy",
     filter_vars=None,
     coords=None,
-    chain_axis=0,
-    draw_axis=1,
+    **kwargs,
 ):
     """Calculate the estimated Bayesian fraction of missing information (BFMI).
 
@@ -578,6 +577,13 @@ def bfmi(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
+    **kwargs : any, optional
+        Forwarded to the array or dataarray interface for additional options.
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested BFMI summary of the provided input
 
     Examples
     --------
@@ -595,46 +601,14 @@ def bfmi(
     .. [1] Betancourt. Diagnosing Suboptimal Cotangent Disintegrations in
         Hamiltonian Monte Carlo. (2016) https://arxiv.org/abs/1604.00695
     """
-    if isinstance(data, list | tuple | np.ndarray):
-        data = np.array(data)
-        return get_array_function("bfmi")(
-            data,
-            chain_axis=chain_axis,
-            draw_axis=draw_axis,
-        )
-
-    if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
-        # Make sure the grouped dimension is added as one of the dimensions to be reduced
-        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
-        return data.map(
-            rhat_nested,
-            sample_dims=sample_dims,
-            var_names=var_names,
-            coords=coords,
-        )
-
-    if isinstance(data, xr.DataArray):
-        if coords is not None:
-            data = data.sel(coords)
-        return data.azstats.bfmi(
-            sample_dims=sample_dims,
-        )
-
-    if isinstance(data, xr.DataTree):
-        data = data.azstats.filter_vars(
-            group=group, var_names=var_names, filter_vars=filter_vars
-        ).datatree
-        if coords is not None:
-            data = data.sel(coords)
-        return data.azstats.bfmi(
-            sample_dims=sample_dims,
-            group=group,
-        )
-
-    data = convert_to_dataset(data, group=group)
-
-    data = data.azstats.filter_vars(var_names=var_names, filter_vars=filter_vars).dataset
-    if coords is not None:
-        data = data.sel(coords)
-
-    return data.azstats.bfmi(sample_dims=sample_dims)
+    return _apply_multi_input_function(
+        "bfmi",
+        data,
+        sample_dims,
+        "sample_dims",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        **kwargs,
+    )
