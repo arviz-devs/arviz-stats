@@ -8,7 +8,7 @@ from .helpers import importorskip
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
-from arviz_stats.sampling_diagnostics import ess, mcse, rhat, rhat_nested
+from arviz_stats.sampling_diagnostics import bfmi, ess, mcse, rhat, rhat_nested
 
 
 def test_ess_datatree_returns_datatree(centered_eight):
@@ -138,3 +138,23 @@ def test_mcse_list_input():
     data = [[1, 2, 3, 4], [5, 6, 7, 8]]
     result = mcse(data)
     assert isinstance(result, float | np.floating | np.ndarray)
+
+
+def test_bfmi_datatree_returns_datatree(centered_eight):
+    result = bfmi(centered_eight)
+    assert isinstance(result, xr.DataTree)
+    assert result.name == "sample_stats"
+    assert "energy" in result.dataset.data_vars
+
+
+def test_bfmi_dataarray_returns_dataarray(centered_eight):
+    da = centered_eight.sample_stats["energy"]
+    result = bfmi(da)
+    assert isinstance(result, xr.DataArray)
+
+
+def test_bfmi_dataset_returns_dataset(centered_eight):
+    ds = centered_eight.sample_stats.dataset
+    result = bfmi(ds, var_names="energy")
+    assert isinstance(result, xr.Dataset)
+    assert "energy" in result.data_vars
