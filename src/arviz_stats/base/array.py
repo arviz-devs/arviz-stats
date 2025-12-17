@@ -570,7 +570,17 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
-    def qds(self, ary, nquantiles=100, binwidth=None, dotsize=1, stackratio=1, axis=-1, **kwargs):
+    def qds(
+        self,
+        ary,
+        nquantiles=100,
+        binwidth=None,
+        dotsize=1,
+        stackratio=1,
+        top_only=False,
+        axis=-1,
+        **kwargs,
+    ):
         """Compute quantile dot."""
         ary, axes = process_ary_axes(ary, axis)
         qd_ufunc = make_ufunc(
@@ -585,10 +595,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return qd_ufunc(
             ary,
             out_shape=((out_s,), (out_s,), ()),
-            nquantiles=nquantiles,
+            nquantiles=out_s,
             binwidth=binwidth,
             dotsize=dotsize,
             stackratio=stackratio,
+            top_only=top_only,
             **kwargs,
         )
 

@@ -550,7 +550,12 @@ class TestQuantileDots:
     def test_qds_basic(self, density, rng):
         x = rng.normal(size=100)
         x_out, y_out, radius = density._qds(
-            x, nquantiles=20, binwidth=None, dotsize=1, stackratio=1
+            x,
+            nquantiles=20,
+            binwidth=None,
+            dotsize=1,
+            stackratio=1,
+            top_only=False,
         )
         assert len(x_out) == 20
         assert len(y_out) == 20
@@ -560,7 +565,12 @@ class TestQuantileDots:
     def test_qds_nquantiles(self, density, rng, nquantiles):
         x = rng.normal(size=200)
         x_out, y_out, _ = density._qds(
-            x, nquantiles=nquantiles, binwidth=None, dotsize=1, stackratio=1
+            x,
+            nquantiles=nquantiles,
+            binwidth=None,
+            dotsize=1,
+            stackratio=1,
+            top_only=False,
         )
         assert len(x_out) == nquantiles
         assert len(y_out) == nquantiles
@@ -568,8 +578,26 @@ class TestQuantileDots:
     def test_qds_too_many_quantiles(self, density, rng):
         x = rng.normal(size=50)
         with pytest.warns(UserWarning, match="nquantiles"):
-            x_out, _, _ = density._qds(x, nquantiles=100, binwidth=None, dotsize=1, stackratio=1)
+            x_out, _, _ = density._qds(
+                x, nquantiles=100, binwidth=None, dotsize=1, stackratio=1, top_only=False
+            )
         assert len(x_out) == 50
+
+    def test_qds_top_only(self, density, rng):
+        x = rng.normal(size=100)
+        x_out, y_out, _ = density._qds(
+            x,
+            nquantiles=20,
+            binwidth=None,
+            dotsize=1,
+            stackratio=1,
+            top_only=True,
+        )
+        assert len(x_out) == 20
+        assert len(y_out) == 20
+        non_nan_count = np.sum(~np.isnan(x_out))
+        assert non_nan_count > 0
+        assert non_nan_count <= 20
 
     def test_compute_quantiles_and_binwidth(self, density, rng):
         x = rng.normal(size=100)
@@ -595,10 +623,57 @@ class TestQuantileDots:
     def test_layout_stacks(self, density):
         stack_locs = [1.0, 5.0, 10.0]
         stack_counts = [3, 2, 1]
-        x, y = density._layout_stacks(stack_locs, stack_counts, binwidth=0.5, stackratio=1.0)
+        x, y = density._layout_stacks(
+            stack_locs, stack_counts, nquantiles=6, dotheight=1, top_only=False
+        )
         assert len(x) == 6
         assert len(y) == 6
         assert np.all(y >= 0)
+
+    def test_layout_stacks_top_only(self, density):
+        stack_locs = [1.0, 5.0, 10.0]
+        stack_counts = [3, 2, 1]
+        x, y = density._layout_stacks(
+            stack_locs, stack_counts, nquantiles=6, dotheight=1, top_only=True
+        )
+        assert len(x) == 6
+        assert len(y) == 6
+        assert np.sum(~np.isnan(x)) == 3
+        assert np.sum(~np.isnan(y)) == 3
+        y_non_nan = y[~np.isnan(y)]
+        expected_y = np.array([2.5, 1.5, 0.5])
+        assert_allclose(y_non_nan, expected_y)
+
+    def test_layout_stacks_top_only_more_quantiles(self, density):
+        stack_locs = [1.0, 5.0]
+        stack_counts = [3, 2]
+        x, y = density._layout_stacks(
+            stack_locs, stack_counts, nquantiles=10, dotheight=1, top_only=True
+        )
+        assert len(x) == 10
+        assert len(y) == 10
+        assert np.sum(~np.isnan(x)) == 2
+        assert np.sum(~np.isnan(y)) == 2
+
+    def test_qds_matches_density(self, density, rng):
+        x = rng.normal(loc=0.5, scale=2, size=2000)
+        nquantiles = 100
+
+        x_dots, y_dots, _ = density._qds(
+            x,
+            nquantiles=nquantiles,
+            binwidth=None,
+            dotsize=1,
+            stackratio=1,
+            top_only=False,
+        )
+        _, pdf, _ = density.kde_linear(x, grid_len=nquantiles)
+
+        dens_dot = np.zeros(nquantiles)
+        for i, x in enumerate(x_dots):
+            dens_dot[i] = np.max(y_dots[x_dots <= x])
+
+        assert np.mean(np.abs(pdf - dens_dot)) < 0.15
 
 
 class TestECDF:

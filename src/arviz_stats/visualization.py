@@ -532,6 +532,7 @@ def qds(
     binwidth=None,
     dotsize=1,
     stackratio=1,
+    top_only=False,
     **kwargs,
 ):
     r"""Compute the marginal quantile dots.
@@ -565,6 +566,8 @@ def qds(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
+    nquantiles : int, default 100
+        Number of quantiles (i.e., dots) to compute.
     binwidth : float, optional
         Width of the bin for the dots.
     dotsize : float, default 1
@@ -573,6 +576,8 @@ def qds(
     stackratio : float, default 1
         The distance between the center of the dots in the same stack relative to the bin height.
         The default makes dots in the same stack just touch each other.
+    top_only : bool, default False
+        If true, only the top dots of each stack are returned.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for quantile dots.
 
@@ -634,5 +639,6 @@ def qds(
         binwidth=binwidth,
         dotsize=dotsize,
         stackratio=stackratio,
+        top_only=top_only,
         **kwargs,
     )
