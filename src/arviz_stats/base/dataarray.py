@@ -246,7 +246,17 @@ class BaseDataArray:
         out = concat((grid, pdf), dim=plot_axis)
         return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
 
-    def qds(self, da, nquantiles=100, binwidth=None, dotsize=1, stackratio=1, dim=None, **kwargs):
+    def qds(
+        self,
+        da,
+        nquantiles=100,
+        binwidth=None,
+        dotsize=1,
+        stackratio=1,
+        top_only=False,
+        dim=None,
+        **kwargs,
+    ):
         """Compute quantile dots on DataArray input."""
         dims = validate_dims(dim)
         x, y, radius = apply_ufunc(
@@ -257,6 +267,7 @@ class BaseDataArray:
                 "binwidth": binwidth,
                 "dotsize": dotsize,
                 "stackratio": stackratio,
+                "top_only": top_only,
                 "axis": np.arange(-len(dims), 0, 1),
                 **kwargs,
             },

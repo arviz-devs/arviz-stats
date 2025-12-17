@@ -781,7 +781,7 @@ class _DensityBase(_CoreBase):
 
         return contours
 
-    def _qds(self, x, nquantiles, binwidth, dotsize, stackratio):
+    def _qds(self, x, nquantiles, binwidth, dotsize, stackratio, top_only):
         """Compute quantile dot stacking for 1D data."""
         x = x.flatten()
         x = x[np.isfinite(x)]
@@ -791,9 +791,17 @@ class _DensityBase(_CoreBase):
             return np.full(nquantiles, np.nan), np.full(nquantiles, np.nan), np.nan
 
         stack_locs, stack_counts = self._wilkinson_algorithm(qvalues, binwidth)
-        x, y = self._layout_stacks(stack_locs, stack_counts, binwidth, stackratio)
-        radius = dotsize * binwidth / 2
 
+        radius = dotsize * binwidth / 2
+        dotheight = stackratio / (nquantiles * binwidth)
+
+        x, y = self._layout_stacks(
+            stack_locs,
+            stack_counts,
+            nquantiles,
+            dotheight,
+            top_only,
+        )
         return x, y, radius
 
     def _ecdf(self, ary, npoints, pit):
@@ -896,7 +904,14 @@ class _DensityBase(_CoreBase):
 
         return stack_locs, stack_counts
 
-    def _layout_stacks(self, stack_locs, stack_counts, binwidth, stackratio):
+    def _layout_stacks(
+        self,
+        stack_locs,
+        stack_counts,
+        nquantiles,
+        dotheight,
+        top_only,
+    ):
         """Use count and location of stacks to get coordinates of dots.
 
         Parameters
@@ -905,10 +920,13 @@ class _DensityBase(_CoreBase):
             Central x (or y) position of each stack.
         stack_counts : array-like of int
             Number of dots in each stack.
-        binwidth : float
-            Binwidth used for stacking.
-        stackratio : float
-            Vertical spacing between dots as a proportion of binwidth.
+        nquantiles : int
+            Total number of quantiles (dots).
+        dotheight : float
+            Height of each dot.
+        top_only : bool, default False
+            When True, return only the top dot from each horizontal stack
+            (i.e., the maximum y per bin). When False, return all dots.
 
         Returns
         -------
@@ -917,9 +935,18 @@ class _DensityBase(_CoreBase):
         """
         stack_locs = np.asarray(stack_locs)
         stack_counts = np.asarray(stack_counts, dtype=int)
+        binradius = dotheight / 2
 
-        dotheight = stackratio * binwidth
-        binradius = binwidth / 2
+        if top_only:
+            x = stack_locs
+            y = dotheight * (stack_counts - 1) + binradius
+            # pad with NaNs because we are returning fewer points than nquantiles
+            x_pad = np.full(nquantiles, np.nan)
+            y_pad = np.full(nquantiles, np.nan)
+            m = min(len(x), nquantiles)
+            x_pad[:m] = x[:m]
+            y_pad[:m] = y[:m]
+            return x_pad, y_pad
 
         x = np.repeat(stack_locs, stack_counts)
         y = np.hstack(
