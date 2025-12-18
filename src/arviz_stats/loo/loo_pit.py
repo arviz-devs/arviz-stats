@@ -4,13 +4,14 @@ import xarray as xr
 from arviz_base import convert_to_datatree, extract
 
 from arviz_stats.loo.helper_loo import _get_r_eff
-from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 def loo_pit(
     data,
     var_names=None,
     log_weights=None,
+    pareto_k=None,
 ):
     r"""Compute leave one out (PSIS-LOO) probability integral transform (PIT) values.
 
@@ -28,13 +29,12 @@ def loo_pit(
         Names of the variables to be used to compute the LOO-PIT values. If None, all
         variables are used. The function assumes that the observed and log_likelihood
         variables share the same names.
-    log_weights: DataArray or ELPDData, optional
-        Smoothed log weights. Can be either:
-
-        - A DataArray with the same shape as ``y_pred``
-        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
-
-        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
+    log_weights : Dataset, optional
+        Pre-computed smoothed log weights from PSIS. Must be a Dataset with variables
+        matching var_names. Must be provided together with pareto_k.
+    pareto_k : Dataset, optional
+        Pre-computed Pareto k-hat diagnostic values. Must be a Dataset with variables
+        matching var_names. Must be provided together with log_weights.
 
     Returns
     -------
@@ -87,16 +87,8 @@ def loo_pit(
         var_names = [var_names]
 
     log_likelihood = get_log_likelihood_dataset(data, var_names=var_names)
-
-    if log_weights is None:
-        n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-        reff = _get_r_eff(data, n_samples)
-        log_weights, _ = log_likelihood.azstats.psislw(r_eff=reff)
-
-    if isinstance(log_weights, ELPDData):
-        if log_weights.log_weights is None:
-            raise ValueError("ELPDData object does not contain log_weights")
-        log_weights = log_weights.log_weights
+    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+    r_eff = _get_r_eff(data, n_samples)
 
     posterior_predictive = extract(
         data,
@@ -119,12 +111,23 @@ def loo_pit(
     for var in var_names:
         pred = posterior_predictive[var]
         obs = observed_data[var]
-        lw = log_weights[var] if isinstance(log_weights, xr.Dataset) else log_weights
 
-        loo_pit_values[var] = pred.azstats.loo_pit(
-            y_obs=obs,
-            log_weights=lw,
-            sample_dims=sample_dims,
-        )
+        if log_weights is not None and pareto_k is not None:
+            pit_values, _ = pred.azstats.loo_pit(
+                y_obs=obs,
+                log_weights=log_weights[var],
+                pareto_k=pareto_k[var],
+                r_eff=r_eff,
+                sample_dims=sample_dims,
+            )
+        else:
+            log_ratios = -log_likelihood[var]
+            pit_values, _ = pred.azstats.loo_pit(
+                y_obs=obs,
+                log_ratios=log_ratios,
+                r_eff=r_eff,
+                sample_dims=sample_dims,
+            )
+        loo_pit_values[var] = pit_values
 
     return loo_pit_values

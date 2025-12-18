@@ -970,7 +970,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         obs_axes = tuple(ax % ndim for ax in obs_axes)
         sample_axes = (chain_axis, draw_axis)
 
-        return self._loo_mixture(
+        return self._mixture(
             ary, obs_axes=obs_axes, sample_axes=sample_axes, log_jacobian=log_jacobian
         )
 
@@ -992,7 +992,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         y_obs : array-like
             Observed values
         log_weights : array-like
-            PSIS-LOO log weights
+            Pre-computed smoothed log weights from PSIS
         kind : str, default "crps"
             "crps" or "scrps"
         chain_axis : int, default -2
@@ -1008,7 +1008,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
             ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
         )
-
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
         log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
 
@@ -1032,7 +1031,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         y_obs : array-like
             Observed values (no sample dims)
         log_weights : array-like
-            PSIS-LOO log weights
+            Pre-computed smoothed log weights from PSIS
         chain_axis : int, default -2
             Axis for chains
         draw_axis : int, default -1
@@ -1046,14 +1045,90 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
             ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
         )
-
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
         log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
 
         rng = np.random.default_rng(214)
 
         loo_pit_ufunc = make_ufunc(self._loo_pit, n_output=1, n_input=3, n_dims=len(axes))
-        return loo_pit_ufunc(ary, y_obs, log_weights, rng)
+        return loo_pit_ufunc(ary, y_obs, log_weights, rng=rng)
+
+    def loo_expectation(
+        self,
+        ary,
+        log_weights,
+        kind="mean",
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute weighted expectation with PSIS-LOO-CV weights.
+
+        Parameters
+        ----------
+        ary : array-like
+            Posterior predictive samples
+        log_weights : array-like
+            Pre-computed smoothed log weights from PSIS
+        kind : str, default "mean"
+            Type of expectation: 'mean', 'median', 'var', 'sd',
+            'circular_mean', 'circular_var', 'circular_sd'
+        chain_axis : int, default -2
+            Axis for chains
+        draw_axis : int, default -1
+            Axis for draws
+
+        Returns
+        -------
+        expectation : array-like
+            Weighted expectation values
+        """
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+        log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+
+        loo_expectation_ufunc = make_ufunc(
+            self._loo_expectation, n_output=1, n_input=2, n_dims=len(axes)
+        )
+        return loo_expectation_ufunc(ary, log_weights, kind)
+
+    def loo_quantile(
+        self,
+        ary,
+        log_weights,
+        prob,
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute weighted quantile with PSIS-LOO-CV weights.
+
+        Parameters
+        ----------
+        ary : array-like
+            Posterior predictive samples
+        log_weights : array-like
+            Pre-computed smoothed log weights from PSIS
+        prob : float
+            Quantile probability in [0, 1]
+        chain_axis : int, default -2
+            Axis for chains
+        draw_axis : int, default -1
+            Axis for draws
+
+        Returns
+        -------
+        quantile : array-like
+            Weighted quantile values
+        """
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+        log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+
+        loo_quantile_ufunc = make_ufunc(self._loo_quantile, n_output=1, n_input=2, n_dims=len(axes))
+        return loo_quantile_ufunc(ary, log_weights, prob)
 
     def loo_summary(self, elpd_i, p_loo_i):
         """Aggregate pointwise LOO values.
@@ -1076,7 +1151,39 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         lppd : float
             Log pointwise predictive density
         """
-        return self._loo_summary(elpd_i, p_loo_i)
+        return self._summary(elpd_i, p_loo_i)
+
+    def loo_r2(self, y_obs, ypred_loo, n_simulations=4000, circular=False, random_state=42):
+        """Compute LOO-adjusted :math:`R^2` using Dirichlet-weighted bootstrap.
+
+        Parameters
+        ----------
+        y_obs : array-like
+            Observed values (1D array).
+        ypred_loo : array-like
+            LOO predictions (1D array, same shape as y_obs).
+        n_simulations : int, default 4000
+            Number of Dirichlet-weighted bootstrap samples.
+        circular : bool, default False
+            Whether the variable is circular (angles in radians).
+        random_state : int, default 42
+            Random seed for reproducibility.
+
+        Returns
+        -------
+        loo_r_squared : array-like
+            Array of :math:`R^2` samples with shape (n_simulations,).
+        """
+        y_obs = np.asarray(y_obs).ravel()
+        ypred_loo = np.asarray(ypred_loo).ravel()
+
+        return self._loo_r2(
+            y_obs,
+            ypred_loo,
+            n_simulations=n_simulations,
+            circular=circular,
+            random_state=random_state,
+        )
 
 
 array_stats = BaseArray()

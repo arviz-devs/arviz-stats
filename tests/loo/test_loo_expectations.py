@@ -1,16 +1,18 @@
 """Test expectations functions for PSIS-LOO-CV."""
 
 # pylint: disable=redefined-outer-name, unused-argument
-import numpy as np
 import pytest
-from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
 
 from ..helpers import importorskip
 
+np = importorskip("numpy")
 azb = importorskip("arviz_base")
 
-from arviz_stats import loo, loo_expectations, loo_metrics, loo_r2
-from arviz_stats.utils import ELPDData
+from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
+
+from arviz_stats import loo_expectations, loo_metrics, loo_r2
+from arviz_stats.loo.helper_loo import _get_r_eff
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 def test_loo_expectations_invalid_kind(centered_eight):
@@ -28,31 +30,11 @@ def test_loo_expectations_invalid_var_name(centered_eight):
         loo_expectations(centered_eight, var_name="nonexistent")
 
 
-def test_loo_expectations_elpddata_without_log_weights(centered_eight):
-    np.random.default_rng(42)
-
-    loo_result_no_weights = ELPDData(
-        elpd=-30.0,
-        se=3.0,
-        p=2.0,
-        good_k=0.7,
-        n_samples=100,
-        n_data_points=8,
-        warning=False,
-        kind="loo",
-        scale="log",
-        log_weights=None,
-    )
-
-    with pytest.raises(ValueError, match="ELPDData object does not contain log_weights"):
-        loo_expectations(centered_eight, log_weights=loo_result_no_weights)
-
-
 @pytest.mark.parametrize(
     "kind, probs, expected_vals",
     [
         ("mean", None, 3.81),
-        ("quantile", [0.25, 0.75], [-6.26, 14.44]),
+        ("quantile", [0.25, 0.75], [-6.27, 14.44]),
     ],
 )
 def test_loo_expectations(centered_eight, kind, probs, expected_vals):
@@ -102,18 +84,6 @@ def test_loo_expectations_khat(centered_eight, datatree, kind):
     if np.any(khat_check.values > good_k):
         with pytest.warns(UserWarning, match="Estimated shape parameter of Pareto distribution"):
             loo_expectations(datatree, var_name="y", kind=kind, probs=probs)
-
-
-def test_log_weights_input_formats(centered_eight):
-    loo_result = loo(centered_eight, pointwise=True)
-    log_weights_da = loo_result.log_weights
-
-    loo_exp_da, khat_da = loo_expectations(centered_eight, kind="mean", log_weights=log_weights_da)
-    loo_exp_elpddata, khat_elpddata = loo_expectations(
-        centered_eight, kind="mean", log_weights=loo_result
-    )
-    assert_array_equal(loo_exp_da.values, loo_exp_elpddata.values)
-    assert_array_equal(khat_da.values, khat_elpddata.values)
 
 
 @pytest.mark.parametrize("kind", ["median", "sd"])
@@ -183,7 +153,7 @@ def test_loo_expectations_with_explicit_var_name(centered_eight):
 
 @pytest.mark.parametrize("kind", ["mae", "mse", "rmse"])
 def test_loo_metrics(centered_eight, kind):
-    result = loo_metrics(centered_eight, kind=kind)
+    result = loo_metrics(centered_eight, kind=kind, round_to=2)
 
     assert hasattr(result, "_fields")
     assert hasattr(result, "mean")
@@ -192,18 +162,8 @@ def test_loo_metrics(centered_eight, kind):
     assert isinstance(result.se, int | float | str)
 
 
-def test_loo_metrics_with_log_weights(centered_eight):
-    loo_result = loo(centered_eight, pointwise=True)
-
-    result_with_weights = loo_metrics(centered_eight, kind="rmse", log_weights=loo_result)
-    result_without_weights = loo_metrics(centered_eight, kind="rmse")
-
-    assert hasattr(result_with_weights, "mean")
-    assert hasattr(result_without_weights, "mean")
-
-
 def test_loo_metrics_explicit_var_name(centered_eight):
-    result = loo_metrics(centered_eight, var_name="obs", kind="mae")
+    result = loo_metrics(centered_eight, var_name="obs", kind="mae", round_to=2)
 
     assert hasattr(result, "mean")
     assert hasattr(result, "se")
@@ -262,3 +222,52 @@ def test_loo_expectations_circular(centered_eight, kind):
     assert khat.shape == (8,)
     assert np.all(np.isfinite(result.values))
     assert np.all(np.isfinite(khat.values))
+
+
+@pytest.mark.parametrize("kind", ["mean", "var", "sd", "median"])
+def test_loo_expectations_precomputed_weights(centered_eight, kind):
+    result_auto, _ = loo_expectations(centered_eight, kind=kind)
+
+    var_name = "obs"
+    log_likelihood = get_log_likelihood_dataset(centered_eight, var_names=var_name)
+    n_samples = log_likelihood[var_name].sizes["chain"] * log_likelihood[var_name].sizes["draw"]
+    r_eff = _get_r_eff(centered_eight, n_samples)
+
+    log_weights_computed, pareto_k_computed = log_likelihood[var_name].azstats.psislw(
+        dim=["chain", "draw"],
+        r_eff=r_eff,
+    )
+
+    result_precomputed, _ = loo_expectations(
+        centered_eight,
+        kind=kind,
+        log_weights=log_weights_computed,
+        pareto_k=pareto_k_computed,
+    )
+
+    assert_allclose(result_precomputed.values, result_auto.values, rtol=1e-10)
+
+
+def test_loo_expectations_quantile_precomputed_weights(centered_eight):
+    probs = [0.25, 0.75]
+    result_auto, _ = loo_expectations(centered_eight, kind="quantile", probs=probs)
+
+    var_name = "obs"
+    log_likelihood = get_log_likelihood_dataset(centered_eight, var_names=var_name)
+    n_samples = log_likelihood[var_name].sizes["chain"] * log_likelihood[var_name].sizes["draw"]
+    r_eff = _get_r_eff(centered_eight, n_samples)
+
+    log_weights_computed, pareto_k_computed = log_likelihood[var_name].azstats.psislw(
+        dim=["chain", "draw"],
+        r_eff=r_eff,
+    )
+
+    result_precomputed, _ = loo_expectations(
+        centered_eight,
+        kind="quantile",
+        probs=probs,
+        log_weights=log_weights_computed,
+        pareto_k=pareto_k_computed,
+    )
+
+    assert_allclose(result_precomputed.values, result_auto.values, rtol=1e-10)

@@ -3,21 +3,20 @@
 import numpy as np
 import xarray as xr
 from arviz_base import convert_to_datatree, extract, rcParams
-from scipy.stats import dirichlet
 from xarray import apply_ufunc
 
-from arviz_stats.base.circular_utils import circular_diff, circular_mean, circular_sd, circular_var
-from arviz_stats.loo.helper_loo import _warn_pareto_k
+from arviz_stats.loo.helper_loo import _get_r_eff, _warn_pareto_k
 from arviz_stats.metrics import _metrics, _summary_r2
-from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 def loo_expectations(
     data,
     var_name=None,
-    log_weights=None,
     kind="mean",
     probs=None,
+    log_weights=None,
+    pareto_k=None,
 ):
     """Compute weighted expectations using the PSIS-LOO-CV method.
 
@@ -31,13 +30,6 @@ def loo_expectations(
     var_name: str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
-    log_weights : DataArray or ELPDData, optional
-        Smoothed log weights. Can be either:
-
-        - A DataArray with the same shape as the log likelihood data
-        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
-
-        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     kind: str, optional
         The kind of expectation to compute. Available options are:
 
@@ -51,6 +43,11 @@ def loo_expectations(
         - 'circular_sd'.
     probs: float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
+    log_weights : DataArray, optional
+        Pre-computed smoothed log weights from PSIS. Must be provided together with pareto_k.
+        If not provided, PSIS will be computed internally.
+    pareto_k : DataArray, optional
+        Pre-computed Pareto k-hat diagnostic values. Must be provided together with log_weights.
 
     Returns
     -------
@@ -112,61 +109,54 @@ def loo_expectations(
     log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
     n_samples = log_likelihood[var_name].sizes["chain"] * log_likelihood[var_name].sizes["draw"]
 
-    if log_weights is None:
-        log_weights, _ = log_likelihood.azstats.psislw()
-        log_weights = log_weights[var_name]
-
-    if isinstance(log_weights, ELPDData):
-        if log_weights.log_weights is None:
-            raise ValueError("ELPDData object does not contain log_weights")
-        log_weights = log_weights.log_weights
-        if var_name in log_weights:
-            log_weights = log_weights[var_name]
-
-    weights = np.exp(log_weights)
+    r_eff = _get_r_eff(data, n_samples)
 
     posterior_predictive = extract(
         data, group="posterior_predictive", var_names=var_name, combined=False
     )
 
-    weighted_predictions = posterior_predictive.weighted(weights)
+    sample_dims = list(dims)
 
-    if kind == "mean":
-        loo_expec = weighted_predictions.mean(dim=dims)
+    if log_weights is not None and pareto_k is not None:
+        if kind in ("mean", "median", "var", "sd", "circular_mean", "circular_var", "circular_sd"):
+            loo_expec, _ = posterior_predictive.azstats.loo_expectation(
+                log_weights=log_weights,
+                pareto_k=pareto_k,
+                kind=kind,
+                r_eff=r_eff,
+                sample_dims=sample_dims,
+            )
+        else:
+            loo_expec, _ = posterior_predictive.azstats.loo_quantile(
+                log_weights=log_weights,
+                pareto_k=pareto_k,
+                probs=probs,
+                r_eff=r_eff,
+                sample_dims=sample_dims,
+            )
+        log_ratios_for_khat = log_weights
+    else:
+        log_ratios = -log_likelihood[var_name]
+        if kind in ("mean", "median", "var", "sd", "circular_mean", "circular_var", "circular_sd"):
+            loo_expec, _ = posterior_predictive.azstats.loo_expectation(
+                log_ratios=log_ratios,
+                kind=kind,
+                r_eff=r_eff,
+                sample_dims=sample_dims,
+            )
+        else:
+            loo_expec, _ = posterior_predictive.azstats.loo_quantile(
+                log_ratios=log_ratios,
+                probs=probs,
+                r_eff=r_eff,
+                sample_dims=sample_dims,
+            )
+        log_ratios_for_khat = log_ratios
 
-    elif kind == "median":
-        loo_expec = weighted_predictions.quantile(0.5, dim=dims)
-
-    elif kind == "var":
-        # We use a Bessel's like correction term
-        # instead of n/(n-1) we use ESS/(ESS-1)
-        # where ESS/(ESS-1) = 1/(1-sum(weights**2))
-        loo_expec = weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))
-
-    elif kind == "sd":
-        loo_expec = (weighted_predictions.var(dim=dims) / (1 - np.sum(weights**2))) ** 0.5
-
-    elif kind == "quantile":
-        loo_expec = weighted_predictions.quantile(probs, dim=dims)
-
-    elif kind == "circular_mean":
-        weights = weights / weights.sum(dim=dims)
-        loo_expec = circular_mean(posterior_predictive, weights=weights, dims=dims)
-
-    elif kind == "circular_var":
-        weights = weights / weights.sum(dim=dims)
-        loo_expec = circular_var(posterior_predictive, weights=weights, dims=dims)
-    else:  # kind == "circular_sd"
-        weights = weights / weights.sum(dim=dims)
-        loo_expec = circular_sd(posterior_predictive, weights=weights, dims=dims)
-
-    log_ratios = -log_likelihood[var_name]
-
-    # Compute function-specific khat
     khat = apply_ufunc(
         _get_function_khat,
         posterior_predictive,
-        log_ratios,
+        log_ratios_for_khat,
         input_core_dims=[dims, dims],
         output_core_dims=[[]],
         exclude_dims=set(dims),
@@ -181,7 +171,7 @@ def loo_expectations(
     return loo_expec, khat
 
 
-def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to=None):
+def loo_metrics(data, kind="rmse", var_name=None, round_to=None):
     """Compute predictive metrics using the PSIS-LOO-CV method.
 
     Currently supported metrics are mean absolute error, mean squared error and
@@ -206,13 +196,6 @@ def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to=Non
     var_name: str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
-    log_weights: DataArray or ELPDData, optional
-        Smoothed log weights. Can be either:
-
-        - A DataArray with the same shape as the log likelihood data
-        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
-
-        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     round_to: int or str or None, optional
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.
@@ -258,7 +241,7 @@ def loo_metrics(data, kind="rmse", var_name=None, log_weights=None, round_to=Non
         var_name = list(data.observed_data.data_vars.keys())[0]
 
     observed = data.observed_data[var_name]
-    predicted, _ = loo_expectations(data, kind="mean", var_name=var_name, log_weights=log_weights)
+    predicted, _ = loo_expectations(data, kind="mean", var_name=var_name)
 
     return _metrics(observed, predicted, kind, round_to)
 
@@ -350,32 +333,21 @@ def loo_r2(
     if round_to is None:
         round_to = rcParams["stats.round_to"]
 
-    y = data.observed_data[var_name].values
+    y_obs = data.observed_data[var_name]
 
     if circular:
         kind = "circular_mean"
     else:
         kind = "mean"
 
-    # Here we should compute the loo-adjusted posterior mean, not the predictive mean
-    ypred_loo = loo_expectations(data, var_name=var_name, kind=kind)[0].values
+    ypred_loo = loo_expectations(data, var_name=var_name, kind=kind)[0]
 
-    if circular:
-        eloo = circular_diff(ypred_loo, y)
-    else:
-        eloo = ypred_loo - y
-
-    n = len(y)
-    rd = dirichlet.rvs(np.ones(n), size=n_simulations, random_state=42)
-
-    if circular:
-        loo_r_squared = 1 - circular_var(eloo, rd)
-    else:
-        vary = (np.sum(rd * y**2, axis=1) - np.sum(rd * y, axis=1) ** 2) * (n / (n - 1))
-        vareloo = (np.sum(rd * eloo**2, axis=1) - np.sum(rd * eloo, axis=1) ** 2) * (n / (n - 1))
-
-        loo_r_squared = 1 - vareloo / vary
-        loo_r_squared = np.clip(loo_r_squared, -1, 1)
+    loo_r_squared = y_obs.azstats.loo_r2(
+        ypred_loo=ypred_loo,
+        n_simulations=n_simulations,
+        circular=circular,
+        random_state=42,
+    )
 
     if summary:
         return _summary_r2("loo", loo_r_squared, point_estimate, ci_kind, ci_prob, round_to)
