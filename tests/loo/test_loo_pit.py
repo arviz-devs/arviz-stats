@@ -1,16 +1,19 @@
 """Test probability integral transform for PSIS-LOO-CV."""
 
 # pylint: disable=redefined-outer-name, unused-argument
-import numpy as np
 import pytest
-from numpy.testing import assert_array_equal
 
 from ..helpers import importorskip
 
+np = importorskip("numpy")
+xr = importorskip("xarray")
 azb = importorskip("arviz_base")
 
-from arviz_stats import loo, loo_pit
-from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
+from numpy.testing import assert_almost_equal
+
+from arviz_stats import loo_pit
+from arviz_stats.loo.helper_loo import _get_r_eff
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 def test_loo_pit_invalid_var_name(centered_eight):
@@ -18,45 +21,20 @@ def test_loo_pit_invalid_var_name(centered_eight):
         loo_pit(centered_eight, var_names="nonexistent")
 
 
-def test_loo_pit_elpddata_without_log_weights(centered_eight):
-    loo_result_no_weights = ELPDData(
-        elpd=-30.0,
-        se=3.0,
-        p=2.0,
-        good_k=0.7,
-        n_samples=100,
-        n_data_points=8,
-        warning=False,
-        kind="loo",
-        scale="log",
-        log_weights=None,
-    )
-
-    with pytest.raises(ValueError, match="ELPDData object does not contain log_weights"):
-        loo_pit(centered_eight, log_weights=loo_result_no_weights)
-
-
 @pytest.mark.parametrize(
     "args",
     [
         {},
-        {"var_names": ["obs"]},
-        {"log_weights": "arr"},
         {"var_names": ["obs"]},
         {"var_names": "obs"},
     ],
 )
 def test_loo_pit(centered_eight, args):
     var_names = args.get("var_names", None)
-    log_weights = args.get("log_weights", None)
-
-    if log_weights == "arr":
-        log_weights = get_log_likelihood_dataset(centered_eight, var_names=var_names)
 
     loo_pit_values = loo_pit(
         centered_eight,
         var_names=var_names,
-        log_weights=log_weights,
     )
     assert np.all(loo_pit_values >= 0)
     assert np.all(loo_pit_values <= 1)
@@ -68,15 +46,6 @@ def test_loo_pit_discrete(centered_eight):
     loo_pit_values = loo_pit(centered_eight)
     assert np.all(loo_pit_values >= 0)
     assert np.all(loo_pit_values <= 1)
-
-
-def test_log_weights_input_formats(centered_eight):
-    loo_result = loo(centered_eight, pointwise=True)
-    log_weights_da = loo_result.log_weights
-
-    loo_pit_da = loo_pit(centered_eight, log_weights=log_weights_da)
-    loo_pit_elpddata = loo_pit(centered_eight, log_weights=loo_result)
-    assert_array_equal(loo_pit_da["obs"].values, loo_pit_elpddata["obs"].values)
 
 
 def test_loo_pit_all_var_names(centered_eight):
@@ -148,12 +117,27 @@ def test_loo_pit_multidimensional():
     assert np.all(result["y"].values <= 1)
 
 
-def test_loo_pit_with_precomputed_log_weights(centered_eight):
-    loo_result = loo(centered_eight, pointwise=True)
+def test_loo_pit_precomputed_weights(centered_eight):
+    result_auto = loo_pit(centered_eight)
 
-    result_with_weights = loo_pit(centered_eight, log_weights=loo_result)
-    result_without_weights = loo_pit(centered_eight)
+    var_names = ["obs"]
+    log_likelihood = get_log_likelihood_dataset(centered_eight, var_names=var_names)
+    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+    r_eff = _get_r_eff(centered_eight, n_samples)
 
-    assert result_with_weights["obs"].shape == result_without_weights["obs"].shape
-    assert np.all(result_with_weights["obs"].values >= 0)
-    assert np.all(result_with_weights["obs"].values <= 1)
+    log_weights_computed, pareto_k_computed = log_likelihood["obs"].azstats.psislw(
+        dim=["chain", "draw"],
+        r_eff=r_eff,
+    )
+
+    log_weights_ds = xr.Dataset({"obs": log_weights_computed})
+    pareto_k_ds = xr.Dataset({"obs": pareto_k_computed})
+
+    result_precomputed = loo_pit(
+        centered_eight,
+        var_names="obs",
+        log_weights=log_weights_ds,
+        pareto_k=pareto_k_ds,
+    )
+
+    assert_almost_equal(result_precomputed["obs"].values, result_auto["obs"].values, decimal=10)

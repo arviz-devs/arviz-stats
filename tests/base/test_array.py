@@ -1,9 +1,7 @@
 """Tests for array interface base functions."""
 
 # pylint: disable=redefined-outer-name, no-self-use, protected-access
-import numpy as np
 import pytest
-from numpy.testing import assert_allclose, assert_array_equal
 
 from arviz_stats.base.array import (
     BaseArray,
@@ -13,11 +11,14 @@ from arviz_stats.base.array import (
 
 from ..helpers import importorskip
 
+np = importorskip("numpy")
 azb = importorskip("arviz_base")
 einstats = importorskip("xarray_einstats")
 xr = importorskip("xarray")
 
-from arviz_stats import loo, loo_approximate_posterior, loo_score
+from numpy.testing import assert_allclose, assert_array_equal
+
+from arviz_stats import loo, loo_approximate_posterior, loo_pit, loo_score
 from arviz_stats.loo.helper_loo import _get_r_eff, _prepare_loo_inputs
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -811,6 +812,58 @@ class TestLOOApproximatePosterior:
         assert_allclose(p_loo_i_array, p_loo_i_xr.values, rtol=1e-10)
 
 
+class TestLOOR2:
+    def test_loo_r2_basic(self, array_stats, rng):
+        y_obs = rng.normal(size=(100,))
+        ypred_loo = y_obs + rng.normal(0, 0.1, size=(100,))
+
+        r2_samples = array_stats.loo_r2(y_obs, ypred_loo, n_simulations=100)
+
+        assert r2_samples.shape == (100,)
+        assert np.all(np.isfinite(r2_samples))
+        assert np.all(r2_samples >= -1)
+        assert np.all(r2_samples <= 1)
+
+    def test_loo_r2_perfect_prediction(self, array_stats, rng):
+        y_obs = rng.normal(size=(50,))
+        ypred_loo = y_obs.copy()
+
+        r2_samples = array_stats.loo_r2(y_obs, ypred_loo, n_simulations=100)
+
+        assert r2_samples.shape == (100,)
+        assert np.all(r2_samples > 0.99)
+
+    def test_loo_r2_n_simulations(self, array_stats, rng):
+        y_obs = rng.normal(size=(50,))
+        ypred_loo = y_obs + rng.normal(0, 0.5, size=(50,))
+
+        r2_100 = array_stats.loo_r2(y_obs, ypred_loo, n_simulations=100)
+        r2_500 = array_stats.loo_r2(y_obs, ypred_loo, n_simulations=500)
+
+        assert r2_100.shape == (100,)
+        assert r2_500.shape == (500,)
+
+    def test_loo_r2_random_state(self, array_stats, rng):
+        y_obs = rng.normal(size=(50,))
+        ypred_loo = y_obs + rng.normal(0, 0.5, size=(50,))
+
+        r2_1 = array_stats.loo_r2(y_obs, ypred_loo, n_simulations=100, random_state=42)
+        r2_2 = array_stats.loo_r2(y_obs, ypred_loo, n_simulations=100, random_state=42)
+        r2_3 = array_stats.loo_r2(y_obs, ypred_loo, n_simulations=100, random_state=123)
+
+        assert_allclose(r2_1, r2_2)
+        assert not np.allclose(r2_1, r2_3)
+
+    def test_loo_r2_circular(self, array_stats, rng):
+        y_obs = rng.vonmises(0, 2, size=(50,))
+        ypred_loo = y_obs + rng.vonmises(0, 10, size=(50,))
+
+        r2_samples = array_stats.loo_r2(y_obs, ypred_loo, n_simulations=100, circular=True)
+
+        assert r2_samples.shape == (100,)
+        assert np.all(np.isfinite(r2_samples))
+
+
 class TestLOOScore:
     @pytest.mark.parametrize("kind", ["crps", "scrps"])
     def test_loo_score_basic(self, array_stats, centered_eight, kind):
@@ -826,7 +879,12 @@ class TestLOOScore:
         log_weights = log_weights_xr.values[:, :, :1]
 
         scores = array_stats.loo_score(
-            y_pred, y_obs, log_weights, kind=kind, chain_axis=0, draw_axis=1
+            y_pred,
+            y_obs,
+            log_weights,
+            kind=kind,
+            chain_axis=0,
+            draw_axis=1,
         )
 
         assert scores.shape == (1,)
@@ -845,7 +903,12 @@ class TestLOOScore:
         log_weights = log_weights_xr.values
 
         scores = array_stats.loo_score(
-            y_pred, y_obs, log_weights, kind="crps", chain_axis=0, draw_axis=1
+            y_pred,
+            y_obs,
+            log_weights,
+            kind="crps",
+            chain_axis=0,
+            draw_axis=1,
         )
 
         assert scores.shape == (8,)
@@ -867,7 +930,12 @@ class TestLOOScore:
         log_weights_flat = log_weights.reshape(-1, log_weights.shape[-1])
 
         scores = array_stats.loo_score(
-            y_pred_flat, y_obs, log_weights_flat, kind="crps", chain_axis=None, draw_axis=0
+            y_pred_flat,
+            y_obs,
+            log_weights_flat,
+            kind="crps",
+            chain_axis=None,
+            draw_axis=0,
         )
 
         assert scores.shape == (8,)
@@ -889,7 +957,12 @@ class TestLOOScore:
         log_weights_reorder = np.transpose(log_weights, (2, 0, 1))
 
         scores = array_stats.loo_score(
-            y_pred_reorder, y_obs, log_weights_reorder, kind="crps", chain_axis=1, draw_axis=2
+            y_pred_reorder,
+            y_obs,
+            log_weights_reorder,
+            kind="crps",
+            chain_axis=1,
+            draw_axis=2,
         )
 
         assert scores.shape == (8,)
@@ -911,7 +984,170 @@ class TestLOOScore:
         log_weights = log_weights_xr.values
 
         scores_array = array_stats.loo_score(
-            y_pred, y_obs, log_weights, kind=kind, chain_axis=0, draw_axis=1
+            y_pred,
+            y_obs,
+            log_weights,
+            kind=kind,
+            chain_axis=0,
+            draw_axis=1,
         )
 
         assert_allclose(scores_array, loo_score_xr.pointwise.values, rtol=1e-10)
+
+
+class TestLooPit:
+    def test_loo_pit_basic(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values[:, :, :1]
+        y_obs = centered_eight.observed_data["obs"].values[:1]
+        log_weights = log_weights_xr.values[:, :, :1]
+
+        pit_values = array_stats.loo_pit(
+            y_pred,
+            y_obs,
+            log_weights,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert pit_values.shape == (1,)
+        assert np.all(pit_values >= 0)
+        assert np.all(pit_values <= 1)
+
+    def test_loo_pit_multiple_obs(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        y_obs = centered_eight.observed_data["obs"].values
+        log_weights = log_weights_xr.values
+
+        pit_values = array_stats.loo_pit(
+            y_pred,
+            y_obs,
+            log_weights,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert pit_values.shape == (8,)
+        assert np.all(pit_values >= 0)
+        assert np.all(pit_values <= 1)
+
+    def test_loo_pit_chain_axis_none(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        y_obs = centered_eight.observed_data["obs"].values
+        log_weights = log_weights_xr.values
+
+        y_pred_flat = y_pred.reshape(-1, y_pred.shape[-1])
+        log_weights_flat = log_weights.reshape(-1, log_weights.shape[-1])
+
+        pit_values = array_stats.loo_pit(
+            y_pred_flat,
+            y_obs,
+            log_weights_flat,
+            chain_axis=None,
+            draw_axis=0,
+        )
+
+        assert pit_values.shape == (8,)
+        assert np.all(pit_values >= 0)
+        assert np.all(pit_values <= 1)
+
+    def test_loo_pit_diff_axes(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        y_obs = centered_eight.observed_data["obs"].values
+        log_weights = log_weights_xr.values
+
+        y_pred_reorder = np.transpose(y_pred, (2, 0, 1))
+        log_weights_reorder = np.transpose(log_weights, (2, 0, 1))
+
+        pit_values = array_stats.loo_pit(
+            y_pred_reorder,
+            y_obs,
+            log_weights_reorder,
+            chain_axis=1,
+            draw_axis=2,
+        )
+
+        assert pit_values.shape == (8,)
+        assert np.all(pit_values >= 0)
+        assert np.all(pit_values <= 1)
+
+    def test_loo_pit_matches_xarray(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        loo_pit_xr = loo_pit(centered_eight)
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        y_obs = centered_eight.observed_data["obs"].values
+        log_weights = log_weights_xr.values
+
+        pit_values_array = array_stats.loo_pit(
+            y_pred,
+            y_obs,
+            log_weights,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert_allclose(pit_values_array, loo_pit_xr["obs"].values, rtol=1e-10)
+
+    def test_loo_pit_discrete_randomization(self, array_stats):
+        """Test that randomization works for discrete data with ties."""
+        rng = np.random.default_rng(42)
+
+        n_chains, n_draws, n_obs = 2, 100, 5
+        y_pred = rng.integers(0, 10, size=(n_chains, n_draws, n_obs)).astype(float)
+        y_obs = np.array([3.0, 5.0, 7.0, 2.0, 8.0])
+
+        log_weights = rng.normal(size=(n_chains, n_draws, n_obs))
+
+        pit_values = array_stats.loo_pit(
+            y_pred,
+            y_obs,
+            log_weights,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert pit_values.shape == (n_obs,)
+        assert np.all(pit_values >= 0)
+        assert np.all(pit_values <= 1)
+
+        has_ties = False
+        for i in range(n_obs):
+            if np.any(y_pred[:, :, i] == y_obs[i]):
+                has_ties = True
+                break
+
+        assert has_ties, "Test data should have ties for this test to be meaningful"
