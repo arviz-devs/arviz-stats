@@ -495,8 +495,8 @@ class _DiagnosticsBase(_CoreBase):
             log_weights, _ = self._psislw(log_ratios, r_eff)
         else:
             log_weights = np.asarray(log_weights).ravel()
-        y_obs = np.asarray(y_obs).flat[0]
 
+        y_obs = np.asarray(y_obs).flat[0]
         abs_error = np.abs(ary - y_obs)
 
         log_den = logsumexp(log_weights)
@@ -560,8 +560,8 @@ class _DiagnosticsBase(_CoreBase):
             log_weights, _ = self._psislw(log_ratios, r_eff)
         else:
             log_weights = np.asarray(log_weights).ravel()
-        y_obs_val = np.asarray(y_obs).ravel()[0]
 
+        y_obs_val = np.asarray(y_obs).ravel()[0]
         log_norm = logsumexp(log_weights)
         weights = np.exp(log_weights - log_norm)
 

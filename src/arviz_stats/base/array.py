@@ -1021,6 +1021,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         log_weights,
         chain_axis=-2,
         draw_axis=-1,
+        random_state=None,
     ):
         """Compute LOO-PIT values with PSIS-LOO-CV weights.
 
@@ -1036,6 +1037,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Axis for chains
         draw_axis : int, default -1
             Axis for draws
+        random_state : int or Generator, optional
+            Random seed or numpy Generator for tie-breaking randomization.
+            If None, uses seed 214 for reproducibility.
 
         Returns
         -------
@@ -1048,7 +1052,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
         log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
 
-        rng = np.random.default_rng(214)
+        if random_state is None:
+            rng = np.random.default_rng(214)
+        else:
+            rng = np.random.default_rng(random_state)
 
         loo_pit_ufunc = make_ufunc(self._loo_pit, n_output=1, n_input=3, n_dims=len(axes))
         return loo_pit_ufunc(ary, y_obs, log_weights, rng=rng)

@@ -141,3 +141,37 @@ def test_loo_pit_precomputed_weights(centered_eight):
     )
 
     assert_almost_equal(result_precomputed["obs"].values, result_auto["obs"].values, decimal=10)
+
+
+def test_loo_pit_random_state_reproducibility(rng):
+    discrete_data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 50))},
+            "posterior_predictive": {"y": rng.integers(0, 10, size=(2, 50, 8)).astype(float)},
+            "log_likelihood": {"y": rng.normal(size=(2, 50, 8))},
+            "observed_data": {"y": np.array([3.0, 5.0, 7.0, 2.0, 8.0, 4.0, 6.0, 1.0])},
+        }
+    )
+
+    result_1 = loo_pit(discrete_data, random_state=42)
+    result_2 = loo_pit(discrete_data, random_state=42)
+    result_3 = loo_pit(discrete_data, random_state=123)
+
+    assert_almost_equal(result_1["y"].values, result_2["y"].values, decimal=10)
+    assert not np.allclose(result_1["y"].values, result_3["y"].values)
+
+
+def test_loo_pit_random_state_with_discrete(rng):
+    discrete_data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 50))},
+            "posterior_predictive": {"y": rng.integers(0, 10, size=(2, 50, 8)).astype(float)},
+            "log_likelihood": {"y": rng.normal(size=(2, 50, 8))},
+            "observed_data": {"y": np.array([3.0, 5.0, 7.0, 2.0, 8.0, 4.0, 6.0, 1.0])},
+        }
+    )
+
+    result_1 = loo_pit(discrete_data, random_state=42)
+    result_2 = loo_pit(discrete_data, random_state=42)
+
+    assert_almost_equal(result_1["y"].values, result_2["y"].values, decimal=10)
