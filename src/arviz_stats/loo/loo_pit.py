@@ -12,6 +12,7 @@ def loo_pit(
     var_names=None,
     log_weights=None,
     pareto_k=None,
+    random_state=None,
 ):
     r"""Compute leave one out (PSIS-LOO) probability integral transform (PIT) values.
 
@@ -35,6 +36,9 @@ def loo_pit(
     pareto_k : Dataset, optional
         Pre-computed Pareto k-hat diagnostic values. Must be a Dataset with variables
         matching var_names. Must be provided together with log_weights.
+    random_state : int or Generator, optional
+        Random seed or numpy Generator for tie-breaking randomization in discrete data.
+        If None, uses seed 214 for reproducibility.
 
     Returns
     -------
@@ -119,6 +123,7 @@ def loo_pit(
                 pareto_k=pareto_k[var],
                 r_eff=r_eff,
                 sample_dims=sample_dims,
+                random_state=random_state,
             )
         else:
             log_ratios = -log_likelihood[var]
@@ -127,6 +132,7 @@ def loo_pit(
                 log_ratios=log_ratios,
                 r_eff=r_eff,
                 sample_dims=sample_dims,
+                random_state=random_state,
             )
         loo_pit_values[var] = pit_values
 

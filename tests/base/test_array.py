@@ -1122,10 +1122,7 @@ class TestLooPit:
 
         assert_allclose(pit_values_array, loo_pit_xr["obs"].values, rtol=1e-10)
 
-    def test_loo_pit_discrete_randomization(self, array_stats):
-        """Test that randomization works for discrete data with ties."""
-        rng = np.random.default_rng(42)
-
+    def test_loo_pit_discrete_randomization(self, array_stats, rng):
         n_chains, n_draws, n_obs = 2, 100, 5
         y_pred = rng.integers(0, 10, size=(n_chains, n_draws, n_obs)).astype(float)
         y_obs = np.array([3.0, 5.0, 7.0, 2.0, 8.0])
@@ -1151,3 +1148,39 @@ class TestLooPit:
                 break
 
         assert has_ties, "Test data should have ties for this test to be meaningful"
+
+    def test_loo_pit_random_state_reproducibility(self, array_stats, rng):
+        n_chains, n_draws, n_obs = 2, 100, 5
+        y_pred = rng.integers(0, 10, size=(n_chains, n_draws, n_obs)).astype(float)
+        y_obs = np.array([3.0, 5.0, 7.0, 2.0, 8.0])
+        log_weights = rng.normal(size=(n_chains, n_draws, n_obs))
+
+        pit_1 = array_stats.loo_pit(
+            y_pred, y_obs, log_weights, chain_axis=0, draw_axis=1, random_state=42
+        )
+        pit_2 = array_stats.loo_pit(
+            y_pred, y_obs, log_weights, chain_axis=0, draw_axis=1, random_state=42
+        )
+        pit_3 = array_stats.loo_pit(
+            y_pred, y_obs, log_weights, chain_axis=0, draw_axis=1, random_state=123
+        )
+
+        assert_allclose(pit_1, pit_2)
+        assert not np.allclose(pit_1, pit_3)
+
+    def test_loo_pit_single_observation(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values[:, :, :1]
+        y_obs = centered_eight.observed_data["obs"].values[:1]
+        log_weights = log_weights_xr.values[:, :, :1]
+
+        pit_values = array_stats.loo_pit(y_pred, y_obs, log_weights, chain_axis=0, draw_axis=1)
+
+        assert pit_values.shape == (1,)
+        assert 0 <= pit_values[0] <= 1

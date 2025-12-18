@@ -643,7 +643,6 @@ class BaseDataArray:
             Pareto k-hat diagnostic values
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
-
         if log_weights is None:
             if log_ratios is None:
                 raise ValueError("Either log_ratios or log_weights must be provided")
@@ -673,6 +672,7 @@ class BaseDataArray:
         log_weights=None,
         pareto_k=None,
         sample_dims=None,
+        random_state=None,
     ):
         """Compute LOO-PIT values on DataArray input.
 
@@ -696,6 +696,9 @@ class BaseDataArray:
             together with log_weights.
         sample_dims : list of str, optional
             Sample dimensions. Defaults to ["chain", "draw"]
+        random_state : int or Generator, optional
+            Random seed or numpy Generator for tie-breaking randomization.
+            If None, uses seed 214 for reproducibility.
 
         Returns
         -------
@@ -705,7 +708,6 @@ class BaseDataArray:
             Pareto k-hat diagnostic values
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
-
         if log_weights is None:
             if log_ratios is None:
                 raise ValueError("Either log_ratios or log_weights must be provided")
@@ -721,6 +723,7 @@ class BaseDataArray:
             kwargs={
                 "chain_axis": chain_axis,
                 "draw_axis": draw_axis,
+                "random_state": random_state,
             },
         )
         return pit_values, pareto_k
@@ -767,7 +770,6 @@ class BaseDataArray:
             Pareto k-hat diagnostic values
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
-
         if log_weights is None:
             if log_ratios is None:
                 raise ValueError("Either log_ratios or log_weights must be provided")
@@ -828,7 +830,6 @@ class BaseDataArray:
             Pareto k-hat diagnostic values
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
-
         if log_weights is None:
             if log_ratios is None:
                 raise ValueError("Either log_ratios or log_weights must be provided")
