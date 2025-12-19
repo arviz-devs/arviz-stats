@@ -178,7 +178,11 @@ def test_isotonic_fit_ci_bounds(binary_datatree):
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_point_interval_unique(binary_datatree):
     result = point_interval_unique(
-        binary_datatree, var_names=["y"], group="posterior_predictive", ci_prob=0.94
+        binary_datatree,
+        var_names=["y"],
+        group="posterior_predictive",
+        ci_prob=0.94,
+        point_estimate="mean",
     )
     assert "y" in result.data_vars
     assert "plot_axis" in result.dims
@@ -190,7 +194,11 @@ def test_point_interval_unique(binary_datatree):
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_point_interval_unique_none_var_names(binary_datatree):
     result = point_interval_unique(
-        binary_datatree, var_names=None, group="posterior_predictive", ci_prob=0.94
+        binary_datatree,
+        var_names=None,
+        group="posterior_predictive",
+        ci_prob=0.94,
+        point_estimate="mean",
     )
     assert "y" in result.data_vars
 
@@ -198,7 +206,11 @@ def test_point_interval_unique_none_var_names(binary_datatree):
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_point_interval_unique_ci_bounds(binary_datatree):
     result = point_interval_unique(
-        binary_datatree, var_names=["y"], group="posterior_predictive", ci_prob=0.94
+        binary_datatree,
+        var_names=["y"],
+        group="posterior_predictive",
+        ci_prob=0.94,
+        point_estimate="median",
     )
     y_values = result["y"].values
     assert np.all(y_values[2] <= y_values[1])
@@ -207,7 +219,11 @@ def test_point_interval_unique_ci_bounds(binary_datatree):
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_point_interval_unique_multiple_vars(categorical_datatree):
     result = point_interval_unique(
-        categorical_datatree, var_names=["y"], group="posterior_predictive", ci_prob=0.94
+        categorical_datatree,
+        var_names=["y"],
+        group="posterior_predictive",
+        ci_prob=0.94,
+        point_estimate="mode",
     )
     assert "y" in result.data_vars
     unique_values = result["y"].values[0]
