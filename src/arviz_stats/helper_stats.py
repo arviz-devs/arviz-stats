@@ -185,46 +185,64 @@ def _isotonic_fit(pred, obs, ci_prob, residuals, preds, x_var):
     return cep, x_sorted, ci[0], ci[1]
 
 
-def point_interval_unique(dt, var_names, group, ci_prob):
-    """
-    Compute the mean frequency and confidence intervals for unique values.
+def point_interval_unique(dt, var_names, group, ci_prob, point_estimate):
+    """Compute summary statistics and credible intervals for unique value frequencies.
+
+    For each unique value in the data, computes how often it appears across predictive
+    samples, then calculates the mean/median/mode frequency and credible intervals.
 
     Parameters
     ----------
-    dt: DataTree
-        DataTree with "posterior_predictive" and "observed_data" groups
+    dt : DataTree
+        DataTree with group ``group`` and "observed_data" groups
     var_names : list of str, optional
-        The variables to compute the unique values.
+        The variables to compute the unique values. If None, uses all variables.
     group : str
         The group from which to get the unique values.
-    ci_prob : float, optional
+    ci_prob : float
         The probability for the credible interval.
+    point_estimate : {"mean", "median", "mode"}
+        The statistic to compute. Options: "mean", "median", or "mode".
+
+    Returns
+    -------
+    Dataset
+        Dataset with coordinates for x_values and plot_axis (x, y, y_bottom, y_top)
     """
     pp = extract(dt, group=group, keep_dataset=True)
 
-    dictio = {}
-
     if var_names is None:
-        var_names = dt[group].data_vars
+        var_names = list(dt[group].data_vars)
 
-    for var in dt[group].data_vars:
-        if var in var_names:
-            unique_values = np.unique(pp[var])
-            group_counts = []
-            for y in unique_values:
-                mask = pp[var] == y
-                unique_counts = mask.mean(dim="sample").values
-                group_counts.append(unique_counts)
+    piu_data = {}
+    for var in var_names:
+        if var not in dt[group].data_vars:
+            continue
 
-            lb = (1 - ci_prob) / 2 * 100
-            ub = (1 + ci_prob) / 2 * 100
-            ci = np.nanpercentile(group_counts, [lb, ub], axis=1) * np.sum(group_counts)
-            means = np.sum(group_counts, axis=1)
+        unique_values = np.unique(pp[var])
+        n_samples = pp[var].sizes["sample"]
 
-            dictio[var] = np.stack([unique_values, means, ci[0], ci[1]])
+        counts_array = np.zeros((n_samples, len(unique_values)), dtype=int)
+        for i, y in enumerate(unique_values):
+            mask = pp[var] == y
+            counts_array[:, i] = mask.sum(axis=0).values
+
+        lb = (1 - ci_prob) / 2 * 100
+        ci = np.percentile(counts_array, [lb, 100 - lb], axis=0)
+
+        if point_estimate == "mean":
+            summary_stat = np.mean(counts_array, axis=0)
+        elif point_estimate == "median":
+            summary_stat = np.median(counts_array, axis=0)
+        elif point_estimate == "mode":
+            summary_stat = np.array([np.bincount(col).argmax() for col in counts_array.T])
+        else:
+            raise ValueError(f"stat must be 'mean', 'median', or 'mode', got '{point_estimate}'")
+
+        piu_data[var] = np.stack([unique_values, summary_stat, ci[0], ci[1]])
 
     return (
-        dict_to_dataset(dictio)
+        dict_to_dataset(piu_data)
         .rename({"draw": "x_values", "chain": "plot_axis"})
         .assign_coords({"plot_axis": ["x", "y", "y_bottom", "y_top"]})
     )
@@ -232,35 +250,38 @@ def point_interval_unique(dt, var_names, group, ci_prob):
 
 def point_unique(dt, var_names):
     """
-    Compute the mean frequency for unique values.
+    Count the occurrences of unique values in observed data.
 
     Parameters
     ----------
-    dt: DataTree
-        DataTree with "posterior_predictive" and "observed_data" groups
+    dt : DataTree
+        DataTree with "observed_data" group.
     var_names : list of str, optional
-        The variables to perform the isotonic regression on.
+        Variables to compute unique value counts for. If None, uses all.
+
+    Returns
+    -------
+    Dataset
+        Dataset with coordinates for x_values and plot_axis (x, y),
+        where x = unique values, y = counts.
     """
     pp = dt["observed_data"]
 
-    dictio = {}
-
     if var_names is None:
-        var_names = pp.data_vars
+        var_names = list(pp.data_vars)
 
-    for var in pp.data_vars:
-        if var in var_names:
-            unique_values = np.unique(pp[var])
-            group_counts = []
-            for y in unique_values:
-                mask = pp[var] == y
-                unique_counts = mask.sum().values
-                group_counts.append(unique_counts)
+    out = {}
+    for var in var_names:
+        if var not in pp.data_vars:
+            continue
 
-            dictio[var] = np.stack([unique_values, np.array(group_counts)])
+        values = pp[var].values
+        unique_values, counts = np.unique(values, return_counts=True)
+
+        out[var] = np.stack([unique_values, counts])
 
     return (
-        dict_to_dataset(dictio)
+        dict_to_dataset(out)
         .rename({"draw": "x_values", "chain": "plot_axis"})
-        .assign_coords({"plot_axis": ["x", "y"]})
+        .assign_coords(plot_axis=["x", "y"])
     )
