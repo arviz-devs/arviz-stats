@@ -194,7 +194,7 @@ def point_interval_unique(dt, var_names, group, ci_prob, point_estimate):
     Parameters
     ----------
     dt : DataTree
-        DataTree with group ``group`` and "observed_data" groups
+        DataTree with group ``group`` and "observed_data" groups.
     var_names : list of str, optional
         The variables to compute the unique values. If None, uses all variables.
     group : str
