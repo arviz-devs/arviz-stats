@@ -685,8 +685,8 @@ class TestLOO:
     def test_loo_with_reff(self, array_stats, rng):
         ary = rng.normal(-2, 1, size=(4, 100))
 
-        elpd_i_1, pareto_k_1, _ = array_stats.loo(ary, reff=0.5)
-        elpd_i_2, pareto_k_2, _ = array_stats.loo(ary, reff=1.0)
+        elpd_i_1, pareto_k_1, _ = array_stats.loo(ary, r_eff=0.5)
+        elpd_i_2, pareto_k_2, _ = array_stats.loo(ary, r_eff=1.0)
 
         assert not np.isclose(pareto_k_1, pareto_k_2) or not np.isclose(elpd_i_1, elpd_i_2)
 
@@ -704,7 +704,7 @@ class TestLOO:
 
         loo_xr = loo(centered_eight, pointwise=True, var_name="obs")
         elpd_i_array, pareto_k_array, p_loo_i_array = array_stats.loo(
-            log_lik.values, chain_axis=0, draw_axis=1, reff=reff
+            log_lik.values, chain_axis=0, draw_axis=1, r_eff=reff
         )
 
         lppd_xr = einstats.stats.logsumexp(
@@ -1184,3 +1184,284 @@ class TestLooPit:
 
         assert pit_values.shape == (1,)
         assert 0 <= pit_values[0] <= 1
+
+
+class TestLooExpectation:
+    def test_loo_expectation(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values[:, :, :1]
+        log_weights = log_weights_xr.values[:, :, :1]
+
+        expectation = array_stats.loo_expectation(
+            y_pred,
+            log_weights,
+            kind="mean",
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert expectation.shape == (1,)
+        assert np.all(np.isfinite(expectation))
+
+    def test_loo_expectation_multiple_obs(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        log_weights = log_weights_xr.values
+
+        expectation = array_stats.loo_expectation(
+            y_pred,
+            log_weights,
+            kind="mean",
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert expectation.shape == (8,)
+        assert np.all(np.isfinite(expectation))
+
+    @pytest.mark.parametrize("kind", ["mean", "median", "var", "sd"])
+    def test_loo_expectation_kinds(self, array_stats, centered_eight, kind):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        log_weights = log_weights_xr.values
+
+        expectation = array_stats.loo_expectation(
+            y_pred,
+            log_weights,
+            kind=kind,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert expectation.shape == (8,)
+        assert np.all(np.isfinite(expectation))
+        if kind in ("var", "sd"):
+            assert np.all(expectation >= 0)
+
+    @pytest.mark.parametrize("kind", ["circular_mean", "circular_var", "circular_sd"])
+    def test_loo_expectation_circular_kinds(self, array_stats, rng, kind):
+        n_chains, n_draws, n_obs = 2, 100, 5
+        angles = rng.uniform(-np.pi, np.pi, size=(n_chains, n_draws, n_obs))
+        log_weights = rng.normal(size=(n_chains, n_draws, n_obs))
+
+        expectation = array_stats.loo_expectation(
+            angles,
+            log_weights,
+            kind=kind,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert expectation.shape == (n_obs,)
+        assert np.all(np.isfinite(expectation))
+        if kind == "circular_mean":
+            assert np.all(expectation >= -np.pi)
+            assert np.all(expectation <= np.pi)
+        elif kind == "circular_var":
+            assert np.all(expectation >= 0)
+            assert np.all(expectation <= 1)
+
+    def test_loo_expectation_chain_axis_none(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        log_weights = log_weights_xr.values
+
+        y_pred_flat = y_pred.reshape(-1, y_pred.shape[-1])
+        log_weights_flat = log_weights.reshape(-1, log_weights.shape[-1])
+
+        expectation = array_stats.loo_expectation(
+            y_pred_flat,
+            log_weights_flat,
+            kind="mean",
+            chain_axis=None,
+            draw_axis=0,
+        )
+
+        assert expectation.shape == (8,)
+        assert np.all(np.isfinite(expectation))
+
+    def test_loo_expectation_diff_axes(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        log_weights = log_weights_xr.values
+
+        y_pred_reorder = np.transpose(y_pred, (2, 0, 1))
+        log_weights_reorder = np.transpose(log_weights, (2, 0, 1))
+
+        expectation = array_stats.loo_expectation(
+            y_pred_reorder,
+            log_weights_reorder,
+            kind="mean",
+            chain_axis=1,
+            draw_axis=2,
+        )
+
+        assert expectation.shape == (8,)
+        assert np.all(np.isfinite(expectation))
+
+
+class TestLooQuantile:
+    def test_loo_quantile_basic(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values[:, :, :1]
+        log_weights = log_weights_xr.values[:, :, :1]
+
+        quantile = array_stats.loo_quantile(
+            y_pred,
+            log_weights,
+            prob=0.5,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert quantile.shape == (1,)
+        assert np.all(np.isfinite(quantile))
+
+    def test_loo_quantile_multiple_obs(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        log_weights = log_weights_xr.values
+
+        quantile = array_stats.loo_quantile(
+            y_pred,
+            log_weights,
+            prob=0.5,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert quantile.shape == (8,)
+        assert np.all(np.isfinite(quantile))
+
+    @pytest.mark.parametrize("prob", [0.1, 0.25, 0.5, 0.75, 0.9])
+    def test_loo_quantile_probs(self, array_stats, centered_eight, prob):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        log_weights = log_weights_xr.values
+
+        quantile = array_stats.loo_quantile(
+            y_pred,
+            log_weights,
+            prob=prob,
+            chain_axis=0,
+            draw_axis=1,
+        )
+
+        assert quantile.shape == (8,)
+        assert np.all(np.isfinite(quantile))
+
+    def test_loo_quantile_ordering(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        log_weights = log_weights_xr.values
+
+        q25 = array_stats.loo_quantile(y_pred, log_weights, prob=0.25, chain_axis=0, draw_axis=1)
+        q50 = array_stats.loo_quantile(y_pred, log_weights, prob=0.50, chain_axis=0, draw_axis=1)
+        q75 = array_stats.loo_quantile(y_pred, log_weights, prob=0.75, chain_axis=0, draw_axis=1)
+
+        assert np.all(q25 <= q50)
+        assert np.all(q50 <= q75)
+
+    def test_loo_quantile_chain_axis_none(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        log_weights = log_weights_xr.values
+
+        y_pred_flat = y_pred.reshape(-1, y_pred.shape[-1])
+        log_weights_flat = log_weights.reshape(-1, log_weights.shape[-1])
+
+        quantile = array_stats.loo_quantile(
+            y_pred_flat,
+            log_weights_flat,
+            prob=0.5,
+            chain_axis=None,
+            draw_axis=0,
+        )
+
+        assert quantile.shape == (8,)
+        assert np.all(np.isfinite(quantile))
+
+    def test_loo_quantile_diff_axes(self, array_stats, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        n_samples = log_lik.chain.size * log_lik.draw.size
+        reff = _get_r_eff(centered_eight, n_samples)
+
+        log_weights_ds, _ = log_lik.azstats.psislw(r_eff=reff)
+        log_weights_xr = log_weights_ds.transpose("chain", "draw", "school")
+
+        y_pred = centered_eight.posterior_predictive["obs"].values
+        log_weights = log_weights_xr.values
+
+        y_pred_reorder = np.transpose(y_pred, (2, 0, 1))
+        log_weights_reorder = np.transpose(log_weights, (2, 0, 1))
+
+        quantile = array_stats.loo_quantile(
+            y_pred_reorder,
+            log_weights_reorder,
+            prob=0.5,
+            chain_axis=1,
+            draw_axis=2,
+        )
+
+        assert quantile.shape == (8,)
+        assert np.all(np.isfinite(quantile))

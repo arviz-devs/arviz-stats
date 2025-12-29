@@ -155,12 +155,12 @@ class _BaseAccessor:
         """Compute Pareto k-hat diagnostic."""
         return self._apply("pareto_khat", sample_dims=sample_dims, **kwargs)
 
-    def loo(self, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None):
+    def loo(self, sample_dims=None, r_eff=1.0, log_weights=None, pareto_k=None, log_jacobian=None):
         """Compute PSIS-LOO-CV."""
         return self._apply(
             "loo",
             sample_dims=sample_dims,
-            reff=reff,
+            r_eff=r_eff,
             log_weights=log_weights,
             pareto_k=pareto_k,
             log_jacobian=log_jacobian,

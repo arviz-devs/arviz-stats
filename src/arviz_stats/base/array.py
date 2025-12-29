@@ -856,7 +856,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary,
         chain_axis=-2,
         draw_axis=-1,
-        reff=1.0,
+        r_eff=1.0,
         log_weights=None,
         pareto_k=None,
         log_jacobian=None,
@@ -868,7 +868,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         chain_axis : int, default -2
         draw_axis : int, default -1
-        reff : float, default 1.0
+        r_eff : float, default 1.0
         log_weights : array-like, optional
         pareto_k : array-like, optional
         log_jacobian : array-like, optional
@@ -890,7 +890,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         loo_ufunc = make_ufunc(self._loo, n_output=3, n_input=1, n_dims=len(axes))
         return loo_ufunc(
-            ary, r_eff=reff, log_weights=log_weights, pareto_k=pareto_k, log_jacobian=log_jacobian
+            ary, r_eff=r_eff, log_weights=log_weights, pareto_k=pareto_k, log_jacobian=log_jacobian
         )
 
     def loo_approximate_posterior(

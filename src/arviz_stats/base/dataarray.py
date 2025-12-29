@@ -421,7 +421,7 @@ class BaseDataArray:
         ).rename("pareto_k")
 
     def loo(
-        self, da, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None
+        self, da, sample_dims=None, r_eff=1.0, log_weights=None, pareto_k=None, log_jacobian=None
     ):
         """Compute PSIS-LOO-CV.
 
@@ -431,7 +431,7 @@ class BaseDataArray:
             Log-likelihood values with shape (chain, draw, *obs_dims)
         sample_dims : list of str, optional
             Sample dimensions. Defaults to ["chain", "draw"]
-        reff : float, default 1.0
+        r_eff : float, default 1.0
             Relative effective sample size
         log_weights : DataArray, optional
             Pre-computed PSIS log weights (same shape as da)
@@ -449,7 +449,7 @@ class BaseDataArray:
         kwargs = {
             "chain_axis": chain_axis,
             "draw_axis": draw_axis,
-            "reff": reff,
+            "r_eff": r_eff,
         }
 
         if log_weights is not None and pareto_k is not None:

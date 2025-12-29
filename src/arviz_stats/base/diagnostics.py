@@ -460,26 +460,21 @@ class _DiagnosticsBase(_CoreBase):
             ary, r_eff=1.0, log_weights=log_weights, pareto_k=pareto_k, log_jacobian=log_jacobian
         )
 
-    def _loo_score(self, ary, y_obs, log_weights, kind, log_ratios=None, r_eff=1.0):
+    @staticmethod
+    def _loo_score(ary, y_obs, log_weights, kind):
         """
         Compute CRPS or SCRPS for a single observation.
 
         Parameters
         ----------
         ary : np.ndarray
-            2D array (chain, draw) of posterior predictive samples
+            1D array of posterior predictive samples (flattened chain*draw)
         y_obs : float
             Observed value
-        log_weights : np.ndarray or None
-            2D array (chain, draw) of pre-computed PSIS-LOO-CV log weights.
-            If None, computed from log_ratios via PSIS.
+        log_weights : np.ndarray
+            1D array of pre-computed PSIS-LOO log weights (same length as ary)
         kind : str
             "crps" or "scrps"
-        log_ratios : np.ndarray, optional
-            2D array (chain, draw) of log importance ratios (typically -log_likelihood).
-            Used to compute PSIS log weights if log_weights is None.
-        r_eff : float, optional
-            Relative effective sample size for PSIS. Default is 1.0.
 
         Returns
         -------
@@ -487,15 +482,7 @@ class _DiagnosticsBase(_CoreBase):
             The score value (negative CRPS or SCRPS for maximization)
         """
         ary = np.asarray(ary).ravel()
-
-        if log_weights is None:
-            if log_ratios is None:
-                raise ValueError("Either log_weights or log_ratios must be provided")
-            log_ratios = np.asarray(log_ratios).ravel()
-            log_weights, _ = self._psislw(log_ratios, r_eff)
-        else:
-            log_weights = np.asarray(log_weights).ravel()
-
+        log_weights = np.asarray(log_weights).ravel()
         y_obs = np.asarray(y_obs).flat[0]
         abs_error = np.abs(ary - y_obs)
 
@@ -524,7 +511,8 @@ class _DiagnosticsBase(_CoreBase):
         gini_mean_difference = 2.0 * np.sum(weights_sorted * values_sorted * bracket)
         return -(loo_weighted_abs_error / gini_mean_difference) - 0.5 * np.log(gini_mean_difference)
 
-    def _loo_pit(self, ary, y_obs, log_weights, log_ratios=None, r_eff=1.0, rng=None):
+    @staticmethod
+    def _loo_pit(ary, y_obs, log_weights, rng=None):
         """
         Compute LOO-PIT value for a single observation.
 
@@ -534,14 +522,8 @@ class _DiagnosticsBase(_CoreBase):
             1D array of posterior predictive samples (flattened chain*draw)
         y_obs : float
             Single observed value
-        log_weights : np.ndarray or None
-            1D array of pre-computed PSIS-LOO log weights (same length as ary).
-            If None, computed from log_ratios via PSIS.
-        log_ratios : np.ndarray, optional
-            1D array of log importance ratios (typically -log_likelihood).
-            Used to compute PSIS log weights if log_weights is None.
-        r_eff : float, optional
-            Relative effective sample size for PSIS. Default is 1.0.
+        log_weights : np.ndarray
+            1D array of pre-computed PSIS-LOO log weights (same length as ary)
         rng : np.random.Generator, optional
             Random number generator for tie-breaking. If None, uses midpoint
             of the interval when ties exist.
@@ -552,15 +534,7 @@ class _DiagnosticsBase(_CoreBase):
             LOO-PIT value in [0, 1]
         """
         ary = np.asarray(ary).ravel()
-
-        if log_weights is None:
-            if log_ratios is None:
-                raise ValueError("Either log_weights or log_ratios must be provided")
-            log_ratios = np.asarray(log_ratios).ravel()
-            log_weights, _ = self._psislw(log_ratios, r_eff)
-        else:
-            log_weights = np.asarray(log_weights).ravel()
-
+        log_weights = np.asarray(log_weights).ravel()
         y_obs_val = np.asarray(y_obs).ravel()[0]
         log_norm = logsumexp(log_weights)
         weights = np.exp(log_weights - log_norm)
@@ -579,7 +553,7 @@ class _DiagnosticsBase(_CoreBase):
 
         return pit_lower
 
-    def _loo_expectation(self, ary, log_weights, kind, log_ratios=None, r_eff=1.0):
+    def _loo_expectation(self, ary, log_weights, kind):
         """
         Compute weighted expectation for a single observation.
 
@@ -587,17 +561,11 @@ class _DiagnosticsBase(_CoreBase):
         ----------
         ary : np.ndarray
             1D array of posterior predictive samples (flattened chain*draw)
-        log_weights : np.ndarray or None
-            1D array of pre-computed PSIS-LOO log weights (same length as ary).
-            If None, computed from log_ratios via PSIS.
+        log_weights : np.ndarray
+            1D array of pre-computed PSIS-LOO log weights (same length as ary)
         kind : str
             Type of expectation: 'mean', 'median', 'var', 'sd',
             'circular_mean', 'circular_var', 'circular_sd'
-        log_ratios : np.ndarray, optional
-            1D array of log importance ratios (typically -log_likelihood).
-            Used to compute PSIS log weights if log_weights is None.
-        r_eff : float, optional
-            Relative effective sample size for PSIS. Default is 1.0.
 
         Returns
         -------
@@ -605,15 +573,7 @@ class _DiagnosticsBase(_CoreBase):
             Weighted expectation value
         """
         ary = np.asarray(ary).ravel()
-
-        if log_weights is None:
-            if log_ratios is None:
-                raise ValueError("Either log_weights or log_ratios must be provided")
-            log_ratios = np.asarray(log_ratios).ravel()
-            log_weights, _ = self._psislw(log_ratios, r_eff)
-        else:
-            log_weights = np.asarray(log_weights).ravel()
-
+        log_weights = np.asarray(log_weights).ravel()
         log_norm = logsumexp(log_weights)
         weights = np.exp(log_weights - log_norm)
 
@@ -627,25 +587,24 @@ class _DiagnosticsBase(_CoreBase):
             correction = ess / (ess - 1) if ess > 1 else 1.0
             var_val = np.sum(weights * (ary - mean_val) ** 2) * correction
             result = np.sqrt(var_val) if kind == "sd" else var_val
-        elif kind == "circular_mean":
+        elif kind in ("circular_mean", "circular_var", "circular_sd"):
             sum_sin = np.sum(weights * np.sin(ary))
             sum_cos = np.sum(weights * np.cos(ary))
-            result = np.arctan2(sum_sin, sum_cos)
-        elif kind in ("circular_var", "circular_sd"):
-            sum_sin = np.sum(weights * np.sin(ary))
-            sum_cos = np.sum(weights * np.cos(ary))
-            mean_resultant = np.sqrt(sum_sin**2 + sum_cos**2)
-            if kind == "circular_var":
-                result = 1 - mean_resultant
+            if kind == "circular_mean":
+                result = np.arctan2(sum_sin, sum_cos)
             else:
-                with np.errstate(divide="ignore"):
-                    result = np.sqrt(-2 * np.log(mean_resultant))
+                mean_resultant = np.sqrt(sum_sin**2 + sum_cos**2)
+                if kind == "circular_var":
+                    result = 1 - mean_resultant
+                else:
+                    with np.errstate(divide="ignore"):
+                        result = np.sqrt(-2 * np.log(mean_resultant))
         else:
             raise ValueError(f"Unknown kind: {kind}")
 
         return result
 
-    def _loo_quantile(self, ary, log_weights, prob, log_ratios=None, r_eff=1.0):
+    def _loo_quantile(self, ary, log_weights, prob):
         """
         Compute weighted quantile for a single observation.
 
@@ -653,16 +612,10 @@ class _DiagnosticsBase(_CoreBase):
         ----------
         ary : np.ndarray
             1D array of posterior predictive samples (flattened chain*draw)
-        log_weights : np.ndarray or None
-            1D array of pre-computed PSIS-LOO log weights (same length as ary).
-            If None, computed from log_ratios via PSIS.
+        log_weights : np.ndarray
+            1D array of pre-computed PSIS-LOO log weights (same length as ary)
         prob : float
             Quantile probability in [0, 1]
-        log_ratios : np.ndarray, optional
-            1D array of log importance ratios (typically -log_likelihood).
-            Used to compute PSIS log weights if log_weights is None.
-        r_eff : float, optional
-            Relative effective sample size for PSIS. Default is 1.0.
 
         Returns
         -------
@@ -670,15 +623,7 @@ class _DiagnosticsBase(_CoreBase):
             Weighted quantile value
         """
         ary = np.asarray(ary).ravel()
-
-        if log_weights is None:
-            if log_ratios is None:
-                raise ValueError("Either log_weights or log_ratios must be provided")
-            log_ratios = np.asarray(log_ratios).ravel()
-            log_weights, _ = self._psislw(log_ratios, r_eff)
-        else:
-            log_weights = np.asarray(log_weights).ravel()
-
+        log_weights = np.asarray(log_weights).ravel()
         log_norm = logsumexp(log_weights)
         weights = np.exp(log_weights - log_norm)
 
