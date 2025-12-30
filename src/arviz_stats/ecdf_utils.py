@@ -8,7 +8,7 @@ from arviz_base import dict_to_dataset
 from scipy.special import bdtr, bdtrik, gammaln  # pylint: disable=no-name-in-module
 
 
-def difference_ecdf_pit(dt, data_pairs, group, ci_prob, coverage, randomized, n_simulations):
+def difference_ecdf_pit(predictive_dist, observed_dist, ci_prob, coverage, n_simulations):
     """Compute the difference PIT ECDF values.
 
     The probability of the posterior predictive being less than or equal to the observed data.
@@ -17,29 +17,25 @@ def difference_ecdf_pit(dt, data_pairs, group, ci_prob, coverage, randomized, n_
 
     Parameters
     ----------
-    dt: DataTree
-        DataTree with "posterior_predictive" and "observed_data" groups
-    data_pairs : tuple
-        Tuple with first element contains the posterior predictive name (or list of names)
-        and the second element contains the observed data variable name (or list of names).
-    group : str
-        The group from which to get the unique values.
+    predictive_dist : xarray.Dataset
+        The posterior predictive distribution.
+    observed_dist : xarray.Dataset
+        The observed data.
     ci_prob : float, optional
         The probability for the credible interval.
-    randomized : list of bool
-        Whether to randomize the PIT values. Randomization is needed for discrete data.
     n_simulations : int
         The number of simulations to use with method `simulation`.
     """
-    dictio = {}
     rng = np.random.default_rng(214)
 
-    for idx, (var_predictive, var_obs) in enumerate(data_pairs.items()):
-        vals = (dt[group][var_predictive] <= dt.observed_data[var_obs]).mean(("chain", "draw"))
-        if randomized[idx]:
-            vals_less = (dt[group][var_predictive] < dt.observed_data[var_obs]).mean(
-                ("chain", "draw")
-            )
+    dictio = {}
+    for var in observed_dist.data_vars:
+        vals = (predictive_dist[var] <= observed_dist[var]).mean(("chain", "draw"))
+        if (
+            predictive_dist[var].values.dtype.kind == "i"
+            or observed_dist[var].values.dtype.kind == "i"
+        ):
+            vals_less = (predictive_dist[var] < observed_dist[var]).mean(("chain", "draw"))
 
             urvs = rng.uniform(size=vals.shape)
             vals = urvs * vals_less + (1 - urvs) * vals
@@ -48,7 +44,7 @@ def difference_ecdf_pit(dt, data_pairs, group, ci_prob, coverage, randomized, n_
             vals = 2 * np.abs(vals - 0.5)
 
         eval_points, ecdf, ci_lb, ci_ub = ecdf_pit(vals, ci_prob, n_simulations, rng=rng)
-        dictio[var_predictive] = np.stack(
+        dictio[var] = np.stack(
             [eval_points, ecdf - eval_points, ci_lb - eval_points, ci_ub - eval_points]
         )
 
