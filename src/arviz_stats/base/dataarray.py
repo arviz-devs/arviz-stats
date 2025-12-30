@@ -428,22 +428,22 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Log-likelihood values with shape (chain, draw, *obs_dims)
+            Log-likelihood values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
         r_eff : float, default 1.0
-            Relative effective sample size
+            Relative effective sample size.
         log_weights : DataArray, optional
-            Pre-computed PSIS log weights (same shape as da)
+            Pre-computed PSIS log weights.
         pareto_k : DataArray, optional
-            Pre-computed Pareto k values (shape: obs_dims only)
+            Pre-computed Pareto k-hat diagnostic values.
         log_jacobian : DataArray, optional
-            Log-Jacobian adjustment (shape: obs_dims only)
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
-            Pointwise LOO values for each observation
+            Pointwise LOO values for each observation.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         kwargs = {
@@ -503,20 +503,20 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Log-likelihood values
+            Log-likelihood values.
         log_p : DataArray
-            Target log-density values (chain, draw)
+            Target log-density values.
         log_q : DataArray
-            Proposal log-density values (chain, draw)
+            Proposal log-density values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
         log_jacobian : DataArray, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
-            Pointwise LOO values for each observation
+            Pointwise LOO values for each observation.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         kwargs = {
@@ -561,20 +561,20 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Log-likelihood values
+            Log-likelihood values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
         log_jacobian : DataArray, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         elpd_i : DataArray
-            Pointwise expected log predictive density
+            Pointwise expected log predictive density.
         p_loo_i : DataArray
-            Pointwise effective number of parameters
+            Pointwise effective number of parameters.
         mix_log_weights : DataArray
-            Mixture log weights
+            Mixture log weights.
         """
         dims, _, _ = validate_dims_chain_draw_axis(sample_dims)
         obs_dims = [d for d in da.dims if d not in dims]
@@ -615,32 +615,29 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Posterior predictive samples
+            Posterior predictive samples.
         y_obs : DataArray or scalar
-            Observed values
+            Observed values.
         log_ratios : DataArray, optional
             Log importance ratios (typically -log_likelihood). If provided,
-            PSIS will be computed internally. Either log_ratios OR
-            (log_weights AND pareto_k) must be provided.
+            PSIS will be computed internally.
         kind : str, default "crps"
-            "crps" or "scrps"
+            Score type, either "crps" or "scrps".
         r_eff : float, default 1.0
-            Relative effective sample size for PSIS
+            Relative effective sample size.
         log_weights : DataArray, optional
-            Pre-computed smoothed log weights from PSIS. Must be provided
-            together with pareto_k.
+            Pre-computed PSIS log weights.
         pareto_k : DataArray, optional
-            Pre-computed Pareto k-hat diagnostic values. Must be provided
-            together with log_weights.
+            Pre-computed Pareto k-hat diagnostic values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
 
         Returns
         -------
         scores : DataArray
-            Score values (negative CRPS or SCRPS for maximization)
+            Score values (negative orientation for maximization).
         pareto_k : DataArray
-            Pareto k-hat diagnostic values
+            Pareto k-hat diagnostic values.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         if log_weights is None:
@@ -679,33 +676,29 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Posterior predictive samples
+            Posterior predictive samples.
         y_obs : DataArray
-            Observed values (no sample dims)
+            Observed values.
         log_ratios : DataArray, optional
             Log importance ratios (typically -log_likelihood). If provided,
-            PSIS will be computed internally. Either log_ratios OR
-            (log_weights AND pareto_k) must be provided.
+            PSIS will be computed internally.
         r_eff : float, default 1.0
-            Relative effective sample size for PSIS
+            Relative effective sample size.
         log_weights : DataArray, optional
-            Pre-computed smoothed log weights from PSIS. Must be provided
-            together with pareto_k.
+            Pre-computed PSIS log weights.
         pareto_k : DataArray, optional
-            Pre-computed Pareto k-hat diagnostic values. Must be provided
-            together with log_weights.
+            Pre-computed Pareto k-hat diagnostic values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
         random_state : int or Generator, optional
-            Random seed or numpy Generator for tie-breaking randomization.
-            If None, uses seed 214 for reproducibility.
+            Random seed or Generator for tie-breaking. If None, uses seed 214.
 
         Returns
         -------
         pit_values : DataArray
-            LOO-PIT values
+            LOO-PIT values in [0, 1].
         pareto_k : DataArray
-            Pareto k-hat diagnostic values
+            Pareto k-hat diagnostic values.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         if log_weights is None:
@@ -743,31 +736,28 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Posterior predictive samples
+            Posterior predictive samples.
         log_ratios : DataArray, optional
             Log importance ratios (typically -log_likelihood). If provided,
-            PSIS will be computed internally. Either log_ratios OR
-            (log_weights AND pareto_k) must be provided.
+            PSIS will be computed internally.
         kind : str, default "mean"
-            Type of expectation: 'mean', 'median', 'var', 'sd',
-            'circular_mean', 'circular_var', 'circular_sd'
+            Type of expectation: "mean", "median", "var", "sd",
+            "circular_mean", "circular_var", "circular_sd".
         r_eff : float, default 1.0
-            Relative effective sample size for PSIS
+            Relative effective sample size.
         log_weights : DataArray, optional
-            Pre-computed smoothed log weights from PSIS. Must be provided
-            together with pareto_k.
+            Pre-computed PSIS log weights.
         pareto_k : DataArray, optional
-            Pre-computed Pareto k-hat diagnostic values. Must be provided
-            together with log_weights.
+            Pre-computed Pareto k-hat diagnostic values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
 
         Returns
         -------
         expectation : DataArray
-            Weighted expectation values
+            Weighted expectation values.
         pareto_k : DataArray
-            Pareto k-hat diagnostic values
+            Pareto k-hat diagnostic values.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         if log_weights is None:
@@ -804,30 +794,27 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Posterior predictive samples
+            Posterior predictive samples.
         log_ratios : DataArray, optional
             Log importance ratios (typically -log_likelihood). If provided,
-            PSIS will be computed internally. Either log_ratios OR
-            (log_weights AND pareto_k) must be provided.
+            PSIS will be computed internally.
         probs : float or array-like
-            Quantile probability(ies) in [0, 1]
+            Quantile probability(ies) in [0, 1].
         r_eff : float, default 1.0
-            Relative effective sample size for PSIS
+            Relative effective sample size.
         log_weights : DataArray, optional
-            Pre-computed smoothed log weights from PSIS. Must be provided
-            together with pareto_k.
+            Pre-computed PSIS log weights.
         pareto_k : DataArray, optional
-            Pre-computed Pareto k-hat diagnostic values. Must be provided
-            together with log_weights.
+            Pre-computed Pareto k-hat diagnostic values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
 
         Returns
         -------
         quantile : DataArray
-            Weighted quantile values with 'quantile' dimension if multiple probs
+            Weighted quantile values.
         pareto_k : DataArray
-            Pareto k-hat diagnostic values
+            Pareto k-hat diagnostic values.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         if log_weights is None:
@@ -864,20 +851,20 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Pointwise expected log predictive density values (elpd_i)
+            Pointwise expected log predictive density (elpd_i).
         p_loo_i : DataArray
-            Pointwise effective number of parameters
+            Pointwise effective number of parameters.
 
         Returns
         -------
         elpd : float
-            Total expected log predictive density
+            Total expected log predictive density.
         se : float
-            Standard error of elpd
+            Standard error of elpd.
         p_loo : float
-            Total effective number of parameters
+            Total effective number of parameters.
         lppd : float
-            Log pointwise predictive density
+            Log pointwise predictive density.
         """
         return self.array_class.loo_summary(da.values, p_loo_i.values)
 

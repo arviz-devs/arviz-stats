@@ -866,19 +866,28 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
+            Log-likelihood values.
         chain_axis : int, default -2
+            Axis for chains.
         draw_axis : int, default -1
+            Axis for draws.
         r_eff : float, default 1.0
+            Relative effective sample size.
         log_weights : array-like, optional
+            Pre-computed PSIS log weights.
         pareto_k : array-like, optional
+            Pre-computed Pareto k-hat diagnostic values.
         log_jacobian : array-like, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         elpd_i : array-like
+            Pointwise expected log predictive density.
         pareto_k : array-like
+            Pareto k-hat diagnostic values.
         p_loo_i : array-like
+            Pointwise effective number of parameters.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -907,18 +916,26 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
+            Log-likelihood values.
         log_p : array-like
+            Target log-density values.
         log_q : array-like
+            Proposal log-density values.
         chain_axis : int, default -2
+            Axis for chains.
         draw_axis : int, default -1
+            Axis for draws.
         log_jacobian : float, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         elpd_i : array-like
+            Pointwise expected log predictive density.
         pareto_k : array-like
+            Pareto k-hat diagnostic values.
         p_loo_i : array-like
+            Pointwise effective number of parameters.
         """
         ary, log_p, log_q, chain_axis, draw_axis = process_chain_none_multi(
             ary, log_p, log_q, chain_axis=chain_axis, draw_axis=draw_axis
@@ -946,22 +963,24 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-            Full log-likelihood array
+            Full log-likelihood array.
         obs_axes : tuple of int
-            Axes corresponding to observation dimensions
+            Axes corresponding to observation dimensions.
         chain_axis : int, default -2
+            Axis for chains.
         draw_axis : int, default -1
+            Axis for draws.
         log_jacobian : array-like, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         elpd_i : array-like
-            Pointwise expected log predictive density
+            Pointwise expected log predictive density.
         p_loo_i : array-like
-            Pointwise effective number of parameters
+            Pointwise effective number of parameters.
         mix_log_weights : array-like
-            Mixture log weights
+            Mixture log weights.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ndim = ary.ndim
@@ -988,22 +1007,22 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-            Posterior predictive samples
+            Posterior predictive samples.
         y_obs : array-like
-            Observed values
+            Observed values.
         log_weights : array-like
-            Pre-computed smoothed log weights from PSIS
+            Pre-computed PSIS log weights.
         kind : str, default "crps"
-            "crps" or "scrps"
+            Score type, either "crps" or "scrps".
         chain_axis : int, default -2
-            Axis for chains
+            Axis for chains.
         draw_axis : int, default -1
-            Axis for draws
+            Axis for draws.
 
         Returns
         -------
         scores : array-like
-            Score values (negative CRPS or SCRPS for maximization)
+            Score values (negative orientation for maximization).
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
             ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
@@ -1028,23 +1047,22 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-            Posterior predictive samples
+            Posterior predictive samples.
         y_obs : array-like
-            Observed values (no sample dims)
+            Observed values.
         log_weights : array-like
-            Pre-computed smoothed log weights from PSIS
+            Pre-computed PSIS log weights.
         chain_axis : int, default -2
-            Axis for chains
+            Axis for chains.
         draw_axis : int, default -1
-            Axis for draws
+            Axis for draws.
         random_state : int or Generator, optional
-            Random seed or numpy Generator for tie-breaking randomization.
-            If None, uses seed 214 for reproducibility.
+            Random seed or Generator for tie-breaking. If None, uses seed 214.
 
         Returns
         -------
         pit_values : array-like
-            LOO-PIT values, one per observation
+            LOO-PIT values in [0, 1].
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
             ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
@@ -1073,21 +1091,21 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-            Posterior predictive samples
+            Posterior predictive samples.
         log_weights : array-like
-            Pre-computed smoothed log weights from PSIS
+            Pre-computed PSIS log weights.
         kind : str, default "mean"
-            Type of expectation: 'mean', 'median', 'var', 'sd',
-            'circular_mean', 'circular_var', 'circular_sd'
+            Type of expectation: "mean", "median", "var", "sd",
+            "circular_mean", "circular_var", "circular_sd".
         chain_axis : int, default -2
-            Axis for chains
+            Axis for chains.
         draw_axis : int, default -1
-            Axis for draws
+            Axis for draws.
 
         Returns
         -------
         expectation : array-like
-            Weighted expectation values
+            Weighted expectation values.
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
             ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
@@ -1113,20 +1131,20 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-            Posterior predictive samples
+            Posterior predictive samples.
         log_weights : array-like
-            Pre-computed smoothed log weights from PSIS
+            Pre-computed PSIS log weights.
         prob : float
-            Quantile probability in [0, 1]
+            Quantile probability in [0, 1].
         chain_axis : int, default -2
-            Axis for chains
+            Axis for chains.
         draw_axis : int, default -1
-            Axis for draws
+            Axis for draws.
 
         Returns
         -------
         quantile : array-like
-            Weighted quantile values
+            Weighted quantile values.
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
             ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
@@ -1143,32 +1161,32 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         elpd_i : array-like
-            Pointwise expected log predictive density
+            Pointwise expected log predictive density.
         p_loo_i : array-like
-            Pointwise effective number of parameters
+            Pointwise effective number of parameters.
 
         Returns
         -------
         elpd : float
-            Total expected log predictive density
+            Total expected log predictive density.
         elpd_se : float
-            Standard error of elpd
+            Standard error of elpd.
         p_loo : float
-            Total effective number of parameters
+            Total effective number of parameters.
         lppd : float
-            Log pointwise predictive density
+            Log pointwise predictive density.
         """
         return self._summary(elpd_i, p_loo_i)
 
     def loo_r2(self, y_obs, ypred_loo, n_simulations=4000, circular=False, random_state=42):
-        """Compute LOO-adjusted :math:`R^2` using Dirichlet-weighted bootstrap.
+        """Compute LOO-adjusted R-squared using Dirichlet-weighted bootstrap.
 
         Parameters
         ----------
         y_obs : array-like
-            Observed values (1D array).
+            Observed values.
         ypred_loo : array-like
-            LOO predictions (1D array, same shape as y_obs).
+            LOO predictions (same shape as y_obs).
         n_simulations : int, default 4000
             Number of Dirichlet-weighted bootstrap samples.
         circular : bool, default False
@@ -1179,7 +1197,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Returns
         -------
         loo_r_squared : array-like
-            Array of :math:`R^2` samples with shape (n_simulations,).
+            R-squared samples with shape (n_simulations,).
         """
         y_obs = np.asarray(y_obs).ravel()
         ypred_loo = np.asarray(ypred_loo).ravel()

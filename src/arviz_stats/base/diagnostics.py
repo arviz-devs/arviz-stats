@@ -468,18 +468,18 @@ class _DiagnosticsBase(_CoreBase):
         Parameters
         ----------
         ary : np.ndarray
-            1D array of posterior predictive samples (flattened chain*draw)
+            1D array of posterior predictive samples (flattened chain*draw).
         y_obs : float
-            Observed value
+            Observed value.
         log_weights : np.ndarray
-            1D array of pre-computed PSIS-LOO log weights (same length as ary)
+            1D array of pre-computed PSIS log weights.
         kind : str
-            "crps" or "scrps"
+            Score type, either "crps" or "scrps".
 
         Returns
         -------
         score : float
-            The score value (negative CRPS or SCRPS for maximization)
+            Score value (negative orientation for maximization).
         """
         ary = np.asarray(ary).ravel()
         log_weights = np.asarray(log_weights).ravel()
@@ -519,19 +519,18 @@ class _DiagnosticsBase(_CoreBase):
         Parameters
         ----------
         ary : np.ndarray
-            1D array of posterior predictive samples (flattened chain*draw)
+            1D array of posterior predictive samples (flattened chain*draw).
         y_obs : float
-            Single observed value
+            Observed value.
         log_weights : np.ndarray
-            1D array of pre-computed PSIS-LOO log weights (same length as ary)
+            1D array of pre-computed PSIS log weights.
         rng : np.random.Generator, optional
-            Random number generator for tie-breaking. If None, uses midpoint
-            of the interval when ties exist.
+            Random number generator for tie-breaking. If None, uses midpoint.
 
         Returns
         -------
         pit : float
-            LOO-PIT value in [0, 1]
+            LOO-PIT value in [0, 1].
         """
         ary = np.asarray(ary).ravel()
         log_weights = np.asarray(log_weights).ravel()
@@ -560,17 +559,17 @@ class _DiagnosticsBase(_CoreBase):
         Parameters
         ----------
         ary : np.ndarray
-            1D array of posterior predictive samples (flattened chain*draw)
+            1D array of posterior predictive samples (flattened chain*draw).
         log_weights : np.ndarray
-            1D array of pre-computed PSIS-LOO log weights (same length as ary)
+            1D array of pre-computed PSIS log weights.
         kind : str
-            Type of expectation: 'mean', 'median', 'var', 'sd',
-            'circular_mean', 'circular_var', 'circular_sd'
+            Type of expectation: "mean", "median", "var", "sd",
+            "circular_mean", "circular_var", "circular_sd".
 
         Returns
         -------
         expectation : float
-            Weighted expectation value
+            Weighted expectation value.
         """
         ary = np.asarray(ary).ravel()
         log_weights = np.asarray(log_weights).ravel()
@@ -611,16 +610,16 @@ class _DiagnosticsBase(_CoreBase):
         Parameters
         ----------
         ary : np.ndarray
-            1D array of posterior predictive samples (flattened chain*draw)
+            1D array of posterior predictive samples (flattened chain*draw).
         log_weights : np.ndarray
-            1D array of pre-computed PSIS-LOO log weights (same length as ary)
+            1D array of pre-computed PSIS log weights.
         prob : float
-            Quantile probability in [0, 1]
+            Quantile probability in [0, 1].
 
         Returns
         -------
         quantile : float
-            Weighted quantile value
+            Weighted quantile value.
         """
         ary = np.asarray(ary).ravel()
         log_weights = np.asarray(log_weights).ravel()
