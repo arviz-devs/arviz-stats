@@ -8,7 +8,7 @@ import numpy as np
 from scipy import stats
 from scipy.special import logsumexp
 
-from arviz_stats.base.circular_utils import circular_diff, circular_var
+from arviz_stats.base.circular_utils import circular_diff, circular_mean, circular_sd, circular_var
 from arviz_stats.base.core import _CoreBase
 from arviz_stats.base.stats_utils import not_valid as _not_valid
 
@@ -587,17 +587,14 @@ class _DiagnosticsBase(_CoreBase):
             var_val = np.sum(weights * (ary - mean_val) ** 2) * correction
             result = np.sqrt(var_val) if kind == "sd" else var_val
         elif kind in ("circular_mean", "circular_var", "circular_sd"):
-            sum_sin = np.sum(weights * np.sin(ary))
-            sum_cos = np.sum(weights * np.cos(ary))
+            angles_2d = ary.reshape(1, -1)
+            weights_2d = weights.reshape(1, -1)
             if kind == "circular_mean":
-                result = np.arctan2(sum_sin, sum_cos)
-            else:
-                mean_resultant = np.sqrt(sum_sin**2 + sum_cos**2)
-                if kind == "circular_var":
-                    result = 1 - mean_resultant
-                else:
-                    with np.errstate(divide="ignore"):
-                        result = np.sqrt(-2 * np.log(mean_resultant))
+                result = circular_mean(angles_2d, weights_2d)[0]
+            elif kind == "circular_var":
+                result = circular_var(angles_2d, weights_2d)[0]
+            else:  # circular_sd
+                result = circular_sd(angles_2d, weights_2d)[0]
         else:
             raise ValueError(f"Unknown kind: {kind}")
 
