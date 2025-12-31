@@ -155,12 +155,12 @@ class _BaseAccessor:
         """Compute Pareto k-hat diagnostic."""
         return self._apply("pareto_khat", sample_dims=sample_dims, **kwargs)
 
-    def loo(self, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None):
+    def loo(self, sample_dims=None, r_eff=1.0, log_weights=None, pareto_k=None, log_jacobian=None):
         """Compute PSIS-LOO-CV."""
         return self._apply(
             "loo",
             sample_dims=sample_dims,
-            reff=reff,
+            r_eff=r_eff,
             log_weights=log_weights,
             pareto_k=pareto_k,
             log_jacobian=log_jacobian,
@@ -184,13 +184,94 @@ class _BaseAccessor:
             log_jacobian=log_jacobian,
         )
 
-    def loo_score(self, y_obs, log_weights, kind="crps", sample_dims=None, **kwargs):
+    def loo_score(
+        self,
+        y_obs,
+        log_ratios=None,
+        kind="crps",
+        r_eff=1.0,
+        log_weights=None,
+        pareto_k=None,
+        sample_dims=None,
+        **kwargs,
+    ):
         """Compute CRPS or SCRPS with PSIS-LOO-CV weights."""
         return self._apply(
             "loo_score",
             y_obs=y_obs,
-            log_weights=log_weights,
+            log_ratios=log_ratios,
             kind=kind,
+            r_eff=r_eff,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+            sample_dims=sample_dims,
+            **kwargs,
+        )
+
+    def loo_pit(
+        self,
+        y_obs,
+        log_ratios=None,
+        r_eff=1.0,
+        log_weights=None,
+        pareto_k=None,
+        sample_dims=None,
+        random_state=None,
+        **kwargs,
+    ):
+        """Compute LOO-PIT values with PSIS-LOO-CV weights."""
+        return self._apply(
+            "loo_pit",
+            y_obs=y_obs,
+            log_ratios=log_ratios,
+            r_eff=r_eff,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+            sample_dims=sample_dims,
+            random_state=random_state,
+            **kwargs,
+        )
+
+    def loo_expectation(
+        self,
+        log_ratios=None,
+        kind="mean",
+        r_eff=1.0,
+        log_weights=None,
+        pareto_k=None,
+        sample_dims=None,
+        **kwargs,
+    ):
+        """Compute weighted expectation with PSIS-LOO-CV weights."""
+        return self._apply(
+            "loo_expectation",
+            log_ratios=log_ratios,
+            kind=kind,
+            r_eff=r_eff,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+            sample_dims=sample_dims,
+            **kwargs,
+        )
+
+    def loo_quantile(
+        self,
+        log_ratios=None,
+        probs=None,
+        r_eff=1.0,
+        log_weights=None,
+        pareto_k=None,
+        sample_dims=None,
+        **kwargs,
+    ):
+        """Compute weighted quantile with PSIS-LOO-CV weights."""
+        return self._apply(
+            "loo_quantile",
+            log_ratios=log_ratios,
+            probs=probs,
+            r_eff=r_eff,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
             sample_dims=sample_dims,
             **kwargs,
         )
@@ -198,6 +279,24 @@ class _BaseAccessor:
     def loo_summary(self, p_loo_i):
         """Aggregate pointwise LOO values."""
         return self._apply("loo_summary", p_loo_i=p_loo_i)
+
+    def loo_r2(
+        self,
+        ypred_loo,
+        n_simulations=4000,
+        circular=False,
+        random_state=42,
+        **kwargs,
+    ):
+        """Compute LOO-adjusted :math:`R^2` using Dirichlet-weighted bootstrap."""
+        return self._apply(
+            "loo_r2",
+            ypred_loo=ypred_loo,
+            n_simulations=n_simulations,
+            circular=circular,
+            random_state=random_state,
+            **kwargs,
+        )
 
     def power_scale_lw(self, dim=None, **kwargs):
         """Compute log weights for power-scaling of the DataTree."""

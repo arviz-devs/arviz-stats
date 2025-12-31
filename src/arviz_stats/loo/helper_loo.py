@@ -125,7 +125,7 @@ def _compute_loo_results(
 
     elpd_i, pareto_k, p_loo_i = log_likelihood_da.azstats.loo(
         sample_dims=sample_dims,
-        reff=reff,
+        r_eff=reff,
         log_weights=log_weights,
         pareto_k=pareto_k,
         log_jacobian=log_jacobian,

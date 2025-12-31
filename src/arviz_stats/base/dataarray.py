@@ -421,35 +421,35 @@ class BaseDataArray:
         ).rename("pareto_k")
 
     def loo(
-        self, da, sample_dims=None, reff=1.0, log_weights=None, pareto_k=None, log_jacobian=None
+        self, da, sample_dims=None, r_eff=1.0, log_weights=None, pareto_k=None, log_jacobian=None
     ):
         """Compute PSIS-LOO-CV.
 
         Parameters
         ----------
         da : DataArray
-            Log-likelihood values with shape (chain, draw, *obs_dims)
+            Log-likelihood values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
-        reff : float, default 1.0
-            Relative effective sample size
+            Sample dimensions. Defaults to ["chain", "draw"].
+        r_eff : float, default 1.0
+            Relative effective sample size.
         log_weights : DataArray, optional
-            Pre-computed PSIS log weights (same shape as da)
+            Pre-computed PSIS log weights.
         pareto_k : DataArray, optional
-            Pre-computed Pareto k values (shape: obs_dims only)
+            Pre-computed Pareto k-hat diagnostic values.
         log_jacobian : DataArray, optional
-            Log-Jacobian adjustment (shape: obs_dims only)
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
-            Pointwise LOO values for each observation
+            Pointwise LOO values for each observation.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         kwargs = {
             "chain_axis": chain_axis,
             "draw_axis": draw_axis,
-            "reff": reff,
+            "r_eff": r_eff,
         }
 
         if log_weights is not None and pareto_k is not None:
@@ -503,20 +503,20 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Log-likelihood values
+            Log-likelihood values.
         log_p : DataArray
-            Target log-density values (chain, draw)
+            Target log-density values.
         log_q : DataArray
-            Proposal log-density values (chain, draw)
+            Proposal log-density values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
         log_jacobian : DataArray, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
-            Pointwise LOO values for each observation
+            Pointwise LOO values for each observation.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         kwargs = {
@@ -561,20 +561,20 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Log-likelihood values
+            Log-likelihood values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
         log_jacobian : DataArray, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         elpd_i : DataArray
-            Pointwise expected log predictive density
+            Pointwise expected log predictive density.
         p_loo_i : DataArray
-            Pointwise effective number of parameters
+            Pointwise effective number of parameters.
         mix_log_weights : DataArray
-            Mixture log weights
+            Mixture log weights.
         """
         dims, _, _ = validate_dims_chain_draw_axis(sample_dims)
         obs_dims = [d for d in da.dims if d not in dims]
@@ -599,29 +599,53 @@ class BaseDataArray:
 
         return elpd_i, p_loo_i, mix_log_weights
 
-    def loo_score(self, da, y_obs, log_weights, kind="crps", sample_dims=None):
+    def loo_score(
+        self,
+        da,
+        y_obs,
+        log_ratios=None,
+        kind="crps",
+        r_eff=1.0,
+        log_weights=None,
+        pareto_k=None,
+        sample_dims=None,
+    ):
         """Compute CRPS or SCRPS with PSIS-LOO-CV weights.
 
         Parameters
         ----------
         da : DataArray
-            Posterior predictive samples
+            Posterior predictive samples.
         y_obs : DataArray or scalar
-            Observed values
-        log_weights : DataArray
-            PSIS-LOO log weights
+            Observed values.
+        log_ratios : DataArray, optional
+            Log importance ratios (typically -log_likelihood). If provided,
+            PSIS will be computed internally.
         kind : str, default "crps"
-            "crps" or "scrps"
+            Score type, either "crps" or "scrps".
+        r_eff : float, default 1.0
+            Relative effective sample size.
+        log_weights : DataArray, optional
+            Pre-computed PSIS log weights.
+        pareto_k : DataArray, optional
+            Pre-computed Pareto k-hat diagnostic values.
         sample_dims : list of str, optional
-            Sample dimensions. Defaults to ["chain", "draw"]
+            Sample dimensions. Defaults to ["chain", "draw"].
 
         Returns
         -------
         scores : DataArray
-            Score values (negative CRPS or SCRPS for maximization)
+            Score values (negative orientation for maximization).
+        pareto_k : DataArray
+            Pareto k-hat diagnostic values.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
-        return apply_ufunc(
+        if log_weights is None:
+            if log_ratios is None:
+                raise ValueError("Either log_ratios or log_weights must be provided")
+            log_weights, pareto_k = self.psislw(-log_ratios, r_eff=r_eff, dim=list(dims))
+
+        scores = apply_ufunc(
             self.array_class.loo_score,
             da,
             y_obs,
@@ -634,6 +658,192 @@ class BaseDataArray:
                 "draw_axis": draw_axis,
             },
         )
+        return scores, pareto_k
+
+    def loo_pit(
+        self,
+        da,
+        y_obs,
+        log_ratios=None,
+        r_eff=1.0,
+        log_weights=None,
+        pareto_k=None,
+        sample_dims=None,
+        random_state=None,
+    ):
+        """Compute LOO-PIT values on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+            Posterior predictive samples.
+        y_obs : DataArray
+            Observed values.
+        log_ratios : DataArray, optional
+            Log importance ratios (typically -log_likelihood). If provided,
+            PSIS will be computed internally.
+        r_eff : float, default 1.0
+            Relative effective sample size.
+        log_weights : DataArray, optional
+            Pre-computed PSIS log weights.
+        pareto_k : DataArray, optional
+            Pre-computed Pareto k-hat diagnostic values.
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"].
+        random_state : int or Generator, optional
+            Random seed or Generator for tie-breaking. If None, uses seed 214.
+
+        Returns
+        -------
+        pit_values : DataArray
+            LOO-PIT values in [0, 1].
+        pareto_k : DataArray
+            Pareto k-hat diagnostic values.
+        """
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        if log_weights is None:
+            if log_ratios is None:
+                raise ValueError("Either log_ratios or log_weights must be provided")
+            log_weights, pareto_k = self.psislw(-log_ratios, r_eff=r_eff, dim=list(dims))
+
+        pit_values = apply_ufunc(
+            self.array_class.loo_pit,
+            da,
+            y_obs,
+            log_weights,
+            input_core_dims=[dims, [], dims],
+            output_core_dims=[[]],
+            kwargs={
+                "chain_axis": chain_axis,
+                "draw_axis": draw_axis,
+                "random_state": random_state,
+            },
+        )
+        return pit_values, pareto_k
+
+    def loo_expectation(
+        self,
+        da,
+        log_ratios=None,
+        kind="mean",
+        r_eff=1.0,
+        log_weights=None,
+        pareto_k=None,
+        sample_dims=None,
+    ):
+        """Compute weighted expectation on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+            Posterior predictive samples.
+        log_ratios : DataArray, optional
+            Log importance ratios (typically -log_likelihood). If provided,
+            PSIS will be computed internally.
+        kind : str, default "mean"
+            Type of expectation: "mean", "median", "var", "sd",
+            "circular_mean", "circular_var", "circular_sd".
+        r_eff : float, default 1.0
+            Relative effective sample size.
+        log_weights : DataArray, optional
+            Pre-computed PSIS log weights.
+        pareto_k : DataArray, optional
+            Pre-computed Pareto k-hat diagnostic values.
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"].
+
+        Returns
+        -------
+        expectation : DataArray
+            Weighted expectation values.
+        pareto_k : DataArray
+            Pareto k-hat diagnostic values.
+        """
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        if log_weights is None:
+            if log_ratios is None:
+                raise ValueError("Either log_ratios or log_weights must be provided")
+            log_weights, pareto_k = self.psislw(-log_ratios, r_eff=r_eff, dim=list(dims))
+
+        expectation = apply_ufunc(
+            self.array_class.loo_expectation,
+            da,
+            log_weights,
+            input_core_dims=[dims, dims],
+            output_core_dims=[[]],
+            kwargs={
+                "kind": kind,
+                "chain_axis": chain_axis,
+                "draw_axis": draw_axis,
+            },
+        )
+        return expectation, pareto_k
+
+    def loo_quantile(
+        self,
+        da,
+        log_ratios=None,
+        probs=None,
+        r_eff=1.0,
+        log_weights=None,
+        pareto_k=None,
+        sample_dims=None,
+    ):
+        """Compute weighted quantile on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+            Posterior predictive samples.
+        log_ratios : DataArray, optional
+            Log importance ratios (typically -log_likelihood). If provided,
+            PSIS will be computed internally.
+        probs : float or array-like
+            Quantile probability(ies) in [0, 1].
+        r_eff : float, default 1.0
+            Relative effective sample size.
+        log_weights : DataArray, optional
+            Pre-computed PSIS log weights.
+        pareto_k : DataArray, optional
+            Pre-computed Pareto k-hat diagnostic values.
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"].
+
+        Returns
+        -------
+        quantile : DataArray
+            Weighted quantile values.
+        pareto_k : DataArray
+            Pareto k-hat diagnostic values.
+        """
+        dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        if log_weights is None:
+            if log_ratios is None:
+                raise ValueError("Either log_ratios or log_weights must be provided")
+            log_weights, pareto_k = self.psislw(-log_ratios, r_eff=r_eff, dim=list(dims))
+
+        probs = np.atleast_1d(probs)
+        quantile_results = []
+
+        for prob in probs:
+            quantile = apply_ufunc(
+                self.array_class.loo_quantile,
+                da,
+                log_weights,
+                input_core_dims=[dims, dims],
+                output_core_dims=[[]],
+                kwargs={
+                    "prob": float(prob),
+                    "chain_axis": chain_axis,
+                    "draw_axis": draw_axis,
+                },
+            )
+            quantile_results.append(quantile)
+
+        if len(probs) == 1:
+            return quantile_results[0], pareto_k
+
+        return concat(quantile_results, dim="quantile").assign_coords(quantile=probs), pareto_k
 
     def loo_summary(self, da, p_loo_i):
         """Aggregate pointwise LOO values.
@@ -641,22 +851,61 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-            Pointwise expected log predictive density values (elpd_i)
+            Pointwise expected log predictive density (elpd_i).
         p_loo_i : DataArray
-            Pointwise effective number of parameters
+            Pointwise effective number of parameters.
 
         Returns
         -------
         elpd : float
-            Total expected log predictive density
+            Total expected log predictive density.
         se : float
-            Standard error of elpd
+            Standard error of elpd.
         p_loo : float
-            Total effective number of parameters
+            Total effective number of parameters.
         lppd : float
-            Log pointwise predictive density
+            Log pointwise predictive density.
         """
         return self.array_class.loo_summary(da.values, p_loo_i.values)
+
+    def loo_r2(
+        self,
+        da,
+        ypred_loo,
+        n_simulations=4000,
+        circular=False,
+        random_state=42,
+    ):
+        """Compute LOO-adjusted :math:`R^2` using Dirichlet-weighted bootstrap.
+
+        Parameters
+        ----------
+        da : DataArray
+            Observed values (passed via accessor as self._obj).
+        ypred_loo : DataArray
+            LOO predictions (same shape as da).
+        n_simulations : int, default 4000
+            Number of Dirichlet-weighted bootstrap samples.
+        circular : bool, default False
+            Whether the variable is circular (angles in radians).
+        random_state : int, default 42
+            Random seed for reproducibility.
+
+        Returns
+        -------
+        loo_r_squared : ndarray
+            Array of :math:`R^2` samples with shape (n_simulations,).
+        """
+        y_obs_vals = np.asarray(da)
+        ypred_loo_vals = np.asarray(ypred_loo)
+
+        return self.array_class.loo_r2(
+            y_obs_vals,
+            ypred_loo_vals,
+            n_simulations=n_simulations,
+            circular=circular,
+            random_state=random_state,
+        )
 
     def power_scale_lw(self, da, alpha=0, dim=None):
         """Compute log weights for power-scaling component by alpha."""

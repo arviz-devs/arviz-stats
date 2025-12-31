@@ -1,18 +1,18 @@
 """Compute leave one out (PSIS-LOO) probability integral transform (PIT) values."""
 
-import numpy as np
 import xarray as xr
 from arviz_base import convert_to_datatree, extract
-from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.helper_loo import _get_r_eff
-from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
+from arviz_stats.utils import get_log_likelihood_dataset
 
 
 def loo_pit(
     data,
     var_names=None,
     log_weights=None,
+    pareto_k=None,
+    random_state=None,
 ):
     r"""Compute leave one out (PSIS-LOO) probability integral transform (PIT) values.
 
@@ -30,13 +30,15 @@ def loo_pit(
         Names of the variables to be used to compute the LOO-PIT values. If None, all
         variables are used. The function assumes that the observed and log_likelihood
         variables share the same names.
-    log_weights: DataArray or ELPDData, optional
-        Smoothed log weights. Can be either:
-
-        - A DataArray with the same shape as ``y_pred``
-        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
-
-        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
+    log_weights : Dataset, optional
+        Pre-computed smoothed log weights from PSIS. Must be a Dataset with variables
+        matching var_names. Must be provided together with pareto_k.
+    pareto_k : Dataset, optional
+        Pre-computed Pareto k-hat diagnostic values. Must be a Dataset with variables
+        matching var_names. Must be provided together with log_weights.
+    random_state : int or Generator, optional
+        Random seed or numpy Generator for tie-breaking randomization in discrete data.
+        If None, uses seed 214 for reproducibility.
 
     Returns
     -------
@@ -82,7 +84,6 @@ def loo_pit(
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
     data = convert_to_datatree(data)
-    rng = np.random.default_rng(214)
 
     if var_names is None:
         var_names = list(data.observed_data.data_vars.keys())
@@ -90,16 +91,8 @@ def loo_pit(
         var_names = [var_names]
 
     log_likelihood = get_log_likelihood_dataset(data, var_names=var_names)
-
-    if log_weights is None:
-        n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-        reff = _get_r_eff(data, n_samples)
-        log_weights, _ = log_likelihood.azstats.psislw(r_eff=reff)
-
-    if isinstance(log_weights, ELPDData):
-        if log_weights.log_weights is None:
-            raise ValueError("ELPDData object does not contain log_weights")
-        log_weights = log_weights.log_weights
+    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
+    r_eff = _get_r_eff(data, n_samples)
 
     posterior_predictive = extract(
         data,
@@ -116,32 +109,31 @@ def loo_pit(
         keep_dataset=True,
     )
 
-    sel_min = {}
-    sel_sup = {}
+    sample_dims = ["chain", "draw"]
+    loo_pit_values = xr.Dataset(coords=observed_data.coords)
+
     for var in var_names:
         pred = posterior_predictive[var]
         obs = observed_data[var]
-        sel_min[var] = pred < obs
-        sel_sup[var] = pred == obs
 
-    sel_min = xr.Dataset(sel_min)
-    sel_sup = xr.Dataset(sel_sup)
-
-    pit = np.exp(logsumexp(log_weights.where(sel_min, -np.inf), dims=["chain", "draw"]))
-
-    loo_pit_values = xr.Dataset(coords=observed_data.coords)
-    for var in var_names:
-        pit_lower = pit[var].values
-
-        if sel_sup[var].any():
-            pit_sup_addition = np.exp(
-                logsumexp(log_weights.where(sel_sup[var], -np.inf), dims=["chain", "draw"])
+        if log_weights is not None and pareto_k is not None:
+            pit_values, _ = pred.azstats.loo_pit(
+                y_obs=obs,
+                log_weights=log_weights[var],
+                pareto_k=pareto_k[var],
+                r_eff=r_eff,
+                sample_dims=sample_dims,
+                random_state=random_state,
             )
-
-            pit_upper = pit_lower + pit_sup_addition[var].values
-            random_value = rng.uniform(pit_lower, pit_upper)
-            loo_pit_values[var] = observed_data[var].copy(data=random_value)
         else:
-            loo_pit_values[var] = observed_data[var].copy(data=pit_lower)
+            log_ratios = -log_likelihood[var]
+            pit_values, _ = pred.azstats.loo_pit(
+                y_obs=obs,
+                log_ratios=log_ratios,
+                r_eff=r_eff,
+                sample_dims=sample_dims,
+                random_state=random_state,
+            )
+        loo_pit_values[var] = pit_values
 
     return loo_pit_values

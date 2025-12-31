@@ -17,11 +17,11 @@ from arviz_stats.loo.helper_loo import (
 def loo_score(
     data,
     var_name=None,
-    log_weights=None,
-    pareto_k=None,
     kind="crps",
     pointwise=False,
     round_to=None,
+    log_weights=None,
+    pareto_k=None,
 ):
     r"""Compute PWM-based CRPS/SCRPS with PSIS-LOO-CV weights.
 
@@ -55,14 +55,6 @@ def loo_score(
         The name of the variable in the log_likelihood group to use. If None, the first
         variable in ``observed_data`` is used and assumed to match ``log_likelihood`` and
         ``posterior_predictive`` names.
-    log_weights : DataArray, optional
-        Smoothed log weights for PSIS-LOO-CV. Must have the same shape as the log-likelihood data.
-        Defaults to None. If not provided, they will be computed via PSIS-LOO-CV. Must be provided
-        together with ``pareto_k`` or both must be None.
-    pareto_k : DataArray, optional
-        Pareto tail indices corresponding to the PSIS smoothing. Same shape as the log-likelihood
-        data. If not provided, they will be computed via PSIS-LOO-CV. Must be provided together with
-        ``log_weights`` or both must be None.
     kind : str, default "crps"
         The kind of score to compute. Available options are:
 
@@ -74,13 +66,18 @@ def loo_score(
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.
         Use None to return raw numbers.
+    log_weights : DataArray, optional
+        Pre-computed smoothed log weights from PSIS. Must be provided together with pareto_k.
+        If not provided, PSIS will be computed internally.
+    pareto_k : DataArray, optional
+        Pre-computed Pareto k-hat diagnostic values. Must be provided together with log_weights.
 
     Returns
     -------
     namedtuple
         If ``pointwise`` is False (default), a namedtuple named ``CRPS`` or ``SCRPS`` with fields
-        ``mean`` and ``se``. If ``pointwise`` is True, the namedtuple also includes a ``pointwise``
-        field with per-observation values.
+        ``mean`` and ``se``. If ``pointwise`` is True, the namedtuple also includes ``pointwise``
+        and ``pareto_k`` fields.
 
     Examples
     --------
@@ -98,18 +95,6 @@ def loo_score(
         :okwarning:
 
         In [2]: loo_score(dt, kind="scrps")
-
-    We can also pass previously computed PSIS-LOO weights and return the pointwise values:
-
-    .. ipython::
-        :okwarning:
-
-        In [3]: from arviz_stats import loo
-           ...: loo_data = loo(dt, pointwise=True)
-           ...: loo_score(dt, kind="crps",
-           ...:           log_weights=loo_data.log_weights,
-           ...:           pareto_k=loo_data.pareto_k,
-           ...:           pointwise=True)
 
     Notes
     -----
@@ -210,22 +195,22 @@ def loo_score(
 
     _validate_crps_input(y_pred, y_obs, log_likelihood, sample_dims=sample_dims, obs_dims=obs_dims)
 
-    if (log_weights is None) != (pareto_k is None):
-        raise ValueError(
-            "Both log_weights and pareto_k must be provided together or both must be None. "
-            "Only one was provided."
+    if log_weights is not None and pareto_k is not None:
+        pointwise_scores, pareto_k_out = y_pred.azstats.loo_score(
+            y_obs=y_obs,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+            kind=kind,
+            r_eff=r_eff,
+            sample_dims=sample_dims,
+        )
+    else:
+        log_ratios = -log_likelihood
+        pointwise_scores, pareto_k_out = y_pred.azstats.loo_score(
+            y_obs=y_obs, log_ratios=log_ratios, kind=kind, r_eff=r_eff, sample_dims=sample_dims
         )
 
-    if log_weights is None and pareto_k is None:
-        log_weights_da, pareto_k = log_likelihood.azstats.psislw(r_eff=r_eff, dim=sample_dims)
-    else:
-        log_weights_da = log_weights
-
-    pointwise_scores = y_pred.azstats.loo_score(
-        y_obs=y_obs, log_weights=log_weights_da, kind=kind, sample_dims=sample_dims
-    )
-
-    _warn_pareto_k(pareto_k, n_samples)
+    _warn_pareto_k(pareto_k_out, n_samples)
 
     n_pts = int(np.prod([pointwise_scores.sizes[d] for d in pointwise_scores.dims]))
     mean = pointwise_scores.mean().values.item()
@@ -233,10 +218,11 @@ def loo_score(
     name = "SCRPS" if kind == "scrps" else "CRPS"
 
     if pointwise:
-        return namedtuple(name, ["mean", "se", "pointwise"])(
+        return namedtuple(name, ["mean", "se", "pointwise", "pareto_k"])(
             round_num(mean, round_to),
             round_num(se, round_to),
             pointwise_scores,
+            pareto_k_out,
         )
     return namedtuple(name, ["mean", "se"])(
         round_num(mean, round_to),
