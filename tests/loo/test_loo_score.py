@@ -32,6 +32,10 @@ def test_loo_score_basic(centered_eight, kind):
     assert hasattr(result, "se")
     assert np.isfinite(result.mean)
     assert np.isfinite(result.se)
+    assert result.se >= 0
+
+    if kind == "crps":
+        assert result.mean <= 0
 
 
 @pytest.mark.parametrize("kind", ["crps", "scrps"])
@@ -71,6 +75,9 @@ def test_loo_score_pointwise(centered_eight, kind):
     assert np.all(np.isfinite(result.pointwise.values))
     assert result.pareto_k.shape == (8,)
     assert np.all(np.isfinite(result.pareto_k.values))
+
+    if kind == "crps":
+        assert np.all(result.pointwise.values <= 0)
 
 
 def test_loo_score_namedtuple_names(centered_eight):

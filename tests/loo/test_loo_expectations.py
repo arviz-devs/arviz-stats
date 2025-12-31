@@ -95,6 +95,9 @@ def test_loo_expectations_median_sd(centered_eight, kind):
     assert np.all(np.isfinite(result.values))
     assert np.all(np.isfinite(khat.values))
 
+    if kind == "sd":
+        assert np.all(result.values >= 0)
+
 
 def test_loo_expectations_single_quantile(centered_eight):
     result, khat = loo_expectations(centered_eight, kind="quantile", probs=0.5)
@@ -214,14 +217,21 @@ def test_loo_r2_ci_prob(datatree_regression, ci_prob):
 
 @pytest.mark.parametrize("kind", ["circular_mean", "circular_var", "circular_sd"])
 def test_loo_expectations_circular(centered_eight, kind):
-    """Simple parametric checks for circular kinds: shape and finiteness of result and khat."""
-
     result, khat = loo_expectations(centered_eight, kind=kind)
 
     assert result.shape == (8,)
     assert khat.shape == (8,)
     assert np.all(np.isfinite(result.values))
     assert np.all(np.isfinite(khat.values))
+
+    if kind == "circular_mean":
+        assert np.all(result.values >= -np.pi)
+        assert np.all(result.values <= np.pi)
+    elif kind == "circular_var":
+        assert np.all(result.values >= 0)
+        assert np.all(result.values <= 1)
+    else:  # circular_sd
+        assert np.all(result.values >= 0)
 
 
 @pytest.mark.parametrize("kind", ["mean", "var", "sd", "median"])
