@@ -351,6 +351,7 @@ def round_num(value, precision):
     ----------
     value : float, numpy array or DataArray
         The value to round. If array assumes it contains a single value.
+        If the value is not finite, it is returned unmodified.
     precision : int or str
         If an integer, specifies decimal places. If a string ending in 'g',
         specifies significant digits. Integers can be negative.
@@ -362,6 +363,9 @@ def round_num(value, precision):
         pass
 
     if precision is None or precision in ("None", "none"):
+        return value
+
+    if not np.isfinite(value):
         return value
 
     if isinstance(precision, int):
