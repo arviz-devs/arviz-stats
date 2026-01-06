@@ -364,7 +364,10 @@ def test_elpddata_repr():
 )
 def test_round_num(value, precision, expected):
     result = round_num(value, precision)
-    assert result == expected
+    if np.isnan(expected):
+        assert np.isnan(result)
+    else:
+        assert result == expected
 
 
 def test_round_num_array():
