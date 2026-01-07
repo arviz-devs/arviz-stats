@@ -856,7 +856,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary,
         chain_axis=-2,
         draw_axis=-1,
-        reff=1.0,
+        r_eff=1.0,
         log_weights=None,
         pareto_k=None,
         log_jacobian=None,
@@ -866,19 +866,28 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
+            Log-likelihood values.
         chain_axis : int, default -2
+            Axis for chains.
         draw_axis : int, default -1
-        reff : float, default 1.0
+            Axis for draws.
+        r_eff : float, default 1.0
+            Relative effective sample size.
         log_weights : array-like, optional
+            Pre-computed PSIS log weights.
         pareto_k : array-like, optional
+            Pre-computed Pareto k-hat diagnostic values.
         log_jacobian : array-like, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         elpd_i : array-like
+            Pointwise expected log predictive density.
         pareto_k : array-like
+            Pareto k-hat diagnostic values.
         p_loo_i : array-like
+            Pointwise effective number of parameters.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -890,7 +899,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         loo_ufunc = make_ufunc(self._loo, n_output=3, n_input=1, n_dims=len(axes))
         return loo_ufunc(
-            ary, r_eff=reff, log_weights=log_weights, pareto_k=pareto_k, log_jacobian=log_jacobian
+            ary, r_eff=r_eff, log_weights=log_weights, pareto_k=pareto_k, log_jacobian=log_jacobian
         )
 
     def loo_approximate_posterior(
@@ -907,18 +916,26 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
+            Log-likelihood values.
         log_p : array-like
+            Target log-density values.
         log_q : array-like
+            Proposal log-density values.
         chain_axis : int, default -2
+            Axis for chains.
         draw_axis : int, default -1
+            Axis for draws.
         log_jacobian : float, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         elpd_i : array-like
+            Pointwise expected log predictive density.
         pareto_k : array-like
+            Pareto k-hat diagnostic values.
         p_loo_i : array-like
+            Pointwise effective number of parameters.
         """
         ary, log_p, log_q, chain_axis, draw_axis = process_chain_none_multi(
             ary, log_p, log_q, chain_axis=chain_axis, draw_axis=draw_axis
@@ -946,22 +963,24 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-            Full log-likelihood array
+            Full log-likelihood array.
         obs_axes : tuple of int
-            Axes corresponding to observation dimensions
+            Axes corresponding to observation dimensions.
         chain_axis : int, default -2
+            Axis for chains.
         draw_axis : int, default -1
+            Axis for draws.
         log_jacobian : array-like, optional
-            Log-Jacobian adjustment for variable transformations
+            Log-Jacobian adjustment for variable transformations.
 
         Returns
         -------
         elpd_i : array-like
-            Pointwise expected log predictive density
+            Pointwise expected log predictive density.
         p_loo_i : array-like
-            Pointwise effective number of parameters
+            Pointwise effective number of parameters.
         mix_log_weights : array-like
-            Mixture log weights
+            Mixture log weights.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ndim = ary.ndim
@@ -970,7 +989,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         obs_axes = tuple(ax % ndim for ax in obs_axes)
         sample_axes = (chain_axis, draw_axis)
 
-        return self._loo_mixture(
+        return self._mixture(
             ary, obs_axes=obs_axes, sample_axes=sample_axes, log_jacobian=log_jacobian
         )
 
@@ -988,32 +1007,153 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-            Posterior predictive samples
+            Posterior predictive samples.
         y_obs : array-like
-            Observed values
+            Observed values.
         log_weights : array-like
-            PSIS-LOO log weights
+            Pre-computed PSIS log weights.
         kind : str, default "crps"
-            "crps" or "scrps"
+            Score type, either "crps" or "scrps".
         chain_axis : int, default -2
-            Axis for chains
+            Axis for chains.
         draw_axis : int, default -1
-            Axis for draws
+            Axis for draws.
 
         Returns
         -------
         scores : array-like
-            Score values (negative CRPS or SCRPS for maximization)
+            Score values (negative orientation for maximization).
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
             ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
         )
-
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
         log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
 
         loo_score_ufunc = make_ufunc(self._loo_score, n_output=1, n_input=3, n_dims=len(axes))
         return loo_score_ufunc(ary, y_obs, log_weights, kind)
+
+    def loo_pit(
+        self,
+        ary,
+        y_obs,
+        log_weights,
+        chain_axis=-2,
+        draw_axis=-1,
+        random_state=None,
+    ):
+        """Compute LOO-PIT values with PSIS-LOO-CV weights.
+
+        Parameters
+        ----------
+        ary : array-like
+            Posterior predictive samples.
+        y_obs : array-like
+            Observed values.
+        log_weights : array-like
+            Pre-computed PSIS log weights.
+        chain_axis : int, default -2
+            Axis for chains.
+        draw_axis : int, default -1
+            Axis for draws.
+        random_state : int or Generator, optional
+            Random seed or Generator for tie-breaking. If None, uses seed 214.
+
+        Returns
+        -------
+        pit_values : array-like
+            LOO-PIT values in [0, 1].
+        """
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+        log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+
+        if random_state is None:
+            rng = np.random.default_rng(214)
+        else:
+            rng = np.random.default_rng(random_state)
+
+        loo_pit_ufunc = make_ufunc(self._loo_pit, n_output=1, n_input=3, n_dims=len(axes))
+        return loo_pit_ufunc(ary, y_obs, log_weights, rng=rng)
+
+    def loo_expectation(
+        self,
+        ary,
+        log_weights,
+        kind="mean",
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute weighted expectation with PSIS-LOO-CV weights.
+
+        Parameters
+        ----------
+        ary : array-like
+            Posterior predictive samples.
+        log_weights : array-like
+            Pre-computed PSIS log weights.
+        kind : str, default "mean"
+            Type of expectation: "mean", "median", "var", "sd",
+            "circular_mean", "circular_var", "circular_sd".
+        chain_axis : int, default -2
+            Axis for chains.
+        draw_axis : int, default -1
+            Axis for draws.
+
+        Returns
+        -------
+        expectation : array-like
+            Weighted expectation values.
+        """
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+        log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+
+        loo_expectation_ufunc = make_ufunc(
+            self._loo_expectation, n_output=1, n_input=2, n_dims=len(axes)
+        )
+        return loo_expectation_ufunc(ary, log_weights, kind)
+
+    def loo_quantile(
+        self,
+        ary,
+        log_weights,
+        prob,
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute weighted quantile with PSIS-LOO-CV weights.
+
+        Parameters
+        ----------
+        ary : array-like
+            Posterior predictive samples.
+        log_weights : array-like
+            Pre-computed PSIS log weights.
+        prob : float
+            Quantile probability in [0, 1].
+        chain_axis : int, default -2
+            Axis for chains.
+        draw_axis : int, default -1
+            Axis for draws.
+
+        Returns
+        -------
+        quantile : array-like
+            Weighted quantile values.
+        """
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+        ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
+        log_weights, _ = process_ary_axes(log_weights, [chain_axis, draw_axis])
+
+        loo_quantile_ufunc = make_ufunc(self._loo_quantile, n_output=1, n_input=2, n_dims=len(axes))
+        return loo_quantile_ufunc(ary, log_weights, prob)
 
     def loo_summary(self, elpd_i, p_loo_i):
         """Aggregate pointwise LOO values.
@@ -1021,22 +1161,54 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         elpd_i : array-like
-            Pointwise expected log predictive density
+            Pointwise expected log predictive density.
         p_loo_i : array-like
-            Pointwise effective number of parameters
+            Pointwise effective number of parameters.
 
         Returns
         -------
         elpd : float
-            Total expected log predictive density
+            Total expected log predictive density.
         elpd_se : float
-            Standard error of elpd
+            Standard error of elpd.
         p_loo : float
-            Total effective number of parameters
+            Total effective number of parameters.
         lppd : float
-            Log pointwise predictive density
+            Log pointwise predictive density.
         """
-        return self._loo_summary(elpd_i, p_loo_i)
+        return self._summary(elpd_i, p_loo_i)
+
+    def loo_r2(self, y_obs, ypred_loo, n_simulations=4000, circular=False, random_state=42):
+        """Compute LOO-adjusted R-squared using Dirichlet-weighted bootstrap.
+
+        Parameters
+        ----------
+        y_obs : array-like
+            Observed values.
+        ypred_loo : array-like
+            LOO predictions (same shape as y_obs).
+        n_simulations : int, default 4000
+            Number of Dirichlet-weighted bootstrap samples.
+        circular : bool, default False
+            Whether the variable is circular (angles in radians).
+        random_state : int, default 42
+            Random seed for reproducibility.
+
+        Returns
+        -------
+        loo_r_squared : array-like
+            R-squared samples with shape (n_simulations,).
+        """
+        y_obs = np.asarray(y_obs).ravel()
+        ypred_loo = np.asarray(ypred_loo).ravel()
+
+        return self._loo_r2(
+            y_obs,
+            ypred_loo,
+            n_simulations=n_simulations,
+            circular=circular,
+            random_state=random_state,
+        )
 
 
 array_stats = BaseArray()

@@ -1,15 +1,17 @@
 """Test score functions for PSIS-LOO-CV."""
 
 # pylint: disable=redefined-outer-name, unused-argument
-import numpy as np
 import pytest
-from numpy.testing import assert_almost_equal
 
 from ..helpers import importorskip
 
+np = importorskip("numpy")
 azb = importorskip("arviz_base")
 
-from arviz_stats import loo, loo_score
+from numpy.testing import assert_almost_equal
+
+from arviz_stats import loo_score
+from arviz_stats.loo.helper_loo import _get_r_eff, _prepare_loo_inputs
 
 
 def test_loo_score_invalid_kind(centered_eight):
@@ -22,16 +24,6 @@ def test_loo_score_invalid_var_name(centered_eight):
         loo_score(centered_eight, var_name="nonexistent")
 
 
-def test_loo_score_mismatched_log_weights_pareto_k(centered_eight):
-    loo_result = loo(centered_eight, pointwise=True)
-
-    with pytest.raises(ValueError, match="Both log_weights and pareto_k must be provided together"):
-        loo_score(centered_eight, log_weights=loo_result.log_weights, pareto_k=None)
-
-    with pytest.raises(ValueError, match="Both log_weights and pareto_k must be provided together"):
-        loo_score(centered_eight, log_weights=None, pareto_k=loo_result.pareto_k)
-
-
 @pytest.mark.parametrize("kind", ["crps", "scrps"])
 def test_loo_score_basic(centered_eight, kind):
     result = loo_score(centered_eight, kind=kind)
@@ -40,22 +32,10 @@ def test_loo_score_basic(centered_eight, kind):
     assert hasattr(result, "se")
     assert np.isfinite(result.mean)
     assert np.isfinite(result.se)
+    assert result.se >= 0
 
-
-@pytest.mark.parametrize("kind", ["crps", "scrps"])
-def test_loo_score_log_weights(centered_eight, kind):
-    loo_result = loo(centered_eight, pointwise=True)
-
-    r1 = loo_score(centered_eight, kind=kind)
-    r2 = loo_score(
-        centered_eight,
-        log_weights=loo_result.log_weights,
-        pareto_k=loo_result.pareto_k,
-        kind=kind,
-    )
-
-    assert_almost_equal(r1.mean, r2.mean, decimal=10)
-    assert_almost_equal(r1.se, r2.se, decimal=10)
+    if kind == "crps":
+        assert result.mean <= 0
 
 
 @pytest.mark.parametrize("kind", ["crps", "scrps"])
@@ -88,10 +68,16 @@ def test_loo_score_pointwise(centered_eight, kind):
     assert hasattr(result, "mean")
     assert hasattr(result, "se")
     assert hasattr(result, "pointwise")
+    assert hasattr(result, "pareto_k")
     assert np.isfinite(result.mean)
     assert np.isfinite(result.se)
     assert result.pointwise.shape == (8,)
     assert np.all(np.isfinite(result.pointwise.values))
+    assert result.pareto_k.shape == (8,)
+    assert np.all(np.isfinite(result.pareto_k.values))
+
+    if kind == "crps":
+        assert np.all(result.pointwise.values <= 0)
 
 
 def test_loo_score_namedtuple_names(centered_eight):
@@ -170,3 +156,31 @@ def test_loo_score_pointwise_shape_multidim():
     result = loo_score(multi_var_data, kind="crps", pointwise=True)
 
     assert result.pointwise.shape == (5,)
+
+
+@pytest.mark.parametrize("kind", ["crps", "scrps"])
+def test_loo_score_precomputed_weights(centered_eight, kind):
+    result_auto = loo_score(centered_eight, kind=kind, pointwise=True)
+
+    loo_inputs = _prepare_loo_inputs(centered_eight, None)
+    log_likelihood = loo_inputs.log_likelihood
+
+    log_weights_computed, pareto_k_computed = log_likelihood.azstats.psislw(
+        dim=["chain", "draw"],
+        r_eff=_get_r_eff(centered_eight, loo_inputs.n_samples),
+    )
+
+    result_precomputed = loo_score(
+        centered_eight,
+        kind=kind,
+        pointwise=True,
+        log_weights=log_weights_computed,
+        pareto_k=pareto_k_computed,
+    )
+
+    assert_almost_equal(result_precomputed.mean, result_auto.mean, decimal=10)
+    assert_almost_equal(result_precomputed.se, result_auto.se, decimal=10)
+    assert_almost_equal(
+        result_precomputed.pointwise.values, result_auto.pointwise.values, decimal=10
+    )
+    assert_almost_equal(result_precomputed.pareto_k.values, result_auto.pareto_k.values, decimal=10)
