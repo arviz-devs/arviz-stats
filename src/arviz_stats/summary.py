@@ -19,6 +19,7 @@ def summary(
     coords=None,
     sample_dims=None,
     kind="all",
+    fmt="wide",
     ci_prob=None,
     ci_kind=None,
     round_to=2,
@@ -52,6 +53,8 @@ def summary(
         * ``stats_median``: `median`, `mad`, and `ci`.
         * ``diagnostics_median``: `ess_median`, `ess_tail`, `r_hat`, `mcse_median`.
         * ``mc_diagnostics``: `mcse_mean`, `ess_mean`, and `min_ss`.
+    fmt: {'wide', 'long', 'xarray'}
+        Return format is either pandas.DataFrame {'wide', 'long'} or xarray.Dataset {'xarray'}.
     ci_prob : float, optional
         Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``.
     ci_kind : {"hdi", "eti"}, optional
@@ -64,7 +67,8 @@ def summary(
 
     Returns
     -------
-    pandas.DataFrame
+    pandas.DataFrame or xarray.Dataset
+        Return type determined by `fmt` argument.
 
     See Also
     --------
@@ -212,13 +216,18 @@ def summary(
 
         to_concat.extend((mcse_mean, ess_mean, min_ss))
 
-    summary_df = dataset_to_dataframe(
-        xr.concat(to_concat, dim="summary"), sample_dims=["summary"]
-    ).T
-    if (round_to is not None) and (round_to not in ("None", "none")):
-        summary_df = summary_df.round(round_to)
+    summary_result = xr.concat(to_concat, dim="summary")
 
-    return summary_df
+    if fmt == "wide":
+        summary_result = dataset_to_dataframe(summary_result, sample_dims=["summary"]).T
+    elif fmt == "long":
+        summary_result = summary_result.to_dataframe().reset_index().set_index("summary")
+        summary_result.index = list(summary_result.index)
+
+    if (round_to is not None) and (round_to not in ("None", "none")):
+        summary_result = summary_result.round(round_to)
+
+    return summary_result
 
 
 def ci_in_rope(
