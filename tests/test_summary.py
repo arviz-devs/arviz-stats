@@ -409,3 +409,17 @@ def test_hdi_prob_parameter(datatree, prob):
 def test_eti_prob_parameter(datatree, prob):
     result = eti(datatree, prob=prob, var_names=["tau"])
     assert result["tau"].shape == (2,)
+
+
+@pytest.mark.parametrize("fmt", ["wide", "long", "xarray"])
+def test_summary_fmt(datatree, fmt):
+    result = summary(datatree, fmt=fmt, var_names=["mu"])
+    if fmt == "wide":
+        assert "mu" in result.index
+        assert "mean" in result.columns
+    elif fmt == "long":
+        assert "mean" in result.index
+        assert "mu" in result.columns
+    else:
+        assert isinstance(result, xr.Dataset)
+        assert "summary" in result.dims
