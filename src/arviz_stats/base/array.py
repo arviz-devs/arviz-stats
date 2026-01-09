@@ -443,7 +443,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         axes = [ax if ax >= 0 else ary.ndim + ax for ax in axis]
         reordered_axes = [i for i in np.arange(ary.ndim) if i not in axes] + list(axes)
         if weights is not None:
-            assert ary.shape == weights.shape
+            if ary.shape != weights.shape:
+                raise ValueError(
+                    "`weights` must have the same shape as `ary`. "
+                    f"Got ary.shape={ary.shape}, weights.shape={weights.shape}"
+                )
             weights = np.transpose(weights, axes=reordered_axes)
         ary = np.transpose(ary, axes=reordered_axes)
         broadcased_shape = ary.shape[: -len(axes)]
@@ -472,7 +476,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                     ary, bins=bins, range=range, density=density, shape_from_1st=True
                 )
             # ensure broadcasting over range
-            assert range.shape[:-1] == broadcased_shape
+            if range.shape[:-1] != broadcased_shape:
+                raise ValueError(
+                    "`range` has incompatible shape. "
+                    f"Expected shape (*, 2) with leading dimensions {broadcased_shape}, "
+                    f"got range.shape={range.shape}"
+                )
             if weights is not None:
                 # ensure broadcasting over weights
                 histogram_ufunc = make_ufunc(
@@ -493,7 +502,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             )
             return histogram_ufunc(ary, range, shape_from_1st=True)
         # ensure broadcasting over bins
-        assert bins.shape[:-1] == broadcased_shape
+        if bins.shape[:-1] != broadcased_shape:
+            raise ValueError(
+                "`bins` has incompatible shape. "
+                f"Expected leading dimensions {broadcased_shape}, "
+                f"got bins.shape={bins.shape}"
+            )
         if (range is None) or (np.size(range) == 2):
             # avoid broadcasting over range
             if weights is not None:
@@ -516,7 +530,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             )
             return histogram_ufunc(ary, bins, shape_from_1st=True)
         # ensure broadcasting over range
-        assert range.shape[:-1] == broadcased_shape
+        if range.shape[:-1] != broadcased_shape:
+            raise ValueError(
+                "`range` has incompatible shape. "
+                f"Expected shape (*, 2) with leading dimensions {broadcased_shape}, "
+                f"got range.shape={range.shape}"
+            )
         if weights is not None:
             # ensure broadcasting over weights
             histogram_ufunc = make_ufunc(
