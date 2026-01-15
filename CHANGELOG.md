@@ -1,3 +1,57 @@
+<a id="v0.8.0"></a>
+# [v0.8.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v0.8.0) - 2026-01-15
+
+## What's Changed
+
+### New features
+
+* Add original Pareto k to `ELPDData` for moment matching by [@jordandeklerk](https://github.com/jordandeklerk) in [#246](https://github.com/arviz-devs/arviz-stats/pull/246)
+* Track full importance weights and compute `n_eff_i` in moment matching by [@jordandeklerk](https://github.com/jordandeklerk) in [#248](https://github.com/arviz-devs/arviz-stats/pull/248)
+* Add group argument to residual_r2 and bayesian_r2 by [@aloctavodia](https://github.com/aloctavodia) in [#254](https://github.com/arviz-devs/arviz-stats/pull/254)
+* Add mean and median functions, use consistent rounding by [@aloctavodia](https://github.com/aloctavodia) in [#255](https://github.com/arviz-devs/arviz-stats/pull/255)
+* Add `calculate_khat_bin_edges` for Pareto k diagnostics by [@jordandeklerk](https://github.com/jordandeklerk) in [#257](https://github.com/arviz-devs/arviz-stats/pull/257)
+* Expose moment matched log-weights by [@jordandeklerk](https://github.com/jordandeklerk) in [#253](https://github.com/arviz-devs/arviz-stats/pull/253)
+* Change internal Pareto stacking dimension name by [@jordandeklerk](https://github.com/jordandeklerk) in [#259](https://github.com/arviz-devs/arviz-stats/pull/259)
+* Add array-only interface for `loo()` by [@jordandeklerk](https://github.com/jordandeklerk) in [#251](https://github.com/arviz-devs/arviz-stats/pull/251)
+* Add mixture importance sampling LOO-CV support by [@jordandeklerk](https://github.com/jordandeklerk) in [#260](https://github.com/arviz-devs/arviz-stats/pull/260)
+* Add function to weight predictions by [@aloctavodia](https://github.com/aloctavodia) in [#263](https://github.com/arviz-devs/arviz-stats/pull/263)
+* Add bfmi by [@aloctavodia](https://github.com/aloctavodia) in [#270](https://github.com/arviz-devs/arviz-stats/pull/270)
+* Add top_only argument and match density by [@aloctavodia](https://github.com/aloctavodia) in [#272](https://github.com/arviz-devs/arviz-stats/pull/272)
+* Add function to compute density diagnostics by [@aloctavodia](https://github.com/aloctavodia) in [#273](https://github.com/arviz-devs/arviz-stats/pull/273)
+* Add fmt argument to summary by [@aloctavodia](https://github.com/aloctavodia) in [#280](https://github.com/arviz-devs/arviz-stats/pull/280)
+
+### Maintenance and bug fixes
+
+* Fix `r2_score` and add more R2 flavors by [@aloctavodia](https://github.com/aloctavodia) in [#242](https://github.com/arviz-devs/arviz-stats/pull/242)
+* Use faster cdf for hypergeometric by [@aloctavodia](https://github.com/aloctavodia) in [#256](https://github.com/arviz-devs/arviz-stats/pull/256)
+* Fix bug, remove bootstrapping, and handle residuals for ppc_pava by [@aloctavodia](https://github.com/aloctavodia) in [#261](https://github.com/arviz-devs/arviz-stats/pull/261)
+* Fix histogram and ecdf for multiple models by [@aloctavodia](https://github.com/aloctavodia) in [#264](https://github.com/arviz-devs/arviz-stats/pull/264)
+* Fix qds for plotting by [@aloctavodia](https://github.com/aloctavodia) in [#266](https://github.com/arviz-devs/arviz-stats/pull/266)
+* Add numba to docs tox environment by [@jordandeklerk](https://github.com/jordandeklerk) in [#268](https://github.com/arviz-devs/arviz-stats/pull/268)
+* Centralize PSIS-LOO-CV computations in `array` layer by [@jordandeklerk](https://github.com/jordandeklerk) in [#267](https://github.com/arviz-devs/arviz-stats/pull/267)
+* Fix finite-sample bias in PSIS-LOO CRPS/SCRPS by [@jordandeklerk](https://github.com/jordandeklerk) in [#271](https://github.com/arviz-devs/arviz-stats/pull/271)
+* Fix and simplify computation for rootogram data also adds option for median and mode by [@aloctavodia](https://github.com/aloctavodia) in [#274](https://github.com/arviz-devs/arviz-stats/pull/274)
+* Use processed dts in difference_ecdf_pit by [@aloctavodia](https://github.com/aloctavodia) in [#276](https://github.com/arviz-devs/arviz-stats/pull/276)
+* Bump the actions group with 2 updates by [@dependabot](https://github.com/dependabot)[bot] in [#277](https://github.com/arviz-devs/arviz-stats/pull/277)
+* Move more LOO functions into the `array` layer by [@jordandeklerk](https://github.com/jordandeklerk) in [#275](https://github.com/arviz-devs/arviz-stats/pull/275)
+* Return non finite values unmodified by [@aloctavodia](https://github.com/aloctavodia) in [#278](https://github.com/arviz-devs/arviz-stats/pull/278)
+
+### Documentation
+
+* Add version attribute and api crosref by [@OriolAbril](https://github.com/OriolAbril) in [#245](https://github.com/arviz-devs/arviz-stats/pull/245)
+* Correct some minor grammar issues by [@star1327p](https://github.com/star1327p) in [#247](https://github.com/arviz-devs/arviz-stats/pull/247)
+* Add link to moment matching EABM chapter by [@jordandeklerk](https://github.com/jordandeklerk) in [#252](https://github.com/arviz-devs/arviz-stats/pull/252)
+* Add link to EABM for posterior corrections by [@jordandeklerk](https://github.com/jordandeklerk) in [#265](https://github.com/arviz-devs/arviz-stats/pull/265)
+
+## New Contributors
+
+* [@tomicapretto](https://github.com/tomicapretto) made their first contribution in [#282](https://github.com/arviz-devs/arviz-stats/pull/282)
+
+**Full Changelog**: https://github.com/arviz-devs/arviz-stats/compare/v0.7.0...v0.8.0
+
+[Changes][v0.8.0]
+
+
 <a id="v0.7.0"></a>
 # [v0.7.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v0.7.0) - 2025-11-11
 
@@ -199,6 +253,7 @@
 [Changes][v.0.4.0]
 
 
+[v0.8.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.7.0...v0.8.0
 [v0.7.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.6.0...v0.7.0
 [v0.6.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.5.0...v0.6.0
 [v0.5.0]: https://github.com/arviz-devs/arviz-stats/compare/v.0.4.0...v0.5.0
