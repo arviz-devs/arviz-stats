@@ -200,5 +200,5 @@ def weight_predictions(
         },
         sample_dims=list(new_idatas[0].dims.keys()),
     )
-
+    weighted_samples["observed_data"] = dts[0].observed_data
     return weighted_samples
