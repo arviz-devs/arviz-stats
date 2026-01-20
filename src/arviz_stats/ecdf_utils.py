@@ -100,6 +100,11 @@ def ecdf_pit(vals, ci_prob, n_simulations, n_chains=1, rng=None):
     )
 
     lower, upper = get_pointwise_confidence_band(prob_pointwise, n_draws, eval_points)
+    # Ensure the bands start at 0 and end at 1
+    eval_points = np.concatenate(([0.0], eval_points, [1.0]))
+    ecdf = np.concatenate(([0.0], ecdf, [1.0]))
+    lower = np.concatenate(([0.0], lower, [1.0]))
+    upper = np.concatenate(([0.0], upper, [1.0]))
 
     return eval_points, ecdf, lower, upper
 
