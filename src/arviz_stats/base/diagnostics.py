@@ -6,10 +6,10 @@ from collections.abc import Sequence
 
 import numpy as np
 from scipy import stats
+from scipy.special import logsumexp
 
 from arviz_stats.base.circular_utils import circular_diff, circular_mean, circular_sd, circular_var
 from arviz_stats.base.core import _CoreBase
-from arviz_stats.base.stats_utils import logsumexp
 from arviz_stats.base.stats_utils import not_valid as _not_valid
 
 
