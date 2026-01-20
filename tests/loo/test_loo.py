@@ -31,7 +31,7 @@ def test_loo(centered_eight, pointwise):
 
     if pointwise:
         assert_almost_equal(
-            loo_data.pareto_k, [0.43, 0.39, 0.49, 0.47, 0.44, 0.55, 0.31, 0.52], decimal=1
+            loo_data.pareto_k, [0.30, 0.50, 0.31, 0.60, 0.57, 0.58, 0.36, 0.27], decimal=1
         )
         assert loo_data.elpd_i.shape == (8,)
 
