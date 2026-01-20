@@ -33,8 +33,8 @@ def test_loo_expectations_invalid_var_name(centered_eight):
 @pytest.mark.parametrize(
     "kind, probs, expected_vals",
     [
-        ("mean", None, 3.81),
-        ("quantile", [0.25, 0.75], [-6.27, 14.44]),
+        ("mean", None, 3.18),
+        ("quantile", [0.25, 0.75], [-7.78, 13.70]),
     ],
 )
 def test_loo_expectations(centered_eight, kind, probs, expected_vals):

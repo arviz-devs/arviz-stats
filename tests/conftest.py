@@ -389,8 +389,8 @@ def mock_wrapper_reloo(non_centered_eight):
             obs_data = self.data.observed_data["obs"]
             all_indices = list(range(len(obs_data)))
             all_indices.remove(idx)
-            modified_obs = obs_data.isel(obs_dim_0=all_indices)
-            excluded_obs = obs_data.isel(obs_dim_0=idx)
+            modified_obs = obs_data.isel(school=all_indices)
+            excluded_obs = obs_data.isel(school=idx)
             return modified_obs, excluded_obs
 
         def sample(self, modified_observed_data):
@@ -402,8 +402,7 @@ def mock_wrapper_reloo(non_centered_eight):
         def log_likelihood__i(self, excluded_obs, idata__i):
             posterior = idata__i.posterior
             theta = posterior["theta"]
-            obs_idx = int(excluded_obs.obs_dim_0.values)
-            theta_i = theta.isel(school=obs_idx)
+            theta_i = theta.sel(school=excluded_obs.school.item())
             sigma = 12.5
             log_lik_values = (
                 -0.5 * np.log(2 * np.pi * sigma**2)
