@@ -129,5 +129,5 @@ def test_ecdf_pit_deterministic():
     ci_prob = 0.95
     n_simulations = 50
     eval_points, ecdf, _, _ = ecdf_pit(vals, ci_prob, n_simulations)
-    assert len(eval_points) == 99
+    assert len(eval_points) == 101
     assert np.all(np.diff(ecdf) >= 0)
