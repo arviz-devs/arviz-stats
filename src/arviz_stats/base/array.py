@@ -1210,5 +1210,69 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             random_state=random_state,
         )
 
+    def srs_estimator(self, y_sample, n_data_points, subsample_size):
+        """Compute simple random sampling estimate for subsampled LOO.
+
+        Parameters
+        ----------
+        y_sample : array-like
+            Values of the statistic for the subsample, shape (m,).
+        n_data_points : int
+            Total number of data points (N).
+        subsample_size : int
+            Number of observations in the subsample (m).
+
+        Returns
+        -------
+        y_hat : float
+            The estimated statistic using simple random sampling.
+        var_y_hat : float
+            The variance of the estimator (sampling uncertainty).
+        hat_var_y : float
+            The estimated variance of the statistic.
+        """
+        y_sample = np.asarray(y_sample).ravel()
+        return self._srs_estimator(y_sample, n_data_points, subsample_size)
+
+    def diff_srs_estimator(
+        self,
+        elpd_loo_i,
+        lpd_approx_sample,
+        lpd_approx_all,
+        n_data_points,
+        subsample_size,
+    ):
+        """Difference estimator for subsampled LOO.
+
+        Parameters
+        ----------
+        elpd_loo_i : array-like
+            Pointwise ELPD values for the subsample, shape (m,).
+        lpd_approx_sample : array-like
+            LPD approximation values for the subsample, shape (m,).
+        lpd_approx_all : array-like
+            LPD approximation values for the full dataset, shape (N,).
+        n_data_points : int
+            Total number of data points (N).
+        subsample_size : int
+            Number of observations in the subsample (m).
+
+        Returns
+        -------
+        elpd_loo_hat : float
+            The estimated ELPD using the difference estimator.
+        subsampling_se : float
+            The standard error due to subsampling uncertainty.
+        total_se : float
+            The total standard error (approximation + sampling uncertainty).
+        """
+        elpd_loo_i = np.asarray(elpd_loo_i).ravel()
+        lpd_approx_sample = np.asarray(lpd_approx_sample).ravel()
+        lpd_approx_all = np.asarray(lpd_approx_all).ravel()
+
+        return self._diff_srs_estimator(
+            elpd_loo_i, lpd_approx_sample, lpd_approx_all, n_data_points, subsample_size
+        )
+
 
 array_stats = BaseArray()

@@ -978,5 +978,72 @@ class BaseDataArray:
             kwargs={"round_to": round_to, "skipna": skipna, "axis": np.arange(-len(dims), 0, 1)},
         )
 
+    def srs_estimator(self, da, n_data_points, subsample_size):
+        """Compute simple random sampling estimate for subsampled LOO on DataArray.
+
+        Parameters
+        ----------
+        da : DataArray
+            Values of the statistic for the subsample.
+        n_data_points : int
+            Total number of data points (N).
+        subsample_size : int
+            Number of observations in the subsample (m).
+
+        Returns
+        -------
+        y_hat : float
+            The estimated statistic using simple random sampling.
+        var_y_hat : float
+            The variance of the estimator (sampling uncertainty).
+        hat_var_y : float
+            The estimated variance of the statistic.
+        """
+        return self.array_class.srs_estimator(
+            np.asarray(da).ravel(),
+            n_data_points,
+            subsample_size,
+        )
+
+    def diff_srs_estimator(
+        self,
+        elpd_loo_i_da,
+        lpd_approx_sample_da,
+        lpd_approx_all_da,
+        n_data_points,
+        subsample_size,
+    ):
+        """Difference estimator for subsampled LOO on DataArrays.
+
+        Parameters
+        ----------
+        elpd_loo_i_da : DataArray
+            Pointwise ELPD values for the subsample.
+        lpd_approx_sample_da : DataArray
+            LPD approximation values for the subsample.
+        lpd_approx_all_da : DataArray
+            LPD approximation values for the full dataset.
+        n_data_points : int
+            Total number of data points (N).
+        subsample_size : int
+            Number of observations in the subsample (m).
+
+        Returns
+        -------
+        elpd_loo_hat : float
+            The estimated ELPD using the difference estimator.
+        subsampling_se : float
+            The standard error due to subsampling uncertainty.
+        total_se : float
+            The total standard error (approximation + sampling uncertainty).
+        """
+        return self.array_class.diff_srs_estimator(
+            np.asarray(elpd_loo_i_da).ravel(),
+            np.asarray(lpd_approx_sample_da).ravel(),
+            np.asarray(lpd_approx_all_da).ravel(),
+            n_data_points,
+            subsample_size,
+        )
+
 
 dataarray_stats = BaseDataArray(array_class=array_stats)

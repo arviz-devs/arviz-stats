@@ -6,10 +6,10 @@ from collections.abc import Sequence
 
 import numpy as np
 from scipy import stats
-from scipy.special import logsumexp
 
 from arviz_stats.base.circular_utils import circular_diff, circular_mean, circular_sd, circular_var
 from arviz_stats.base.core import _CoreBase
+from arviz_stats.base.stats_utils import logsumexp
 from arviz_stats.base.stats_utils import not_valid as _not_valid
 
 
@@ -717,8 +717,148 @@ class _DiagnosticsBase(_CoreBase):
         return elpd_i, p_loo_i, mix_log_weights
 
     @staticmethod
+    def _srs_estimator(y_sample, n_data_points, subsample_size):
+        """
+        Calculate the SRS estimator for PSIS-LOO-CV with sub-sampling.
+
+        Parameters
+        ----------
+        y_sample : 1D array
+            Values of the statistic (e.g., p_loo) for the subsample, shape (m,).
+        n_data_points : int
+            Total number of data points (N).
+        subsample_size : int
+            Number of observations in the subsample (m).
+
+        Returns
+        -------
+        y_hat : float
+            The estimated statistic using simple random sampling.
+        var_y_hat : float
+            The variance of the estimator (sampling uncertainty).
+        hat_var_y : float
+            The estimated variance of the statistic.
+        """
+        y_sample = np.asarray(y_sample).ravel()
+        y_sample_mean = np.mean(y_sample)
+        y_hat = n_data_points * y_sample_mean
+
+        if subsample_size > 1:
+            y_sample_var = np.var(y_sample, ddof=1)
+            var_y_hat = (
+                (n_data_points**2)
+                * (1 - subsample_size / n_data_points)
+                * y_sample_var
+                / subsample_size
+            )
+            hat_var_y = n_data_points * y_sample_var
+        else:
+            var_y_hat = np.inf
+            hat_var_y = np.inf
+
+        return y_hat, var_y_hat, hat_var_y
+
+    @staticmethod
+    def _diff_srs_estimator(
+        elpd_loo_i_sample,
+        lpd_approx_sample,
+        lpd_approx_all,
+        n_data_points,
+        subsample_size,
+    ):
+        """
+        Calculate the difference estimator for PSIS-LOO-CV with sub-sampling.
+
+        Parameters
+        ----------
+        elpd_loo_i_sample : 1D array
+            Pointwise ELPD values for the subsample, shape (m,).
+        lpd_approx_sample : 1D array
+            LPD approximation values for the subsample, shape (m,).
+        lpd_approx_all : 1D array
+            LPD approximation values for the full dataset, shape (N,).
+        n_data_points : int
+            Total number of data points (N).
+        subsample_size : int
+            Number of observations in the subsample (m).
+
+        Returns
+        -------
+        elpd_loo_hat : float
+            The estimated ELPD using the difference estimator.
+        subsampling_se : float
+            The standard error due to subsampling uncertainty.
+        total_se : float
+            The total standard error (approximation + sampling uncertainty).
+        """
+        elpd_sample = np.asarray(elpd_loo_i_sample, dtype=float).ravel()
+        approx_sample = np.asarray(lpd_approx_sample, dtype=float).ravel()
+        approx_all = np.asarray(lpd_approx_all, dtype=float).ravel()
+
+        if elpd_sample.size != approx_sample.size:
+            raise ValueError("Subsampled ELPD and approximation must have matching shapes.")
+
+        finite_mask = np.isfinite(elpd_sample) & np.isfinite(approx_sample)
+        valid_count = int(np.count_nonzero(finite_mask))
+
+        if valid_count == 0:
+            return np.nan, np.inf, np.inf
+
+        elpd_valid = elpd_sample[finite_mask]
+        approx_valid = approx_sample[finite_mask]
+
+        pointwise_diff = elpd_valid - approx_valid
+
+        lpd_approx_sum_all = np.nansum(approx_all)
+        scaled_mean_pointwise_diff = n_data_points * np.nanmean(pointwise_diff)
+        elpd_loo_estimate = lpd_approx_sum_all + scaled_mean_pointwise_diff
+
+        subsampling_se = np.inf
+        total_se = np.inf
+
+        effective_m = min(valid_count, subsample_size)
+        if effective_m > 1 and n_data_points > 0:
+            variance = np.nanvar(pointwise_diff, ddof=1)
+
+            if np.isfinite(variance):
+                finite_pop_correction = max(0.0, 1 - effective_m / n_data_points)
+                subsampling_variance = (
+                    (n_data_points**2) * finite_pop_correction * variance / effective_m
+                )
+                subsampling_variance = np.nan_to_num(subsampling_variance, nan=np.inf)
+
+                subsampling_se = (
+                    np.sqrt(subsampling_variance) if np.isfinite(subsampling_variance) else np.inf
+                )
+
+                lpd_approx_sq_sum_all = np.nansum(approx_all**2)
+                mean_sq_diff = np.nanmean(elpd_valid**2 - approx_valid**2)
+                scaled_mean_sq_diff = n_data_points * mean_sq_diff
+
+                total_variance_estimate = (
+                    lpd_approx_sq_sum_all
+                    + scaled_mean_sq_diff
+                    - (1 / n_data_points)
+                    * (
+                        scaled_mean_pointwise_diff**2
+                        - subsampling_variance
+                        + 2 * lpd_approx_sum_all * elpd_loo_estimate
+                        - lpd_approx_sum_all**2
+                    )
+                )
+
+                if np.isfinite(total_variance_estimate):
+                    total_variance_estimate = max(0.0, total_variance_estimate)
+                    total_se = np.sqrt(total_variance_estimate)
+                else:
+                    total_se = np.inf
+
+        return elpd_loo_estimate, subsampling_se, total_se
+
+    @staticmethod
     def _weighted_quantile(ary, weights, prob):
-        """Compute weighted quantile.
+        """
+        Compute weighted quantile.
 
         Parameters
         ----------
