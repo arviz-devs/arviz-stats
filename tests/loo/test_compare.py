@@ -471,3 +471,17 @@ def test_compare_order_stat_check_subsampling(centered_eight_with_sigma, rng):
     result = compare(models)
     assert len(result) == 12
     assert "subsampling_dse" in result.columns
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_reference(centered_eight, non_centered_eight):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict, reference="centered")
+
+    assert result.loc["centered"]["elpd_diff"] == 0.0
+    assert result.loc["centered"]["dse"] == 0.0
+
+    ref_elpd = result.loc["centered"]["elpd"]
+    other_elpd = result.loc["non_centered"]["elpd"]
+    expected_diff = ref_elpd - other_elpd
+    assert_almost_equal(result.loc["non_centered"]["elpd_diff"], expected_diff, decimal=12)
