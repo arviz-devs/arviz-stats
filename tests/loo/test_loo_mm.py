@@ -255,6 +255,7 @@ def capture_log_lik_call(container, upars_da, _):
     return xr.zeros_like(upars_da.isel(uparam=0, drop=True))
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_psis_matches_r_reference(roaches_r_example):
     example = roaches_r_example
     loo_result = loo(example["data_tree"], pointwise=True, var_name="log_lik")

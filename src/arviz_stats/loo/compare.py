@@ -18,6 +18,7 @@ def compare(
     compare_dict,
     method="stacking",
     var_name=None,
+    reference=None,
 ):
     r"""Compare models based on their expected log pointwise predictive density (ELPD).
 
@@ -52,6 +53,12 @@ def compare(
     var_name: str, optional
         If there is more than a single observed variable in the ``InferenceData``, which
         should be used as the basis for comparison.
+    reference: str, optional
+        Name of the reference model used for computing ``elpd_diff``. If ``None`` (default),
+        the best-performing model (highest ELPD) is used as the reference. When specified,
+        all ``elpd_diff`` values are computed relative to this model, which will have
+        ``elpd_diff = 0``. This is useful for comparing against a baseline model, null model,
+        or a specific model of interest rather than the top-ranked model.
 
     Returns
     -------
@@ -175,6 +182,12 @@ def compare(
             f"https://doi.org/10.1214/17-BA1091."
         )
 
+    if reference is not None and reference not in names:
+        raise ValueError(
+            f"Reference model '{reference}' not found in compare_dict. "
+            f"Available models: {', '.join(names)}"
+        )
+
     ics = pd.DataFrame.from_dict(ics_dict, orient="index")
     ics.sort_values(by="elpd", inplace=True, ascending=False)
     ics["elpd_i"] = ics["elpd_i"].apply(lambda x: x.values.flatten())
@@ -223,8 +236,8 @@ def compare(
         weights = (z_rv / np.sum(z_rv)).to_numpy()
 
     if np.any(weights):
-        best_model_name = ics.index[0]
-        best_elpd_data = ics_dict[best_model_name]
+        ref_name = reference if reference is not None else ics.index[0]
+        ref_elpd_data = ics_dict[ref_name]
         n_models = len(ics.index)
         mismatched_pairs = []
 
@@ -232,13 +245,13 @@ def compare(
             res = ics.loc[val]
             current_elpd_data = ics_dict[val]
 
-            if idx == 0:
+            if val == ref_name:
                 d_ic = 0.0
                 d_std_err = 0.0
                 subsampling_d_std_err = 0.0 if has_subsampling else None
             else:
                 diff_result = _compute_elpd_diff_subsampled(
-                    best_elpd_data,
+                    ref_elpd_data,
                     current_elpd_data,
                 )
 
@@ -247,7 +260,7 @@ def compare(
                 subsampling_d_std_err = diff_result.get("subsampling_dse")
 
                 if diff_result.get("subsample_mismatch"):
-                    mismatched_pairs.append((best_model_name, val))
+                    mismatched_pairs.append((ref_name, val))
 
             std_err = ses.loc[val]
             weight = weights[idx]
