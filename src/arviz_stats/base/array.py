@@ -1210,7 +1210,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             random_state=random_state,
         )
 
-    def srs_estimator(self, y_sample, n_data_points, subsample_size):
+    def srs_estimator(self, y_sample, n_data_points):
         """Compute simple random sampling estimate for subsampled LOO.
 
         Parameters
@@ -1219,8 +1219,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Values of the statistic for the subsample, shape (m,).
         n_data_points : int
             Total number of data points (N).
-        subsample_size : int
-            Number of observations in the subsample (m).
 
         Returns
         -------
@@ -1232,7 +1230,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             The estimated variance of the statistic.
         """
         y_sample = np.asarray(y_sample).ravel()
-        return self._srs_estimator(y_sample, n_data_points, subsample_size)
+        return self._srs_estimator(y_sample, n_data_points)
 
     def diff_srs_estimator(
         self,
@@ -1240,7 +1238,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         lpd_approx_sample,
         lpd_approx_all,
         n_data_points,
-        subsample_size,
     ):
         """Difference estimator for subsampled LOO.
 
@@ -1254,8 +1251,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             LPD approximation values for the full dataset, shape (N,).
         n_data_points : int
             Total number of data points (N).
-        subsample_size : int
-            Number of observations in the subsample (m).
 
         Returns
         -------
@@ -1271,7 +1266,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         lpd_approx_all = np.asarray(lpd_approx_all).ravel()
 
         return self._diff_srs_estimator(
-            elpd_loo_i, lpd_approx_sample, lpd_approx_all, n_data_points, subsample_size
+            elpd_loo_i, lpd_approx_sample, lpd_approx_all, n_data_points
         )
 
 

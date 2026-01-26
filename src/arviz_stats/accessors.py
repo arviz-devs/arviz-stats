@@ -322,12 +322,11 @@ class _BaseAccessor:
         """Compute mode for all variables in the dataset."""
         return self._apply("mode", dim=dim, **kwargs)
 
-    def srs_estimator(self, n_data_points, subsample_size, **kwargs):
+    def srs_estimator(self, n_data_points, **kwargs):
         """Compute simple random sampling estimate for subsampled LOO."""
         return self._apply(
             "srs_estimator",
             n_data_points=n_data_points,
-            subsample_size=subsample_size,
             **kwargs,
         )
 
@@ -336,7 +335,6 @@ class _BaseAccessor:
         lpd_approx_sample,
         lpd_approx_all,
         n_data_points,
-        subsample_size,
         **kwargs,
     ):
         """Difference estimator for subsampled LOO."""
@@ -345,7 +343,6 @@ class _BaseAccessor:
             lpd_approx_sample_da=lpd_approx_sample,
             lpd_approx_all_da=lpd_approx_all,
             n_data_points=n_data_points,
-            subsample_size=subsample_size,
             **kwargs,
         )
 

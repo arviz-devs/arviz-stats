@@ -339,7 +339,6 @@ def loo_subsample(
         lpd_approx_sample=lpd_approx_sample,
         lpd_approx_all=lpd_approx_all,
         n_data_points=loo_inputs.n_data_points,
-        subsample_size=subsample_data.subsample_size,
     )
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
@@ -347,7 +346,6 @@ def loo_subsample(
     p_loo_sample = lpd_approx_sample - elpd_loo_i
     p_loo, _, _ = p_loo_sample.azstats.srs_estimator(
         n_data_points=loo_inputs.n_data_points,
-        subsample_size=subsample_data.subsample_size,
     )
 
     if not pointwise:
@@ -650,7 +648,6 @@ def update_subsample(
         lpd_approx_sample=lpd_approx_sample_da,
         lpd_approx_all=lpd_approx_all,
         n_data_points=loo_inputs.n_data_points,
-        subsample_size=update_data.combined_size,
     )
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
@@ -658,7 +655,6 @@ def update_subsample(
     p_loo_sample = lpd_approx_sample_da - combined_elpd_i_da
     p_loo, _, _ = p_loo_sample.azstats.srs_estimator(
         n_data_points=loo_inputs.n_data_points,
-        subsample_size=update_data.combined_size,
     )
 
     combined_indices = np.concatenate((update_data.old_indices, update_data.new_indices))

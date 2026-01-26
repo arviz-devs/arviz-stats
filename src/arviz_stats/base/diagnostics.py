@@ -717,7 +717,7 @@ class _DiagnosticsBase(_CoreBase):
         return elpd_i, p_loo_i, mix_log_weights
 
     @staticmethod
-    def _srs_estimator(y_sample, n_data_points, subsample_size):
+    def _srs_estimator(y_sample, n_data_points):
         """
         Calculate the SRS estimator for PSIS-LOO-CV with sub-sampling.
 
@@ -727,8 +727,6 @@ class _DiagnosticsBase(_CoreBase):
             Values of the statistic (e.g., p_loo) for the subsample, shape (m,).
         n_data_points : int
             Total number of data points (N).
-        subsample_size : int
-            Number of observations in the subsample (m).
 
         Returns
         -------
@@ -740,6 +738,7 @@ class _DiagnosticsBase(_CoreBase):
             The estimated variance of the statistic.
         """
         y_sample = np.asarray(y_sample).ravel()
+        subsample_size = len(y_sample)
         y_sample_mean = np.mean(y_sample)
         y_hat = n_data_points * y_sample_mean
 
@@ -764,7 +763,6 @@ class _DiagnosticsBase(_CoreBase):
         lpd_approx_sample,
         lpd_approx_all,
         n_data_points,
-        subsample_size,
     ):
         """
         Calculate the difference estimator for PSIS-LOO-CV with sub-sampling.
@@ -779,8 +777,6 @@ class _DiagnosticsBase(_CoreBase):
             LPD approximation values for the full dataset, shape (N,).
         n_data_points : int
             Total number of data points (N).
-        subsample_size : int
-            Number of observations in the subsample (m).
 
         Returns
         -------
@@ -816,14 +812,13 @@ class _DiagnosticsBase(_CoreBase):
         subsampling_se = np.inf
         total_se = np.inf
 
-        effective_m = min(valid_count, subsample_size)
-        if effective_m > 1 and n_data_points > 0:
+        if valid_count > 1 and n_data_points > 0:
             variance = np.nanvar(pointwise_diff, ddof=1)
 
             if np.isfinite(variance):
-                finite_pop_correction = max(0.0, 1 - effective_m / n_data_points)
+                finite_pop_correction = max(0.0, 1 - valid_count / n_data_points)
                 subsampling_variance = (
-                    (n_data_points**2) * finite_pop_correction * variance / effective_m
+                    (n_data_points**2) * finite_pop_correction * variance / valid_count
                 )
                 subsampling_variance = np.nan_to_num(subsampling_variance, nan=np.inf)
 

@@ -978,7 +978,7 @@ class BaseDataArray:
             kwargs={"round_to": round_to, "skipna": skipna, "axis": np.arange(-len(dims), 0, 1)},
         )
 
-    def srs_estimator(self, da, n_data_points, subsample_size):
+    def srs_estimator(self, da, n_data_points):
         """Compute simple random sampling estimate for subsampled LOO on DataArray.
 
         Parameters
@@ -987,8 +987,6 @@ class BaseDataArray:
             Values of the statistic for the subsample.
         n_data_points : int
             Total number of data points (N).
-        subsample_size : int
-            Number of observations in the subsample (m).
 
         Returns
         -------
@@ -1002,7 +1000,6 @@ class BaseDataArray:
         return self.array_class.srs_estimator(
             np.asarray(da).ravel(),
             n_data_points,
-            subsample_size,
         )
 
     def diff_srs_estimator(
@@ -1011,7 +1008,6 @@ class BaseDataArray:
         lpd_approx_sample_da,
         lpd_approx_all_da,
         n_data_points,
-        subsample_size,
     ):
         """Difference estimator for subsampled LOO on DataArrays.
 
@@ -1025,8 +1021,6 @@ class BaseDataArray:
             LPD approximation values for the full dataset.
         n_data_points : int
             Total number of data points (N).
-        subsample_size : int
-            Number of observations in the subsample (m).
 
         Returns
         -------
@@ -1042,7 +1036,6 @@ class BaseDataArray:
             np.asarray(lpd_approx_sample_da).ravel(),
             np.asarray(lpd_approx_all_da).ravel(),
             n_data_points,
-            subsample_size,
         )
 
 
