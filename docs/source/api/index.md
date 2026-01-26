@@ -56,6 +56,8 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.loo_metrics
    arviz_stats.loo_r2
    arviz_stats.loo_score
+   arviz_stats.mean
+   arviz_stats.median
    arviz_stats.metrics
    arviz_stats.mode
    arviz_stats.qds
