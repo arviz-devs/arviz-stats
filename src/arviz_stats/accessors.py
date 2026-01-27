@@ -322,6 +322,30 @@ class _BaseAccessor:
         """Compute mode for all variables in the dataset."""
         return self._apply("mode", dim=dim, **kwargs)
 
+    def srs_estimator(self, n_data_points, **kwargs):
+        """Compute simple random sampling estimate for subsampled LOO."""
+        return self._apply(
+            "srs_estimator",
+            n_data_points=n_data_points,
+            **kwargs,
+        )
+
+    def diff_srs_estimator(
+        self,
+        lpd_approx_sample,
+        lpd_approx_all,
+        n_data_points,
+        **kwargs,
+    ):
+        """Difference estimator for subsampled LOO."""
+        return self._apply(
+            "diff_srs_estimator",
+            lpd_approx_sample_da=lpd_approx_sample,
+            lpd_approx_all_da=lpd_approx_all,
+            n_data_points=n_data_points,
+            **kwargs,
+        )
+
 
 @xr.register_dataarray_accessor("azstats")
 class AzStatsDaAccessor(_BaseAccessor):

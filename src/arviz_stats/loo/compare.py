@@ -431,7 +431,6 @@ def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subs
         diff_approx_sample,
         diff_approx_all,
         elpd_a.n_data_points,
-        diff_sample.size,
     )
 
     return {

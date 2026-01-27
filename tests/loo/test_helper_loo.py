@@ -77,10 +77,9 @@ def test_diff_srs_estimator():
     lpd_approx_sample = xr.DataArray(np.array([-4.5, -5.5, -6.5]))
     lpd_approx_all = xr.DataArray(np.array([-4.5, -5.5, -6.5, -7.5, -8.5]))
     n_data_points = 5
-    subsample_size = 3
 
     elpd_est, subsampling_se, total_se = _diff_srs_estimator(
-        elpd_loo_i_sample, lpd_approx_sample, lpd_approx_all, n_data_points, subsample_size
+        elpd_loo_i_sample, lpd_approx_sample, lpd_approx_all, n_data_points
     )
 
     assert isinstance(elpd_est, float)
@@ -95,9 +94,8 @@ def test_diff_srs_estimator():
 def test_srs_estimator():
     y_sample = xr.DataArray(np.array([1.0, 2.0, 3.0, 4.0]))
     n_data_points = 10
-    subsample_size = 4
 
-    y_hat, var_y_hat, hat_var_y = _srs_estimator(y_sample, n_data_points, subsample_size)
+    y_hat, var_y_hat, hat_var_y = _srs_estimator(y_sample, n_data_points)
 
     expected_y_hat = n_data_points * y_sample.mean().values
 
@@ -846,10 +844,9 @@ def test_diff_srs_estimator_edge_case_full_sample():
     lpd_approx_sample = xr.DataArray([-5.0, -6.0])
     lpd_approx_all = xr.DataArray([-4.0, -5.0])
     n_data_points = 2
-    subsample_size = 2
 
     elpd_est, subsampling_se, total_se = _diff_srs_estimator(
-        elpd_sample, lpd_approx_sample, lpd_approx_all, n_data_points, subsample_size
+        elpd_sample, lpd_approx_sample, lpd_approx_all, n_data_points
     )
 
     assert isinstance(elpd_est, float)

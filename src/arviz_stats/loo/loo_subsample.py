@@ -8,7 +8,6 @@ from xarray_einstats.stats import logsumexp
 from arviz_stats.loo.helper_loo import (
     _check_log_jacobian,
     _compute_loo_results,
-    _diff_srs_estimator,
     _get_r_eff,
     _prepare_full_arrays,
     _prepare_loo_inputs,
@@ -16,7 +15,6 @@ from arviz_stats.loo.helper_loo import (
     _prepare_update_subsample,
     _select_obs_by_coords,
     _select_obs_by_indices,
-    _srs_estimator,
     _warn_pareto_k,
 )
 from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
@@ -337,21 +335,17 @@ def loo_subsample(
 
     warn_mg, good_k = _warn_pareto_k(pareto_k_sample_da, loo_inputs.n_samples)
 
-    elpd_loo_hat, subsampling_se, se = _diff_srs_estimator(
-        elpd_loo_i,
-        lpd_approx_sample,
-        lpd_approx_all,
-        loo_inputs.n_data_points,
-        subsample_data.subsample_size,
+    elpd_loo_hat, subsampling_se, se = elpd_loo_i.azstats.diff_srs_estimator(
+        lpd_approx_sample=lpd_approx_sample,
+        lpd_approx_all=lpd_approx_all,
+        n_data_points=loo_inputs.n_data_points,
     )
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
     # from the subsample
     p_loo_sample = lpd_approx_sample - elpd_loo_i
-    p_loo, _, _ = _srs_estimator(
-        p_loo_sample,
-        loo_inputs.n_data_points,
-        subsample_data.subsample_size,
+    p_loo, _, _ = p_loo_sample.azstats.srs_estimator(
+        n_data_points=loo_inputs.n_data_points,
     )
 
     if not pointwise:
@@ -650,21 +644,17 @@ def update_subsample(
         lpd_approx_all, combined_elpd_i_da, loo_inputs.obs_dims, "__obs__"
     )
 
-    elpd_loo_hat, subsampling_se, se = _diff_srs_estimator(
-        combined_elpd_i_da,
-        lpd_approx_sample_da,
-        lpd_approx_all,
-        loo_inputs.n_data_points,
-        update_data.combined_size,
+    elpd_loo_hat, subsampling_se, se = combined_elpd_i_da.azstats.diff_srs_estimator(
+        lpd_approx_sample=lpd_approx_sample_da,
+        lpd_approx_all=lpd_approx_all,
+        n_data_points=loo_inputs.n_data_points,
     )
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
     # from the subsample
     p_loo_sample = lpd_approx_sample_da - combined_elpd_i_da
-    p_loo, _, _ = _srs_estimator(
-        p_loo_sample,
-        loo_inputs.n_data_points,
-        update_data.combined_size,
+    p_loo, _, _ = p_loo_sample.azstats.srs_estimator(
+        n_data_points=loo_inputs.n_data_points,
     )
 
     combined_indices = np.concatenate((update_data.old_indices, update_data.new_indices))
