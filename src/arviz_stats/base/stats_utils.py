@@ -378,3 +378,10 @@ def round_num(value, precision):
         return round(value, sig_digits - int(np.floor(np.log10(abs(value)))) - 1)
 
     return value
+
+
+def get_decimal_places_from_se(se_val):
+    """Get number of decimal places from standard error value."""
+    two_se = 2 * se_val
+    se_magnitude = np.floor(np.log10(np.abs(two_se))) if two_se != 0 else 0
+    return -int(se_magnitude)
