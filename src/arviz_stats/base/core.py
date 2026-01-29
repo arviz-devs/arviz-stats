@@ -199,16 +199,16 @@ class _CoreBase:
                 width = max(1, width)
             return x_min, x_max, width
 
-        # Sturges histogram bin estimator
+        # Sturges width estimator
         width_sturges = (x_max - x_min) / (np.log2(values.size) + 1)
 
-        # The Freedman-Diaconis histogram bin estimator.
+        # The Freedman-Diaconis width estimator.
         iqr = np.subtract(*self.quantile(values, [0.75, 0.25]))  # pylint: disable=assignment-from-no-return
         width_fd = 2 * iqr * values.size ** (-1 / 3)
 
-        # Correct FD, heuristic to limit the maximal number of bins
-        sqrt_bw = (x_max - x_min) / np.sqrt(values.size)
-        corr_fd = max(width_fd, sqrt_bw / 2)
+        # Correct Freedman-Diaconis. Heuristic to limit the maximal number of bins
+        width_sqrt = (x_max - x_min) / np.sqrt(values.size)
+        corr_fd = max(width_fd, width_sqrt / 2)
 
         if dtype == "i":
             width = np.round(np.min([1, width_sturges, corr_fd])).astype(int)
