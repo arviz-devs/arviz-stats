@@ -206,10 +206,14 @@ class _CoreBase:
         iqr = np.subtract(*self.quantile(values, [0.75, 0.25]))  # pylint: disable=assignment-from-no-return
         width_fd = 2 * iqr * values.size ** (-1 / 3)
 
+        # Correct FD, heuristic to limit the maximal number of bins
+        sqrt_bw = (x_max - x_min) / np.sqrt(values.size)
+        corr_fd = max(width_fd, sqrt_bw / 2)
+
         if dtype == "i":
-            width = np.round(np.max([1, width_sturges, width_fd])).astype(int)
+            width = np.round(np.min([1, width_sturges, corr_fd])).astype(int)
         else:
-            width = np.max([width_sturges, width_fd])
+            width = min(width_sturges, corr_fd)
 
         return x_min, x_max, width
 
@@ -234,7 +238,7 @@ class _CoreBase:
 
         Notes
         -----
-        Computes the width of the bins by taking the maximum of the Sturges and
+        Computes the width of the bins by taking the minimum of the Sturges and
         the Freedman-Diaconis estimators.
         According to numpy `np.histogram` this provides good all around performance.
 

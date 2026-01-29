@@ -447,9 +447,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             weights = np.transpose(weights, axes=reordered_axes)
         ary = np.transpose(ary, axes=reordered_axes)
         broadcased_shape = ary.shape[: -len(axes)]
-        if bins is None:
+
+        if bins is None or bins == "auto":
             bins = self.get_bins(ary, axis=np.arange(-len(axes), 0, dtype=int))
-        if isinstance(bins, int | str):
+        elif isinstance(bins, int):
             # avoid broadcasting over bins -> can't be positional argument
             if (range is None) or (np.size(range) == 2):
                 # avoid broadcasting over range
