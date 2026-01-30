@@ -272,6 +272,7 @@ def _round_summary(summary_result, round_val):
     result = summary_result.copy()
     columns = result.columns
     rounded_columns = set()
+    use_scientific = {}
 
     # Rule 1: ESS columns and min_ss are rounded down to int
     ess_cols = [col for col in columns if col.startswith("ess_") or col == "min_ss"]
@@ -298,9 +299,11 @@ def _round_summary(summary_result, round_val):
         for idx in result.index:
             stat_val = result.loc[idx, stat_col]
             se_val = result.loc[idx, se_col]
-
             decimal_places = get_decimal_places_from_se(se_val)
-            result.loc[idx, stat_col] = round_num(stat_val, decimal_places)
+            if decimal_places < 0:
+                use_scientific[(idx, stat_col)] = True
+            else:
+                result.loc[idx, stat_col] = round_num(stat_val, decimal_places)
 
         rounded_columns.add(stat_col)
         rounded_columns.add(se_col)
@@ -311,13 +314,22 @@ def _round_summary(summary_result, round_val):
             if result[col].dtype.kind == "f":
                 result[col] = result[col].apply(lambda x: round_num(x, round_val))
 
-    # Rule 5:Remove trailing zeros
+    # Rule 5: Format
     for col in columns:
         if result[col].dtype.kind == "f":
             if col == "r_hat":
                 result[col] = result[col].apply(lambda x: f"{x:.2f}" if np.isfinite(x) else x)
             else:
-                result[col] = result[col].apply(lambda x: f"{x:g}" if np.isfinite(x) else x)
+                formatted_values = []
+                for idx, val in zip(result.index, result[col]):
+                    if not np.isfinite(val):
+                        formatted_values.append(val)
+                    elif use_scientific.get((idx, col), False):
+                        formatted_values.append(f"{val:.0e}")
+                    else:
+                        formatted_values.append(f"{val:g}")
+
+                result[col] = formatted_values
 
     return result
 
