@@ -396,7 +396,7 @@ def test_mode_single_value_array():
 def test_summary_zero_variance():
     array = np.ones((4, 100, 2))
     summary_df = summary(array)
-    assert summary_df["sd"].iloc[0] == 0.0
+    assert summary_df["sd"].iloc[0] == "0"
 
 
 @pytest.mark.parametrize("prob", [0.5, 0.89, 0.95])

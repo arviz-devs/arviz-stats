@@ -244,7 +244,7 @@ def summary(
 
     if fmt == "xarray":
         if (round_to is not None) and (round_to not in ("None", "none")):
-            summary_result = summary_result.round(round_val)
+            summary_result = xr.apply_ufunc(round_num, summary_result, round_val, vectorize=True)
     else:
         if round_to == "auto":
             summary_result = _round_summary(summary_result, round_val)
@@ -299,6 +299,8 @@ def _round_summary(summary_result, round_val):
         for idx in result.index:
             stat_val = result.loc[idx, stat_col]
             se_val = result.loc[idx, se_col]
+            if not np.isfinite(se_val):
+                continue
             decimal_places = get_decimal_places_from_se(se_val)
             if decimal_places < 0:
                 use_scientific[(idx, stat_col)] = True
