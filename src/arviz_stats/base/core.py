@@ -210,10 +210,9 @@ class _CoreBase:
         width_sqrt = (x_max - x_min) / np.sqrt(values.size)
         corr_fd = max(width_fd, width_sqrt / 2)
 
+        width = min(width_sturges, corr_fd)
         if dtype == "i":
-            width = np.round(np.min([1, width_sturges, corr_fd])).astype(int)
-        else:
-            width = min(width_sturges, corr_fd)
+            width = np.round(max(1, width)).astype(int)
 
         return x_min, x_max, width
 

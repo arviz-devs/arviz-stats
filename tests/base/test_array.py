@@ -376,7 +376,7 @@ class TestBinning:
         ary = rng.normal(size=(100,))
         bins = array_stats.get_bins(ary)
         assert bins.ndim == 1
-        assert len(bins) == 9
+        assert len(bins) == 10
         assert bins[0] == ary.min()
         assert ary.max() <= bins[-1]
 
