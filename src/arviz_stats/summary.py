@@ -63,21 +63,21 @@ def summary(
         Type of credible interval. Defaults to ``rcParams["stats.ci_kind"]``.
         If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
     round_to : int or {"auto", "none"}, optional
-        Rounding specification. If integer, number of decimal places to round to.
-        If "auto", applies custom rounding rules depending on the statistic (see below).
-        If "none", no rounding is applied. "auto" is intended for display purposes, using it
-        is not recommended when the output will be used for further numerical computations.
-        Defaults to "auto".
-        Auto rounding rules:
-        If "auto", and `fmt` is "xarray" defaults to rcParams["stats.round_to"], else applies
-        the following custom rounding rules:
-        - ESS values (ess_bulk, ess_tail, ess_mean, ess_median, min_ss) are rounded down to int
-        - R-hat always shows 2 digits after the decimal
-        - If a column `stat` and `mcse_stat` are both present the mcse is shown to 2 significant
-        figures, and `stat` is shown with precision based on 2*mcse.
-        - All other floating point numbers are shown to using ``rcParams["stats.round_to"]``.
-        - For all floating point numbers except R-hat, trailing zeros are removed and values are
+        Rounding specification. Defaults to "auto". If integer, number of decimal places to
+        round to. If "none", no rounding is applied. If "auto", and `fmt` is "xarray" defaults to
+        ``rcParams["stats.round_to"]``. If "auto" and `fmt` is in  {"wide", "long"}, applies the
+        following rounding rules:
+
+        * ESS values (ess_bulk, ess_tail, ess_mean, ess_median, min_ss) are rounded down to int
+        * R-hat always shows 2 digits after the decimal
+        * If a column *stat* and *mcse_stat* are both present then the mcse is shown to 2
+          significant figures, and *stat* is shown with precision based on 2*mcse.
+        * All other floating point numbers are shown following ``rcParams["stats.round_to"]``.
+        * For all floating point numbers except R-hat, trailing zeros are removed and values are
         converted to string for consistent display.
+
+        Note: "auto" is intended for display purposes, using it is not recommended when the output
+        will be used for further numerical computations.
     skipna: bool
         If true ignores nan values when computing the summary statistics. Defaults to false.
 
