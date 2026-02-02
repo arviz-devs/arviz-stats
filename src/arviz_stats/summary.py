@@ -64,9 +64,10 @@ def summary(
         If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
     round_to : int or {"auto", "none"}, optional
         Number of decimals used to round results. Defaults to "auto". Use "none" to return raw
-        numbers. If "auto", and `fmt` is "xarray" defaults to rcParams["stats.round_to"], else
-        applies the following custom rounding rules:
-
+        numbers. If you want to further process the results of summary, it is recommended to
+        avoid "auto".
+        If "auto", and `fmt` is "xarray" defaults to rcParams["stats.round_to"], else applies
+        the following custom rounding rules:
         - ESS values (ess_bulk, ess_tail, ess_mean, ess_median, min_ss) are rounded down to int
         - R-hat always shows 2 digits after the decimal
         - If a column `stat` and `mcse_stat` are both present the mcse is shown to 2 significant
@@ -74,9 +75,6 @@ def summary(
         - All other floating point numbers are shown to using ``rcParams["stats.round_to"]``.
         - For all floating point numbers except R-hat, trailing zeros are removed and values are
         converted to string for consistent display.
-
-        If you want to further process the results of summary, it is recommended to avoid "auto".
-
     skipna: bool
         If true ignores nan values when computing the summary statistics. Defaults to false.
 
