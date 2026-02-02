@@ -74,7 +74,7 @@ def summary(
           significant figures, and *stat* is shown with precision based on 2*mcse.
         * All other floating point numbers are shown following ``rcParams["stats.round_to"]``.
         * For all floating point numbers except R-hat, trailing zeros are removed and values are
-        converted to string for consistent display.
+          converted to string for consistent display.
 
         Note: "auto" is intended for display purposes, using it is not recommended when the output
         will be used for further numerical computations.
