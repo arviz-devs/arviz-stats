@@ -63,9 +63,12 @@ def summary(
         Type of credible interval. Defaults to ``rcParams["stats.ci_kind"]``.
         If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
     round_to : int or {"auto", "none"}, optional
-        Number of decimals used to round results. Defaults to "auto". Use "none" to return raw
-        numbers. If you want to further process the results of summary, it is recommended to
-        avoid "auto".
+        Rounding specification. If integer, number of decimal places to round to.
+        If "auto", applies custom rounding rules depending on the statistic (see below).
+        If "none", no rounding is applied. "auto" is intended for display purposes, using it
+        is not recommended when the output will be used for further numerical computations.
+        Defaults to "auto".
+        Auto rounding rules:
         If "auto", and `fmt` is "xarray" defaults to rcParams["stats.round_to"], else applies
         the following custom rounding rules:
         - ESS values (ess_bulk, ess_tail, ess_mean, ess_median, min_ss) are rounded down to int
