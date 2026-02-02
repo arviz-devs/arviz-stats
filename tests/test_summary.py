@@ -10,9 +10,11 @@ from numpy.testing import assert_array_equal
 from .helpers import importorskip
 
 azb = importorskip("arviz_base")
+pd = importorskip("pandas")
 xr = importorskip("xarray")
 
 from arviz_stats import ci_in_rope, eti, hdi, mode, qds, summary
+from arviz_stats.summary import _round_summary
 
 
 def test_summary_ndarray():
@@ -423,3 +425,36 @@ def test_summary_fmt(datatree, fmt):
     else:
         assert isinstance(result, xr.Dataset)
         assert "summary" in result.dims
+
+
+def test_round_summary():
+    labels = ["a", "bb", "ccc", "d", "e"]
+    data = {
+        "mean": [111.11, 1.2345e-6, 5.4321e8, np.inf, np.nan],
+        "mcse_mean": [0.0012345, 5.432e-5, 2.1234e5, np.inf, np.nan],
+        "sd": [0.0012345, 5.432e-5, 2.1234e5, np.inf, np.nan],
+        "r_hat": [1.009, 1.011, 0.99, np.inf, np.nan],
+        "ess_bulk": [312.45, 23.32, 1011.98, np.inf, np.nan],
+        "ess_tail": [9.2345, 876.321, 999.99, np.inf, np.nan],
+    }
+    df = pd.DataFrame(data, index=labels)
+    result = _round_summary(df, round_val=2)
+
+    assert result["ess_bulk"].dtype == "Int64"
+    assert result["ess_tail"].dtype == "Int64"
+    expected_ess_bulk = pd.Series(
+        [312, 23, 1011, pd.NA, pd.NA], index=labels, dtype="Int64", name="ess_bulk"
+    )
+    pd.testing.assert_series_equal(result["ess_bulk"], expected_ess_bulk)
+    expected_ess_tail = pd.Series(
+        [9, 876, 999, pd.NA, pd.NA], index=labels, dtype="Int64", name="ess_tail"
+    )
+    pd.testing.assert_series_equal(result["ess_tail"], expected_ess_tail)
+    expected_r_hat = pd.Series(["1.01", "1.01", "0.99", np.inf, np.nan], index=labels, name="r_hat")
+    pd.testing.assert_series_equal(result["r_hat"], expected_r_hat)
+    expected_mcse = pd.Series(["0", "0", "212340", np.inf, np.nan], index=labels, name="mcse_mean")
+    pd.testing.assert_series_equal(result["mcse_mean"], expected_mcse)
+    expected_mean = pd.Series(["111", "0", "5e+08"], index=labels[:3], name="mean")
+    pd.testing.assert_series_equal(result.loc[labels[:3], "mean"], expected_mean)
+    expected_sd = pd.Series(["0", "0", "212340"], index=labels[:3], name="sd")
+    pd.testing.assert_series_equal(result.loc[labels[:3], "sd"], expected_sd)

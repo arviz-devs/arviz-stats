@@ -1,6 +1,7 @@
 """Summaries for various statistics and diagnostics."""
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 from arviz_base import dataset_to_dataframe, extract, rcParams, references_to_dataset
 from xarray_einstats import stats
@@ -277,7 +278,8 @@ def _round_summary(summary_result, round_val):
     # Rule 1: ESS columns and min_ss are rounded down to int
     ess_cols = [col for col in columns if col.startswith("ess_") or col == "min_ss"]
     for col in ess_cols:
-        result[col] = np.floor(result[col]).astype("Int64")
+        result[col] = result[col].apply(lambda x: pd.NA if not np.isfinite(x) else np.floor(x))
+        result[col] = result[col].astype("Int64")
         rounded_columns.add(col)
 
     # Rule 2: R-hat always shows 2 digits after decimal
