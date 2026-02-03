@@ -1,10 +1,12 @@
 """Summaries for various statistics and diagnostics."""
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 from arviz_base import dataset_to_dataframe, extract, rcParams, references_to_dataset
 from xarray_einstats import stats
 
+from arviz_stats.base.stats_utils import get_decimal_places_from_se, round_num
 from arviz_stats.utils import _apply_multi_input_function
 from arviz_stats.validate import validate_dims
 
@@ -22,7 +24,7 @@ def summary(
     fmt="wide",
     ci_prob=None,
     ci_kind=None,
-    round_to=2,
+    round_to="auto",
     skipna=False,
 ):
     """
@@ -60,8 +62,22 @@ def summary(
     ci_kind : {"hdi", "eti"}, optional
         Type of credible interval. Defaults to ``rcParams["stats.ci_kind"]``.
         If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
-    round_to : int
-        Number of decimals used to round results. Defaults to 2. Use "none" to return raw numbers.
+    round_to : int or {"auto", "none"}, optional
+        Rounding specification. Defaults to "auto". If integer, number of decimal places to
+        round to. If "none", no rounding is applied. If "auto", and `fmt` is "xarray" defaults to
+        ``rcParams["stats.round_to"]``. If "auto" and `fmt` is in  {"wide", "long"}, applies the
+        following rounding rules:
+
+        * ESS values (ess_bulk, ess_tail, ess_mean, ess_median, min_ss) are rounded down to int
+        * R-hat always shows 2 digits after the decimal
+        * If a column *stat* and *mcse_stat* are both present then the mcse is shown to 2
+          significant figures, and *stat* is shown with precision based on 2*mcse.
+        * All other floating point numbers are shown following ``rcParams["stats.round_to"]``.
+        * For all floating point numbers except R-hat, trailing zeros are removed and values are
+          converted to string for consistent display.
+
+        Note: "auto" is intended for display purposes, using it is not recommended when the output
+        will be used for further numerical computations.
     skipna: bool
         If true ignores nan values when computing the summary statistics. Defaults to false.
 
@@ -127,6 +143,10 @@ def summary(
         ci_kind = rcParams["stats.ci_kind"]
     if sample_dims is None:
         sample_dims = rcParams["data.sample_dims"]
+    if round_to == "auto":
+        round_val = rcParams["stats.round_to"]
+    else:
+        round_val = round_to
 
     ci_perc = int(ci_prob * 100)
 
@@ -224,10 +244,99 @@ def summary(
         summary_result = summary_result.to_dataframe().reset_index().set_index("summary")
         summary_result.index = list(summary_result.index)
 
-    if (round_to is not None) and (round_to not in ("None", "none")):
-        summary_result = summary_result.round(round_to)
+    if fmt == "xarray":
+        if (round_to is not None) and (round_to not in ("None", "none")):
+            summary_result = xr.apply_ufunc(round_num, summary_result, round_val, vectorize=True)
+    else:
+        if round_to == "auto":
+            summary_result = _round_summary(summary_result, round_val)
+        else:
+            if (round_to is not None) and (round_to not in ("None", "none")):
+                summary_result = summary_result.map(lambda x: round_num(x, round_val))
 
     return summary_result
+
+
+def _round_summary(summary_result, round_val):
+    """Apply custom rounding rules to summary statistics.
+
+    Parameters
+    ----------
+    summary_result : pandas.DataFrame
+        The summary result to round
+    round_val : int or str
+        Number of decimals or significant figures to round to.
+
+    Returns
+    -------
+    pandas.DataFrame
+    """
+    result = summary_result.copy()
+    columns = result.columns
+    rounded_columns = set()
+    use_scientific = {}
+
+    # Rule 1: ESS columns and min_ss are rounded down to int
+    ess_cols = [col for col in columns if col.startswith("ess_") or col == "min_ss"]
+    for col in ess_cols:
+        result[col] = result[col].apply(lambda x: pd.NA if not np.isfinite(x) else np.floor(x))
+        result[col] = result[col].astype("Int64")
+        rounded_columns.add(col)
+
+    # Rule 2: R-hat always shows 2 digits after decimal
+    if "r_hat" in columns:
+        result["r_hat"] = result["r_hat"].round(2)
+        rounded_columns.add("r_hat")
+
+    # Rule 3: Handle stat/mcse pairs
+    stat_se_pairs = []
+    for col in columns:
+        if col.startswith("mcse_"):
+            stat_col = col[5:]
+            if stat_col in columns:
+                stat_se_pairs.append((stat_col, col))
+
+    for stat_col, se_col in stat_se_pairs:
+        result[se_col] = result[se_col].apply(lambda x: round_num(x, round_val))
+
+        for idx in result.index:
+            stat_val = result.loc[idx, stat_col]
+            se_val = result.loc[idx, se_col]
+            if not np.isfinite(se_val):
+                continue
+            decimal_places = get_decimal_places_from_se(se_val)
+            if decimal_places < 0:
+                use_scientific[(idx, stat_col)] = True
+            else:
+                result.loc[idx, stat_col] = round_num(stat_val, decimal_places)
+
+        rounded_columns.add(stat_col)
+        rounded_columns.add(se_col)
+
+    # Rule 4: Other floating point numbers to round_val significant figures
+    for col in columns:
+        if col not in rounded_columns:
+            if result[col].dtype.kind == "f":
+                result[col] = result[col].apply(lambda x: round_num(x, round_val))
+
+    # Rule 5: Format
+    for col in columns:
+        if result[col].dtype.kind == "f":
+            if col == "r_hat":
+                result[col] = result[col].apply(lambda x: f"{x:.2f}" if np.isfinite(x) else x)
+            else:
+                formatted_values = []
+                for idx, val in zip(result.index, result[col]):
+                    if not np.isfinite(val):
+                        formatted_values.append(val)
+                    elif use_scientific.get((idx, col), False):
+                        formatted_values.append(f"{val:.0e}")
+                    else:
+                        formatted_values.append(f"{val:g}")
+
+                result[col] = formatted_values
+
+    return result
 
 
 def ci_in_rope(
