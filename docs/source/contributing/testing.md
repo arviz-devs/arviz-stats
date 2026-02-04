@@ -1,3 +1,4 @@
+(contributing_testing)=
 # Testing arviz-stats
 
 ## How to run the test suite
