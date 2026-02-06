@@ -215,18 +215,6 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
 
         if not isinstance(log_likelihood, xr.DataArray):
             log_lik_array = np.asarray(log_likelihood)
-            expected_shape = (
-                (ref_log_likelihood.sizes["chain"], ref_log_likelihood.sizes["draw"])
-                + tuple(observed.sizes[dim] for dim in obs_dims)
-                if ref_log_likelihood is not None
-                else None
-            )
-            if expected_shape is not None and log_lik_array.shape != expected_shape:
-                raise ValueError(
-                    f"log_lik_fn returned array with shape {log_lik_array.shape}, "
-                    f"expected {expected_shape}"
-                )
-
             coords = _get_sample_coords(sample_dims, None, data_for_fn)
             coords.update(
                 {dim: observed.coords[dim] for dim in observed.dims if dim in observed.coords}
