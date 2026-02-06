@@ -165,6 +165,7 @@ def _compute_loo_results(
 def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
     """Prepare inputs for PSIS-LOO-CV."""
     data = convert_to_datatree(data)
+    sample_dims = ["chain", "draw"]
 
     if log_lik_fn is None:
         log_likelihood = get_log_likelihood(data, var_name=var_name)
@@ -172,7 +173,6 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
             var_name = log_likelihood.name
 
         if thin_factor is not None:
-            # Avoid circular import
             from arviz_stats.manipulation import thin
 
             log_likelihood = thin(log_likelihood, factor=thin_factor)
@@ -201,10 +201,9 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
                 raise ValueError(f"Variable '{var_name}' not found in observed_data") from exc
 
         observed = data.observed_data[var_name]
-        sample_dims = ["chain", "draw"]
         obs_dims = [dim for dim in observed.dims if dim not in sample_dims]
-
         data_for_fn = _align_data_to_obs(data, observed)
+
         try:
             log_likelihood = log_lik_fn(observed, data_for_fn)
         except Exception as err:
@@ -216,7 +215,6 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
 
         if not isinstance(log_likelihood, xr.DataArray):
             log_lik_array = np.asarray(log_likelihood)
-
             expected_shape = (
                 (ref_log_likelihood.sizes["chain"], ref_log_likelihood.sizes["draw"])
                 + tuple(observed.sizes[dim] for dim in obs_dims)
@@ -233,7 +231,6 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
             coords.update(
                 {dim: observed.coords[dim] for dim in observed.dims if dim in observed.coords}
             )
-
             log_likelihood = ndarray_to_dataarray(
                 log_lik_array,
                 var_name or observed.name or "log_likelihood",
@@ -264,7 +261,6 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
                         f"expected {ref_log_likelihood.sizes[dim]}"
                     )
 
-    sample_dims = ["chain", "draw"]
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
     n_data_points = np.prod(
