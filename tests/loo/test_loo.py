@@ -152,6 +152,49 @@ def test_loo_i_with_log_lik_fn(centered_eight):
         loo_i(0, centered_eight, var_name="obs", log_lik_fn="not a function")
 
 
+@pytest.mark.parametrize("drop_log_likelihood", [False, True])
+def test_loo_with_log_lik_fn(centered_eight_with_sigma, drop_log_likelihood):
+    reference_data = centered_eight_with_sigma.copy(deep=True)
+    target_data = reference_data.copy(deep=True)
+    if drop_log_likelihood:
+        del target_data["log_likelihood"]
+
+    def normal_log_lik_fn(observed, data):
+        theta = data.posterior["theta"]
+        obs_sd = data.constant_data["sigma"]
+        return sp.stats.norm.logpdf(observed, loc=theta, scale=obs_sd)
+
+    result_standard = loo(reference_data, var_name="obs", pointwise=True)
+    result_custom = loo(
+        target_data,
+        var_name="obs",
+        pointwise=True,
+        log_lik_fn=normal_log_lik_fn,
+    )
+
+    assert_almost_equal(result_standard.elpd, result_custom.elpd, decimal=10)
+    assert_almost_equal(result_standard.se, result_custom.se, decimal=10)
+    assert_almost_equal(result_standard.p, result_custom.p, decimal=10)
+    assert_array_equal(result_standard.pareto_k.values, result_custom.pareto_k.values)
+
+
+@pytest.mark.parametrize(
+    "log_lik_fn,error_type,error_match",
+    [
+        ("not a function", TypeError, "log_lik_fn must be a callable"),
+        ("wrong_dims", ValueError, "log_lik_fn must return an object with dims"),
+    ],
+)
+def test_loo_with_log_lik_fn_errors(centered_eight, log_lik_fn, error_type, error_match):
+    if log_lik_fn == "wrong_dims":
+
+        def log_lik_fn(observed, data):  # pylint: disable=function-redefined
+            return xr.DataArray(np.ones((10, 20)), dims=["wrong1", "wrong2"])
+
+    with pytest.raises(error_type, match=error_match):
+        loo(centered_eight, var_name="obs", log_lik_fn=log_lik_fn)
+
+
 def test_loo_i_numpy(centered_eight):
     xre = importorskip("xarray_einstats")
 

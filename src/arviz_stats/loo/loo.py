@@ -24,6 +24,7 @@ def loo(
     pointwise=None,
     var_name=None,
     reff=None,
+    log_lik_fn=None,
     log_weights=None,
     pareto_k=None,
     log_jacobian=None,
@@ -49,6 +50,13 @@ def loo(
     reff : float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
+    log_lik_fn : callable, optional
+        Custom log-likelihood function. The signature must be ``log_lik_fn(observed, data)``
+        where ``observed`` is an :class:`~xarray.DataArray` containing one or more observations
+        and ``data`` is the full :class:`~arviz_base.DataTree` or
+        :class:`~arviz_base.InferenceData`. The function must return an object with dimensions
+        ``("chain", "draw", *obs_dims)`` containing per-draw log-likelihood values.
+        When provided, ``loo`` uses this function instead of the ``log_likelihood`` group.
     log_weights : DataArray, optional
         Smoothed log weights. It must have the same shape as the log likelihood data.
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
@@ -157,7 +165,7 @@ def loo(
        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
        arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    loo_inputs = _prepare_loo_inputs(data, var_name)
+    loo_inputs = _prepare_loo_inputs(data, var_name, log_lik_fn=log_lik_fn)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     if reff is None:
