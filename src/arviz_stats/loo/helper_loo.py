@@ -162,19 +162,107 @@ def _compute_loo_results(
     )
 
 
-def _prepare_loo_inputs(data, var_name, thin_factor=None):
+def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
     """Prepare inputs for PSIS-LOO-CV."""
     data = convert_to_datatree(data)
 
-    log_likelihood = get_log_likelihood(data, var_name=var_name)
-    if var_name is None and log_likelihood.name is not None:
-        var_name = log_likelihood.name
+    if log_lik_fn is None:
+        log_likelihood = get_log_likelihood(data, var_name=var_name)
+        if var_name is None and log_likelihood.name is not None:
+            var_name = log_likelihood.name
 
-    if thin_factor is not None:
-        # Avoid circular import
-        from arviz_stats.manipulation import thin
+        if thin_factor is not None:
+            # Avoid circular import
+            from arviz_stats.manipulation import thin
 
-        log_likelihood = thin(log_likelihood, factor=thin_factor)
+            log_likelihood = thin(log_likelihood, factor=thin_factor)
+    else:
+        if not callable(log_lik_fn):
+            raise TypeError("log_lik_fn must be a callable function")
+        if not hasattr(data, "observed_data"):
+            raise ValueError(
+                "Must be able to extract an observed_data group from data when using log_lik_fn."
+            )
+
+        ref_log_likelihood = None
+        try:
+            ref_log_likelihood = get_log_likelihood(data, var_name=var_name)
+            if var_name is None and ref_log_likelihood.name is not None:
+                var_name = ref_log_likelihood.name
+        except TypeError as exc:
+            obs_vars = list(data.observed_data.data_vars)
+            if var_name is None:
+                if len(obs_vars) != 1:
+                    raise ValueError(
+                        "Multiple observed variables found; please specify var_name explicitly."
+                    ) from exc
+                var_name = obs_vars[0]
+            elif var_name not in data.observed_data:
+                raise ValueError(f"Variable '{var_name}' not found in observed_data") from exc
+
+        observed = data.observed_data[var_name]
+        sample_dims = ["chain", "draw"]
+        obs_dims = [dim for dim in observed.dims if dim not in sample_dims]
+
+        data_for_fn = _align_data_to_obs(data, observed)
+        try:
+            log_likelihood = log_lik_fn(observed, data_for_fn)
+        except Exception as err:
+            func_name = getattr(log_lik_fn, "__name__", "<callable>")
+            raise RuntimeError(
+                f"{func_name} failed while evaluating observed variable '{var_name}' due to "
+                f"{err.__class__.__name__}: {err}. Check your custom log-likelihood function."
+            ) from err
+
+        if not isinstance(log_likelihood, xr.DataArray):
+            log_lik_array = np.asarray(log_likelihood)
+
+            expected_shape = (
+                (ref_log_likelihood.sizes["chain"], ref_log_likelihood.sizes["draw"])
+                + tuple(observed.sizes[dim] for dim in obs_dims)
+                if ref_log_likelihood is not None
+                else None
+            )
+            if expected_shape is not None and log_lik_array.shape != expected_shape:
+                raise ValueError(
+                    f"log_lik_fn returned array with shape {log_lik_array.shape}, "
+                    f"expected {expected_shape}"
+                )
+
+            coords = _get_sample_coords(sample_dims, None, data_for_fn)
+            coords.update(
+                {dim: observed.coords[dim] for dim in observed.dims if dim in observed.coords}
+            )
+
+            log_likelihood = ndarray_to_dataarray(
+                log_lik_array,
+                var_name or observed.name or "log_likelihood",
+                sample_dims=sample_dims,
+                dims=list(observed.dims),
+                coords=coords,
+            )
+
+        expected_dims = set(sample_dims) | set(obs_dims)
+        if set(log_likelihood.dims) != expected_dims:
+            raise ValueError(
+                f"log_lik_fn must return an object with dims {list(expected_dims)}. "
+                f"Got {list(log_likelihood.dims)}"
+            )
+
+        for dim in obs_dims:
+            if log_likelihood.sizes[dim] != observed.sizes[dim]:
+                raise ValueError(
+                    f"log_lik_fn must return an object with {dim} size {observed.sizes[dim]}. "
+                    f"Got {log_likelihood.sizes[dim]}"
+                )
+
+        if ref_log_likelihood is not None:
+            for dim in sample_dims:
+                if log_likelihood.sizes[dim] != ref_log_likelihood.sizes[dim]:
+                    raise ValueError(
+                        f"log_lik_fn returned size {log_likelihood.sizes[dim]} for '{dim}', "
+                        f"expected {ref_log_likelihood.sizes[dim]}"
+                    )
 
     sample_dims = ["chain", "draw"]
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
