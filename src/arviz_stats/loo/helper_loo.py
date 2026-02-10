@@ -41,6 +41,7 @@ __all__ = [
     "_log_lik_i",
     "_validate_sample_dims",
     "_get_sample_coords",
+    "_custom_ll",
 ]
 
 LooInputs = namedtuple(
@@ -179,27 +180,8 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
     else:
         if not callable(log_lik_fn):
             raise TypeError("log_lik_fn must be a callable function")
-        if not hasattr(data, "observed_data"):
-            raise ValueError(
-                "Must be able to extract an observed_data group from data when using log_lik_fn."
-            )
 
-        ref_log_likelihood = None
-        try:
-            ref_log_likelihood = get_log_likelihood(data, var_name=var_name)
-            if var_name is None and ref_log_likelihood.name is not None:
-                var_name = ref_log_likelihood.name
-        except TypeError as exc:
-            obs_vars = list(data.observed_data.data_vars)
-            if var_name is None:
-                if len(obs_vars) != 1:
-                    raise ValueError(
-                        "Multiple observed variables found; please specify var_name explicitly."
-                    ) from exc
-                var_name = obs_vars[0]
-            elif var_name not in data.observed_data:
-                raise ValueError(f"Variable '{var_name}' not found in observed_data") from exc
-
+        var_name, ref_log_likelihood = _custom_ll(data, var_name)
         observed = data.observed_data[var_name]
         obs_dims = [dim for dim in observed.dims if dim not in sample_dims]
         data_for_fn = _align_data_to_obs(data, observed)
@@ -215,7 +197,7 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
 
         if not isinstance(log_likelihood, xr.DataArray):
             log_lik_array = np.asarray(log_likelihood)
-            coords = _get_sample_coords(sample_dims, None, data_for_fn)
+            coords = _get_sample_coords(sample_dims, ref_log_likelihood, data_for_fn)
             coords.update(
                 {dim: observed.coords[dim] for dim in observed.dims if dim in observed.coords}
             )
@@ -275,34 +257,12 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
 
     if not callable(log_lik_fn):
         raise TypeError("log_lik_fn must be a callable function")
-    if not hasattr(data, "observed_data"):
-        raise ValueError(
-            "Must be able to extract an observed_data group from data when using log_lik_fn."
-        )
 
-    try:
-        loo_inputs = _prepare_loo_inputs(data, var_name)
-        obs_var = loo_inputs.var_name
-        sample_dims = loo_inputs.sample_dims
-        obs_dims = loo_inputs.obs_dims
-    except TypeError as exc:
-        obs_vars = list(data.observed_data.data_vars)
-        if var_name is None:
-            if len(obs_vars) != 1:
-                raise ValueError(
-                    "Multiple observed variables found; please specify var_name explicitly."
-                ) from exc
-            obs_var = obs_vars[0]
-        else:
-            if var_name not in data.observed_data:
-                raise ValueError(f"Variable '{var_name}' not found in observed_data") from exc
-            obs_var = var_name
+    var_name, ref_log_likelihood = _custom_ll(data, var_name)
+    sample_dims = ["chain", "draw"]
+    obs_dims = [d for d in data.observed_data[var_name].dims if d not in sample_dims]
 
-        sample_dims = ["chain", "draw"]
-        obs_dims = [d for d in data.observed_data[obs_var].dims if d not in sample_dims]
-        loo_inputs = None
-
-    observed_i = _get_log_likelihood_i(data.observed_data[obs_var], i, obs_dims)
+    observed_i = _get_log_likelihood_i(data.observed_data[var_name], i, obs_dims)
     data_for_fn = _align_data_to_obs(data, observed_i)
 
     try:
@@ -330,11 +290,11 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
 
     if not isinstance(log_lik_i, xr.DataArray):
         log_lik_array = np.asarray(log_lik_i)
-        coords = _get_sample_coords(sample_dims, loo_inputs, data_for_fn)
+        coords = _get_sample_coords(sample_dims, ref_log_likelihood, data_for_fn)
 
         log_lik_i = ndarray_to_dataarray(
             log_lik_array,
-            obs_var or observed_i.name or "log_likelihood",
+            var_name or observed_i.name or "log_likelihood",
             sample_dims=sample_dims,
             dims=[],
             coords=coords,
@@ -351,7 +311,7 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
         log_lik_i = _validate_sample_dims(
             log_lik_i,
             sample_dims=tuple(sample_dims),
-            ref_sizes=loo_inputs.log_likelihood if loo_inputs else None,
+            ref_sizes=ref_log_likelihood,
             obs_dims=obs_dims,
         )
     except ValueError as e:
@@ -361,8 +321,8 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
         ) from e
 
     n_samples = (
-        loo_inputs.n_samples
-        if loo_inputs
+        ref_log_likelihood.chain.size * ref_log_likelihood.draw.size
+        if ref_log_likelihood is not None
         else int(log_lik_i.sizes["chain"] * log_lik_i.sizes["draw"])
     )
 
@@ -1441,11 +1401,10 @@ def _validate_sample_dims(
     return data
 
 
-def _get_sample_coords(sample_dims, loo_inputs, data_for_fn):
+def _get_sample_coords(sample_dims, ref_log_lik, data_for_fn):
     """Collect sample dimension coordinates."""
-    if loo_inputs is not None:
-        source = loo_inputs.log_likelihood
-        return {dim: source.coords[dim] for dim in sample_dims if dim in source.coords}
+    if ref_log_lik is not None:
+        return {dim: ref_log_lik.coords[dim] for dim in sample_dims if dim in ref_log_lik.coords}
 
     coords = {}
     posterior = getattr(data_for_fn, "posterior", None)
@@ -1474,3 +1433,35 @@ def _get_sample_coords(sample_dims, loo_inputs, data_for_fn):
             {dim: posterior.coords[dim] for dim in sample_dims if dim in posterior.coords}
         )
     return coords
+
+
+def _custom_ll(data, var_name):
+    """Resolve variable name and log-likelihood.
+
+    Returns
+    -------
+    tuple of (str, DataArray or None)
+        Resolved *var_name* and reference log-likelihood.
+    """
+    if not hasattr(data, "observed_data"):
+        raise ValueError(
+            "Must be able to extract an observed_data group from data when using log_lik_fn."
+        )
+
+    ref_log_likelihood = None
+    try:
+        ref_log_likelihood = get_log_likelihood(data, var_name=var_name)
+        if var_name is None and ref_log_likelihood.name is not None:
+            var_name = ref_log_likelihood.name
+    except TypeError as exc:
+        obs_vars = list(data.observed_data.data_vars)
+        if var_name is None:
+            if len(obs_vars) != 1:
+                raise ValueError(
+                    "Multiple observed variables found; please specify var_name explicitly."
+                ) from exc
+            var_name = obs_vars[0]
+        elif var_name not in data.observed_data:
+            raise ValueError(f"Variable '{var_name}' not found in observed_data") from exc
+
+    return var_name, ref_log_likelihood
