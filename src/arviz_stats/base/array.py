@@ -477,9 +477,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                 )
             # ensure broadcasting over range
             if range.shape[:-1] != broadcased_shape:
+                expected_shape = broadcased_shape + (2,)
                 raise ValueError(
                     "`range` has incompatible shape. "
-                    f"Expected shape (*, 2) with leading dimensions {broadcased_shape}, "
+                    f"Expected shape {expected_shape}, "
                     f"got range.shape={range.shape}"
                 )
             if weights is not None:
@@ -531,9 +532,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             return histogram_ufunc(ary, bins, shape_from_1st=True)
         # ensure broadcasting over range
         if range.shape[:-1] != broadcased_shape:
+            expected_shape = broadcased_shape + (2,)
             raise ValueError(
                 "`range` has incompatible shape. "
-                f"Expected shape (*, 2) with leading dimensions {broadcased_shape}, "
+                f"Expected shape {expected_shape}, "
                 f"got range.shape={range.shape}"
             )
         if weights is not None:
