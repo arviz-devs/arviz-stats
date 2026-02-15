@@ -1,11 +1,15 @@
 """Functions for sampling diagnostics."""
 
+import logging
+
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_dataset
+from arviz_base import convert_to_dataset, convert_to_datatree, rcParams
 
 from arviz_stats.utils import _apply_multi_input_function, get_array_function
 from arviz_stats.validate import validate_dims
+
+_log = logging.getLogger(__name__)
 
 
 def ess(
@@ -615,3 +619,345 @@ def bfmi(
         coords=coords,
         **kwargs,
     )
+
+
+def diagnose(
+    data,
+    *,
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    sample_dims=None,
+    group="posterior",
+    rhat_max=1.01,
+    ess_min_ratio=0.001,
+    bfmi_threshold=0.3,
+    verbose=True,
+    return_diagnostics=False,
+):
+    """Run comprehensive diagnostic checks for MCMC sampling.
+
+    This function performs diagnostic checks on MCMC samples similar to CmdStan's diagnose
+    utility. It checks for:
+
+    - Divergent transitions
+    - Maximum tree depth saturation
+    - Low E-BFMI (Energy Bayesian Fraction of Missing Information)
+    - Low effective sample size (ESS)
+    - High R-hat values
+
+    Parameters
+    ----------
+    data : DataTree, Dataset, or InferenceData-like
+        Input data. To be able to compute all diagnostics, the data should contain MCMC
+        posterior samples (see ``group`` argument) and sampler statistics (in "sample_stats" group).
+    var_names : str or list of str, optional
+        Names of variables to check for R-hat and ESS diagnostics.
+        If None, checks all variables.
+    filter_vars : {None, "like", "regex"}, default None
+        How to filter variable names. See :func:`filter_vars` for details.
+    coords : dict, optional
+        Coordinates to select a subset of the data.
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions.
+        Default from ``rcParams["data.sample_dims"]``.
+    group : str, default "posterior"
+        Group to check for convergence diagnostics (R-hat, ESS).
+    rhat_max : float, default 1.01
+        Maximum acceptable R-hat value. Parameters with R-hat > rhat_max
+        will be flagged.
+    ess_min_ratio : float, default 0.001
+        Minimum acceptable ratio of ESS to total samples. Parameters with
+        ESS/N < ess_min_ratio will be flagged.
+        A flag is also emitted if ESS is lower than 100 * number of chains.
+    bfmi_threshold : float, default 0.3
+        Minimum acceptable E-BFMI value. Values below this threshold indicate
+        potential issues with the sampler's exploration.
+    verbose : bool, default True
+        If True, print diagnostic messages to stdout. If False, return results silently.
+    return_diagnostics : bool, default False
+        If True, return a dictionary with detailed diagnostic results in addition
+        to the boolean has_errors flag.
+
+    Returns
+    -------
+    has_errors : bool
+        True if any diagnostic checks failed, False otherwise.
+    diagnostics : dict, optional
+        Only returned if return_diagnostics=True. Contains detailed diagnostic information:
+
+        - "divergent": dict with keys "n_divergent", "pct", "total_samples"
+        - "treedepth": dict with keys "n_max", "pct", "max_limit", "total_samples"
+        - "bfmi": dict with keys "bfmi_values", "failed_chains", "threshold"
+        - "ess": dict with keys "bad_params", "ess_values"
+        - "rhat": dict with keys "bad_params", "rhat_values"
+
+    Examples
+    --------
+    Check diagnostics for a model fit:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: from arviz_base import load_arviz_data
+           ...: data = load_arviz_data('centered_eight')
+           ...: azs.diagnose(data)
+
+    Get detailed diagnostic information without printing messages:
+
+    .. ipython::
+
+        In [1]: _, diagnostics = azs.diagnose(data, return_diagnostics=True, verbose=False)
+           ...: diagnostics
+
+    See Also
+    --------
+    :func:`arviz_stats.rhat` Compute R-hat convergence diagnostic
+    :func:`arviz_stats.ess` Compute effective sample size
+    :func:`arviz_stats.bfmi` Compute Bayesian fraction of missing information
+    :func:`arviz_stats.summary` Create a data frame with summary statistics, including diagnostics.
+
+    References
+    ----------
+    .. [1] Vehtari et al. *Rank-normalization, folding, and localization: An improved
+        Rhat for assessing convergence of MCMC*. Bayesian Analysis. 16(2) (2021)
+        https://doi.org/10.1214/20-BA1221
+    .. [2] Betancourt. *Diagnosing Suboptimal Cotangent Disintegrations in
+        Hamiltonian Monte Carlo*. (2016) https://arxiv.org/abs/1604.00695
+    """
+    if sample_dims is None:
+        sample_dims = rcParams["data.sample_dims"]
+    if isinstance(sample_dims, str):
+        sample_dims = [sample_dims]
+
+    dt = convert_to_datatree(data)
+
+    has_errors = False
+    diagnostics_results = {}
+
+    sample_stats = dt.get("sample_stats")
+    if sample_stats is None:
+        if verbose:
+            _log.warning("No sample_stats group found. Skipping sampler-specific diagnostics.")
+        sample_stats_available = False
+    else:
+        sample_stats_available = True
+
+    posterior = dt[group]
+
+    total_samples = np.prod([posterior.sizes[dim] for dim in sample_dims if dim in posterior.sizes])
+
+    if sample_stats_available and "diverging" in sample_stats:
+        if verbose:
+            _log.warning("Divergences\n")
+        diverging = sample_stats["diverging"]
+        n_divergent = int(diverging.sum().values)
+
+        diagnostics_results["divergent"] = {
+            "n_divergent": n_divergent,
+            "pct": 100 * n_divergent / total_samples,
+            "total_samples": total_samples,
+        }
+
+        if n_divergent > 0:
+            has_errors = True
+            if verbose:
+                pct = diagnostics_results["divergent"]["pct"]
+                _log.warning(
+                    "%d of %d (%.2f%%) transitions ended with a divergence.\n"
+                    "These divergent transitions indicate that HMC is not fully able to explore "
+                    "the posterior distribution.\n"
+                    "Try increasing adapt delta closer to 1.\n"
+                    "If this doesn't remove all divergences, try to reparameterize the model.",
+                    n_divergent,
+                    total_samples,
+                    pct,
+                )
+        else:
+            if verbose:
+                _log.warning("No divergent transitions found.")
+
+    if sample_stats_available and "tree_depth" in sample_stats:
+        if verbose:
+            _log.warning("\nTree depth\n")
+
+        reached_max_treedepth = sample_stats["reached_max_treedepth"]
+
+        n_max = int((reached_max_treedepth).sum().values)
+
+        diagnostics_results["treedepth"] = {
+            "n_max": n_max,
+            "pct": 100 * n_max / total_samples,
+            "total_samples": total_samples,
+        }
+
+        if n_max:
+            has_errors = True
+            if verbose:
+                pct = diagnostics_results["treedepth"]["pct"]
+                _log.warning(
+                    "%d of %d (%.2f%%) transitions hit the maximum treedepth limit.\n"
+                    "Trajectories that are prematurely terminated due to this limit will result "
+                    "in slow exploration.\nFor optimal performance, increase this limit.",
+                    n_max,
+                    total_samples,
+                    pct,
+                )
+        else:
+            if verbose:
+                _log.warning("Treedepth satisfactory for all transitions.")
+
+    # Check E-BFMI
+    if sample_stats_available and "energy" in sample_stats:
+        if verbose:
+            _log.warning("\nE-BFMI\n")
+
+        bfmi_values = bfmi(dt, sample_dims=sample_dims)["energy"]
+
+        low_bfmi = bfmi_values < 0.3
+        chain_indices = low_bfmi.where(low_bfmi, drop=True).coords["chain"].values.tolist()
+
+        diagnostics_results["bfmi"] = {
+            "bfmi_values": bfmi_values.values,
+            "failed_chains": chain_indices,
+            "threshold": bfmi_threshold,
+        }
+
+        if chain_indices:
+            has_errors = True
+            if verbose:
+                for _, chain_idx in enumerate(chain_indices):
+                    bfmi_val = bfmi_values.sel(chain=chain_idx).item()
+                    _log.warning("Chain %d: E-BFMI = %.3f", chain_idx, bfmi_val)
+                _log.warning(
+                    "The E-BFMI values are below the nominal threshold of %.2f which suggests that "
+                    "HMC may have trouble exploring the target distribution.\n"
+                    "If possible, try to reparameterize the model.",
+                    bfmi_threshold,
+                )
+        else:
+            if verbose:
+                _log.warning("E-BFMI satisfactory for all chains.")
+
+    # Check ESS
+    if verbose:
+        _log.warning("\nESS\n")
+
+    ess_bulk = ess(
+        dt,
+        sample_dims=sample_dims,
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        method="bulk",
+    )
+    ess_tail = ess(
+        dt,
+        sample_dims=sample_dims,
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        method="tail",
+    )
+
+    ess_min = np.minimum(ess_bulk.ds, ess_tail.ds)
+    ess_ratio = ess_min / total_samples
+    bad_ess_params = list((ess_ratio < ess_min_ratio).any().data_vars)
+
+    ess_threshold = 100 * len(posterior.coords["chain"])
+    below_minimum_params = list(ess_bulk.ds.where(ess_bulk.ds < ess_threshold, drop=True).data_vars)
+
+    diagnostics_results["ess"] = {
+        "bad_params": bad_ess_params,
+        "ess_values": ess_min[bad_ess_params],
+        "threshold_ratio": ess_min_ratio,
+        "total_samples": total_samples,
+    }
+
+    if bad_ess_params:
+        has_errors = True
+        if verbose:
+            _log.warning(
+                "The following parameters has fewer than %.2f effective draws per transition:\n"
+                "  %s\nSuch low values indicate that the effective sample size estimators may be "
+                "biased high and actual performance may be substantially lower than quoted.",
+                ess_min_ratio,
+                ", ".join(bad_ess_params),
+            )
+
+    if below_minimum_params:
+        has_errors = True
+        if verbose:
+            _log.warning(
+                "The following parameters has fewer than %d effective samples:\n"
+                "  %s\n"
+                "This suggests that the sampler may not have fully explored the posterior "
+                "distribution for this parameter.\nConsider reparameterizing the model or "
+                "increasing the number of samples.",
+                ess_threshold,
+                ", ".join(below_minimum_params),
+            )
+
+    if not bad_ess_params and not below_minimum_params:
+        if verbose:
+            _log.warning("Effective sample size satisfactory for all parameters.")
+
+    # Check R-hat
+    if verbose:
+        _log.warning("\nR-hat\n")
+
+    rhat_rank = rhat(
+        dt,
+        sample_dims=sample_dims,
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        method="rank",
+    )
+    rhat_folded = rhat(
+        dt,
+        sample_dims=sample_dims,
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        method="folded",
+    )
+
+    rhat_max_vals = np.maximum(rhat_rank.ds, rhat_folded.ds)
+
+    bad_rhat_params = list((rhat_max_vals > rhat_max).any().data_vars)
+
+    diagnostics_results["rhat"] = {
+        "bad_params": bad_rhat_params,
+        "rhat_values": rhat_max_vals[bad_rhat_params],
+        "threshold": rhat_max,
+    }
+
+    if bad_rhat_params:
+        has_errors = True
+        if verbose:
+            _log.warning(
+                "The following parameters has R-hat values greater than %.2f:\n"
+                "  %s\n"
+                "Such high values indicate incomplete mixing and biased estimation.\n"
+                "You should consider regularizing your model with additional prior information or "
+                "a more effective parameterization.",
+                rhat_max,
+                ", ".join(bad_rhat_params),
+            )
+    else:
+        if verbose:
+            _log.warning("R-hat values satisfactory for all parameters.")
+
+    if verbose:
+        if not has_errors:
+            _log.warning("\nProcessing complete, no problems detected.")
+
+    if return_diagnostics:
+        return has_errors, diagnostics_results
+
+    return has_errors
