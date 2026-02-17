@@ -775,7 +775,7 @@ def diagnose(
             messages.append("No divergent transitions found.")
 
     # Check tree depth
-    if sample_stats_available and "tree_depth" in sample_stats:
+    if sample_stats_available and "reached_max_treedepth" in sample_stats:
         reached_max_treedepth = sample_stats["reached_max_treedepth"]
         n_max = int((reached_max_treedepth).sum().values)
 
