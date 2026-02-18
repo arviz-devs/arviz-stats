@@ -904,7 +904,7 @@ def diagnose(
         method="folded",
     )
 
-    rhat_max_vals = np.maximum(rhat_rank.ds, rhat_folded.ds)
+    rhat_max_vals = np.maximum(rhat_rank.dataset, rhat_folded.dataset)
     bad_rhat_params = [
         var for var in rhat_max_vals.data_vars if (rhat_max_vals[var] > rhat_max).any()
     ]
