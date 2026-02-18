@@ -845,7 +845,7 @@ def diagnose(
         method="tail",
     )
 
-    ess_min = np.minimum(ess_bulk.ds, ess_tail.ds)
+    ess_min = np.minimum(ess_bulk.dataset, ess_tail.dataset)
     ess_ratio = ess_min / total_samples
     bad_ess_params = [var for var in ess_ratio.data_vars if (ess_ratio[var] < ess_min_ratio).any()]
 
