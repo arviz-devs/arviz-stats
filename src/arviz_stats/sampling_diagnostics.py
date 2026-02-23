@@ -1,6 +1,7 @@
 """Functions for sampling diagnostics."""
 
 import sys
+import warnings
 
 import numpy as np
 import xarray as xr
@@ -629,6 +630,7 @@ def diagnose(
     group="posterior",
     rhat_max=1.01,
     ess_min_ratio=0.001,
+    ess_threshold=None,
     bfmi_threshold=0.3,
     show_diagnostics=True,
     return_diagnostics=False,
@@ -670,7 +672,10 @@ def diagnose(
     ess_min_ratio : float, default 0.001
         Minimum acceptable ratio of ESS to total samples. Parameters with
         ESS/N < ess_min_ratio will be flagged.
-        A flag is also emitted if ESS is lower than 100 * number of chains.
+    ess_threshold : int, optional
+        Minimum acceptable ESS value. Parameters with ESS < ess_threshold
+        will be flagged. Defaults to 100 * number of chains. If None and the chain
+        dimension is not present, this check will be skipped.
     bfmi_threshold : float, default 0.3
         Minimum acceptable E-BFMI value. Values below this threshold indicate
         potential issues with the sampler's exploration.
@@ -803,7 +808,8 @@ def diagnose(
         bfmi_values = bfmi(dt, sample_dims=sample_dims)["energy"]
 
         low_bfmi = bfmi_values < bfmi_threshold
-        chain_indices = low_bfmi.where(low_bfmi, drop=True).coords["chain"].values.tolist()
+        chain_dim = low_bfmi.dims[0]
+        chain_indices = low_bfmi.where(low_bfmi, drop=True).coords[chain_dim].values.tolist()
 
         diagnostics_results["bfmi"] = {
             "bfmi_values": bfmi_values.values,
@@ -815,7 +821,7 @@ def diagnose(
         if chain_indices:
             has_errors = True
             for chain_idx in chain_indices:
-                bfmi_val = bfmi_values.sel(chain=chain_idx).item()
+                bfmi_val = bfmi_values.sel({chain_dim: chain_idx}).item()
                 messages.append(f"Chain {chain_idx}: E-BFMI = {bfmi_val:.3f}")
             messages.append(
                 f"E-BFMI values are below the threshold {bfmi_threshold:.2f} which suggests that "
@@ -849,11 +855,6 @@ def diagnose(
     ess_ratio = ess_min / total_samples
     bad_ess_params = [var for var in ess_ratio.data_vars if (ess_ratio[var] < ess_min_ratio).any()]
 
-    ess_threshold = 100 * len(posterior.coords["chain"])
-    below_minimum_params = [
-        var for var in ess_bulk.ds.data_vars if (ess_bulk.ds[var] < ess_threshold).any()
-    ]
-
     diagnostics_results["ess"] = {
         "bad_params": bad_ess_params,
         "ess_values": ess_min[bad_ess_params],
@@ -871,18 +872,35 @@ def diagnose(
             "biased high and actual performance may be substantially lower than quoted."
         )
 
-    if below_minimum_params:
-        has_errors = True
-        messages.append(
-            f"The following parameters has fewer than {ess_threshold} effective samples:\n"
-            f"  {', '.join(below_minimum_params)}\n"
-            "This suggests that the sampler may not have fully explored the posterior "
-            "distribution for this parameter.\nConsider reparameterizing the model or "
-            "increasing the number of samples."
-        )
+    if "chain" in posterior.dims:
+        if ess_threshold is None:
+            ess_threshold = 100 * len(posterior.coords["chain"])
+        else:
+            ess_threshold = int(ess_threshold)
+    else:
+        if ess_threshold is None:
+            warnings.warn(
+                "Chain dimension not found in data. Skipping ESS threshold check.",
+                UserWarning,
+            )
 
-    if not bad_ess_params and not below_minimum_params:
-        messages.append("Effective sample size satisfactory for all parameters.")
+    if ess_threshold is not None:
+        below_minimum_params = [
+            var for var in ess_bulk.ds.data_vars if (ess_bulk.ds[var] < ess_threshold).any()
+        ]
+
+        if below_minimum_params:
+            has_errors = True
+            messages.append(
+                f"The following parameters has fewer than {ess_threshold} effective samples:\n"
+                f"  {', '.join(below_minimum_params)}\n"
+                "This suggests that the sampler may not have fully explored the posterior "
+                "distribution for this parameter.\nConsider reparameterizing the model or "
+                "increasing the number of samples."
+            )
+
+        if not bad_ess_params and not below_minimum_params:
+            messages.append("Effective sample size satisfactory for all parameters.")
 
     # Check R-hat
     rhat_rank = rhat(
