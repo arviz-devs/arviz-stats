@@ -203,15 +203,18 @@ def test_diagnose_var_names_flags(centered_eight):
     assert diagnostics["treedepth"]["n_max"] == 0
 
 
-def test_diagnose_no_sample_stats(centered_eight):
+def test_diagnose_no_sample_stats(centered_eight, capsys):
     data_no_sample_stats = azb.from_dict({"posterior": {"mu": centered_eight.posterior["mu"]}})
 
     _, diagnostics = diagnose(
         data_no_sample_stats,
         var_names=["mu"],
-        show_diagnostics=False,
+        show_diagnostics=True,
         return_diagnostics=True,
     )
+    output = capsys.readouterr().out
+
+    assert "No sample_stats group found." in output
     assert "divergent" not in diagnostics
     assert "treedepth" not in diagnostics
     assert "bfmi" not in diagnostics
