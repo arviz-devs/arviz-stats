@@ -802,7 +802,7 @@ def diagnose(
     if sample_stats_available and "energy" in sample_stats:
         bfmi_values = bfmi(dt, sample_dims=sample_dims)["energy"]
 
-        low_bfmi = bfmi_values < 0.3
+        low_bfmi = bfmi_values < bfmi_threshold
         chain_indices = low_bfmi.where(low_bfmi, drop=True).coords["chain"].values.tolist()
 
         diagnostics_results["bfmi"] = {
