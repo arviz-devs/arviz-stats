@@ -2,13 +2,14 @@
 
 # pylint: disable=redefined-outer-name
 import numpy as np
+import pytest
 
 from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
-from arviz_stats.sampling_diagnostics import bfmi, ess, mcse, rhat, rhat_nested
+from arviz_stats.sampling_diagnostics import bfmi, diagnose, ess, mcse, rhat, rhat_nested
 
 
 def test_ess_datatree_returns_datatree(centered_eight):
@@ -158,3 +159,85 @@ def test_bfmi_dataset_returns_dataset(centered_eight):
     result = bfmi(ds, var_names="energy")
     assert isinstance(result, xr.Dataset)
     assert "energy" in result.data_vars
+
+
+def test_diagnose_stdout(centered_eight, capsys):
+    diagnose(centered_eight, show_diagnostics=True)
+    output = capsys.readouterr().out
+    for keyword in ["ESS", "R-hat", "Divergences", "Treedepth", "E-BFMI"]:
+        assert keyword in output
+
+    diagnose(centered_eight, show_diagnostics=False)
+    assert capsys.readouterr().out == ""
+
+
+def test_diagnose_diagnostics_dict(centered_eight):
+    has_errors, diagnostics = diagnose(
+        centered_eight, show_diagnostics=False, return_diagnostics=True
+    )
+
+    assert isinstance(has_errors, bool)
+    assert isinstance(diagnostics, dict)
+    assert "ess" in diagnostics
+    assert "rhat" in diagnostics
+    assert "divergent" in diagnostics
+    assert "treedepth" in diagnostics
+    assert "bfmi" in diagnostics
+
+
+def test_diagnose_var_names_flags(centered_eight):
+    _, diagnostics = diagnose(
+        centered_eight,
+        var_names=["mu"],
+        ess_min_ratio=2.0,
+        rhat_max=0.0,
+        bfmi_threshold=2.0,
+        show_diagnostics=False,
+        return_diagnostics=True,
+    )
+
+    assert diagnostics["ess"]["bad_params"] == ["mu"]
+    assert diagnostics["rhat"]["bad_params"] == ["mu"]
+    assert diagnostics["bfmi"]["failed_chains"] == [0, 1, 2, 3]
+    assert diagnostics["divergent"]["n_divergent"] == 19
+    assert diagnostics["treedepth"]["n_max"] == 0
+
+
+def test_diagnose_no_sample_stats(centered_eight, capsys):
+    data_no_sample_stats = azb.from_dict({"posterior": {"mu": centered_eight.posterior["mu"]}})
+
+    _, diagnostics = diagnose(
+        data_no_sample_stats,
+        var_names=["mu"],
+        show_diagnostics=True,
+        return_diagnostics=True,
+    )
+    output = capsys.readouterr().out
+
+    assert "No sample_stats group found." in output
+    assert "divergent" not in diagnostics
+    assert "treedepth" not in diagnostics
+    assert "bfmi" not in diagnostics
+    assert "ess" in diagnostics
+    assert "rhat" in diagnostics
+
+
+def test_diagnose_no_chains(centered_eight):
+    data_no_chains = xr.DataTree.from_dict(
+        {
+            "posterior": centered_eight["posterior"].ds.rename({"chain": "not_a_chain"}),
+            "sample_stats": centered_eight["sample_stats"].ds.rename({"chain": "not_a_chain"}),
+        }
+    )
+
+    with pytest.warns(
+        UserWarning,
+        match="Chain dimension not found in data. Skipping ESS threshold check.",
+    ):
+        diagnose(
+            data_no_chains,
+            var_names=["mu"],
+            sample_dims=["not_a_chain", "draw"],
+            show_diagnostics=False,
+            return_diagnostics=True,
+        )
