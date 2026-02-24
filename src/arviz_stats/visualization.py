@@ -642,3 +642,210 @@ def qds(
         top_only=top_only,
         **kwargs,
     )
+
+
+def mean(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    round_to=None,
+    skipna=False,
+):
+    """Compute the mean of the input data.
+
+    See the EABM chapter on `Visualization of Random Variables with ArviZ <https://arviz-devs.github.io/EABM/Chapters/Distributions.html#point-estimates>`_
+    for more details.
+
+    Xarray objects have a ``.mean`` method which can in most cases also achieve the same result.
+    The main differences are due to defaults and the presence of the `round_to` argument.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.mean``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions to be reduced when computing the mean
+        Default ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the mean
+    var_names : str or list of str, optional
+        Names of the variables for which the mean should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    round_to : str or int, optional
+    skipna : bool, default False
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested mean of the provided input.
+
+    See Also
+    --------
+    arviz_stats.median, arviz_stats.mode
+    """
+    return _apply_multi_input_function(
+        "mean",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        round_to=round_to,
+        skipna=skipna,
+    )
+
+
+def median(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    round_to=None,
+    skipna=False,
+):
+    """Compute the median of the input data.
+
+    See the EABM chapter on `Visualization of Random Variables with ArviZ <https://arviz-devs.github.io/EABM/Chapters/Distributions.html#point-estimates>`_
+    for more details.
+
+    Xarray objects have a ``.median`` method which can in most cases also achieve the same result.
+    The main differences are due to defaults and the presence of the `round_to` argument.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.median``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions to be reduced when computing the median
+        Default ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the median
+    var_names : str or list of str, optional
+        Names of the variables for which the median should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    round_to : str or int, optional
+    skipna : bool, default False
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested median of the provided input.
+
+    See Also
+    --------
+    arviz_stats.median, arviz_stats.mode
+    """
+    return _apply_multi_input_function(
+        "median",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        round_to=round_to,
+        skipna=skipna,
+    )
+
+
+def mode(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    round_to=None,
+    skipna=False,
+):
+    """Compute the mode of the input data.
+
+    See the EABM chapter on `Visualization of Random Variables with ArviZ <https://arviz-devs.github.io/EABM/Chapters/Distributions.html#point-estimates>`_
+    for more details.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions to be reduced when computing the mode
+        Default ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the mode
+    var_names : str or list of str, optional
+        Names of the variables for which the mode should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    round_to : str or int, optional
+    skipna : bool, default False
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested mode of the provided input.
+
+    See Also
+    --------
+    arviz_stats.median, arviz_stats.mode
+    """
+    return _apply_multi_input_function(
+        "mode",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        round_to=round_to,
+        skipna=skipna,
+    )
