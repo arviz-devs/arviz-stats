@@ -13,6 +13,7 @@ from arviz_stats.loo.reloo import reloo
 from arviz_stats.loo.wrapper import SamplingWrapper
 from arviz_stats.loo.compare import compare, _calculate_ics
 from arviz_stats.loo.loo_kfold import loo_kfold
+from arviz_stats.loo.lfo_cv import lfo_cv
 
 __all__ = [
     "loo",
@@ -31,4 +32,5 @@ __all__ = [
     "SamplingWrapper",
     "compare",
     "loo_kfold",
+    "lfo_cv",
 ]
