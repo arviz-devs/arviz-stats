@@ -290,3 +290,99 @@ class TestMode:
         x = np.array([1.0, 2.0, 2.0, np.nan, 2.0, 3.0])
         result = core._mode(x)
         assert not np.isnan(result)
+
+
+class TestStd:
+    def test_std_continuous(self, core, rng):
+        x = rng.normal(5, 1, 1000)
+        result = core._std(x)
+        assert_allclose(result, 1.0, rtol=0.1)
+
+    def test_std_single_value(self, core):
+        x = np.array([5.0])
+        result = core._std(x)
+        assert np.isnan(result)
+
+    def test_std_empty(self, core):
+        x = np.array([])
+        result = core._std(x)
+        assert np.isnan(result)
+
+    def test_std_with_nan(self, core):
+        x = np.array([1.0, 2.0, 2.0, np.nan, 2.0, 3.0])
+        result = core._std(x)
+        assert np.isnan(result)
+        result = core._std(x, skipna=True)
+        assert not np.isnan(result)
+
+
+class TestVar:
+    def test_var_continuous(self, core, rng):
+        x = rng.normal(5, 2, 1000)
+        result = core._var(x)
+        assert_allclose(result, 4.0, rtol=0.1)
+
+    def test_var_single_value(self, core):
+        x = np.array([5.0])
+        result = core._var(x)
+        assert np.isnan(result)
+
+    def test_var_empty(self, core):
+        x = np.array([])
+        result = core._var(x)
+        assert np.isnan(result)
+
+    def test_var_with_nan(self, core):
+        x = np.array([1.0, 2.0, 2.0, np.nan, 2.0, 3.0])
+        result = core._var(x)
+        assert np.isnan(result)
+        result = core._var(x, skipna=True)
+        assert not np.isnan(result)
+
+
+class TestMAD:
+    def test_mad_continuous(self, core, rng):
+        x = rng.normal(5, 1, 1000)
+        result = core._mad(x)
+        assert_allclose(result, 0.67, rtol=0.1)
+
+    def test_mad_single_value(self, core):
+        x = np.array([5.0])
+        result = core._mad(x)
+        assert result == 0.0
+
+    def test_mad_empty(self, core):
+        x = np.array([])
+        result = core._mad(x)
+        assert np.isnan(result)
+
+    def test_mad_with_nan(self, core):
+        x = np.array([1.0, 2.0, 2.0, np.nan, 2.0, 3.0])
+        result = core._mad(x)
+        assert np.isnan(result)
+        result = core._mad(x, skipna=True)
+        assert not np.isnan(result)
+
+
+class TestIQR:
+    def test_iqr_continuous(self, core, rng):
+        x = rng.normal(5, 1, 1000)
+        result = core._iqr(x)
+        assert_allclose(result, 1.34, rtol=0.1)
+
+    def test_iqr_single_value(self, core):
+        x = np.array([5.0])
+        result = core._iqr(x)
+        assert result == 0.0
+
+    def test_iqr_empty(self, core):
+        x = np.array([])
+        result = core._iqr(x)
+        assert np.isnan(result)
+
+    def test_iqr_with_nan(self, core):
+        x = np.array([1.0, 2.0, 2.0, np.nan, 2.0, 3.0])
+        result = core._iqr(x)
+        assert np.isnan(result)
+        result = core._iqr(x, skipna=True)
+        assert not np.isnan(result)
