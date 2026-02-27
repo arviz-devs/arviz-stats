@@ -10,10 +10,12 @@ from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equ
 from ..helpers import importorskip
 
 azb = importorskip("arviz_base")
+pd = importorskip("pandas")
 sp = importorskip("scipy")
 
 from arviz_stats import compare, loo, loo_subsample, update_subsample
 from arviz_stats.loo import _calculate_ics
+from arviz_stats.loo.compare import _round_compare
 
 
 def log_lik_fn_subsample(obs_da, datatree):
@@ -231,7 +233,7 @@ def test_compare_single_model(centered_eight, method):
 @pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
 def test_compare_many_models(centered_eight, method):
     models = {f"model_{i}": centered_eight for i in range(7)}
-    result = compare(models, method=method)
+    result = compare(models, method=method, round_to="None")
 
     assert len(result) == 7
     assert result["rank"].min() == 0
@@ -273,7 +275,7 @@ def test_compare_best_model_properties(centered_eight, non_centered_eight, metho
 @pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
 def test_compare_weights_properties(centered_eight, non_centered_eight, method):
     model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
-    result = compare(model_dict, method=method)
+    result = compare(model_dict, method=method, round_to="None")
 
     assert (result["weight"] >= 0).all()
     assert (result["weight"] <= 1).all()
@@ -292,7 +294,7 @@ def test_compare_sorting(centered_eight, non_centered_eight):
 @pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
 def test_compare_weight_sum(centered_eight, n_models, method):
     models = {f"model_{i}": centered_eight for i in range(n_models)}
-    result = compare(models, method=method)
+    result = compare(models, method=method, round_to="None")
     assert_allclose(result["weight"].sum(), 1.0)
 
 
@@ -436,7 +438,7 @@ def test_compare_order_stat_check(centered_eight, rng):
 def test_compare_order_stat_check_identical_models(centered_eight):
     models = {f"model_{i}": centered_eight for i in range(12)}
     with pytest.warns(UserWarning, match="All models have nearly identical performance"):
-        result = compare(models)
+        result = compare(models, round_to="None")
     assert len(result) == 12
     assert_allclose(result["elpd"].values, result["elpd"].values[0])
     assert_allclose(result["weight"].sum(), 1.0)
@@ -485,3 +487,43 @@ def test_compare_reference(centered_eight, non_centered_eight):
     other_elpd = result.loc["non_centered"]["elpd"]
     expected_diff = ref_elpd - other_elpd
     assert_almost_equal(result.loc["non_centered"]["elpd_diff"], expected_diff, decimal=12)
+
+
+def test_round_auto():
+    input_df = pd.DataFrame(
+        {
+            "rank": [0, 1, 2],
+            "elpd": [-31.026, -31.004, -1000],
+            "p": [0.94, 0.91, 2.2234],
+            "elpd_diff": [0.0, 0.031, 1.5],
+            "weight": [0.91, 0.09, 0.0001],
+            "se": [1.52, 1.43, 0.0],
+            "dse": [0.0, 0.061, 0.0],
+            "warning": [False, False, False],
+        },
+        index=["m1", "m2", "m3"],
+    )
+
+    result = _round_compare(input_df, 2)
+
+    assert_allclose(result["elpd"].to_numpy(), np.array([-31.0, -31.0, -1000.0]))
+    assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.0, 0.0, 2]))
+    assert_allclose(result["p"].to_numpy(), np.array([0.9, 0.9, 2.2]))
+    assert_allclose(result["weight"].to_numpy(), np.array([0.91, 0.09, 0]))
+    assert_allclose(result["se"].to_numpy(), np.array([1.52, 1.43, 0.0]))
+    assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06, 0.0]))
+    assert_allclose(result["warning"].to_numpy(), np.array([False, False, False]))
+
+
+def test_round_int(centered_eight, non_centered_eight):
+    model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
+    result = compare(model_dict, round_to=2)
+
+    assert_allclose(result["rank"].to_numpy(), np.array([0, 1]))
+    assert_allclose(result["elpd"].to_numpy(), np.array([-30.73, -30.76]))
+    assert_allclose(result["p"].to_numpy(), np.array([0.86, 0.95]))
+    assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.00, 0.03]))
+    assert_allclose(result["weight"].to_numpy(), np.array([1.0, 0.0]))
+    assert_allclose(result["se"].to_numpy(), np.array([1.38, 1.34]))
+    assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06]))
+    assert_allclose(result["warning"].to_numpy(), np.array([False, False]))

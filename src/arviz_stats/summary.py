@@ -64,9 +64,10 @@ def summary(
         If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
     round_to : int or {"auto", "none"}, optional
         Rounding specification. Defaults to "auto". If integer, number of decimal places to
-        round to. If "none", no rounding is applied. If "auto", and `fmt` is "xarray" defaults to
-        ``rcParams["stats.round_to"]``. If "auto" and `fmt` is in  {"wide", "long"}, applies the
-        following rounding rules:
+        round to. Use the string "None" or "none" to return raw numbers. If None use
+        ``rcParams["stats.round_to"]``.
+        If "auto", and `fmt` is "xarray" defaults to ``rcParams["stats.round_to"]``.
+        If "auto" and `fmt` is in  {"wide", "long"}, applies the following rounding rules:
 
         * ESS values (ess_bulk, ess_tail, ess_mean, ess_median, min_ss) are rounded down to int
         * R-hat always shows 2 digits after the decimal
@@ -143,7 +144,7 @@ def summary(
         ci_kind = rcParams["stats.ci_kind"]
     if sample_dims is None:
         sample_dims = rcParams["data.sample_dims"]
-    if round_to == "auto":
+    if round_to == "auto" or round_to is None:
         round_val = rcParams["stats.round_to"]
     else:
         round_val = round_to
@@ -245,13 +246,13 @@ def summary(
         summary_result.index = list(summary_result.index)
 
     if fmt == "xarray":
-        if (round_to is not None) and (round_to not in ("None", "none")):
+        if round_to not in ("None", "none"):
             summary_result = xr.apply_ufunc(round_num, summary_result, round_val, vectorize=True)
     else:
         if round_to == "auto":
             summary_result = _round_summary(summary_result, round_val)
         else:
-            if (round_to is not None) and (round_to not in ("None", "none")):
+            if round_to not in ("None", "none"):
                 summary_result = summary_result.map(lambda x: round_num(x, round_val))
 
     return summary_result
