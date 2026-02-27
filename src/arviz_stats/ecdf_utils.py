@@ -250,6 +250,10 @@ def compute_pit_for_histogram(dt_group, hist_dt):
         bin_edges = np.append(left_edges, right_edges[-1])
         dx = np.diff(bin_edges)
 
+        total = np.sum(histogram * dx)
+        if total > 0:
+            histogram = histogram / total
+
         xmin = bin_edges[:-1]
         xmax = bin_edges[1:]
         cdf = np.concatenate([[0.0], np.cumsum(histogram * dx)])
@@ -259,7 +263,7 @@ def compute_pit_for_histogram(dt_group, hist_dt):
 
         inside = (values > xmin[0]) & (values < xmax[-1])
         xi = values[inside]
-        idx = np.searchsorted(xmax, xi, side="right") - 1
+        idx = np.searchsorted(xmin, xi, side="right") - 1
         pit[inside] = cdf[idx] + (xi - xmin[idx]) * histogram[idx]
 
         return pit
