@@ -233,7 +233,7 @@ def test_compare_single_model(centered_eight, method):
 @pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
 def test_compare_many_models(centered_eight, method):
     models = {f"model_{i}": centered_eight for i in range(7)}
-    result = compare(models, method=method, round_to=None)
+    result = compare(models, method=method, round_to="None")
 
     assert len(result) == 7
     assert result["rank"].min() == 0
@@ -275,7 +275,7 @@ def test_compare_best_model_properties(centered_eight, non_centered_eight, metho
 @pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
 def test_compare_weights_properties(centered_eight, non_centered_eight, method):
     model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
-    result = compare(model_dict, method=method, round_to=None)
+    result = compare(model_dict, method=method, round_to="None")
 
     assert (result["weight"] >= 0).all()
     assert (result["weight"] <= 1).all()
@@ -294,7 +294,7 @@ def test_compare_sorting(centered_eight, non_centered_eight):
 @pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
 def test_compare_weight_sum(centered_eight, n_models, method):
     models = {f"model_{i}": centered_eight for i in range(n_models)}
-    result = compare(models, method=method, round_to=None)
+    result = compare(models, method=method, round_to="None")
     assert_allclose(result["weight"].sum(), 1.0)
 
 
@@ -438,7 +438,7 @@ def test_compare_order_stat_check(centered_eight, rng):
 def test_compare_order_stat_check_identical_models(centered_eight):
     models = {f"model_{i}": centered_eight for i in range(12)}
     with pytest.warns(UserWarning, match="All models have nearly identical performance"):
-        result = compare(models, round_to=None)
+        result = compare(models, round_to="None")
     assert len(result) == 12
     assert_allclose(result["elpd"].values, result["elpd"].values[0])
     assert_allclose(result["weight"].sum(), 1.0)
