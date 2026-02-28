@@ -5,13 +5,13 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "arviz-stats"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {file = "LICENSE"}
 authors = [
     {name = "ArviZ team", email = "arvizdevs@gmail.com"}
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Education",
@@ -19,14 +19,14 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dynamic = ["version", "description"]
 dependencies = [
   "numpy>=2",
-  "scipy>=1.10",
+  "scipy>=1.13",
 ]
 
 [tool.flit.module]
@@ -43,7 +43,7 @@ funding = "https://opencollective.com/arviz"
 xarray = [
   "arviz-base @ git+https://github.com/arviz-devs/arviz-base",
   "xarray-einstats",
-  "xarray",
+  "xarray>=2024.11.0",
 ]
 numba = [
   "numba",
