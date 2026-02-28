@@ -322,6 +322,22 @@ class _BaseAccessor:
         """Compute mode for all variables in the dataset."""
         return self._apply("mode", dim=dim, **kwargs)
 
+    def std(self, dim=None, **kwargs):
+        """Compute standard deviation for all variables in the dataset."""
+        return self._apply("std", dim=dim, **kwargs)
+
+    def var(self, dim=None, **kwargs):
+        """Compute variance for all variables in the dataset."""
+        return self._apply("var", dim=dim, **kwargs)
+
+    def mad(self, dim=None, **kwargs):
+        """Compute median absolute deviation for all variables in the dataset."""
+        return self._apply("mad", dim=dim, **kwargs)
+
+    def iqr(self, dim=None, **kwargs):
+        """Compute interquantile range for all variables in the dataset."""
+        return self._apply("iqr", dim=dim, **kwargs)
+
     def srs_estimator(self, n_data_points, **kwargs):
         """Compute simple random sampling estimate for subsampled LOO."""
         return self._apply(

@@ -358,6 +358,46 @@ def test_mode_multimodal(data_discrete_multimodal):
     assert mode.shape == (2,)
 
 
+def test_std(data_discrete):
+    std = array_stats.std(data_discrete, axis=(0, 1))
+    assert std.shape == (3,)
+
+
+def test_std_multimodal(data_multimodal):
+    std = array_stats.std(data_multimodal, axis=(0, 1))
+    assert std.shape == (2,)
+
+
+def test_var(data_discrete):
+    var = array_stats.var(data_discrete, axis=(0, 1))
+    assert var.shape == (3,)
+
+
+def test_var_multimodal(data_multimodal):
+    var = array_stats.var(data_multimodal, axis=(0, 1))
+    assert var.shape == (2,)
+
+
+def test_mad(data_discrete):
+    mad = array_stats.mad(data_discrete, axis=(0, 1))
+    assert mad.shape == (3,)
+
+
+def test_mad_multimodal(data_multimodal):
+    mad = array_stats.mad(data_multimodal, axis=(0, 1))
+    assert mad.shape == (2,)
+
+
+def test_iqr(data_discrete):
+    iqr = array_stats.iqr(data_discrete, axis=(0, 1))
+    assert iqr.shape == (3,)
+
+
+def test_iqr_multimodal(data_multimodal):
+    iqr = array_stats.iqr(data_multimodal, axis=(0, 1))
+    assert iqr.shape == (2,)
+
+
 @pytest.mark.parametrize("factor", [2, 5])
 def test_thin_factor_values(data_c0d1, factor):
     thinned = array_stats.thin(data_c0d1, factor=factor, chain_axis=0, draw_axis=1)

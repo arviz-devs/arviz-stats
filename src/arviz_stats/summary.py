@@ -10,7 +10,7 @@ from arviz_stats.base.stats_utils import get_decimal_places_from_se, round_num
 from arviz_stats.utils import _apply_multi_input_function
 from arviz_stats.validate import validate_dims
 
-__all__ = ["summary", "ci_in_rope", "mean", "median", "mode"]
+__all__ = ["summary", "ci_in_rope", "mean", "median", "mode", "std", "var", "iqr", "mad"]
 
 
 def summary(
@@ -169,14 +169,14 @@ def summary(
         mean_value = dataset.azstats.mean(dim=sample_dims, skipna=skipna).expand_dims(
             summary=["mean"]
         )
-        std = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
+        std_value = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
         ci = (
             dataset.azstats.eti(prob=ci_prob, dim=sample_dims, skipna=skipna)
             .rename({"ci_bound": "summary"})
             .assign_coords(summary=[f"{ci_kind}{ci_perc}_lb", f"{ci_kind}{ci_perc}_ub"])
         )
 
-        to_concat.extend((mean_value, std, ci))
+        to_concat.extend((mean_value, std_value, ci))
 
     if kind in ["diagnostics", "all"]:
         ess_bulk = dataset.azstats.ess(sample_dims=sample_dims, method="bulk").expand_dims(
@@ -199,7 +199,7 @@ def summary(
         median_value = dataset.azstats.median(dim=sample_dims, skipna=skipna).expand_dims(
             summary=["median"]
         )
-        mad = stats.median_abs_deviation(
+        mad_value = stats.median_abs_deviation(
             dataset, dims=("chain", "draw"), nan_policy="omit" if skipna else "propagate"
         ).expand_dims(summary=["mad"])
         ci = (
@@ -208,7 +208,7 @@ def summary(
             .assign_coords(summary=[f"eti{ci_perc}_lb", f"eti{ci_perc}_ub"])
         )
 
-        to_concat.extend((median_value, mad, ci))
+        to_concat.extend((median_value, mad_value, ci))
 
     if kind in ["diagnostics_median", "all_median"]:
         ess_median = dataset.azstats.ess(sample_dims=sample_dims, method="median").expand_dims(
@@ -527,7 +527,7 @@ def mean(
     Returns
     -------
     ndarray, DataArray, Dataset, DataTree
-        Requested mode of the provided input.
+        Requested mean of the provided input.
 
     See Also
     --------
@@ -632,7 +632,7 @@ def median(
     Returns
     -------
     ndarray, DataArray, Dataset, DataTree
-        Requested mode of the provided input.
+        Requested median of the provided input.
 
     See Also
     --------
@@ -790,6 +790,427 @@ def mode(
         var_names=var_names,
         filter_vars=filter_vars,
         coords=coords,
+        round_to=round_to,
+        skipna=skipna,
+        **kwargs,
+    )
+
+
+def std(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    round_to=None,
+    skipna=False,
+    **kwargs,
+):
+    r"""Compute the standard deviation.
+
+    The standard deviation is a measure of the amount of variation or dispersion of a set of values.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the mode
+    var_names : str or list of str, optional
+        Names of the variables for which the mode should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
+    skipna: bool, default False
+        If True, ignore NaN values.
+    **kwargs : any, optional
+        Forwarded to the array or dataarray interface for mode.
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested standard deviation of the provided input.
+
+    See Also
+    --------
+    :func:`arviz_stats.var`, :func:`arviz_stats.mad`
+
+
+    Examples
+    --------
+    Calculate the standard deviation of a Normal random variable:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: import numpy as np
+           ...: data = np.random.default_rng().normal(size=2000)
+           ...: azs.std(data)
+
+    Calculate the standard deviations for specific variables:
+
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: dt = azb.load_arviz_data("centered_eight")
+           ...: azs.std(dt, var_names=["mu", "theta"])
+
+    Calculate the standard deviations excluding the school dimension:
+
+    .. ipython::
+
+        In [1]: azs.std(dt, dim=["chain", "draw"])
+    """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
+    return _apply_multi_input_function(
+        "std",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        round_to=round_to,
+        skipna=skipna,
+        **kwargs,
+    )
+
+
+def var(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    round_to=None,
+    skipna=False,
+    **kwargs,
+):
+    r"""Compute the variance.
+
+    The variance is a measure of the dispersion of a set of values. It is calculated as the
+    average of the squared differences from the mean.
+
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the mode
+    var_names : str or list of str, optional
+        Names of the variables for which the mode should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
+    skipna: bool, default False
+        If True, ignore NaN values.
+    **kwargs : any, optional
+        Forwarded to the array or dataarray interface for mode.
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested variance of the provided input.
+
+    See Also
+    --------
+    :func:`arviz_stats.std`, :func:`arviz_stats.mad`
+
+
+    Examples
+    --------
+    Calculate the variance of a Normal random variable:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: import numpy as np
+           ...: data = np.random.default_rng().normal(size=2000)
+           ...: azs.var(data)
+
+    Calculate the variances for specific variables:
+
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: dt = azb.load_arviz_data("centered_eight")
+           ...: azs.var(dt, var_names=["mu", "theta"])
+
+    Calculate the variances excluding the school dimension:
+
+    .. ipython::
+
+        In [1]: azs.var(dt, dim=["chain", "draw"])
+    """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
+    return _apply_multi_input_function(
+        "var",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        round_to=round_to,
+        skipna=skipna,
+        **kwargs,
+    )
+
+
+def mad(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    round_to=None,
+    skipna=False,
+    **kwargs,
+):
+    r"""Compute the median absolute deviation (MAD).
+
+    The MAD is a robust measure of the variability of a univariate sample of quantitative data.
+    It is the median of the absolute deviations from the median of the data.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the mode
+    var_names : str or list of str, optional
+        Names of the variables for which the mode should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
+    skipna: bool, default False
+        If True, ignore NaN values.
+    **kwargs : any, optional
+        Forwarded to the array or dataarray interface for mode.
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested mode of the provided input.
+
+    See Also
+    --------
+    :func:`arviz_stats.iqr`, :func:`arviz_stats.std`
+
+
+    Examples
+    --------
+    Calculate the median absolute deviation of a Normal random variable:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: import numpy as np
+           ...: data = np.random.default_rng().normal(size=2000)
+           ...: azs.mad(data)
+
+    Calculate the median absolute deviations for specific variables:
+
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: dt = azb.load_arviz_data("centered_eight")
+           ...: azs.mad(dt, var_names=["mu", "theta"])
+
+    Calculate the median absolute deviations excluding the school dimension:
+
+    .. ipython::
+
+        In [1]: azs.mad(dt, dim=["chain", "draw"])
+    """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
+    return _apply_multi_input_function(
+        "mad",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        round_to=round_to,
+        skipna=skipna,
+        **kwargs,
+    )
+
+
+def iqr(
+    data,
+    dim=None,
+    group="posterior",
+    var_names=None,
+    filter_vars=None,
+    coords=None,
+    quantiles=(0.25, 0.75),
+    round_to=None,
+    skipna=False,
+    **kwargs,
+):
+    r"""Compute the interquantile range.
+
+    The interquantile range (IQR) is a measure of statistical dispersion, being equal to the
+    difference between two quantiles. The most common choice for the quantiles it to use the
+    0.25 and 0.75 quantiles. This is known as the interquartile range.
+
+    Parameters
+    ----------
+    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+        Input data. It will have different pre-processing applied to it depending on its type:
+
+        - array-like: call array layer within ``arviz-stats``.
+        - xarray object: apply dimension aware function to all relevant subsets
+        - others: passed to :func:`arviz_base.convert_to_dataset` then treated as
+          :class:`xarray.Dataset`. This option is discouraged due to needing this conversion
+          which is completely automated and will be needed again in future executions or
+          similar functions.
+
+          It is recommended to first perform the conversion manually and then call
+          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          its results.
+    dim : sequence of hashable, optional
+        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group on which to compute the mode
+    var_names : str or list of str, optional
+        Names of the variables for which the mode should be computed.
+    filter_vars : {None, "like", "regex"}, default None
+    coords : dict, optional
+        Dictionary of dimension/index names to coordinate values defining a subset
+        of the data for which to perform the computation.
+    quantiles : tuple of float, default (0.25, 0.75)
+        Quantiles to use for the interquantile range calculation. Must be between 0 and 1.
+    round_to: int or str or None, optional
+     If integer, number of decimal places to round the result. Integers can be negative.
+        If string of the form '2g' number of significant digits to round the result.
+        Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
+        return raw numbers.
+    skipna: bool, default False
+        If True, ignore NaN values.
+    **kwargs : any, optional
+        Forwarded to the array or dataarray interface for mode.
+
+    Returns
+    -------
+    ndarray, DataArray, Dataset, DataTree
+        Requested mode of the provided input.
+
+    See Also
+    --------
+    :func:`arviz_stats.mean`, :func:`arviz_stats.mode`
+
+
+    Examples
+    --------
+    Calculate the interquantile range of a Normal random variable:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: import numpy as np
+           ...: data = np.random.default_rng().normal(size=2000)
+           ...: azs.iqr(data)
+
+    Calculate the interquantile ranges for specific variables:
+
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: dt = azb.load_arviz_data("centered_eight")
+           ...: azs.iqr(dt, var_names=["mu", "theta"])
+
+    Calculate the interquantile ranges excluding the school dimension:
+
+    .. ipython::
+
+        In [1]: azs.iqr(dt, dim=["chain", "draw"])
+    """
+    if round_to is None:
+        round_to = rcParams["stats.round_to"]
+
+    return _apply_multi_input_function(
+        "iqr",
+        data,
+        dim,
+        "dim",
+        group=group,
+        var_names=var_names,
+        filter_vars=filter_vars,
+        coords=coords,
+        quantiles=quantiles,
         round_to=round_to,
         skipna=skipna,
         **kwargs,

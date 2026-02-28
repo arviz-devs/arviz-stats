@@ -773,7 +773,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         skipna : bool, default False
             Whether to ignore NaN values when computing the mean.
         axis : int, sequence of int or None, default -1
-            Axis or axes along which to compute the mode.
+            Axis or axes along which to compute the mean.
 
         Returns
         -------
@@ -804,7 +804,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         skipna : bool, default False
             Whether to ignore NaN values when computing the median.
         axis : int, sequence of int or None, default -1
-            Axis or axes along which to compute the mode.
+            Axis or axes along which to compute the median.
 
         Returns
         -------
@@ -851,6 +851,132 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             ravel=False,
         )
         return mode_ufunc(ary, round_to=round_to, skipna=skipna)
+
+    def std(self, ary, round_to=None, skipna=False, axis=None):
+        """Compute standard deviation of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            Whether to ignore NaN values when computing the standard deviation.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to compute the standard deviation.
+
+        Returns
+        -------
+        std : array-like
+            Standard deviation of the input values along the specified axis.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        std_ufunc = make_ufunc(
+            self._std,
+            n_output=1,
+            n_input=1,
+            n_dims=len(axes),
+            ravel=False,
+        )
+        return std_ufunc(ary, round_to=round_to, skipna=skipna)
+
+    def var(self, ary, round_to=None, skipna=False, axis=None):
+        """Compute variance of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            Whether to ignore NaN values when computing the variance.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to compute the variance.
+
+        Returns
+        -------
+        var : array-like
+            Variance of the input values along the specified axis.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        var_ufunc = make_ufunc(
+            self._var,
+            n_output=1,
+            n_input=1,
+            n_dims=len(axes),
+            ravel=False,
+        )
+        return var_ufunc(ary, round_to=round_to, skipna=skipna)
+
+    def mad(self, ary, round_to=None, skipna=False, axis=None):
+        """Compute mean absolute deviation of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            Whether to ignore NaN values when computing the mean absolute deviation.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to compute the mean absolute deviation.
+
+        Returns
+        -------
+        mad : array-like
+            Mean absolute deviation of the input values along the specified axis.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        mad_ufunc = make_ufunc(
+            self._mad,
+            n_output=1,
+            n_input=1,
+            n_dims=len(axes),
+            ravel=False,
+        )
+        return mad_ufunc(ary, round_to=round_to, skipna=skipna)
+
+    def iqr(self, ary, quantiles=(0.25, 0.75), round_to=None, skipna=False, axis=None):
+        """Compute interquantile range of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        quantiles : tuple of float, default (0.25, 0.75)
+            Quantiles to compute the interquartile range.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            Whether to ignore NaN values when computing the interquantile range.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to compute the interquantile range.
+
+        Returns
+        -------
+        iqr : array-like
+            Interquantile range of the input values along the specified axis.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        iqr_ufunc = make_ufunc(
+            self._iqr,
+            n_output=1,
+            n_input=1,
+            n_dims=len(axes),
+            ravel=False,
+        )
+        return iqr_ufunc(ary, quantiles=quantiles, round_to=round_to, skipna=skipna)
 
     def loo(
         self,

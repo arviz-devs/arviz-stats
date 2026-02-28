@@ -1,6 +1,6 @@
 """Tests for array interface base functions."""
 
-# pylint: disable=redefined-outer-name, no-self-use, protected-access
+# pylint: disable=redefined-outer-name, no-self-use, protected-access, too-many-lines
 import pytest
 
 from arviz_stats.base.array import (
@@ -628,6 +628,66 @@ class TestMode:
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(10, 20, 30))
         result = array_stats.mode(ary, axis=axis)
+        assert result.ndim < ary.ndim
+
+
+class TestStd:
+    def test_std_basic(self, array_stats):
+        rng = np.random.default_rng(42)
+        x = rng.normal(5, 1, 1000)
+        result = array_stats.std(x)
+        assert_allclose(result, 1, rtol=0.1)
+
+    @pytest.mark.parametrize("axis", [0, 1, -1])
+    def test_std_axis(self, array_stats, axis):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(10, 20, 30))
+        result = array_stats.std(ary, axis=axis)
+        assert result.ndim < ary.ndim
+
+
+class TestVar:
+    def test_var_basic(self, array_stats):
+        rng = np.random.default_rng(42)
+        x = rng.normal(5, 2, 1000)
+        result = array_stats.var(x)
+        assert_allclose(result, 4, rtol=0.1)
+
+    @pytest.mark.parametrize("axis", [0, 1, -1])
+    def test_var_axis(self, array_stats, axis):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(10, 20, 30))
+        result = array_stats.var(ary, axis=axis)
+        assert result.ndim < ary.ndim
+
+
+class TestMAD:
+    def test_mad_basic(self, array_stats):
+        rng = np.random.default_rng(42)
+        x = rng.normal(5, 1, 1000)
+        result = array_stats.mad(x)
+        assert_allclose(result, 0.67, rtol=0.1)
+
+    @pytest.mark.parametrize("axis", [0, 1, -1])
+    def test_mad_axis(self, array_stats, axis):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(10, 20, 30))
+        result = array_stats.mad(ary, axis=axis)
+        assert result.ndim < ary.ndim
+
+
+class TestIQR:
+    def test_iqr_basic(self, array_stats):
+        rng = np.random.default_rng(42)
+        x = rng.normal(5, 1, 1000)
+        result = array_stats.iqr(x)
+        assert_allclose(result, 1.3, rtol=0.1)
+
+    @pytest.mark.parametrize("axis", [0, 1, -1])
+    def test_iqr_axis(self, array_stats, axis):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(10, 20, 30))
+        result = array_stats.iqr(ary, axis=axis)
         assert result.ndim < ary.ndim
 
 

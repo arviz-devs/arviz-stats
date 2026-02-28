@@ -177,6 +177,58 @@ def test_mode(datatree):
     assert result.shape == ()
 
 
+def test_std(datatree):
+    result = mode(datatree)
+    assert result["mu"].shape == ()
+    assert result["theta"].shape == (7,)
+    result = mode(datatree.posterior)
+    assert result["mu"].shape == ()
+    assert result["theta"].shape == (7,)
+    result = mode(datatree.posterior["mu"])
+    assert result.shape == ()
+    result = mode(datatree.posterior["mu"].values)
+    assert result.shape == ()
+
+
+def test_var(datatree):
+    result = mode(datatree)
+    assert result["mu"].shape == ()
+    assert result["theta"].shape == (7,)
+    result = mode(datatree.posterior)
+    assert result["mu"].shape == ()
+    assert result["theta"].shape == (7,)
+    result = mode(datatree.posterior["mu"])
+    assert result.shape == ()
+    result = mode(datatree.posterior["mu"].values)
+    assert result.shape == ()
+
+
+def test_mad(datatree):
+    result = mode(datatree)
+    assert result["mu"].shape == ()
+    assert result["theta"].shape == (7,)
+    result = mode(datatree.posterior)
+    assert result["mu"].shape == ()
+    assert result["theta"].shape == (7,)
+    result = mode(datatree.posterior["mu"])
+    assert result.shape == ()
+    result = mode(datatree.posterior["mu"].values)
+    assert result.shape == ()
+
+
+def test_iqr(datatree):
+    result = mode(datatree)
+    assert result["mu"].shape == ()
+    assert result["theta"].shape == (7,)
+    result = mode(datatree.posterior)
+    assert result["mu"].shape == ()
+    assert result["theta"].shape == (7,)
+    result = mode(datatree.posterior["mu"])
+    assert result.shape == ()
+    result = mode(datatree.posterior["mu"].values)
+    assert result.shape == ()
+
+
 @pytest.mark.parametrize("filter_vars", [None, "like", "regex"])
 def test_summary_filter_vars(datatree, filter_vars):
     if filter_vars == "like":
