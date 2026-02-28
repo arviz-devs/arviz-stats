@@ -521,3 +521,146 @@ def mock_wrapper_2d(mock_2d_data):
             )
 
     return MockSamplingWrapper2D(model=None, idata_orig=mock_2d_data)
+
+
+# LFO-CV fixtures
+@pytest.fixture(scope="session")
+def data_with_time():
+    """Create simple time series data for LFO-CV testing."""
+    azb = importorskip("arviz_base")
+    rng = np.random.default_rng(42)
+
+    n_chains, n_draws, n_time = 4, 100, 30
+
+    posterior = {
+        "mu": rng.normal(size=(n_chains, n_draws)),
+        "sigma": np.abs(rng.normal(size=(n_chains, n_draws))),
+    }
+    log_likelihood = {
+        "obs": rng.normal(-1, 0.5, size=(n_chains, n_draws, n_time)),
+    }
+    observed_data = {
+        "obs": rng.normal(size=n_time),
+    }
+
+    return azb.from_dict(
+        {
+            "posterior": posterior,
+            "log_likelihood": log_likelihood,
+            "observed_data": observed_data,
+        },
+        dims={"obs": ["time"]},
+        coords={"time": np.arange(n_time)},
+    )
+
+
+@pytest.fixture(scope="session")
+def data_with_time_minimal():
+    """Create minimal time series data (min_observations + forecast_horizon + 1)."""
+    azb = importorskip("arviz_base")
+    rng = np.random.default_rng(42)
+
+    # Minimal: 10 (min_obs) + 5 (forecast) + 1 = 16 time points
+    n_chains, n_draws, n_time = 4, 100, 16
+
+    return azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(n_chains, n_draws))},
+            "log_likelihood": {"obs": rng.normal(size=(n_chains, n_draws, n_time))},
+            "observed_data": {"obs": rng.normal(size=n_time)},
+        },
+        dims={"obs": ["time"]},
+        coords={"time": np.arange(n_time)},
+    )
+
+
+@pytest.fixture
+def mock_lfo_wrapper(data_with_time):
+    """Create mock SamplingWrapper for LFO-CV testing."""
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    class MockLFOWrapper(SamplingWrapper):
+        def __init__(self, idata):
+            super().__init__(model=None, idata_orig=idata)
+            self.fit_count = 0
+            self.training_indices_history = []
+            self.test_indices_history = []
+            self.rng = np.random.default_rng(42)
+
+            self.original_obs = idata.observed_data["obs"].values
+            self.n_time = len(self.original_obs)
+
+        def sel_observations(self, idx):
+            """Select observations, excluding indices in idx from training."""
+            xr = importorskip("xarray")
+
+            all_indices = np.arange(self.n_time)
+            idx_array = np.atleast_1d(idx)
+            train_indices = np.setdiff1d(all_indices, idx_array)
+
+            train_obs = self.original_obs[train_indices]
+            test_obs = self.original_obs[idx_array]
+
+            # Track for testing
+            self.training_indices_history.append(train_indices.copy())
+            self.test_indices_history.append(idx_array.copy())
+
+            train_data = xr.DataArray(train_obs, dims=["time"], coords={"time": train_indices})
+            test_data = xr.DataArray(test_obs, dims=["time"], coords={"time": idx_array})
+
+            return train_data, test_data
+
+        def sample(self, modified_observed_data):
+            self.fit_count += 1
+            n_train = len(modified_observed_data)
+
+            # Mock posterior samples
+            n_samples = 400
+            mu_samples = self.rng.normal(
+                np.mean(modified_observed_data.values),
+                1.0 / np.sqrt(n_train),
+                n_samples,
+            )
+            return {"mu": mu_samples, "n_train": n_train}
+
+        def get_inference_data(self, fitted_model):
+            azb = importorskip("arviz_base")
+            xr = importorskip("xarray")
+
+            posterior_dict = {
+                "mu": xr.DataArray(
+                    fitted_model["mu"].reshape(1, -1),
+                    dims=["chain", "draw"],
+                    coords={"chain": [0], "draw": np.arange(len(fitted_model["mu"]))},
+                ),
+            }
+            return azb.from_dict({"posterior": posterior_dict})
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            xr = importorskip("xarray")
+            sp = importorskip("scipy")
+
+            mu = idata__i.posterior["mu"].values.flatten()
+            sigma = 1.0  # Fixed for mock
+
+            # Compute log-likelihood for excluded observations
+            obs_values = np.atleast_1d(excluded_obs.values)
+            log_lik = sp.stats.norm.logpdf(obs_values, loc=mu[:, np.newaxis], scale=sigma)
+
+            return xr.DataArray(
+                log_lik.T[np.newaxis, :, :],
+                dims=["chain", "time", "draw"],
+                coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
+            )
+
+    return MockLFOWrapper(data_with_time)
+
+
+@pytest.fixture
+def fresh_lfo_wrapper(mock_lfo_wrapper):
+    """Reset wrapper state for test isolation."""
+    mock_lfo_wrapper.fit_count = 0
+    mock_lfo_wrapper.training_indices_history = []
+    mock_lfo_wrapper.test_indices_history = []
+    mock_lfo_wrapper.rng = np.random.default_rng(42)
+    return mock_lfo_wrapper
