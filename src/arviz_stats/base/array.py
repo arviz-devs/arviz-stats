@@ -419,7 +419,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
     # pylint: disable=redefined-builtin, too-many-return-statements
     # noqa: PLR0911
-    def histogram(self, ary, bins=None, range=None, weights=None, axis=-1, density=None):
+    def histogram(self, ary, bins=None, range=None, weights=None, axis=-1, density=True):
         """Compute histogram over provided axis.
 
         Parameters
@@ -429,7 +429,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         range : (float, float), optional
         weights : array-like, optional
         axis : int, sequence of int or None, default -1
-        density : bool, optional
+        density : bool, default True
 
         Returns
         -------

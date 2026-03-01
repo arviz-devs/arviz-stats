@@ -264,7 +264,7 @@ class _CoreBase:
         return bins
 
     # pylint: disable=redefined-builtin
-    def _histogram(self, ary, bins=None, range=None, weights=None, density=None):
+    def _histogram(self, ary, bins=None, range=None, weights=None, density=True):
         if bins is None:
             bins = self._get_bins(ary)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)

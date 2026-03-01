@@ -161,7 +161,7 @@ class BaseDataArray:
         )
 
     # pylint: disable=redefined-builtin
-    def histogram(self, da, dim=None, bins=None, range=None, weights=None, density=None):
+    def histogram(self, da, dim=None, bins=None, range=None, weights=None, density=True):
         """Compute histogram on DataArray input."""
         dims = validate_dims(dim)
         edges_dim = "edges_dim" if da.name is None else f"edges_dim_{da.name}"
