@@ -2,7 +2,7 @@
 
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_dataset, convert_to_datatree, extract, from_dict, rcParams
+from arviz_base import convert_to_dataset, convert_to_datatree, extract, rcParams
 
 from arviz_stats.utils import get_array_function
 from arviz_stats.validate import validate_dims
@@ -193,12 +193,11 @@ def weight_predictions(
         for samples, dt in zip(new_samples, dts)
     ]
 
-    weighted_samples = from_dict(
+    pp = xr.concat(new_idatas, dim="sample")
+    weighted_samples = xr.DataTree.from_dict(
         {
-            group: xr.concat(new_idatas, dim="sample"),
+            group: pp,
             "observed_data": dts[0].observed_data,
-        },
-        sample_dims=list(new_idatas[0].dims.keys()),
+        }
     )
-
     return weighted_samples
