@@ -1,3 +1,32 @@
+<a id="v1.0.0"></a>
+# [v1.0.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.0.0) - 2026-03-02
+
+## What's Changed
+
+### New features
+* ecdf_pit: ensure the envelope starts at 0 and ends at 1 by [@aloctavodia](https://github.com/aloctavodia) in [#288](https://github.com/arviz-devs/arviz-stats/pull/288)
+* Add ability to specify a reference model in `compare()` by [@jordandeklerk](https://github.com/jordandeklerk) in [#291](https://github.com/arviz-devs/arviz-stats/pull/291)
+* Add functions for `loo_subsample` to array layer by [@jordandeklerk](https://github.com/jordandeklerk) in [#287](https://github.com/arviz-devs/arviz-stats/pull/287)
+* Use custom rounding rules for summary by [@aloctavodia](https://github.com/aloctavodia) in [#294](https://github.com/arviz-devs/arviz-stats/pull/294)
+* Add custom rounding rules to compare by [@aloctavodia](https://github.com/aloctavodia) in [#304](https://github.com/arviz-devs/arviz-stats/pull/304)
+* Add diagnose by [@aloctavodia](https://github.com/aloctavodia) in [#299](https://github.com/arviz-devs/arviz-stats/pull/299)
+
+### Maintenance and bug fixes
+* Fix CI after arviz-base and h5netcdf updates by [@tomicapretto](https://github.com/tomicapretto) in [#286](https://github.com/arviz-devs/arviz-stats/pull/286)
+* Fix bins computation by [@aloctavodia](https://github.com/aloctavodia) in [#295](https://github.com/arviz-devs/arviz-stats/pull/295)
+* Fix bug compute_pit_for_histogram by [@aloctavodia](https://github.com/aloctavodia) in [#308](https://github.com/arviz-devs/arviz-stats/pull/308)
+* update dependencies by [@OriolAbril](https://github.com/OriolAbril) in [#309](https://github.com/arviz-devs/arviz-stats/pull/309)
+
+### Documentation
+* Add missing entry for mean and median by [@aloctavodia](https://github.com/aloctavodia) in [#292](https://github.com/arviz-devs/arviz-stats/pull/292)
+* Improvements to contributing docs and workflow by [@OriolAbril](https://github.com/OriolAbril) in [#296](https://github.com/arviz-devs/arviz-stats/pull/296)
+
+
+**Full Changelog**: https://github.com/arviz-devs/arviz-stats/compare/v0.8.0...v1.0.0
+
+[Changes][v1.0.0]
+
+
 <a id="v0.8.0"></a>
 # [v0.8.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v0.8.0) - 2026-01-15
 
@@ -253,6 +282,7 @@
 [Changes][v.0.4.0]
 
 
+[v1.0.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.8.0...v1.0.0
 [v0.8.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.7.0...v0.8.0
 [v0.7.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.6.0...v0.7.0
 [v0.6.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.5.0...v0.6.0
