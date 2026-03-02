@@ -7,6 +7,7 @@ from ..helpers import importorskip
 
 np = importorskip("numpy")
 azb = importorskip("arviz_base")
+xr = importorskip("xarray")
 
 from numpy.testing import assert_allclose, assert_almost_equal, assert_array_equal
 
@@ -16,7 +17,7 @@ from arviz_stats.utils import get_log_likelihood_dataset
 
 
 def test_loo_expectations_invalid_kind(centered_eight):
-    with pytest.raises(ValueError, match="kind must be either"):
+    with pytest.raises(ValueError, match="kind must be one of"):
         loo_expectations(centered_eight, kind="invalid")
 
 
@@ -132,18 +133,34 @@ def test_loo_expectations_multidimensional():
 
     multi_dim_data = azb.from_dict(
         {
-            "posterior": {"mu": rng.normal(size=(2, 50))},
+            "posterior": {
+                "mu": rng.normal(size=(2, 50)),
+                "coef": rng.normal(size=(2, 50, 3, 4, 2)),
+            },
             "posterior_predictive": {"y": rng.normal(size=(2, 50, 3, 4))},
             "log_likelihood": {"y": rng.normal(size=(2, 50, 3, 4))},
             "observed_data": {"y": rng.normal(size=(3, 4))},
-        }
+        },
+        dims={"y": ["d1", "d2"], "coef": ["d1", "d2", "coef_dim"]},
     )
 
     result, khat = loo_expectations(multi_dim_data, kind="mean")
-
     assert result.shape == (3, 4)
     assert khat.shape == (3, 4)
     assert np.all(np.isfinite(result.values))
+    assert np.all(np.isfinite(khat.values))
+
+    result, khat = loo_expectations(
+        multi_dim_data,
+        kind="mean",
+        group="posterior",
+        var_name="coef",
+        log_likelihood_var_name="y",
+    )
+    assert result.shape == (3, 4, 2)
+    assert khat.shape == (3, 4, 2)
+    assert np.all(np.isfinite(result.values))
+    assert np.all(np.isfinite(khat.values))
 
 
 def test_loo_expectations_with_explicit_var_name(centered_eight):
