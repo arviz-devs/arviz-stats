@@ -55,6 +55,8 @@ def loo_expectations(
         Defaults to ``rcParams["data.sample_dims"]``
     log_likelihood_var_name: str, optional
         The name of the variable in the log_likelihood group to use for loo computation.
+        When log_likelihood contains more than one variable and group is ``posterior``,
+        this must be provided.
     kind: str, optional
         The kind of expectation to compute. Available options are:
 
@@ -76,9 +78,9 @@ def loo_expectations(
 
     Returns
     -------
-    loo_expec : DataArray
+    loo_expec : DataArray or Dataset
         The LOO-weighted expectations, one value per observation.
-    khat : DataArray
+    khat : DataArray or Dataset
         Function-specific Pareto k-hat diagnostics for each observation.
 
     Examples
@@ -118,7 +120,10 @@ def loo_expectations(
         https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    _valid_kinds = (
+    if group not in ["posterior_predictive", "posterior"]:
+        raise ValueError("group must be either 'posterior_predictive' or 'posterior'")
+
+    _validkinds = (
         "mean",
         "median",
         "var",
@@ -129,8 +134,8 @@ def loo_expectations(
         "circular_sd",
     )
 
-    if kind not in _valid_kinds:
-        raise ValueError(f"kind must be one of {_valid_kinds}, got {kind}")
+    if kind not in _validkinds:
+        raise ValueError(f"kind must be one of {_validkinds}, got {kind}")
     if kind == "quantile" and probs is None:
         raise ValueError("probs must be provided when kind is 'quantile'")
     if (log_weights is None) != (pareto_k is None):
@@ -138,25 +143,40 @@ def loo_expectations(
 
     if sample_dims is None:
         sample_dims = rcParams["data.sample_dims"]
-    if log_likelihood_var_name is None:
-        log_likelihood_var_name = list(data.observed_data.data_vars.keys())[0]
 
     data = convert_to_datatree(data)
     log_likelihood = get_log_likelihood_dataset(data, var_names=log_likelihood_var_name)
-    n_samples = int(
-        np.prod([log_likelihood[log_likelihood_var_name].sizes[dim] for dim in sample_dims])
-    )
+
+    if group != "posterior_predictive":
+        ll_var_names = list(log_likelihood.data_vars)
+        if len(ll_var_names) == 1:
+            log_likelihood = log_likelihood[ll_var_names[0]]
+        else:
+            raise TypeError(
+                f"Found several log likelihood arrays {ll_var_names}, log_likelihood_var_name"
+                " cannot be None"
+            )
+
+    n_samples = int(np.prod([log_likelihood.sizes[dim] for dim in sample_dims]))
     r_eff = _get_r_eff(data, n_samples)
 
     h_draws = extract(data, group=group, var_names=var_name, combined=False)
 
-    h_draws = h_draws.broadcast_like(log_likelihood[log_likelihood_var_name], exclude=sample_dims)
+    if group == "posterior_predictive" and isinstance(h_draws, xr.Dataset):
+        ll_var_names = list(log_likelihood.data_vars)
+        h_draws = h_draws[ll_var_names]
+    elif group == "posterior_predictive" and isinstance(log_likelihood, xr.Dataset):
+        ll_var_names = list(log_likelihood.data_vars)
+        if len(ll_var_names) == 1:
+            log_likelihood = log_likelihood[ll_var_names[0]]
+
+    h_draws = h_draws.broadcast_like(log_likelihood, exclude=sample_dims)
 
     if log_weights is not None:
         weights = log_weights.broadcast_like(h_draws, exclude=sample_dims)
         psis_kwargs = {"log_weights": weights, "pareto_k": pareto_k}
     else:
-        log_ratios = -log_likelihood[log_likelihood_var_name]
+        log_ratios = -log_likelihood
         weights = log_ratios.broadcast_like(h_draws, exclude=sample_dims)
         psis_kwargs = {"log_ratios": weights}
 
@@ -188,7 +208,12 @@ def loo_expectations(
         output_dtypes=[float],
     )
 
-    _warn_pareto_k(khat.values, n_samples)
+    if isinstance(khat, xr.Dataset):
+        khat_values = np.concatenate([khat[v].values for v in khat.data_vars])
+    else:
+        khat_values = khat.values
+
+    _warn_pareto_k(khat_values, n_samples)
 
     return loo_expec, khat
 
