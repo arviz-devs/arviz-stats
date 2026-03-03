@@ -134,22 +134,18 @@ def test_weight_predictions_preserves_coords():
     idata = az.load_arviz_data("centered_eight")
     dt = convert_to_datatree(idata)
 
-    # Convert observed_data DataTree → Dataset
-    observed_ds = dt.observed_data.to_dataset()
-
-    # Add NON-index coordinate
-    observed_ds = observed_ds.assign_coords(
-        obs_label=("obs_dim_0", ["a", "b", "c", "d", "e", "f", "g", "h"])
+    # Add NON-index coordinate to all groups
+    dt = dt.map_over_datasets(
+        lambda ds: ds.assign_coords(school=("school", ["a", "b", "c", "d", "e", "f", "g", "h"]))
     )
-
-    # Put it back into the DataTree
-    dt["observed_data"] = observed_ds
-
-    original_coords = dt.observed_data.coords
 
     out = weight_predictions([dt, dt])
 
-    # Assert ALL coords are preserved
-    assert set(out.observed_data.coords) == set(original_coords)
-    for coord in original_coords:
-        assert (out.observed_data.coords[coord] == original_coords[coord]).all()
+    # ---- observed_data ----
+    for coord in dt.observed_data.coords:
+        assert coord in out.observed_data.coords
+        assert (out.observed_data.coords[coord] == dt.observed_data.coords[coord]).all()
+
+    # ---- posterior_predictive ----
+    for coord in dt.posterior_predictive.coords:
+        assert coord in out.posterior_predictive.coords

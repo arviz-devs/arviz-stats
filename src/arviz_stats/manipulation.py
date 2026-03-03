@@ -193,10 +193,9 @@ def weight_predictions(
         for samples, dt in zip(new_samples, dts)
     ]
 
-    pp = xr.concat(new_idatas, dim="sample")
     weighted_samples = xr.DataTree.from_dict(
         {
-            group: pp,
+            group: xr.concat(new_idatas, dim="sample"),
             "observed_data": dts[0].observed_data,
         }
     )
