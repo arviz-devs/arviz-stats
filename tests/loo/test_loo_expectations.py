@@ -154,13 +154,14 @@ def test_loo_expectations_multidimensional():
         multi_dim_data,
         kind="mean",
         group="posterior",
-        var_name="coef",
         log_likelihood_var_name="y",
     )
-    assert result.shape == (3, 4, 2)
-    assert khat.shape == (3, 4, 2)
-    assert np.all(np.isfinite(result.values))
-    assert np.all(np.isfinite(khat.values))
+    assert result["mu"].shape == (3, 4)
+    assert result["coef"].shape == (3, 4, 2)
+    assert np.all(np.isfinite(result["mu"].values))
+    assert np.all(np.isfinite(result["coef"].values))
+    assert np.all(np.isfinite(khat["mu"].values))
+    assert np.all(np.isfinite(khat["coef"].values))
 
 
 def test_loo_expectations_with_explicit_var_name(centered_eight):

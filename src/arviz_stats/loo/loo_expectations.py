@@ -162,23 +162,55 @@ def loo_expectations(
 
     h_draws = extract(data, group=group, var_names=var_name, combined=False)
 
-    if group == "posterior_predictive" and isinstance(h_draws, xr.Dataset):
-        ll_var_names = list(log_likelihood.data_vars)
-        h_draws = h_draws[ll_var_names]
-    elif group == "posterior_predictive" and isinstance(log_likelihood, xr.Dataset):
-        ll_var_names = list(log_likelihood.data_vars)
-        if len(ll_var_names) == 1:
-            log_likelihood = log_likelihood[ll_var_names[0]]
+    if group == "posterior_predictive" and isinstance(log_likelihood, xr.Dataset):
+        if isinstance(h_draws, xr.Dataset):
+            shared_vars = [v for v in h_draws.data_vars if v in log_likelihood.data_vars]
+            h_draws = h_draws[shared_vars]
+            log_likelihood = log_likelihood[shared_vars]
+        elif h_draws.name in log_likelihood.data_vars:
+            log_likelihood = log_likelihood[h_draws.name]
 
-    h_draws = h_draws.broadcast_like(log_likelihood, exclude=sample_dims)
+    if isinstance(h_draws, xr.Dataset):
+        h_draws = xr.Dataset(
+            {
+                var: h_draws[var].broadcast_like(
+                    log_likelihood[var]
+                    if isinstance(log_likelihood, xr.Dataset)
+                    else log_likelihood,
+                    exclude=sample_dims,
+                )
+                for var in h_draws
+            }
+        )
+    else:
+        h_draws = h_draws.broadcast_like(log_likelihood, exclude=sample_dims)
 
     if log_weights is not None:
-        weights = log_weights.broadcast_like(h_draws, exclude=sample_dims)
-        psis_kwargs = {"log_weights": weights, "pareto_k": pareto_k}
+        raw_weights = log_weights
+        psis_kwargs = {"log_weights": log_weights, "pareto_k": pareto_k}
     else:
-        log_ratios = -log_likelihood
-        weights = log_ratios.broadcast_like(h_draws, exclude=sample_dims)
-        psis_kwargs = {"log_ratios": weights}
+        raw_weights = -log_likelihood
+        psis_kwargs = {"log_ratios": raw_weights}
+
+    def _broadcast_to_h_draws(values):
+        if isinstance(h_draws, xr.Dataset):
+            if isinstance(values, xr.Dataset):
+                return xr.Dataset(
+                    {
+                        var: values[var].broadcast_like(h_draws[var], exclude=sample_dims)
+                        for var in h_draws
+                    }
+                )
+            return xr.Dataset(
+                {var: values.broadcast_like(h_draws[var], exclude=sample_dims) for var in h_draws}
+            )
+        return values.broadcast_like(h_draws, exclude=sample_dims)
+
+    weights = _broadcast_to_h_draws(raw_weights)
+    psis_kwargs = {
+        key: _broadcast_to_h_draws(val) if isinstance(val, (xr.DataArray | xr.Dataset)) else val
+        for key, val in psis_kwargs.items()
+    }
 
     if kind == "quantile":
         loo_expec, _ = h_draws.azstats.loo_quantile(
@@ -209,7 +241,7 @@ def loo_expectations(
     )
 
     if isinstance(khat, xr.Dataset):
-        khat_values = np.concatenate([khat[v].values for v in khat.data_vars])
+        khat_values = np.concatenate([khat[v].values.ravel() for v in khat.data_vars])
     else:
         khat_values = khat.values
 
