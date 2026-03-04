@@ -1,5 +1,6 @@
 """Tests for uniformity_test array interface."""
 
+# pylint: disable=no-self-use, protected-access
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
@@ -141,10 +142,10 @@ class TestUniformityTestPritC:
         p_value, shapley = array_stats.uniformity_test(x, method="prit_c")
 
         x_sorted = np.sort(x)
-        N = len(x_sorted)
+        len_x = len(x_sorted)
         ranks = np.searchsorted(x_sorted, x_sorted, side="right")
-        probs1 = binom.cdf(ranks, N, x_sorted)
-        probs2 = binom.cdf(ranks - 1, N, x_sorted)
+        probs1 = binom.cdf(ranks, len_x, x_sorted)
+        probs2 = binom.cdf(ranks - 1, len_x, x_sorted)
         ps = 2 * np.minimum(probs1, 1 - probs2)
         expected_p = _cauchy_combination(ps, truncate=True)
 
