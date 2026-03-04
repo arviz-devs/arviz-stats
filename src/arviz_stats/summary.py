@@ -514,7 +514,7 @@ def mean(
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
     round_to: int or str or None, optional
-     If integer, number of decimal places to round the result. Integers can be negative.
+        If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
@@ -619,7 +619,7 @@ def median(
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
     round_to: int or str or None, optional
-     If integer, number of decimal places to round the result. Integers can be negative.
+        If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
@@ -726,7 +726,7 @@ def mode(
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
     round_to: int or str or None, optional
-     If integer, number of decimal places to round the result. Integers can be negative.
+        If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
@@ -836,7 +836,7 @@ def std(
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
     round_to: int or str or None, optional
-     If integer, number of decimal places to round the result. Integers can be negative.
+        If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
@@ -941,7 +941,7 @@ def var(
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
     round_to: int or str or None, optional
-     If integer, number of decimal places to round the result. Integers can be negative.
+        If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
@@ -1045,7 +1045,7 @@ def mad(
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
     round_to: int or str or None, optional
-     If integer, number of decimal places to round the result. Integers can be negative.
+        If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
@@ -1153,7 +1153,7 @@ def iqr(
     quantiles : tuple of float, default (0.25, 0.75)
         Quantiles to use for the interquantile range calculation. Must be between 0 and 1.
     round_to: int or str or None, optional
-     If integer, number of decimal places to round the result. Integers can be negative.
+        If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
