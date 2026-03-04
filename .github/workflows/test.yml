@@ -34,3 +34,37 @@ jobs:
         with:
           name: Python ${{ matrix.python-version }} ${{ matrix.job }}
           fail_ci_if_error: false
+
+  prerelease:
+    name: Pre-release (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install pre-release scientific stack
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --pre "numpy>=2" "scipy>=1.13"
+          python -m pip install -e ".[test]"
+          python -m pip install arviz-base xarray xarray-einstats netcdf4
+      - name: Show versions
+        run: |
+          python -c "import sys, numpy, scipy; print(sys.version); print('numpy', numpy.__version__); print('scipy', scipy.__version__)"
+          python -c "import arviz_base, xarray, xarray_einstats, netCDF4; print('arviz-base', arviz_base.__version__); print('xarray', xarray.__version__); print('xarray-einstats', xarray_einstats.__version__); print('netcdf4', netCDF4.__version__)"
+      - name: Collect-only (surface ABI warnings)
+        run: |
+          pytest -q --collect-only -W default 2>&1 | tee collect_only.log
+      - name: Full test run (warnings visible)
+        run: |
+          pytest -W default --tb=short 2>&1 | tee prerelease_pytest.log
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: prerelease-logs
+          path: |
+            collect_only.log
+            prerelease_pytest.log
