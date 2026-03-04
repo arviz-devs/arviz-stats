@@ -103,8 +103,9 @@ def loo_expectations(
 
     .. ipython::
 
-        In [3]: loo_expec, khat = loo_expectations(
-           ...:     dt, group="posterior", var_name="mu", log_likelihood_var_name="y"
+        In [3]: dt = load_arviz_data("centered_eight")
+           ...: loo_expec, khat = loo_expectations(
+           ...:     dt, group="posterior", var_name="mu", log_likelihood_var_name="obs"
            ...: )
            ...: loo_expec
 
