@@ -105,8 +105,7 @@ def loo_expectations(
 
         In [3]: dt = load_arviz_data("centered_eight")
            ...: loo_expec, khat = loo_expectations(
-           ...:     dt, group="posterior", var_name="mu", log_likelihood_var_name="obs"
-           ...: )
+           ...:     dt, group="posterior", var_name="mu")
            ...: loo_expec
 
     References
