@@ -401,7 +401,7 @@ class TestBinning:
 
     def test_histogram_basic(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
-        counts, edges = array_stats.histogram(ary)
+        counts, edges = array_stats.histogram(ary,density=False)
         assert len(counts) == len(edges) - 1
         assert counts.sum() == 1000
 
