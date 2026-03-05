@@ -8,17 +8,38 @@ from xarray import apply_ufunc
 from arviz_stats.loo.helper_loo import _get_r_eff, _warn_pareto_k
 from arviz_stats.metrics import _metrics, _summary_r2
 from arviz_stats.utils import get_log_likelihood_dataset
+from arviz_stats.validate import validate_dims
 
 
 def loo_expectations(
     data,
     var_name=None,
+    group="posterior_predictive",
+    sample_dims=None,
+    log_likelihood_var_name=None,
     kind="mean",
     probs=None,
     log_weights=None,
     pareto_k=None,
 ):
-    """Compute weighted expectations using the PSIS-LOO-CV method.
+    r"""Compute weighted expectations using the PSIS-LOO-CV method.
+
+    For each observation :math:`i`, approximates
+
+    .. math::
+
+        \mathbb{E}_{p(\theta \mid y_{-i})}[g(\theta)]
+        \approx \sum_s w_i^s \, g(\theta^s),
+
+    where :math:`w_i^s` are PSIS-smoothed importance weights and
+    :math:`g(\theta^s)` is any scalar quantity associated with draw
+    :math:`\theta^s`.
+
+    If :math:`g(\theta^s)` corresponds to posterior predictive samples
+    :math:`y_i^s \sim p(y_i \mid \theta^s)`, the result is the LOO prediction
+    for observation :math:`i`. If it corresponds to posterior parameters
+    or derived quantities, the result is the expectation of that quantity
+    under the LOO posterior :math:`p(\theta \mid y_{-i})`.
 
     The expectations assume that the PSIS approximation is working well.
     The PSIS-LOO-CV method is described in [1]_ and [2]_.
@@ -26,10 +47,17 @@ def loo_expectations(
     Parameters
     ----------
     data: DataTree or InferenceData
-        It should contain the groups `posterior_predictive` and `log_likelihood`.
+        It should contain the selected `group` and `log_likelihood`.
     var_name: str, optional
-        The name of the variable in log_likelihood groups storing the pointwise log
-        likelihood data to use for loo computation.
+        The name of the variable to compute the expectations for.
+    group: str
+        Group from which to compute weighted expectations. Defaults to ``posterior_predictive``.
+    sample_dims : str or sequence of hashable, optional
+        Defaults to ``rcParams["data.sample_dims"]``
+    log_likelihood_var_name: str, optional
+        The name of the variable in the log_likelihood group to use for loo computation.
+        When log_likelihood contains more than one variable and group is ``posterior``,
+        this must be provided.
     kind: str, optional
         The kind of expectation to compute. Available options are:
 
@@ -51,9 +79,9 @@ def loo_expectations(
 
     Returns
     -------
-    loo_expec : DataArray
-        The weighted expectations.
-    khat : DataArray
+    loo_expec : DataArray or Dataset
+        The LOO-weighted expectations, one value per observation.
+    khat : DataArray or Dataset
         Function-specific Pareto k-hat diagnostics for each observation.
 
     Examples
@@ -72,18 +100,31 @@ def loo_expectations(
 
         In [2]: khat
 
+    Compute LOO posterior mean for the parameter ``mu``:
+
+    .. ipython::
+
+        In [3]: dt = load_arviz_data("centered_eight")
+           ...: loo_expec, khat = loo_expectations(
+           ...:     dt, group="posterior", var_name="mu")
+           ...: loo_expec
+
     References
     ----------
-
-    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
-        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+    .. [1] Vehtari et al. *Practical Bayesian model evaluation using
+        leave-one-out cross-validation and WAIC*. Statistics and Computing,
+        27(5) (2017). https://doi.org/10.1007/s11222-016-9696-4
         arXiv preprint https://arxiv.org/abs/1507.04544.
 
     .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
-        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+        Journal of Machine Learning Research, 25(72) (2024).
+        https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    if kind not in [
+    if group not in ["posterior_predictive", "posterior"]:
+        raise ValueError("group must be either 'posterior_predictive' or 'posterior'")
+
+    _validkinds = (
         "mean",
         "median",
         "var",
@@ -92,81 +133,119 @@ def loo_expectations(
         "circular_mean",
         "circular_var",
         "circular_sd",
-    ]:
-        raise ValueError(
-            """kind must be either 'mean', 'median', 'var', 'sd', 'quantile',
-            'circular_mean', 'circular_var', or 'circular_sd'"""
-        )
-
-    if kind == "quantile" and probs is None:
-        raise ValueError("probs must be provided when kind is 'quantile'")
-
-    dims = ("chain", "draw")
-    if var_name is None:
-        var_name = list(data.observed_data.data_vars.keys())[0]
-
-    data = convert_to_datatree(data)
-    log_likelihood = get_log_likelihood_dataset(data, var_names=var_name)
-    n_samples = log_likelihood[var_name].sizes["chain"] * log_likelihood[var_name].sizes["draw"]
-
-    r_eff = _get_r_eff(data, n_samples)
-
-    posterior_predictive = extract(
-        data, group="posterior_predictive", var_names=var_name, combined=False
     )
 
-    sample_dims = list(dims)
+    if kind not in _validkinds:
+        raise ValueError(f"kind must be one of {_validkinds}, got {kind}")
+    if kind == "quantile" and probs is None:
+        raise ValueError("probs must be provided when kind is 'quantile'")
+    if (log_weights is None) != (pareto_k is None):
+        raise ValueError("log_weights and pareto_k must both be provided or both be None")
 
-    if log_weights is not None and pareto_k is not None:
-        if kind in ("mean", "median", "var", "sd", "circular_mean", "circular_var", "circular_sd"):
-            loo_expec, _ = posterior_predictive.azstats.loo_expectation(
-                log_weights=log_weights,
-                pareto_k=pareto_k,
-                kind=kind,
-                r_eff=r_eff,
-                sample_dims=sample_dims,
-            )
+    sample_dims = validate_dims(sample_dims)
+
+    data = convert_to_datatree(data)
+    log_likelihood = get_log_likelihood_dataset(data, var_names=log_likelihood_var_name)
+
+    if group != "posterior_predictive":
+        ll_var_names = list(log_likelihood.data_vars)
+        if len(ll_var_names) == 1:
+            log_likelihood = log_likelihood[ll_var_names[0]]
         else:
-            loo_expec, _ = posterior_predictive.azstats.loo_quantile(
-                log_weights=log_weights,
-                pareto_k=pareto_k,
-                probs=probs,
-                r_eff=r_eff,
-                sample_dims=sample_dims,
+            raise TypeError(
+                f"Found several log likelihood arrays {ll_var_names}, log_likelihood_var_name"
+                " cannot be None"
             )
-        log_ratios_for_khat = log_weights
+
+    n_samples = int(np.prod([log_likelihood.sizes[dim] for dim in sample_dims]))
+    r_eff = _get_r_eff(data, n_samples)
+
+    h_draws = extract(data, group=group, var_names=var_name, combined=False)
+
+    if group == "posterior_predictive" and isinstance(log_likelihood, xr.Dataset):
+        if isinstance(h_draws, xr.Dataset):
+            shared_vars = [v for v in h_draws.data_vars if v in log_likelihood.data_vars]
+            h_draws = h_draws[shared_vars]
+            log_likelihood = log_likelihood[shared_vars]
+        elif h_draws.name in log_likelihood.data_vars:
+            log_likelihood = log_likelihood[h_draws.name]
+
+    if isinstance(h_draws, xr.Dataset):
+        h_draws = xr.Dataset(
+            {
+                var: h_draws[var].broadcast_like(
+                    log_likelihood[var]
+                    if isinstance(log_likelihood, xr.Dataset)
+                    else log_likelihood,
+                    exclude=sample_dims,
+                )
+                for var in h_draws
+            }
+        )
     else:
-        log_ratios = -log_likelihood[var_name]
-        if kind in ("mean", "median", "var", "sd", "circular_mean", "circular_var", "circular_sd"):
-            loo_expec, _ = posterior_predictive.azstats.loo_expectation(
-                log_ratios=log_ratios,
-                kind=kind,
-                r_eff=r_eff,
-                sample_dims=sample_dims,
+        h_draws = h_draws.broadcast_like(log_likelihood, exclude=sample_dims)
+
+    if log_weights is not None:
+        raw_weights = log_weights
+        psis_kwargs = {"log_weights": log_weights, "pareto_k": pareto_k}
+    else:
+        raw_weights = -log_likelihood
+        psis_kwargs = {"log_ratios": raw_weights}
+
+    def _broadcast_to_h_draws(values):
+        if isinstance(h_draws, xr.Dataset):
+            if isinstance(values, xr.Dataset):
+                return xr.Dataset(
+                    {
+                        var: values[var].broadcast_like(h_draws[var], exclude=sample_dims)
+                        for var in h_draws
+                    }
+                )
+            return xr.Dataset(
+                {var: values.broadcast_like(h_draws[var], exclude=sample_dims) for var in h_draws}
             )
-        else:
-            loo_expec, _ = posterior_predictive.azstats.loo_quantile(
-                log_ratios=log_ratios,
-                probs=probs,
-                r_eff=r_eff,
-                sample_dims=sample_dims,
-            )
-        log_ratios_for_khat = log_ratios
+        return values.broadcast_like(h_draws, exclude=sample_dims)
+
+    weights = _broadcast_to_h_draws(raw_weights)
+    psis_kwargs = {
+        key: _broadcast_to_h_draws(val) if isinstance(val, (xr.DataArray | xr.Dataset)) else val
+        for key, val in psis_kwargs.items()
+    }
+
+    if kind == "quantile":
+        loo_expec, _ = h_draws.azstats.loo_quantile(
+            **psis_kwargs,
+            probs=probs,
+            r_eff=r_eff,
+            sample_dims=sample_dims,
+        )
+    else:
+        loo_expec, _ = h_draws.azstats.loo_expectation(
+            **psis_kwargs,
+            kind=kind,
+            r_eff=r_eff,
+            sample_dims=sample_dims,
+        )
 
     khat = apply_ufunc(
         _get_function_khat,
-        posterior_predictive,
-        log_ratios_for_khat,
-        input_core_dims=[dims, dims],
+        h_draws,
+        weights,
+        input_core_dims=[sample_dims, sample_dims],
         output_core_dims=[[]],
-        exclude_dims=set(dims),
+        exclude_dims=set(sample_dims),
         kwargs={"kind": kind},
         vectorize=True,
         dask="parallelized",
         output_dtypes=[float],
     )
 
-    _warn_pareto_k(khat.values, n_samples)
+    if isinstance(khat, xr.Dataset):
+        khat_values = np.concatenate([khat[v].values.ravel() for v in khat.data_vars])
+    else:
+        khat_values = khat.values
+
+    _warn_pareto_k(khat_values, n_samples)
 
     return loo_expec, khat
 
