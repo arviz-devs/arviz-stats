@@ -6,7 +6,6 @@ import pytest
 
 from .helpers import importorskip
 
-az = importorskip("arviz")
 xr = importorskip("xarray")
 azb = importorskip("arviz_base")
 
@@ -130,7 +129,7 @@ def test_thin_negative_factor(datatree):
 
 
 def test_weight_predictions_preserves_coords():
-    idata = az.load_arviz_data("centered_eight")
+    idata = azb.load_arviz_data("centered_eight")
     dt = convert_to_datatree(idata)
 
     # Add NON-index coordinate to all groups
