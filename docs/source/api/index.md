@@ -49,6 +49,7 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.ci_in_rope
    arviz_stats.ecdf
    arviz_stats.eti
+   arviz_stats.iqr
    arviz_stats.hdi
    arviz_stats.histogram
    arviz_stats.kde
@@ -57,13 +58,16 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.loo_metrics
    arviz_stats.loo_r2
    arviz_stats.loo_score
+   arviz_stats.mad
    arviz_stats.mean
    arviz_stats.median
    arviz_stats.metrics
    arviz_stats.mode
    arviz_stats.qds
    arviz_stats.residual_r2
+   arviz_stats.std
    arviz_stats.summary
+   arviz_stats.var
    arviz_stats.wasserstein
 ```
 

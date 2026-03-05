@@ -490,3 +490,92 @@ class _CoreBase:
         # For discrete data, we use the most frequent value.
         vals, cnts = np.unique(ary, return_counts=True)
         return vals[cnts.argmax()]
+
+    def _std(self, ary, round_to=None, skipna=False, axis=None):
+        """Compute standard deviation of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            If True, ignore NaN values.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the standard deviation.
+        """
+        if skipna:
+            ary = ary[~np.isnan(ary)]
+        return round_num(np.std(ary, axis=axis, ddof=1), round_to)
+
+    def _var(self, ary, round_to=None, skipna=False, axis=None):
+        """Compute variance of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            If True, ignore NaN values.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the variance.
+        """
+        if skipna:
+            ary = ary[~np.isnan(ary)]
+        return round_num(np.var(ary, axis=axis, ddof=1), round_to)
+
+    def _mad(self, ary, round_to=None, skipna=False, axis=None):
+        """Compute median absolute deviation of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            If True, ignore NaN values.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the median absolute deviation.
+        """
+        if skipna:
+            ary = ary[~np.isnan(ary)]
+        median = np.median(ary, axis=axis)
+        mad = np.median(np.abs(ary - median), axis=axis)
+        return round_num(mad, round_to)
+
+    def _iqr(self, ary, quantiles=(0.25, 0.75), round_to=None, skipna=False, axis=None):
+        """Compute interquantile range of values along the specified axis.
+
+        Parameters
+        ----------
+        values : array-like
+            Input array.
+        quantiles : tuple of two floats, default (0.25, 0.75)
+            Quantiles to compute the interquantile range. Defaults to (0.25, 0.75), that is,
+            the interquartile range.
+        round_to : int or str, optional
+            If integer, number of decimal places to round the result. If string of the
+            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            Use None to return raw numbers.
+        skipna : bool, default False
+            If True, ignore NaN values.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the interquartile range.
+        """
+        if skipna:
+            ary = ary[~np.isnan(ary)]
+        if ary.size == 0:
+            return np.nan
+        q1, q3 = np.quantile(ary, quantiles, axis=axis)
+        iqr = q3 - q1
+        return round_num(iqr, round_to)

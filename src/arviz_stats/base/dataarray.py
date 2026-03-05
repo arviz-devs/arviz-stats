@@ -978,6 +978,59 @@ class BaseDataArray:
             kwargs={"round_to": round_to, "skipna": skipna, "axis": np.arange(-len(dims), 0, 1)},
         )
 
+    def std(self, da, round_to=None, skipna=False, dim=None):
+        """Compute standard deviation on DataArray input."""
+        dims = validate_dims(dim)
+
+        return apply_ufunc(
+            self.array_class.std,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[]],
+            kwargs={"round_to": round_to, "skipna": skipna, "axis": np.arange(-len(dims), 0, 1)},
+        )
+
+    def var(self, da, round_to=None, skipna=False, dim=None):
+        """Compute variance on DataArray input."""
+        dims = validate_dims(dim)
+
+        return apply_ufunc(
+            self.array_class.var,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[]],
+            kwargs={"round_to": round_to, "skipna": skipna, "axis": np.arange(-len(dims), 0, 1)},
+        )
+
+    def mad(self, da, round_to=None, skipna=False, dim=None):
+        """Compute median absolute deviation on DataArray input."""
+        dims = validate_dims(dim)
+
+        return apply_ufunc(
+            self.array_class.mad,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[]],
+            kwargs={"round_to": round_to, "skipna": skipna, "axis": np.arange(-len(dims), 0, 1)},
+        )
+
+    def iqr(self, da, quantiles=(0.25, 0.75), round_to=None, skipna=False, dim=None):
+        """Compute interquartile range on DataArray input."""
+        dims = validate_dims(dim)
+
+        return apply_ufunc(
+            self.array_class.iqr,
+            da,
+            input_core_dims=[dims],
+            output_core_dims=[[]],
+            kwargs={
+                "quantiles": quantiles,
+                "round_to": round_to,
+                "skipna": skipna,
+                "axis": np.arange(-len(dims), 0, 1),
+            },
+        )
+
     def srs_estimator(self, da, n_data_points):
         """Compute simple random sampling estimate for subsampled LOO on DataArray.
 
