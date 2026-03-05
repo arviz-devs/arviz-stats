@@ -14,11 +14,6 @@ convert_to_datatree = azb.convert_to_datatree
 
 from arviz_stats.manipulation import thin, weight_predictions
 
-from .helpers import importorskip
-
-azb = importorskip("arviz_base")
-xr = importorskip("xarray")
-
 
 @pytest.mark.parametrize("factor", [2, 5, 10])
 def test_thin_numpy(factor):
