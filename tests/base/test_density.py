@@ -761,7 +761,7 @@ class TestHistogramEdgeCases:
 
     def test_histogram_single_bin(self, density, rng):
         x = rng.normal(size=100)
-        counts, edges = density._histogram(x, bins=1,density=False)
+        counts, edges = density._histogram(x, bins=1, density=False)
         assert len(counts) == 1
         assert len(edges) == 2
         assert np.sum(counts) == 100
