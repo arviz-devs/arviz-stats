@@ -8,6 +8,7 @@ from xarray import apply_ufunc
 from arviz_stats.loo.helper_loo import _get_r_eff, _warn_pareto_k
 from arviz_stats.metrics import _metrics, _summary_r2
 from arviz_stats.utils import get_log_likelihood_dataset
+from arviz_stats.validate import validate_dims
 
 
 def loo_expectations(
@@ -141,8 +142,7 @@ def loo_expectations(
     if (log_weights is None) != (pareto_k is None):
         raise ValueError("log_weights and pareto_k must both be provided or both be None")
 
-    if sample_dims is None:
-        sample_dims = rcParams["data.sample_dims"]
+    sample_dims = validate_dims(sample_dims)
 
     data = convert_to_datatree(data)
     log_likelihood = get_log_likelihood_dataset(data, var_names=log_likelihood_var_name)
