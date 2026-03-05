@@ -1,19 +1,23 @@
 """Test thinning function."""
 
 # pylint: disable=redefined-outer-name
-import arviz as az
 import numpy as np
 import pytest
-from arviz_base import convert_to_datatree
 
-from arviz_stats.manipulation import weight_predictions
+from .helpers import importorskip
+
+az = importorskip("arviz")
+xr = importorskip("xarray")
+azb = importorskip("arviz_base")
+
+convert_to_datatree = azb.convert_to_datatree
+
+from arviz_stats.manipulation import thin, weight_predictions
 
 from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
-
-from arviz_stats.manipulation import thin
 
 
 @pytest.mark.parametrize("factor", [2, 5, 10])
