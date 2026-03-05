@@ -140,5 +140,11 @@ testpaths = [
     "tests",
 ]
 
+filterwarnings = [
+    "error",
+    # netCDF4 C extension binary incompatibility with NumPy ABI; third-party issue
+    "ignore:numpy.ndarray size changed, may indicate binary incompatibility..*:RuntimeWarning",
+]
+
 [tool.coverage.run]
 source = ["arviz_stats"]
