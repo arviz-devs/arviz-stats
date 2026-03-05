@@ -199,7 +199,8 @@ def test_loo_metrics_round_to(centered_eight):
 
 
 def test_loo_r2_summary(datatree_regression):
-    result = loo_r2(datatree_regression, var_name="y")
+    with pytest.warns(UserWarning, match=r"Estimated shape parameter of Pareto distribution"):
+        result = loo_r2(datatree_regression, var_name="y")
     assert isinstance(result, tuple)
     assert hasattr(result, "_fields")
     assert "mean" in result._fields
@@ -209,27 +210,31 @@ def test_loo_r2_summary(datatree_regression):
 
 def test_loo_r2_array(datatree_regression):
     n_sims = 1000
-    result = loo_r2(datatree_regression, var_name="y", summary=False, n_simulations=n_sims)
+    with pytest.warns(UserWarning, match=r"Estimated shape parameter of Pareto distribution"):
+        result = loo_r2(datatree_regression, var_name="y", summary=False, n_simulations=n_sims)
     assert isinstance(result, np.ndarray)
     assert result.shape == (n_sims,)
 
 
 @pytest.mark.parametrize("point_estimate", ["mean", "median"])
 def test_loo_r2_point_estimate(datatree_regression, point_estimate):
-    result = loo_r2(datatree_regression, var_name="y", summary=True, point_estimate=point_estimate)
+    with pytest.warns(UserWarning, match=r"Estimated shape parameter of Pareto distribution"):
+        result = loo_r2(datatree_regression, var_name="y", summary=True, point_estimate=point_estimate)
     assert point_estimate in result._fields
 
 
 @pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
 def test_loo_r2_ci_kind(datatree_regression, ci_kind):
-    result = loo_r2(datatree_regression, var_name="y", summary=True, ci_kind=ci_kind)
+    with pytest.warns(UserWarning, match=r"Estimated shape parameter of Pareto distribution"):
+        result = loo_r2(datatree_regression, var_name="y", summary=True, ci_kind=ci_kind)
     assert f"{ci_kind}_lb" in result._fields
     assert f"{ci_kind}_ub" in result._fields
 
 
 @pytest.mark.parametrize("ci_prob", [0.9, 0.95])
 def test_loo_r2_ci_prob(datatree_regression, ci_prob):
-    result = loo_r2(datatree_regression, var_name="y", summary=True, ci_prob=ci_prob)
+    with pytest.warns(UserWarning, match=r"Estimated shape parameter of Pareto distribution"):
+        result = loo_r2(datatree_regression, var_name="y", summary=True, ci_prob=ci_prob)
     assert hasattr(result, "_fields")
 
 
