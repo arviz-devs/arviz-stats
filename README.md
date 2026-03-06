@@ -51,7 +51,7 @@ Another option is to clone the repository and install using git and setuptools:
 
 ```
 git clone https://github.com/arviz-devs/arviz-stats.git
-cd arviz
+cd arviz-stats
 python setup.py install
 ```
 
