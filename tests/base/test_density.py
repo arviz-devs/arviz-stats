@@ -755,13 +755,13 @@ class TestKDEEdgeCases:
 class TestHistogramEdgeCases:
     def test_histogram_empty_bins(self, density, rng):
         x = rng.normal(size=100)
-        counts, _edges = density._histogram(x, bins=100, range=(-10, -5))
+        counts, _edges = density._histogram(x, bins=100, range=(-10, -5), density=False)
         assert len(counts) == 100
         assert np.sum(counts) == 0
 
     def test_histogram_single_bin(self, density, rng):
         x = rng.normal(size=100)
-        counts, edges = density._histogram(x, bins=1)
+        counts, edges = density._histogram(x, bins=1, density=False)
         assert len(counts) == 1
         assert len(edges) == 2
         assert np.sum(counts) == 100

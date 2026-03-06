@@ -213,7 +213,7 @@ class TestBinning:
 
     def test_histogram_counts(self, core, rng):
         x = rng.normal(size=1000)
-        counts, edges = core._histogram(x)
+        counts, edges = core._histogram(x, density=False)
         assert counts.sum() == 1000
         assert len(counts) == len(edges) - 1
 
