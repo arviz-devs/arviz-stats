@@ -22,6 +22,7 @@ try:
         compare,
         SamplingWrapper,
         loo_kfold,
+        lfo_cv,
     )
     from arviz_stats.psense import psense, psense_summary
     from arviz_stats.metrics import bayesian_r2, kl_divergence, metrics, residual_r2, wasserstein
