@@ -6,10 +6,12 @@ import pytest
 
 from .helpers import importorskip
 
-azb = importorskip("arviz_base")
 xr = importorskip("xarray")
+azb = importorskip("arviz_base")
 
-from arviz_stats.manipulation import thin
+convert_to_datatree = azb.convert_to_datatree
+
+from arviz_stats.manipulation import thin, weight_predictions
 
 
 @pytest.mark.parametrize("factor", [2, 5, 10])
@@ -124,3 +126,24 @@ def test_thin_negative_factor(datatree):
     data = datatree.posterior["mu"]
     with pytest.raises(ValueError, match="factor must be greater than 1"):
         thin(data, factor=-5)
+
+
+def test_weight_predictions_preserves_coords():
+    idata = azb.load_arviz_data("centered_eight")
+    dt = convert_to_datatree(idata)
+
+    # Add NON-index coordinate to all groups
+    dt = dt.map_over_datasets(
+        lambda ds: ds.assign_coords(school=("school", ["a", "b", "c", "d", "e", "f", "g", "h"]))
+    )
+
+    out = weight_predictions([dt, dt])
+
+    # ---- observed_data ----
+    for coord in dt.observed_data.coords:
+        assert coord in out.observed_data.coords
+        assert (out.observed_data.coords[coord] == dt.observed_data.coords[coord]).all()
+
+    # ---- posterior_predictive ----
+    for coord in dt.posterior_predictive.coords:
+        assert coord in out.posterior_predictive.coords
