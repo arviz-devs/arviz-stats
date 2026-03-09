@@ -509,6 +509,8 @@ class _CoreBase:
         """
         if skipna:
             ary = ary[~np.isnan(ary)]
+        if np.size(ary) < 2:
+            return np.nan
         return round_num(np.std(ary, axis=axis, ddof=1), round_to)
 
     def _var(self, ary, round_to=None, skipna=False, axis=None):
@@ -529,6 +531,8 @@ class _CoreBase:
         """
         if skipna:
             ary = ary[~np.isnan(ary)]
+        if np.size(ary) < 2:
+            return np.nan
         return round_num(np.var(ary, axis=axis, ddof=1), round_to)
 
     def _mad(self, ary, round_to=None, skipna=False, axis=None):
@@ -549,6 +553,8 @@ class _CoreBase:
         """
         if skipna:
             ary = ary[~np.isnan(ary)]
+        if np.size(ary) == 0:
+            return np.nan
         median = np.median(ary, axis=axis)
         mad = np.median(np.abs(ary - median), axis=axis)
         return round_num(mad, round_to)
