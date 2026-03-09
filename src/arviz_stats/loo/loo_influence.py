@@ -77,7 +77,7 @@ def loo_influence(
            ...: loo_expec, _ = loo_influence(dt, kind="median", var_names="mu", group="posterior")
            ...: loo_expec
 
-     Calculate influential observations based on 3 quantiles of the posterior predictive:
+    Calculate influential observations based on 3 quantiles of the posterior predictive:
 
     .. ipython::
 
