@@ -48,6 +48,19 @@ class TestQuantileUfunc:
         _quantile_ufunc(a, q, out)
         assert_allclose(out[0], 49.5, rtol=0.01)
 
+    def test_quantile_parity(self):  
+        """Verify that the Numba quantile ufunc perfectly matches standard NumPy."""
+        rng = np.random.default_rng(42)
+        a = rng.normal(size=1000)
+        q = np.array([0.05, 0.5, 0.95])
+        
+        expected = np.quantile(a, q)
+        actual = np.zeros_like(expected)
+        
+        _quantile_ufunc(a, q, actual)
+        
+        assert_allclose(actual, expected, rtol=1e-7, atol=1e-7)
+
 
 class TestHistogramJit:
     def test_histogram_jit_basic(self, rng):
@@ -92,6 +105,24 @@ class TestNumbaArray:
         }
         assert result.shape == expected_shape[axis]
 
+    def test_quantile_axis_none(self, rng):
+        """Test that passing axis=None correctly triggers the ravel() fallback."""
+        array_stats = NumbaArray()
+        ary = rng.normal(size=(2, 3, 4))
+        
+        result = array_stats.quantile(ary, np.array([0.5]), axis=None)
+        
+        assert result.shape == (1,)
+
+    def test_quantile_scalar(self, rng):
+        """Test that passing a scalar quantile triggers the ndim==0 return path."""
+        array_stats = NumbaArray()
+        ary = rng.normal(size=(2, 3, 4))
+        
+        result = array_stats.quantile(ary, 0.5, axis=-1)
+        
+        assert result is not None
+
     @pytest.mark.parametrize("axis", [0, 1, -1])
     def test_quantile_axis_multiple_quantiles(self, rng, axis):
         array_stats = NumbaArray()
@@ -123,6 +154,35 @@ class TestNumbaArray:
         hist, edges = array_stats._histogram(ary, bins=10, density=True)
         bin_width = edges[1] - edges[0]
         assert_allclose(np.sum(hist) * bin_width, 1.0, rtol=0.01)
+
+    def test_histogram_bins_none(self, rng):
+        """Test that passing bins=None triggers the fallback to _get_bins."""
+        array_stats = NumbaArray()
+        ary = rng.normal(size=100) 
+        
+        hist, bin_edges = array_stats._histogram(ary, bins=None)
+        
+        assert hist is not None
+        assert bin_edges is not None
+        assert len(hist) > 0
+        assert len(bin_edges) == len(hist) + 1
+
+    def test_kde_initialization_and_run(self, rng):
+        """Test that kde_ufunc lazy initializes and executes correctly."""
+        array_stats = NumbaArray()
+        assert array_stats._kde_ufunc is None
+        ufunc = array_stats.kde_ufunc
+        assert ufunc is not None
+        assert array_stats._kde_ufunc is not None
+        
+        ary = rng.normal(size=100)
+        
+        x, pdf, bw = array_stats.kde(ary)
+        
+        assert x is not None
+        assert pdf is not None
+        assert bw is not None
+        assert len(x) == len(pdf)
 
     def test_histogram_weights_not_supported(self, rng):
         array_stats = NumbaArray()
@@ -159,6 +219,18 @@ class TestNumbaArray:
         assert grid.shape == expected_shape[axis]
         assert pdf.shape == expected_shape[axis]
         assert bw.shape == expected_bw_shape[axis]
+
+    def test_kde_axis_none(self, rng):
+        """Test that KDE correctly flattens the array when axis=None."""
+        array_stats = NumbaArray()
+        ary = rng.normal(size=(2, 50))
+        
+        x, pdf, bw = array_stats.kde(ary, axis=None)
+        
+        assert x is not None
+        assert pdf is not None
+        assert bw is not None
+        assert len(x) == len(pdf)
 
     def test_kde_ufunc_caching(self):
         array_stats = NumbaArray()
