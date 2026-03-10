@@ -145,7 +145,7 @@ def test_loo_i_with_log_lik_fn(centered_eight):
     def bad_log_lik_wrong_dims(observed_i, data):
         return xr.DataArray(np.ones((10, 20)), dims=["wrong1", "wrong2"])
 
-    with pytest.raises(ValueError, match="log_lik_fn must return DataArray with dimensions"):
+    with pytest.raises(ValueError, match="`log_lik_fn` must return DataArray with dimensions"):
         loo_i(0, centered_eight, var_name="obs", log_lik_fn=bad_log_lik_wrong_dims)
 
     with pytest.raises(TypeError, match="log_lik_fn must be a callable"):
@@ -179,12 +179,12 @@ def test_loo_with_log_lik_fn(centered_eight_with_sigma, drop_log_likelihood):
 
 
 def test_loo_with_log_lik_fn_not_callable(centered_eight):
-    with pytest.raises(TypeError, match="log_lik_fn must be a callable"):
+    with pytest.raises(TypeError, match="`log_lik_fn` must be a callable"):
         loo(centered_eight, var_name="obs", log_lik_fn="not a function")
 
 
 def test_loo_with_log_lik_fn_wrong_dims(centered_eight, wrong_dims_ll):
-    with pytest.raises(ValueError, match="log_lik_fn must return an object with dims"):
+    with pytest.raises(ValueError, match="`log_lik_fn` must return an object with dims"):
         loo(centered_eight, var_name="obs", log_lik_fn=wrong_dims_ll)
 
 
