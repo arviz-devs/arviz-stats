@@ -1441,13 +1441,7 @@ def _validate_log_lik_fn_result(log_likelihood, sample_dims, obs_dims, observed,
 
 
 def _custom_ll(data, var_name):
-    """Resolve variable name and log-likelihood.
-
-    Returns
-    -------
-    tuple of (str, DataArray or None)
-        Resolved *var_name* and reference log-likelihood.
-    """
+    """Resolve variable name and log-likelihood."""
     if not hasattr(data, "observed_data"):
         raise ValueError(
             "Must be able to extract an observed_data group from data when using log_lik_fn."
