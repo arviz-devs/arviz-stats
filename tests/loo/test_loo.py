@@ -178,21 +178,74 @@ def test_loo_with_log_lik_fn(centered_eight_with_sigma, drop_log_likelihood):
     assert_array_equal(result_standard.pareto_k.values, result_custom.pareto_k.values)
 
 
-@pytest.mark.parametrize(
-    "log_lik_fn,error_type,error_match",
-    [
-        ("not a function", TypeError, "log_lik_fn must be a callable"),
-        ("wrong_dims", ValueError, "log_lik_fn must return an object with dims"),
-    ],
-)
-def test_loo_with_log_lik_fn_errors(centered_eight, log_lik_fn, error_type, error_match):
-    if log_lik_fn == "wrong_dims":
+def test_loo_with_log_lik_fn_not_callable(centered_eight):
+    with pytest.raises(TypeError, match="log_lik_fn must be a callable"):
+        loo(centered_eight, var_name="obs", log_lik_fn="not a function")
 
-        def log_lik_fn(observed, data):  # pylint: disable=function-redefined
-            return xr.DataArray(np.ones((10, 20)), dims=["wrong1", "wrong2"])
 
-    with pytest.raises(error_type, match=error_match):
-        loo(centered_eight, var_name="obs", log_lik_fn=log_lik_fn)
+def test_loo_with_log_lik_fn_wrong_dims(centered_eight, wrong_dims_ll):
+    with pytest.raises(ValueError, match="log_lik_fn must return an object with dims"):
+        loo(centered_eight, var_name="obs", log_lik_fn=wrong_dims_ll)
+
+
+def test_loo_with_log_lik_fn_raises(centered_eight, failing_ll):
+    with pytest.raises(RuntimeError, match="boom"):
+        loo(centered_eight, var_name="obs", log_lik_fn=failing_ll)
+
+
+def test_loo_with_log_lik_fn_returns_dataarray(centered_eight_with_sigma):
+    reference_data = centered_eight_with_sigma.copy(deep=True)
+
+    def dataarray_log_lik_fn(observed, data):
+        theta = data.posterior["theta"]
+        obs_sd = data.constant_data["sigma"]
+        values = sp.stats.norm.logpdf(observed.values, loc=theta.values, scale=obs_sd.values)
+        return xr.DataArray(values, dims=theta.dims, coords=theta.coords)
+
+    result_standard = loo(reference_data, var_name="obs", pointwise=True)
+    result_custom = loo(
+        reference_data,
+        var_name="obs",
+        pointwise=True,
+        log_lik_fn=dataarray_log_lik_fn,
+    )
+
+    assert_almost_equal(result_standard.elpd, result_custom.elpd, decimal=10)
+    assert_almost_equal(result_standard.se, result_custom.se, decimal=10)
+    assert_array_equal(result_standard.pareto_k.values, result_custom.pareto_k.values)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_with_log_lik_fn_multidim():
+    rng = np.random.default_rng(42)
+    n_chains, n_draws, n_y0, n_y1 = 2, 50, 3, 4
+    mu = rng.normal(size=(n_chains, n_draws))
+    observed = rng.normal(size=(n_y0, n_y1))
+    ll = sp.stats.norm.logpdf(
+        observed[np.newaxis, np.newaxis, :, :], loc=mu[:, :, np.newaxis, np.newaxis]
+    )
+
+    data = azb.from_dict(
+        {
+            "posterior": {"mu": mu},
+            "log_likelihood": {"y": ll},
+            "observed_data": {"y": observed},
+        }
+    )
+
+    def custom_ll(obs, dt):
+        mu_vals = dt.posterior["mu"]
+        return sp.stats.norm.logpdf(
+            obs.values[np.newaxis, np.newaxis, :, :],
+            loc=mu_vals.values[:, :, np.newaxis, np.newaxis],
+        )
+
+    result_standard = loo(data, var_name="y", pointwise=True)
+    result_custom = loo(data, var_name="y", pointwise=True, log_lik_fn=custom_ll)
+
+    assert_almost_equal(result_standard.elpd, result_custom.elpd, decimal=10)
+    assert_almost_equal(result_standard.se, result_custom.se, decimal=10)
+    assert result_custom.elpd_i.shape == (n_y0, n_y1)
 
 
 def test_loo_i_numpy(centered_eight):

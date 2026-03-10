@@ -42,6 +42,7 @@ __all__ = [
     "_validate_sample_dims",
     "_get_sample_coords",
     "_custom_ll",
+    "_validate_log_lik_fn_result",
 ]
 
 LooInputs = namedtuple(
@@ -165,6 +166,9 @@ def _compute_loo_results(
 
 def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
     """Prepare inputs for PSIS-LOO-CV."""
+    if thin_factor is not None and log_lik_fn is not None:
+        raise ValueError("thin_factor and log_lik_fn cannot be used together.")
+
     data = convert_to_datatree(data)
     sample_dims = ["chain", "draw"]
 
@@ -209,27 +213,9 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
                 coords=coords,
             )
 
-        expected_dims = set(sample_dims) | set(obs_dims)
-        if set(log_likelihood.dims) != expected_dims:
-            raise ValueError(
-                f"log_lik_fn must return an object with dims {list(expected_dims)}. "
-                f"Got {list(log_likelihood.dims)}"
-            )
-
-        for dim in obs_dims:
-            if log_likelihood.sizes[dim] != observed.sizes[dim]:
-                raise ValueError(
-                    f"log_lik_fn must return an object with {dim} size {observed.sizes[dim]}. "
-                    f"Got {log_likelihood.sizes[dim]}"
-                )
-
-        if ref_log_likelihood is not None:
-            for dim in sample_dims:
-                if log_likelihood.sizes[dim] != ref_log_likelihood.sizes[dim]:
-                    raise ValueError(
-                        f"log_lik_fn returned size {log_likelihood.sizes[dim]} for '{dim}', "
-                        f"expected {ref_log_likelihood.sizes[dim]}"
-                    )
+        log_likelihood = _validate_log_lik_fn_result(
+            log_likelihood, sample_dims, obs_dims, observed, ref_log_likelihood
+        )
 
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
@@ -1433,6 +1419,33 @@ def _get_sample_coords(sample_dims, ref_log_lik, data_for_fn):
             {dim: posterior.coords[dim] for dim in sample_dims if dim in posterior.coords}
         )
     return coords
+
+
+def _validate_log_lik_fn_result(log_likelihood, sample_dims, obs_dims, observed, ref_log_lik):
+    """Validate dimensions and shapes of a custom log-likelihood result."""
+    expected_dims = set(sample_dims) | set(obs_dims)
+    if set(log_likelihood.dims) != expected_dims:
+        raise ValueError(
+            f"log_lik_fn must return an object with dims {sorted(expected_dims)}. "
+            f"Got {list(log_likelihood.dims)}"
+        )
+
+    for dim in obs_dims:
+        if log_likelihood.sizes[dim] != observed.sizes[dim]:
+            raise ValueError(
+                f"log_lik_fn must return an object with {dim} size {observed.sizes[dim]}. "
+                f"Got {log_likelihood.sizes[dim]}"
+            )
+
+    if ref_log_lik is not None:
+        for dim in sample_dims:
+            if log_likelihood.sizes[dim] != ref_log_lik.sizes[dim]:
+                raise ValueError(
+                    f"log_lik_fn returned size {log_likelihood.sizes[dim]} for '{dim}', "
+                    f"expected {ref_log_lik.sizes[dim]}"
+                )
+
+    return log_likelihood
 
 
 def _custom_ll(data, var_name):
