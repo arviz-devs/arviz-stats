@@ -1429,15 +1429,15 @@ def _var_name_custom_ll(data, var_name):
     """Get variable name from observed data for custom log-likelihood."""
     if not hasattr(data, "observed_data"):
         raise ValueError(
-            "Must be able to extract an observed_data group from data when using log_lik_fn."
+            "Must be able to extract an `observed_data` group from data when using `log_lik_fn`."
         )
 
     if var_name is not None:
         if var_name not in data.observed_data:
-            raise ValueError(f"Variable '{var_name}' not found in observed_data")
+            raise ValueError(f"Variable `{var_name}` not found in `observed_data`")
         return var_name
 
     obs_vars = list(data.observed_data.data_vars)
     if len(obs_vars) != 1:
-        raise ValueError("Multiple observed variables found; please specify var_name explicitly.")
+        raise ValueError("Multiple observed variables found. Please specify `var_name` explicitly.")
     return obs_vars[0]
