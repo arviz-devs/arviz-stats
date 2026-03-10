@@ -1411,14 +1411,14 @@ def _validate_log_lik_fn_result(log_likelihood, sample_dims, obs_dims, observed)
     expected_dims = set(sample_dims) | set(obs_dims)
     if set(log_likelihood.dims) != expected_dims:
         raise ValueError(
-            f"log_lik_fn must return an object with dims {sorted(expected_dims)}. "
+            f"`log_lik_fn` must return an object with dims {sorted(expected_dims)}. "
             f"Got {list(log_likelihood.dims)}"
         )
 
     for dim in obs_dims:
         if log_likelihood.sizes[dim] != observed.sizes[dim]:
             raise ValueError(
-                f"log_lik_fn must return an object with {dim} size {observed.sizes[dim]}. "
+                f"`log_lik_fn` must return an object with {dim} size {observed.sizes[dim]}. "
                 f"Got {log_likelihood.sizes[dim]}"
             )
 
