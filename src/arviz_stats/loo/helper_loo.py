@@ -294,11 +294,11 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
         )
     except ValueError as e:
         raise ValueError(
-            f"log_lik_fn must return DataArray with dimensions {tuple(sample_dims)}, "
+            f"`log_lik_fn` must return DataArray with dimensions {tuple(sample_dims)}, "
             f"got {tuple(log_lik_i.dims)}"
         ) from e
 
-    n_samples = int(log_lik_i.sizes["chain"] * log_lik_i.sizes["draw"])
+    n_samples = log_lik_i.sizes["chain"] * log_lik_i.sizes["draw"]
 
     return log_lik_i, sample_dims, obs_dims, n_samples
 
