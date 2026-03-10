@@ -188,20 +188,12 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
         var_name, ref_log_likelihood = _custom_ll(data, var_name)
         observed = data.observed_data[var_name]
         obs_dims = [dim for dim in observed.dims if dim not in sample_dims]
-        data_for_fn = _align_data_to_obs(data, observed)
 
-        try:
-            log_likelihood = log_lik_fn(observed, data_for_fn)
-        except Exception as err:
-            func_name = getattr(log_lik_fn, "__name__", "<callable>")
-            raise RuntimeError(
-                f"{func_name} failed while evaluating observed variable '{var_name}' due to "
-                f"{err.__class__.__name__}: {err}. Check your custom log-likelihood function."
-            ) from err
+        log_likelihood = log_lik_fn(observed, data)
 
         if not isinstance(log_likelihood, xr.DataArray):
             log_lik_array = np.asarray(log_likelihood)
-            coords = _get_sample_coords(sample_dims, ref_log_likelihood, data_for_fn)
+            coords = _get_sample_coords(sample_dims, ref_log_likelihood, data)
             coords.update(
                 {dim: observed.coords[dim] for dim in observed.dims if dim in observed.coords}
             )

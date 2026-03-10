@@ -189,7 +189,7 @@ def test_loo_with_log_lik_fn_wrong_dims(centered_eight, wrong_dims_ll):
 
 
 def test_loo_with_log_lik_fn_raises(centered_eight, failing_ll):
-    with pytest.raises(RuntimeError, match="boom"):
+    with pytest.raises(ZeroDivisionError, match="boom"):
         loo(centered_eight, var_name="obs", log_lik_fn=failing_ll)
 
 
