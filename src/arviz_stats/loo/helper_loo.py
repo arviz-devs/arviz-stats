@@ -41,7 +41,7 @@ __all__ = [
     "_log_lik_i",
     "_validate_sample_dims",
     "_get_sample_coords",
-    "_custom_ll",
+    "_var_name_custom_ll",
     "_validate_log_lik_fn_result",
 ]
 
@@ -167,7 +167,7 @@ def _compute_loo_results(
 def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
     """Prepare inputs for PSIS-LOO-CV."""
     if thin_factor is not None and log_lik_fn is not None:
-        raise ValueError("thin_factor and log_lik_fn cannot be used together.")
+        raise ValueError("`thin_factor` and `log_lik_fn` cannot be used together.")
 
     data = convert_to_datatree(data)
     sample_dims = ["chain", "draw"]
@@ -183,9 +183,9 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
             log_likelihood = thin(log_likelihood, factor=thin_factor)
     else:
         if not callable(log_lik_fn):
-            raise TypeError("log_lik_fn must be a callable function")
+            raise TypeError("`log_lik_fn` must be a callable function")
 
-        var_name, ref_log_likelihood = _custom_ll(data, var_name)
+        var_name = _var_name_custom_ll(data, var_name)
         observed = data.observed_data[var_name]
         obs_dims = [dim for dim in observed.dims if dim not in sample_dims]
 
@@ -193,7 +193,7 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
 
         if not isinstance(log_likelihood, xr.DataArray):
             log_lik_array = np.asarray(log_likelihood)
-            coords = _get_sample_coords(sample_dims, ref_log_likelihood, data)
+            coords = _get_sample_coords(sample_dims, data)
             coords.update(
                 {dim: observed.coords[dim] for dim in observed.dims if dim in observed.coords}
             )
@@ -206,7 +206,7 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
             )
 
         log_likelihood = _validate_log_lik_fn_result(
-            log_likelihood, sample_dims, obs_dims, observed, ref_log_likelihood
+            log_likelihood, sample_dims, obs_dims, observed
         )
 
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
@@ -236,7 +236,7 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
     if not callable(log_lik_fn):
         raise TypeError("log_lik_fn must be a callable function")
 
-    var_name, ref_log_likelihood = _custom_ll(data, var_name)
+    var_name = _var_name_custom_ll(data, var_name)
     sample_dims = ["chain", "draw"]
     obs_dims = [d for d in data.observed_data[var_name].dims if d not in sample_dims]
 
@@ -268,7 +268,7 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
 
     if not isinstance(log_lik_i, xr.DataArray):
         log_lik_array = np.asarray(log_lik_i)
-        coords = _get_sample_coords(sample_dims, ref_log_likelihood, data_for_fn)
+        coords = _get_sample_coords(sample_dims, data_for_fn)
 
         log_lik_i = ndarray_to_dataarray(
             log_lik_array,
@@ -289,7 +289,7 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
         log_lik_i = _validate_sample_dims(
             log_lik_i,
             sample_dims=tuple(sample_dims),
-            ref_sizes=ref_log_likelihood,
+            ref_sizes=None,
             obs_dims=obs_dims,
         )
     except ValueError as e:
@@ -298,11 +298,7 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
             f"got {tuple(log_lik_i.dims)}"
         ) from e
 
-    n_samples = (
-        ref_log_likelihood.chain.size * ref_log_likelihood.draw.size
-        if ref_log_likelihood is not None
-        else int(log_lik_i.sizes["chain"] * log_lik_i.sizes["draw"])
-    )
+    n_samples = int(log_lik_i.sizes["chain"] * log_lik_i.sizes["draw"])
 
     return log_lik_i, sample_dims, obs_dims, n_samples
 
@@ -1379,11 +1375,8 @@ def _validate_sample_dims(
     return data
 
 
-def _get_sample_coords(sample_dims, ref_log_lik, data_for_fn):
-    """Collect sample dimension coordinates."""
-    if ref_log_lik is not None:
-        return {dim: ref_log_lik.coords[dim] for dim in sample_dims if dim in ref_log_lik.coords}
-
+def _get_sample_coords(sample_dims, data_for_fn):
+    """Collect sample dimension coordinates from the posterior."""
     coords = {}
     posterior = getattr(data_for_fn, "posterior", None)
     if posterior is None:
@@ -1413,7 +1406,7 @@ def _get_sample_coords(sample_dims, ref_log_lik, data_for_fn):
     return coords
 
 
-def _validate_log_lik_fn_result(log_likelihood, sample_dims, obs_dims, observed, ref_log_lik):
+def _validate_log_lik_fn_result(log_likelihood, sample_dims, obs_dims, observed):
     """Validate dimensions and shapes of a custom log-likelihood result."""
     expected_dims = set(sample_dims) | set(obs_dims)
     if set(log_likelihood.dims) != expected_dims:
@@ -1429,38 +1422,22 @@ def _validate_log_lik_fn_result(log_likelihood, sample_dims, obs_dims, observed,
                 f"Got {log_likelihood.sizes[dim]}"
             )
 
-    if ref_log_lik is not None:
-        for dim in sample_dims:
-            if log_likelihood.sizes[dim] != ref_log_lik.sizes[dim]:
-                raise ValueError(
-                    f"log_lik_fn returned size {log_likelihood.sizes[dim]} for '{dim}', "
-                    f"expected {ref_log_lik.sizes[dim]}"
-                )
-
     return log_likelihood
 
 
-def _custom_ll(data, var_name):
-    """Resolve variable name and log-likelihood."""
+def _var_name_custom_ll(data, var_name):
+    """Get variable name from observed data for custom log-likelihood."""
     if not hasattr(data, "observed_data"):
         raise ValueError(
             "Must be able to extract an observed_data group from data when using log_lik_fn."
         )
 
-    ref_log_likelihood = None
-    try:
-        ref_log_likelihood = get_log_likelihood(data, var_name=var_name)
-        if var_name is None and ref_log_likelihood.name is not None:
-            var_name = ref_log_likelihood.name
-    except TypeError as exc:
-        obs_vars = list(data.observed_data.data_vars)
-        if var_name is None:
-            if len(obs_vars) != 1:
-                raise ValueError(
-                    "Multiple observed variables found; please specify var_name explicitly."
-                ) from exc
-            var_name = obs_vars[0]
-        elif var_name not in data.observed_data:
-            raise ValueError(f"Variable '{var_name}' not found in observed_data") from exc
+    if var_name is not None:
+        if var_name not in data.observed_data:
+            raise ValueError(f"Variable '{var_name}' not found in observed_data")
+        return var_name
 
-    return var_name, ref_log_likelihood
+    obs_vars = list(data.observed_data.data_vars)
+    if len(obs_vars) != 1:
+        raise ValueError("Multiple observed variables found; please specify var_name explicitly.")
+    return obs_vars[0]

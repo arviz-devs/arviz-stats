@@ -193,6 +193,7 @@ def test_loo_with_log_lik_fn_raises(centered_eight, failing_ll):
         loo(centered_eight, var_name="obs", log_lik_fn=failing_ll)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_loo_with_log_lik_fn_returns_dataarray(centered_eight_with_sigma):
     reference_data = centered_eight_with_sigma.copy(deep=True)
 
