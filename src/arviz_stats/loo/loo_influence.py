@@ -47,8 +47,8 @@ def loo_influence(
         - 'quantile'.
         - 'octiles'.
     standardize: bool
-        Whether to standardized the computed metric.
-        It use the standard deviation when kind=mean and MAD when kind=median.
+        Whether to standardize the computed metric.
+        It uses the standard deviation when ``kind=mean`` and MAD when ``kind=median``.
         Ignored for the other values of kind.
     probs: float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
@@ -74,15 +74,15 @@ def loo_influence(
         In [1]: from arviz_stats import loo_influence
            ...: from arviz_base import load_arviz_data
            ...: dt = load_arviz_data("centered_eight")
-           ...: loo_expec, _ = loo_influence(dt, kind="median", var_names="mu", group="posterior")
-           ...: loo_expec
+           ...: shift, _ = loo_influence(dt, kind="median", var_names="mu", group="posterior")
+           ...: shift
 
     Calculate influential observations based on 3 quantiles of the posterior predictive:
 
     .. ipython::
 
-        In [2]: loo_expec, khat = loo_influence(dt, kind="quantile", probs=[0.25, 0.5, 0.75])
-           ...: loo_expec
+        In [2]: shift, khat = loo_influence(dt, kind="quantile", probs=[0.25, 0.5, 0.75])
+           ...: shift
     """
     sample_dims = validate_dims(sample_dims)
 
@@ -109,11 +109,12 @@ def loo_influence(
     if kind in ["quantile", "octiles"]:
         loo_expec, khat = loo_expectations(
             data,
-            kind="quantile",
-            group=group,
             var_name=var_names,
-            probs=probs,
+            group=group,
+            sample_dims=sample_dims,
             log_likelihood_var_name=log_likelihood_var_name,
+            kind="quantile",
+            probs=probs,
             log_weights=log_weights,
             pareto_k=pareto_k,
         )
@@ -122,11 +123,11 @@ def loo_influence(
     else:
         loo_expec, khat = loo_expectations(
             data,
-            kind=kind,
-            probs=probs,
-            group=group,
             var_name=var_names,
+            group=group,
+            sample_dims=sample_dims,
             log_likelihood_var_name=log_likelihood_var_name,
+            kind=kind,
             log_weights=log_weights,
             pareto_k=pareto_k,
         )
