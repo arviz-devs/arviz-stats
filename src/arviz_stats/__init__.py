@@ -10,6 +10,7 @@ try:
         loo,
         loo_i,
         loo_expectations,
+        loo_influence,
         loo_metrics,
         loo_r2,
         loo_score,
