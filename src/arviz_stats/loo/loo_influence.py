@@ -44,6 +44,8 @@ def loo_influence(
 
         - 'mean'. Default.
         - 'median'.
+        - 'sd'.
+        - 'var'.
         - 'quantile'.
         - 'octiles'.
     standardize: bool
