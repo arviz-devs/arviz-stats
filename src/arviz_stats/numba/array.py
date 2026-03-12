@@ -135,6 +135,26 @@ class NumbaArray(BaseArray):
     def kde(self, ary, axis=-1, circular=False, grid_len=512, **kwargs):
         """Compute the guvectorized kde.
 
+        Parameters
+        ----------
+        ary : array-like
+            Input array.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which the KDE is computed.
+        circular : bool, default False
+            Whether the data is circular (e.g., angles).
+        grid_len : int, default 512
+            Number of points on the KDE grid.
+        **kwargs : dict, optional
+            Additional keyword arguments passed to the KDE implementation.
+            Supported arguments include:
+
+            * bw : str or float, optional
+                The bandwidth of the kernel. Options include "scott" (default),
+                "silverman", "isj", and "experimental", or a positive float.
+            * adaptive : bool, optional
+                Whether to use an adaptive KDE. Defaults to False.
+
         Notes
         -----
         There currenly is no jit compiling of the kde computation steps other than the
