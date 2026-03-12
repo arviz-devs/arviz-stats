@@ -245,8 +245,9 @@ def hypergeom_cdf(x_values, draws, successes, population):
 
 def compute_pit_for_histogram(dt_group, hist_dt):
     """Compute the PIT values for histogram distributions."""
+    rng = np.random.default_rng(3146)
 
-    def _pit_for_hist(values, left_edges, right_edges, histogram):
+    def _pit_for_hist(value, left_edges, right_edges, histogram):
         bin_edges = np.append(left_edges, right_edges[-1])
         dx = np.diff(bin_edges)
 
@@ -258,15 +259,13 @@ def compute_pit_for_histogram(dt_group, hist_dt):
         xmax = bin_edges[1:]
         cdf = np.concatenate([[0.0], np.cumsum(histogram * dx)])
 
-        pit = np.zeros_like(values, dtype=float)
-        pit[values >= xmax[-1]] = 1.0
+        if value <= xmin[0]:
+            return rng.uniform(0, eps)
+        if value >= xmax[-1]:
+            return rng.uniform(1 - eps, 1)
 
-        inside = (values > xmin[0]) & (values < xmax[-1])
-        xi = values[inside]
-        idx = np.searchsorted(xmin, xi, side="right") - 1
-        pit[inside] = cdf[idx] + (xi - xmin[idx]) * histogram[idx]
-
-        return pit
+        idx = np.searchsorted(xmin, value, side="right") - 1
+        return cdf[idx] + (value - xmin[idx]) * histogram[idx]
 
     pit_results = {}
     for var_name in dt_group.data_vars:
@@ -276,6 +275,7 @@ def compute_pit_for_histogram(dt_group, hist_dt):
         histogram = hist_data.sel(plot_axis="histogram")
 
         sample = dt_group[var_name].stack(sample=("chain", "draw"))
+        eps = 0.5 / sample.sizes["sample"]
 
         pit_da = xr.apply_ufunc(
             _pit_for_hist,
@@ -302,19 +302,25 @@ def compute_pit_for_histogram(dt_group, hist_dt):
 
 def compute_pit_for_kde(dt_group, kde_dt):
     """Compute the PIT values for KDE distributions."""
+    rng = np.random.default_rng(3146)
     pit_results = {}
+
     for var_name in dt_group.data_vars:
         kde_data = kde_dt[var_name]
         grid = kde_data.sel(plot_axis="x")
         density = kde_data.sel(plot_axis="y")
-
         dx = grid.diff("kde_dim").isel(kde_dim=0)
         cdf = (density.cumsum("kde_dim") * dx).clip(0.0, 1.0)
-
         sample = dt_group[var_name].stack(sample=("chain", "draw"))
+        eps = 0.5 / sample.sizes["sample"]
 
-        def interp_cdf(sample, grid, cdf):
-            return np.interp(sample, grid, cdf, left=0.0, right=1.0)
+        def interp_cdf(value, grid, cdf, eps=eps, rng=rng):
+            pit = float(np.interp(value, grid, cdf, left=0.0, right=1.0))
+            if pit == 0.0:
+                return rng.uniform(0, eps)
+            if pit == 1.0:
+                return rng.uniform(1 - eps, 1)
+            return pit
 
         pit = xr.apply_ufunc(
             interp_cdf,
@@ -327,7 +333,6 @@ def compute_pit_for_kde(dt_group, kde_dt):
             dask="parallelized",
             output_dtypes=[float],
         )
-
         pit_results[var_name] = pit
 
     return xr.Dataset(pit_results)
@@ -335,7 +340,7 @@ def compute_pit_for_kde(dt_group, kde_dt):
 
 def compute_pit_for_qds(dt_group, qds_dt):
     """Compute the PIT values for quantile dot plot distributions."""
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(3146)
 
     def _pit_f_for_qds(values, quantile_positions, radius, nqds):
         pit = np.zeros_like(values, dtype=float)
@@ -358,10 +363,9 @@ def compute_pit_for_qds(dt_group, qds_dt):
                     q_min = np.argmax(candidates_mask)
                 else:
                     q_min = q_max - 1 if q_max > 0 else 0
+                pit[i] = rng.uniform(q_min, q_max) / nqds
             else:
-                q_min = 0
-
-            pit[i] = rng.uniform(q_min, q_max) / nqds
+                pit[i] = rng.uniform(0, 0.5) / nqds
 
         return pit
 
