@@ -139,6 +139,7 @@ disallow_untyped_defs = true
 testpaths = [
     "tests",
 ]
+filterwarnings = ["error"]
 
 [tool.coverage.run]
 source = ["arviz_stats"]
