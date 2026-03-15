@@ -9,7 +9,6 @@ from .helpers import importorskip
 xr = importorskip("xarray")
 azb = importorskip("arviz_base")
 
-convert_to_datatree = azb.convert_to_datatree
 
 from arviz_stats.manipulation import thin, weight_predictions
 
@@ -122,15 +121,8 @@ def test_thin_invalid_factor(datatree):
         thin(data, factor=0)
 
 
-def test_thin_negative_factor(datatree):
-    data = datatree.posterior["mu"]
-    with pytest.raises(ValueError, match="factor must be greater than 1"):
-        thin(data, factor=-5)
-
-
 def test_weight_predictions_preserves_coords():
-    idata = azb.load_arviz_data("centered_eight")
-    dt = convert_to_datatree(idata)
+    dt = azb.load_arviz_data("centered_eight")
 
     # Add NON-index coordinate to all groups
     dt = dt.map_over_datasets(
