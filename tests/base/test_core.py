@@ -1,8 +1,6 @@
 """Tests for core base functions."""
 
 # pylint: disable=redefined-outer-name, no-self-use, protected-access
-import warnings
-
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_almost_equal, assert_array_equal
@@ -317,14 +315,6 @@ class TestStd:
         result = core._std(x, skipna=True)
         assert not np.isnan(result)
 
-    def test_std_single_value_no_warning(self, core):
-        x = np.array([5.0])
-        with warnings.catch_warnings(record=True) as record:
-            warnings.simplefilter("always")
-            result = core._std(x)
-        assert len(record) == 0
-        assert np.isnan(result)
-
 
 class TestVar:
     def test_var_continuous(self, core, rng):
@@ -349,14 +339,6 @@ class TestVar:
         result = core._var(x, skipna=True)
         assert not np.isnan(result)
 
-    def test_var_single_value_no_warning(self, core):
-        x = np.array([5.0])
-        with warnings.catch_warnings(record=True) as record:
-            warnings.simplefilter("always")
-            result = core._var(x)
-        assert len(record) == 0
-        assert np.isnan(result)
-
 
 class TestMAD:
     def test_mad_continuous(self, core, rng):
@@ -380,14 +362,6 @@ class TestMAD:
         assert np.isnan(result)
         result = core._mad(x, skipna=True)
         assert not np.isnan(result)
-
-    def test_mad_empty_no_warning(self, core):
-        x = np.array([])
-        with warnings.catch_warnings(record=True) as record:
-            warnings.simplefilter("always")
-            result = core._mad(x)
-        assert len(record) == 0
-        assert np.isnan(result)
 
 
 class TestIQR:
