@@ -178,9 +178,7 @@ def test_isotonic_fit_ci_bounds(binary_datatree):
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_point_interval_unique(binary_datatree):
     result = point_interval_unique(
-        binary_datatree,
-        var_names=["y"],
-        group="posterior_predictive",
+        binary_datatree.posterior_predictive.dataset,
         ci_prob=0.94,
         point_estimate="mean",
     )
@@ -192,23 +190,9 @@ def test_point_interval_unique(binary_datatree):
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_point_interval_unique_none_var_names(binary_datatree):
-    result = point_interval_unique(
-        binary_datatree,
-        var_names=None,
-        group="posterior_predictive",
-        ci_prob=0.94,
-        point_estimate="mean",
-    )
-    assert "y" in result.data_vars
-
-
-@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_point_interval_unique_ci_bounds(binary_datatree):
     result = point_interval_unique(
-        binary_datatree,
-        var_names=["y"],
-        group="posterior_predictive",
+        binary_datatree.posterior_predictive.dataset,
         ci_prob=0.94,
         point_estimate="median",
     )
@@ -219,9 +203,7 @@ def test_point_interval_unique_ci_bounds(binary_datatree):
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_point_interval_unique_multiple_vars(categorical_datatree):
     result = point_interval_unique(
-        categorical_datatree,
-        var_names=["y"],
-        group="posterior_predictive",
+        categorical_datatree.posterior_predictive.dataset,
         ci_prob=0.94,
         point_estimate="mode",
     )
@@ -231,7 +213,7 @@ def test_point_interval_unique_multiple_vars(categorical_datatree):
 
 
 def test_point_unique(binary_datatree):
-    result = point_unique(binary_datatree, var_names=["y"])
+    result = point_unique(binary_datatree.observed_data.dataset)
     assert "y" in result.data_vars
     assert "plot_axis" in result.dims
     assert "x_values" in result.dims
@@ -239,13 +221,8 @@ def test_point_unique(binary_datatree):
     assert result["y"].shape[0] == 2
 
 
-def test_point_unique_none_var_names(binary_datatree):
-    result = point_unique(binary_datatree, var_names=None)
-    assert "y" in result.data_vars
-
-
 def test_point_unique_returns_counts(binary_datatree):
-    result = point_unique(binary_datatree, var_names=["y"])
+    result = point_unique(binary_datatree.observed_data.dataset)
     y_values = result["y"].values
     unique_vals = y_values[0]
     counts = y_values[1]
@@ -255,7 +232,7 @@ def test_point_unique_returns_counts(binary_datatree):
 
 
 def test_point_unique_categorical(categorical_datatree):
-    result = point_unique(categorical_datatree, var_names=["y"])
+    result = point_unique(categorical_datatree.observed_data.dataset)
     y_values = result["y"].values
     unique_vals = y_values[0]
     counts = y_values[1]
