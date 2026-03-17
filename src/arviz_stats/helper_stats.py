@@ -185,7 +185,7 @@ def _isotonic_fit(pred, obs, ci_prob, residuals, preds, x_var):
     return cep, x_sorted, ci[0], ci[1]
 
 
-def point_interval_unique(dt, var_names, group, ci_prob, point_estimate):
+def point_interval_unique(ds, ci_prob, point_estimate):
     """Compute summary statistics and credible intervals for unique value frequencies.
 
     For each unique value in the data, computes how often it appears across predictive
@@ -193,12 +193,8 @@ def point_interval_unique(dt, var_names, group, ci_prob, point_estimate):
 
     Parameters
     ----------
-    dt : DataTree
-        DataTree with group ``group`` and "observed_data" groups.
-    var_names : list of str, optional
-        The variables to compute the unique values. If None, uses all variables.
-    group : str
-        The group from which to get the unique values.
+    dt : Dataset
+        Dataset with predictive samples.
     ci_prob : float
         The probability for the credible interval.
     point_estimate : {"mean", "median", "mode"}
@@ -209,18 +205,12 @@ def point_interval_unique(dt, var_names, group, ci_prob, point_estimate):
     Dataset
         Dataset with coordinates for x_values and plot_axis (x, y, y_bottom, y_top)
     """
-    pp = extract(dt, group=group, keep_dataset=True)
-
-    if var_names is None:
-        var_names = list(dt[group].data_vars)
+    pp = extract(ds, keep_dataset=True)
+    n_samples = pp.sizes["sample"]
 
     piu_data = {}
-    for var in var_names:
-        if var not in dt[group].data_vars:
-            continue
-
+    for var in pp.data_vars:
         unique_values = np.unique(pp[var])
-        n_samples = pp[var].sizes["sample"]
 
         counts_array = np.zeros((n_samples, len(unique_values)), dtype=int)
         for i, y in enumerate(unique_values):
@@ -248,14 +238,14 @@ def point_interval_unique(dt, var_names, group, ci_prob, point_estimate):
     )
 
 
-def point_unique(dt, var_names):
+def point_unique(ds):
     """
     Count the occurrences of unique values in observed data.
 
     Parameters
     ----------
-    dt : DataTree
-        DataTree with "observed_data" group.
+    ds : Dataset
+        Dataset with "observed_data" values.
     var_names : list of str, optional
         Variables to compute unique value counts for. If None, uses all.
 
@@ -265,17 +255,9 @@ def point_unique(dt, var_names):
         Dataset with coordinates for x_values and plot_axis (x, y),
         where x = unique values, y = counts.
     """
-    pp = dt["observed_data"]
-
-    if var_names is None:
-        var_names = list(pp.data_vars)
-
     out = {}
-    for var in var_names:
-        if var not in pp.data_vars:
-            continue
-
-        values = pp[var].values
+    for var, da in ds.items():
+        values = da.values
         unique_values, counts = np.unique(values, return_counts=True)
 
         out[var] = np.stack([unique_values, counts])
