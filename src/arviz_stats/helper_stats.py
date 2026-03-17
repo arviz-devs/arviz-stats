@@ -193,7 +193,7 @@ def point_interval_unique(ds, ci_prob, point_estimate):
 
     Parameters
     ----------
-    dt : Dataset
+    ds : Dataset
         Dataset with predictive samples.
     ci_prob : float
         The probability for the credible interval.
