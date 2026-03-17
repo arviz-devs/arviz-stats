@@ -53,9 +53,8 @@ def loo(
     log_lik_fn : callable, optional
         Custom log-likelihood function. The signature must be ``log_lik_fn(observed, data)``
         where ``observed`` is an :class:`~xarray.DataArray` containing one or more observations
-        and ``data`` is the full :class:`~arviz_base.DataTree` or
-        :class:`~arviz_base.InferenceData`. The function must return an object with dimensions
-        ``("chain", "draw", *obs_dims)`` containing per-draw log-likelihood values.
+        and ``data`` is the full :class:`~xarray.DataTree`. The function must return an object
+        with dimensions ``("chain", "draw", *obs_dims)`` containing per-draw log-likelihood values.
         When provided, ``loo`` uses this function instead of the ``log_likelihood`` group.
     log_weights : DataArray, optional
         Smoothed log weights. It must have the same shape as the log likelihood data.
