@@ -297,7 +297,7 @@ class BaseDataArray:
         return concat((x, y), dim=plot_axis)
 
     def uniformity_test(self, da, dim=None, method="pot_c", **kwargs):
-        """Pointwise Order-based Test with Cauchy combination on DataArray input."""
+        """Pointwise uniformity test on DataArray input."""
         dims = validate_dims(dim)
         n_points = 1
         for d in dims:

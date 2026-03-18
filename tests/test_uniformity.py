@@ -181,7 +181,7 @@ class TestUniformityTestPietC:
 
         pe = expon.cdf(-np.log(x))
         ps = 2 * np.minimum(pe, 1 - pe)
-        expected_p = _cauchy_combination(ps, truncate=True)
+        expected_p = _cauchy_combination(ps, truncate=False)
 
         assert_allclose(p_value, expected_p, atol=1e-10)
         assert len(shapley) == len(x)

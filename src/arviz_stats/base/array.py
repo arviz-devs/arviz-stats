@@ -674,13 +674,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             raise ValueError(
                 f"Requested method '{method}' but it must be one of 'pot_c', 'prit_c' or 'piet_c'"
             )
-        pot_c_ufunc = make_ufunc(
+        uni_test_ufunc = make_ufunc(
             test_func,
             n_output=2,
             n_input=1,
             n_dims=len(axes),
         )
-        return pot_c_ufunc(
+        return uni_test_ufunc(
             ary,
             out_shape=((), (n_points,)),
             **kwargs,

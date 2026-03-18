@@ -848,7 +848,7 @@ class _DensityBase(_CoreBase):
         if n == 0:
             return np.nan, np.array([])
 
-        eps = 0  # 0.5 / n
+        eps = 0
         x_sorted = np.sort(np.clip(ary, eps, 1 - eps))
         i_vals = np.arange(1, n + 1)
 
@@ -874,7 +874,7 @@ class _DensityBase(_CoreBase):
         if n == 0:
             return np.nan, np.array([])
 
-        eps = 0  # 0.5 / n
+        eps = 0
         x = np.sort(np.clip(ary, eps, 1 - eps))
         N = len(x)
 
@@ -900,13 +900,12 @@ class _DensityBase(_CoreBase):
         if n == 0:
             return np.nan, np.array([])
 
-        eps = 0  # 0.5 / n
+        eps = 0
         ary = np.clip(ary, eps, 1 - eps)
         pe = -np.expm1(np.log(ary))
         ps = 2 * np.minimum(pe, 1 - pe)
         cauchy_vals = np.tan((0.5 - ps) * np.pi)
-        mask = (ps < 0.5).astype(float)
-        cauchy_mean = np.mean(cauchy_vals * mask)
+        cauchy_mean = np.mean(cauchy_vals)
         p_value = 0.5 - np.arctan(cauchy_mean) / np.pi
         shapley_vals = self._shapley_mean(cauchy_vals)
 
