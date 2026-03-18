@@ -90,6 +90,24 @@ def centered_eight_with_sigma(centered_eight):
 
 
 @pytest.fixture(scope="module")
+def wrong_dims_ll():
+    xr = importorskip("xarray")
+
+    def _fn(_obs, _data):
+        return xr.DataArray(np.ones((10, 20)), dims=["wrong1", "wrong2"])
+
+    return _fn
+
+
+@pytest.fixture(scope="module")
+def failing_ll():
+    def _fn(_obs, _data):
+        raise ZeroDivisionError("boom")
+
+    return _fn
+
+
+@pytest.fixture(scope="module")
 def multivariable_log_likelihood(centered_eight):
     xr = importorskip("xarray")
     centered_eight = centered_eight.copy()
