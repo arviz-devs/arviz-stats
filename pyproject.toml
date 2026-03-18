@@ -41,7 +41,7 @@ funding = "https://opencollective.com/arviz"
 [project.optional-dependencies]
 # user facing optional dependency blocks
 xarray = [
-  "arviz-base @ git+https://github.com/arviz-devs/arviz-base",
+  "arviz-base @ git+https://github.com/arviz-devs/arviz-base@kind_auto",
   "xarray-einstats",
   "xarray>=2024.11.0",
 ]
