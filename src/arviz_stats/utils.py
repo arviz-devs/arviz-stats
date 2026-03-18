@@ -206,7 +206,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
             base = f"Computed from {self.n_folds}-fold cross validation.\n\n"
             base += f"{{0:{padding}}} Estimate       SE\n"
             base += f"{scale_str}_{display_kind} {{ic_value:8.2f}}  {{ic_se:7.2f}}\n"
-            base += f"p_{display_kind:{padding-2}} {{p_value:8.2f}}        -"
+            base += f"p_{display_kind:{padding - 2}} {{p_value:8.2f}}        -"
             base = base.format(
                 "",
                 ic_value=self.elpd,

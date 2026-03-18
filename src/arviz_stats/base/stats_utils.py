@@ -145,7 +145,7 @@ def update_docstring(ufunc, func, n_output=1):
     if n_output > 1:
         output_core_dims = f" tuple([] for _ in range({n_output}))"
         msg = f"xr.apply_ufunc(ufunc, dataset, input_core_dims={input_core_dims}, "
-        msg += f"output_core_dims={ output_core_dims})"
+        msg += f"output_core_dims={output_core_dims})"
     else:
         output_core_dims = ""
         msg = f"xr.apply_ufunc(ufunc, dataset, input_core_dims={input_core_dims})"
