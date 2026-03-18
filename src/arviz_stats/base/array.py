@@ -660,6 +660,53 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
+    def uniformity_test(self, ary, axis=-1, method="pot_c", **kwargs):
+        """Pointwise uniformity test for PIT values.
+
+        Computes a uniformity test p-value and Shapley contributions for PIT values.
+
+        Parameters
+        ----------
+        ary : array-like
+            PIT values in [0, 1].
+        axis : int, sequence of int or None, default -1
+            Dimensions to reduce.
+        method : str, optional
+            Method to use for the uniformity test.
+            Valid options are pot_c (default), prit_c and piet_c.
+        **kwargs
+            Additional keyword arguments.
+
+        Returns
+        -------
+        p_value, shapley_vals : array-like
+            ``p_value`` has the batch shape (input shape minus reduced axes).
+            ``shapley_vals`` has the batch shape plus the reduced dimension length.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        n_points = int(np.prod([ary.shape[ax] for ax in axes]))
+        if method == "pot_c":
+            test_func = self._pot_c
+        elif method == "prit_c":
+            test_func = self._prit_c
+        elif method == "piet_c":
+            test_func = self._piet_c
+        else:
+            raise ValueError(
+                f"Requested method '{method}' but it must be one of 'pot_c', 'prit_c' or 'piet_c'"
+            )
+        uni_test_ufunc = make_ufunc(
+            test_func,
+            n_output=2,
+            n_input=1,
+            n_dims=len(axes),
+        )
+        return uni_test_ufunc(
+            ary,
+            out_shape=((), (n_points,)),
+            **kwargs,
+        )
+
     def bayesian_r2(self, mu_pred, scale=None, scale_kind="sd", circular=False):
         """Compute Bayesian R² for regression models."""
         r2_ufunc = make_ufunc(

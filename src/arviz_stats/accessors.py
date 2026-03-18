@@ -139,6 +139,10 @@ class _BaseAccessor:
         """Compute the ecdf for all variables in the dataset."""
         return self._apply("ecdf", dim=dim, **kwargs)
 
+    def uniformity_test(self, dim=None, method="pot_c", **kwargs):
+        """Compute pointwise uniformity test for all variables in the dataset."""
+        return self._apply("uniformity_test", dim=dim, method=method, **kwargs)
+
     def pareto_min_ss(self, sample_dims=None, **kwargs):
         """Compute the min sample size for all variables in the dataset."""
         return self._apply("pareto_min_ss", sample_dims=sample_dims, **kwargs)

@@ -296,6 +296,25 @@ class BaseDataArray:
         plot_axis = DataArray(["x", "y"], dims="plot_axis")
         return concat((x, y), dim=plot_axis)
 
+    def uniformity_test(self, da, dim=None, method="pot_c", **kwargs):
+        """Pointwise uniformity test on DataArray input."""
+        dims = validate_dims(dim)
+        n_points = 1
+        for d in dims:
+            n_points *= da.sizes[d]
+        p_value, shapley = apply_ufunc(
+            self.array_class.uniformity_test,
+            da,
+            kwargs={
+                "axis": np.arange(-len(dims), 0, 1),
+                "method": method,
+                **kwargs,
+            },
+            input_core_dims=[dims],
+            output_core_dims=[[], ["pit_dim"]],
+        )
+        return p_value, shapley
+
     def thin_factor(self, da, target_ess=None, reduce_func="mean"):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
 
