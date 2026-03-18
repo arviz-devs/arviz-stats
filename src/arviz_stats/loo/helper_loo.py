@@ -733,8 +733,7 @@ def _compute_loo_approximation(
     if isinstance(posterior, xr.DataArray):
         if param_names and len(param_names) == 1 and posterior.name != param_names[0]:
             raise ValueError(
-                f"Requested parameter '{param_names[0]}' but DataArray has "
-                f"name {posterior.name}"
+                f"Requested parameter '{param_names[0]}' but DataArray has name {posterior.name}"
             )
         if param_names and len(param_names) > 1:
             raise ValueError(
@@ -760,8 +759,7 @@ def _compute_loo_approximation(
     except KeyError as e:
         if "missing_param" in str(e) or "No variable named" in str(e):
             raise KeyError(
-                f"Variable not found in posterior. Available posterior variables: "
-                f"{available_vars}"
+                f"Variable not found in posterior. Available posterior variables: {available_vars}"
             ) from e
         raise
     except Exception as e:
@@ -1001,8 +999,7 @@ def _generate_subsample_indices(n_data_points, observations, seed):
     if isinstance(observations, int):
         if not 1 <= observations <= n_data_points:
             raise ValueError(
-                f"Number of observations must be between 1 and {n_data_points}, "
-                f"got {observations}"
+                f"Number of observations must be between 1 and {n_data_points}, got {observations}"
             )
         # SRS-WOR
         rng = np.random.default_rng(seed)
