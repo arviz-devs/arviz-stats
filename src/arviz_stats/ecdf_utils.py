@@ -244,7 +244,7 @@ def hypergeom_cdf(x_values, draws, successes, population):
 
 
 def _pit_for_hist(value, left_edges, right_edges, histogram, *, eps, rng):
-    """Help compute PIT for hist on 1d data."""
+    """Help compute PIT for hist on scalar `value` and 1d data."""
     bin_edges = np.append(left_edges, right_edges[-1])
     dx = np.diff(bin_edges)
 
@@ -288,12 +288,12 @@ def compute_pit_for_histogram(dt_group, hist_dt, sample_dims):
             right_edges,
             histogram,
             input_core_dims=[
-                ["sample"],
+                [],
                 ["hist_dim_" + var_name],
                 ["hist_dim_" + var_name],
                 ["hist_dim_" + var_name],
             ],
-            output_core_dims=[["sample"]],
+            output_core_dims=[[]],
             vectorize=True,
             dask="parallelized",
             output_dtypes=[float],
@@ -306,7 +306,7 @@ def compute_pit_for_histogram(dt_group, hist_dt, sample_dims):
 
 
 def _interp_cdf(value, grid, cdf, *, eps, rng):
-    """Help interpolate cdf on 1d data."""
+    """Help interpolate cdf on scalar `value` and 1d data."""
     pit = float(np.interp(value, grid, cdf, left=0.0, right=1.0))
     if pit == 0.0:
         return rng.uniform(0, eps)
@@ -337,8 +337,8 @@ def compute_pit_for_kde(dt_group, kde_dt, sample_dims):
             sample,
             grid,
             cdf,
-            input_core_dims=[["sample"], ["kde_dim"], ["kde_dim"]],
-            output_core_dims=[["sample"]],
+            input_core_dims=[[], ["kde_dim"], ["kde_dim"]],
+            output_core_dims=[[]],
             vectorize=True,
             dask="parallelized",
             output_dtypes=[float],
