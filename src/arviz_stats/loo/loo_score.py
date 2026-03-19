@@ -184,14 +184,19 @@ def loo_score(
     loo_inputs = _prepare_loo_inputs(data, var_name)
     var_name = loo_inputs.var_name
     log_likelihood = loo_inputs.log_likelihood
-
-    y_pred = extract(data, group="posterior_predictive", var_names=var_name, combined=False)
-    y_obs = extract(data, group="observed_data", var_names=var_name, combined=False)
-
     n_samples = loo_inputs.n_samples
     sample_dims = loo_inputs.sample_dims
     obs_dims = loo_inputs.obs_dims
     r_eff = _get_r_eff(data, n_samples)
+
+    y_pred = extract(
+        data,
+        group="posterior_predictive",
+        var_names=var_name,
+        combined=False,
+        sample_dims=sample_dims,
+    )
+    y_obs = extract(data, group="observed_data", var_names=var_name, combined=False, sample_dims=[])
 
     _validate_crps_input(y_pred, y_obs, log_likelihood, sample_dims=sample_dims, obs_dims=obs_dims)
 
