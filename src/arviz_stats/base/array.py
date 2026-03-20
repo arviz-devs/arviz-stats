@@ -560,7 +560,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return histogram_ufunc(ary, bins, range, shape_from_1st=True)
 
     def kde(self, ary, axis=-1, circular=False, grid_len=512, **kwargs):
-        """Compute of kde on array-like inputs.
+        """Compute KDE on array-like inputs.
 
         Parameters
         ----------
@@ -568,13 +568,21 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         axis : int, sequence of int or None, default -1
         circular : bool, default False
         grid_len : int, default 512
-        **kwargs
+        **kwargs : dict, optional
+            Additional keyword arguments passed to the KDE implementation.
+            Supported arguments include:
+            
+            * bw : str or float, optional
+                The bandwidth of the kernel. Options include "scott" (default),
+                "silverman", "isj", and "experimental", or a positive float.
+            * adaptive : bool, optional
+                Whether to use an adaptive KDE. Defaults to False.
 
         Returns
         -------
         grid, pdf, bw : array-like
             `grid` and `pdf` will have the same shape: the same as `ary` minus the dimensions
-            in `axis` plus an extra dimension of lenght `grid_len`. Same for `bw`
+            in `axis` plus an extra dimension of length `grid_len`. Same for `bw`
             except it will not have the extra dimension.
         """
         ary, axes = process_ary_axes(ary, axis)

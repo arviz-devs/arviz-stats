@@ -116,7 +116,23 @@ class _BaseAccessor:
         return self._apply("mcse", sample_dims=sample_dims, method=method, prob=prob, **kwargs)
 
     def kde(self, dim=None, **kwargs):
-        """Compute the KDE for all variables in the dataset."""
+        """Compute the KDE for all variables in the dataset.
+
+        Parameters
+        ----------
+        dim : str or sequence of str, optional
+            Dimension(s) over which to compute the KDE.
+        **kwargs : dict, optional
+            Additional keyword arguments passed to the underlying KDE 
+            implementations. Supported arguments include `bw`, `adaptive`, 
+            `circular`, and `grid_len`. See the array-level `kde` methods 
+            for full details on these parameters.
+
+        Returns
+        -------
+        xarray.Dataset
+            A dataset containing the KDE grids and pdf values for each variable.
+        """
         return self._apply("kde", dim=dim, **kwargs)
 
     def qds(self, dim=None, **kwargs):
