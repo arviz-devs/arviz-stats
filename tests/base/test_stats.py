@@ -72,6 +72,46 @@ def test_extra_kwargs_raise(centered_eight, func):
         getattr(accessor, func)(dims="draw")
 
 
+@pytest.mark.parametrize(
+    "func",
+    (
+        "ess",
+        "rhat",
+        "rhat_nested",
+        "mcse",
+        "qds",
+        "get_bins",
+        "compute_ranks",
+        "ecdf",
+        "pareto_min_ss",
+        "psislw",
+        "bfmi",
+        "pareto_khat",
+        "loo_expectation",
+        "loo_quantile",
+        "power_scale_lw",
+        "power_scale_sense",
+        "autocorr",
+        "mean",
+        "median",
+        "mode",
+    ),
+)
+def test_accessor_kwargs_raise(datatree, func):
+    accessor = datatree.posterior.dataset.azstats
+    with pytest.raises(TypeError, match=".*unexpected keyword argument.*"):
+        getattr(accessor, func)(invalid_kwarg="value")
+
+
+@pytest.mark.parametrize("func", ("loo_score", "loo_pit", "loo_r2"))
+def test_loo_accessor_kwargs_raise(datatree, func):
+    rng = np.random.default_rng()
+    y_obs = xr.DataArray(rng.normal(size=8))
+    accessor = datatree.posterior.dataset.azstats
+    with pytest.raises(TypeError, match=".*unexpected keyword argument.*"):
+        getattr(accessor, func)(y_obs, invalid_kwarg="value")
+
+
 def test_hdi_idata(centered_eight):
     accessor = centered_eight.posterior.ds.azstats
     result = accessor.hdi()
