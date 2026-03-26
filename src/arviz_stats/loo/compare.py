@@ -84,7 +84,7 @@ def compare(
         - **rank**: The rank-order of the models. 0 is the best.
         - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`).
           Higher ELPD indicates higher out-of-sample predictive fit ("better" model).
-        - **pIC**: Estimated effective number of parameters.
+        - **p**: pIC, Estimated effective number of parameters.
         - **elpd_diff**: The difference in ELPD between two models.
           If more than two models are compared, the difference is computed relative to the
           top-ranked model, that always has an `elpd_diff` of 0.
@@ -93,11 +93,11 @@ def compare(
           (among the compared models)
           given the data. By default the uncertainty in the weights estimation is considered using
           Bayesian bootstrap.
-        - **SE**: Standard error of the ELPD estimate.
+        - **se**: Standard error of the ELPD estimate.
           If method = BB-pseudo-BMA these values are estimated using Bayesian bootstrap.
-        - **dSE**: Standard error of the difference in ELPD between each model
+        - **dse**: Standard error of the difference in ELPD between each model
           and the top-ranked model. It's always 0 for the top-ranked model.
-        - **subsampling_dSE**: (Only when subsampling is used) The subsampling component
+        - **subsampling_dse**: (Only when subsampling is used) The subsampling component
           of the standard error of the ELPD difference. This quantifies the uncertainty due to
           using a subsample rather than all observations.
         - **warning**: A value of 1 indicates that the computation of the ELPD may not be reliable.
