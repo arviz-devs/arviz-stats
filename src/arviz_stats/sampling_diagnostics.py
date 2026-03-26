@@ -438,7 +438,7 @@ def mcse(
     chain_axis=0,
     draw_axis=1,
 ):
-    """Calculate Markov Chain Standard Error statistic.
+    r"""Calculate Markov Chain Standard Error statistic.
 
     Parameters
     ----------
