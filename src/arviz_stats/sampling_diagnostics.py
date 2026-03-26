@@ -470,7 +470,8 @@ def mcse(
     prob : float, or tuple of two floats, optional
         Probability value "quantile".
     circular : bool, default False
-        Whether to treat the data as circular when computing the MCSE.
+        Whether to treat the data as circular in the :math:`[-\pi, \pi]` interval
+        when computing the MCSE.
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
