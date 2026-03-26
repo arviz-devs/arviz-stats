@@ -90,6 +90,7 @@ def loo_pit(
     elif isinstance(var_names, str):
         var_names = [var_names]
 
+    sample_dims = ["chain", "draw"]
     log_likelihood = get_log_likelihood_dataset(data, var_names=var_names)
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
     r_eff = _get_r_eff(data, n_samples)
@@ -100,6 +101,7 @@ def loo_pit(
         combined=False,
         var_names=var_names,
         keep_dataset=True,
+        sample_dims=sample_dims,
     )
     observed_data = extract(
         data,
@@ -107,9 +109,9 @@ def loo_pit(
         combined=False,
         var_names=var_names,
         keep_dataset=True,
+        sample_dims=[],
     )
 
-    sample_dims = ["chain", "draw"]
     loo_pit_values = xr.Dataset(coords=observed_data.coords)
 
     for var in var_names:
