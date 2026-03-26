@@ -64,12 +64,51 @@ def test_kde_is_normalized(bound_correction, kde_kwargs):
     assert_array_almost_equal(density_norm, 1, 6)
 
 
-@pytest.mark.parametrize("func", ("eti", "hdi", "kde", "histogram"))
-def test_extra_kwargs_raise(centered_eight, func):
-    accessor = centered_eight.posterior.ds.azstats
+@pytest.mark.parametrize(
+    ("func", "kwargs", "use_centered_eight"),
+    (
+        ("eti", {"dims": "draw"}, True),
+        ("hdi", {"dims": "draw"}, True),
+        ("kde", {"dims": "draw"}, True),
+        ("histogram", {"dims": "draw"}, True),
+        ("ess", {"invalid_kwarg": "value"}, False),
+        ("rhat", {"invalid_kwarg": "value"}, False),
+        ("rhat_nested", {"invalid_kwarg": "value"}, False),
+        ("mcse", {"invalid_kwarg": "value"}, False),
+        ("qds", {"invalid_kwarg": "value"}, False),
+        ("get_bins", {"invalid_kwarg": "value"}, False),
+        ("compute_ranks", {"invalid_kwarg": "value"}, False),
+        ("ecdf", {"invalid_kwarg": "value"}, False),
+        ("pareto_min_ss", {"invalid_kwarg": "value"}, False),
+        ("psislw", {"invalid_kwarg": "value"}, False),
+        ("bfmi", {"invalid_kwarg": "value"}, False),
+        ("pareto_khat", {"invalid_kwarg": "value"}, False),
+        ("loo_expectation", {"invalid_kwarg": "value"}, False),
+        ("loo_quantile", {"invalid_kwarg": "value"}, False),
+        ("power_scale_lw", {"invalid_kwarg": "value"}, False),
+        ("power_scale_sense", {"invalid_kwarg": "value"}, False),
+        ("autocorr", {"invalid_kwarg": "value"}, False),
+        ("mean", {"invalid_kwarg": "value"}, False),
+        ("median", {"invalid_kwarg": "value"}, False),
+        ("mode", {"invalid_kwarg": "value"}, False),
+    ),
+)
+def test_accessor_kwargs_raise(datatree, centered_eight, func, kwargs, use_centered_eight):
+    if use_centered_eight:
+        accessor = centered_eight.posterior.dataset.azstats
+    else:
+        accessor = datatree.posterior.dataset.azstats
     with pytest.raises(TypeError, match=".*unexpected keyword argument.*"):
-        # 'dims' is not valid, to match xarray behaviour we use 'dim' only
-        getattr(accessor, func)(dims="draw")
+        getattr(accessor, func)(**kwargs)
+
+
+@pytest.mark.parametrize("func", ("loo_score", "loo_pit", "loo_r2"))
+def test_loo_accessor_kwargs_raise(datatree, func):
+    rng = np.random.default_rng()
+    y_obs = xr.DataArray(rng.normal(size=8))
+    accessor = datatree.posterior.dataset.azstats
+    with pytest.raises(TypeError, match=".*unexpected keyword argument.*"):
+        getattr(accessor, func)(y_obs, invalid_kwarg="value")
 
 
 def test_hdi_idata(centered_eight):
