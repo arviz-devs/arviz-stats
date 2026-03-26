@@ -18,7 +18,8 @@ def circular_diff(array0, array1):
     np.ndarray
         Wrapped angular difference in [-π, π).
     """
-    return ((array0 - array1 + np.pi) % (2 * np.pi)) - np.pi
+    diff = array0 - array1
+    return np.arctan2(np.sin(diff), np.cos(diff))
 
 
 def circular_mean(angles, weights=None, dims=None):

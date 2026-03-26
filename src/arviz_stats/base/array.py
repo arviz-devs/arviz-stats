@@ -223,7 +223,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         rhat_ufunc = make_ufunc(rhat_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return rhat_ufunc(ary, superchain_ids=superchain_ids)
 
-    def mcse(self, ary, chain_axis=-2, draw_axis=-1, method="mean", prob=None):
+    def mcse(self, ary, chain_axis=-2, draw_axis=-1, method="mean", prob=None, circular=False):
         """Compute of mcse on array-like inputs.
 
         See docstring of :func:`arviz_stats.mcse` for full description of computation
@@ -246,7 +246,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         mcse_func = getattr(self, f"_mcse_{method}")
-        func_kwargs = {} if prob is None else {"prob": prob}
+        func_kwargs = {}
+        if prob is not None:
+            func_kwargs["prob"] = prob
+        if method != "sd":
+            func_kwargs["circular"] = circular
         mcse_array = make_ufunc(mcse_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return mcse_array(ary, **func_kwargs)
 

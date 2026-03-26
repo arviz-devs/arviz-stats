@@ -288,13 +288,16 @@ class _DiagnosticsBase(_CoreBase):
             return np.nan
         return self._ess(ary, relative=relative)
 
-    def _mcse_mean(self, ary):
+    def _mcse_mean(self, ary, circular=False):
         """Compute the Markov Chain mean error."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
         ess = self._ess_mean(ary)
-        sd = np.std(ary, ddof=1)
+        if circular:
+            sd = stats.circstd(ary, -np.pi, np.pi, normalize=True)
+        else:
+            sd = np.std(ary, ddof=1)
         mcse_mean_value = sd / np.sqrt(ess)
         return mcse_mean_value
 
@@ -311,11 +314,11 @@ class _DiagnosticsBase(_CoreBase):
         mcse_sd_value = np.sqrt(varsd)
         return mcse_sd_value
 
-    def _mcse_median(self, ary):
+    def _mcse_median(self, ary, circular=False):
         """Compute the Markov Chain median error."""
-        return self._mcse_quantile(ary, 0.5)
+        return self._mcse_quantile(ary, 0.5, circular=circular)
 
-    def _mcse_quantile(self, ary, prob):
+    def _mcse_quantile(self, ary, prob, circular=False):
         """Compute the Markov Chain quantile error at quantile=prob."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -324,6 +327,9 @@ class _DiagnosticsBase(_CoreBase):
         probability = [0.1586553, 0.8413447]
         with np.errstate(invalid="ignore"):
             ppf = stats.beta.ppf(probability, ess * prob + 1, ess * (1 - prob) + 1)
+        if circular:
+            mean = np.angle(np.mean(np.exp(1j * ary)))
+            ary = np.angle(np.exp(1j * (ary - mean)))
         sorted_ary = np.sort(ary.ravel())
         size = sorted_ary.size
         ppf_size = ppf * size - 1
