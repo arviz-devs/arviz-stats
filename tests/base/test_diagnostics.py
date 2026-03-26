@@ -318,6 +318,19 @@ def test_mcse_array(rng, mcse_method):
     assert mcse_hat
 
 
+@pytest.mark.parametrize("mcse_method", ("mean", "sd", "median", "quantile"))
+def test_mcse_array_circular(rng, mcse_method):
+    ary0 = rng.vonmises(mu=np.pi, kappa=100, size=(4, 1000))
+    ary1 = np.angle(np.exp(1j * (ary0 - np.pi)))
+    if mcse_method == "quantile":
+        mcse_hat0 = array_stats.mcse(ary0, method=mcse_method, prob=0.34, circular=True)
+        mcse_hat1 = array_stats.mcse(ary1, method=mcse_method, prob=0.34, circular=False)
+    else:
+        mcse_hat0 = array_stats.mcse(ary0, method=mcse_method, circular=True)
+        mcse_hat1 = array_stats.mcse(ary1, method=mcse_method, circular=False)
+    np.testing.assert_allclose(mcse_hat0, mcse_hat1, rtol=0, atol=1e-3)
+
+
 def test_mcse_ndarray_axis(rng):
     ary = rng.normal(size=(3, 100, 5))
     mcse_data = array_stats.mcse(ary, chain_axis=0, draw_axis=1)

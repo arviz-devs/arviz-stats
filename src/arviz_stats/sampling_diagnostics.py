@@ -434,10 +434,11 @@ def mcse(
     coords=None,
     method="mean",
     prob=None,
+    circular=False,
     chain_axis=0,
     draw_axis=1,
 ):
-    """Calculate Markov Chain Standard Error statistic.
+    r"""Calculate Markov Chain Standard Error statistic.
 
     Parameters
     ----------
@@ -468,6 +469,9 @@ def mcse(
         - "quantile"
     prob : float, or tuple of two floats, optional
         Probability value "quantile".
+    circular : bool, default False
+        Whether to treat the data as circular in the :math:`[-\pi, \pi]` interval
+        when computing the MCSE.
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
@@ -507,6 +511,7 @@ def mcse(
             data,
             method=method,
             prob=prob,
+            circular=circular,
             chain_axis=chain_axis,
             draw_axis=draw_axis,
         )
@@ -521,12 +526,15 @@ def mcse(
             coords=coords,
             method=method,
             prob=prob,
+            circular=circular,
         )
 
     if isinstance(data, xr.DataArray):
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.mcse(sample_dims=sample_dims, method=method, prob=prob)
+        return data.azstats.mcse(
+            sample_dims=sample_dims, method=method, prob=prob, circular=circular
+        )
 
     if isinstance(data, xr.DataTree):
         data = data.azstats.filter_vars(
@@ -534,7 +542,9 @@ def mcse(
         ).datatree
         if coords is not None:
             data = data.sel(coords)
-        return data.azstats.mcse(sample_dims=sample_dims, group=group, method=method, prob=prob)
+        return data.azstats.mcse(
+            sample_dims=sample_dims, group=group, method=method, prob=prob, circular=circular
+        )
 
     data = convert_to_dataset(data, group=group)
 
@@ -542,7 +552,7 @@ def mcse(
     if coords is not None:
         data = data.sel(coords)
 
-    return data.azstats.mcse(sample_dims=sample_dims, method=method, prob=prob)
+    return data.azstats.mcse(sample_dims=sample_dims, method=method, prob=prob, circular=circular)
 
 
 def bfmi(

@@ -130,7 +130,7 @@ class BaseDataArray:
             },
         )
 
-    def mcse(self, da, sample_dims=None, method="mean", prob=None):
+    def mcse(self, da, sample_dims=None, method="mean", prob=None, circular=False):
         """Compute mcse on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
@@ -141,6 +141,7 @@ class BaseDataArray:
             kwargs={
                 "method": method,
                 "prob": prob,
+                "circular": circular,
                 "chain_axis": chain_axis,
                 "draw_axis": draw_axis,
             },
