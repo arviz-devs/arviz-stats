@@ -49,6 +49,21 @@ class TestQuantileUfunc:
         assert_allclose(out[0], 49.5, rtol=0.01)
 
 
+    def test_quantile_parity(self):
+        """Verify that the function correctly handles 2D arrays, axes, and scalars."""
+        rng = np.random.default_rng(42)
+        a = rng.normal(size=(10, 3)) 
+        # Make the quantile a scalar to test 'ndim==0' logic
+        q = 0.5 
+        expected = np.quantile(a, q, axis=0)
+        
+
+        actual = NumbaArray().quantile(a, q, axis=0)
+        
+        assert actual.shape == expected.shape
+        assert_allclose(actual, expected, rtol=1e-7, atol=1e-7)
+
+
 class TestHistogramJit:
     def test_histogram_jit_basic(self, rng):
         ary = rng.normal(size=100)
@@ -79,18 +94,55 @@ class TestNumbaArray:
         result = array_stats.quantile(ary, [0.25, 0.5, 0.75], axis=-1)
         assert result.shape == (4, 3)
 
-    @pytest.mark.parametrize("axis", [0, 1, -1, -2])
-    def test_quantile_axis(self, rng, axis):
+    @pytest.mark.parametrize(
+        "axis,expected_shape",
+        [
+            (0, (20, 30, 1)),
+            (1, (10, 30, 1)),
+            (-1, (10, 20, 1)),
+            (-2, (10, 30, 1)),
+            (None, (1,)),         
+            ((0, 1), (30, 1)),    #swapped lists to tuples
+            ((0, -1), (20, 1)),
+        ]
+    )
+    def test_quantile_axis(self, rng, axis, expected_shape):
         array_stats = NumbaArray()
         ary = rng.normal(size=(10, 20, 30))
+        
         result = array_stats.quantile(ary, np.array([0.5]), axis=axis)
-        expected_shape = {
-            0: (20, 30, 1),
-            1: (10, 30, 1),
-            -1: (10, 20, 1),
-            -2: (10, 30, 1),
-        }
-        assert result.shape == expected_shape[axis]
+        
+        # The expected_shape is passed directly from the parametrize list above
+        assert result.shape == expected_shape
+
+    @pytest.mark.parametrize(
+        "axis,expected_shape",
+        [
+            (0, (3, 4)),
+            (1, (2, 4)),
+            (-1, (2, 3)),
+            (None, ()),          # axis=None results in a 0-dimensional scalar
+            ((0, 1), (4,)),      # Operating on multiple axes drops both
+        ]
+    )
+    def test_quantile_scalar(self, rng, axis, expected_shape):
+        """Test that passing a scalar quantile triggers the ndim==0 return path."""
+        array_stats = NumbaArray()
+        ary = rng.normal(size=(2, 3, 4))
+        
+        # We pass 0.5 (a scalar) instead of [0.5] (a list)
+        result = array_stats.quantile(ary, 0.5, axis=axis)
+        
+        assert result.shape == expected_shape
+
+    def test_quantile_axis_none(self, rng):
+        """Test that passing axis=None correctly triggers the ravel() fallback."""
+        array_stats = NumbaArray()
+        ary = rng.normal(size=(2, 3, 4))
+        
+        result = array_stats.quantile(ary, np.array([0.5]), axis=None)
+        
+        assert result.shape == (1,)
 
     @pytest.mark.parametrize("axis", [0, 1, -1])
     def test_quantile_axis_multiple_quantiles(self, rng, axis):
@@ -124,6 +176,17 @@ class TestNumbaArray:
         bin_width = edges[1] - edges[0]
         assert_allclose(np.sum(hist) * bin_width, 1.0, rtol=0.01)
 
+    def test_histogram_bins_none(self, rng):
+        array_stats = NumbaArray()
+        ary = rng.normal(size=100) 
+        
+        hist, bin_edges = array_stats._histogram(ary, bins=None)
+        
+        assert hist is not None
+        assert bin_edges is not None
+        assert len(hist) > 0
+        assert len(bin_edges) == len(hist) + 1
+
     def test_histogram_weights_not_supported(self, rng):
         array_stats = NumbaArray()
         ary = rng.normal(size=100)
@@ -139,26 +202,25 @@ class TestNumbaArray:
         assert pdf.shape == (4, 256)
         assert bw.shape == (4,)
 
-    @pytest.mark.parametrize("axis", [0, 1, -1, -2])
-    def test_kde_axis(self, rng, axis):
+    @pytest.mark.parametrize(
+        "axis,expected_shape,expected_bw_shape",
+        [
+            (0, (20, 30, 128), (20, 30)),
+            (1, (10, 30, 128), (10, 30)),
+            (-1, (10, 20, 128), (10, 20)),
+            (-2, (10, 30, 128), (10, 30)),
+            (None, (128,), ()),  
+        ]
+    )
+    def test_kde_axis(self, rng, axis, expected_shape, expected_bw_shape):
         array_stats = NumbaArray()
         ary = rng.normal(size=(10, 20, 30))
+        
         grid, pdf, bw = array_stats.kde(ary, axis=axis, grid_len=128)  # pylint: disable=unpacking-non-sequence
-        expected_shape = {
-            0: (20, 30, 128),
-            1: (10, 30, 128),
-            -1: (10, 20, 128),
-            -2: (10, 30, 128),
-        }
-        expected_bw_shape = {
-            0: (20, 30),
-            1: (10, 30),
-            -1: (10, 20),
-            -2: (10, 30),
-        }
-        assert grid.shape == expected_shape[axis]
-        assert pdf.shape == expected_shape[axis]
-        assert bw.shape == expected_bw_shape[axis]
+        
+        assert grid.shape == expected_shape
+        assert pdf.shape == expected_shape
+        assert bw.shape == expected_bw_shape
 
     def test_kde_ufunc_caching(self):
         array_stats = NumbaArray()
