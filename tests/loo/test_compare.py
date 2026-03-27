@@ -495,7 +495,7 @@ def test_round_auto():
             "rank": [0, 1, 2],
             "elpd": [-31.026, -31.004, -1000],
             "p": [0.94, 0.91, 2.2234],
-            "elpd_diff": [0.0, 0.031, 1.5],
+            "elpd_diff": [0.0, -0.031, -1.5],
             "weight": [0.91, 0.09, 0.0001],
             "se": [1.52, 1.43, 0.0],
             "dse": [0.0, 0.061, 0.0],
@@ -507,7 +507,7 @@ def test_round_auto():
     result = _round_compare(input_df, 2)
 
     assert_allclose(result["elpd"].to_numpy(), np.array([-31.0, -31.0, -1000.0]))
-    assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.0, 0.0, 2]))
+    assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.0, 0.0, -2]))
     assert_allclose(result["p"].to_numpy(), np.array([0.9, 0.9, 2.2]))
     assert_allclose(result["weight"].to_numpy(), np.array([0.91, 0.09, 0]))
     assert_allclose(result["se"].to_numpy(), np.array([1.52, 1.43, 0.0]))
@@ -522,7 +522,7 @@ def test_round_int(centered_eight, non_centered_eight):
     assert_allclose(result["rank"].to_numpy(), np.array([0, 1]))
     assert_allclose(result["elpd"].to_numpy(), np.array([-30.73, -30.76]))
     assert_allclose(result["p"].to_numpy(), np.array([0.86, 0.95]))
-    assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.00, 0.03]))
+    assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.00, -0.03]))
     assert_allclose(result["weight"].to_numpy(), np.array([1.0, 0.0]))
     assert_allclose(result["se"].to_numpy(), np.array([1.38, 1.34]))
     assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06]))
