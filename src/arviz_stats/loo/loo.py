@@ -2,6 +2,7 @@
 
 import warnings
 
+from .loo_moment_match import loo_moment_match
 from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
@@ -28,6 +29,11 @@ def loo(
     pareto_k=None,
     log_jacobian=None,
     mixture=False,
+    moment_match=False,
+    log_prob_upars_fn=None,
+    log_lik_i_upars_fn=None,
+    upars=None,
+    **moment_match_kwargs,
 ):
     r"""Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
@@ -159,6 +165,8 @@ def loo(
     """
     loo_inputs = _prepare_loo_inputs(data, var_name)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
+    if moment_match:
+        pointwise = True
 
     if reff is None:
         reff = _get_r_eff(data, loo_inputs.n_samples)
@@ -218,18 +226,35 @@ def loo(
             log_weights=mix_log_weights,
         )
 
-    return _compute_loo_results(
-        log_likelihood=loo_inputs.log_likelihood,
-        var_name=loo_inputs.var_name,
-        pointwise=pointwise,
-        sample_dims=loo_inputs.sample_dims,
-        n_samples=loo_inputs.n_samples,
-        n_data_points=loo_inputs.n_data_points,
-        log_weights=log_weights,
-        pareto_k=pareto_k,
-        approx_posterior=False,
-        log_jacobian=jacobian_da,
-    )
+    loo_res = _compute_loo_results(
+    log_likelihood=loo_inputs.log_likelihood,
+    var_name=loo_inputs.var_name,
+    pointwise=pointwise,
+    sample_dims=loo_inputs.sample_dims,
+    n_samples=loo_inputs.n_samples,
+    n_data_points=loo_inputs.n_data_points,
+    log_weights=log_weights,
+    pareto_k=pareto_k,
+    approx_posterior=False,
+    log_jacobian=jacobian_da,
+)
+    if moment_match:
+        if log_prob_upars_fn is None or log_lik_i_upars_fn is None:
+            raise ValueError(
+                "moment_match=True requires log_prob_upars_fn and log_lik_i_upars_fn"
+            )
+
+        loo_res = loo_moment_match (
+            data=data,
+            loo_orig=loo_res,
+            log_prob_upars_fn=log_prob_upars_fn,
+            log_lik_i_upars_fn=log_lik_i_upars_fn,
+            upars=upars,
+            var_name=var_name,
+            reff=reff,
+            **moment_match_kwargs,
+        )
+    return loo_res
 
 
 def loo_i(

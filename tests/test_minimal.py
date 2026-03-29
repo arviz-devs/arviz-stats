@@ -387,3 +387,24 @@ def test_hdi_invalid_prob(data_c0d1):
 def test_thin_invalid_factor(data_c0d1):
     with pytest.raises(ValueError, match="must be greater than 1"):
         array_stats.thin(data_c0d1, factor=0, chain_axis=0, draw_axis=1)
+
+
+def test_loo_moment_match_flag_runs():
+    from arviz_stats import loo
+    from arviz_base import load_arviz_data
+
+    data = load_arviz_data("centered_eight")
+
+    result = loo(data, moment_match=False)
+
+    assert result is not None
+
+def test_loo_moment_match_requires_functions():
+    from arviz_stats import loo
+    from arviz_base import load_arviz_data
+    import pytest
+
+    data = load_arviz_data("centered_eight")
+
+    with pytest.raises(ValueError):
+        loo(data, moment_match=True)
