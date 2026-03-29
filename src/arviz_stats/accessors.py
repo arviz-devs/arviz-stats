@@ -122,11 +122,9 @@ class _BaseAccessor:
         ----------
         dim : str or sequence of str, optional
             Dimension(s) over which to compute the KDE.
-        **kwargs : dict, optional
-            Additional keyword arguments passed to the underlying KDE 
-            implementations. Supported arguments include `bw`, `adaptive`, 
-            `circular`, and `grid_len`. See the array-level `kde` methods 
-            for full details on these parameters.
+        **kwargs : any, optional
+            Additional keyword arguments forwarded to the array or dataarray interface. 
+            See the base ``kde`` for the full list of supported arguments.
 
         Returns
         -------

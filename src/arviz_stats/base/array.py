@@ -568,15 +568,30 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         axis : int, sequence of int or None, default -1
         circular : bool, default False
         grid_len : int, default 512
-        **kwargs : dict, optional
-            Additional keyword arguments passed to the KDE implementation.
-            Supported arguments include:
+        **kwargs
+            Additional keyword arguments passed to the underlying KDE implementation. 
+            Depending on whether `circular` is True or False, supported arguments include:
             
-            * bw : str or float, optional
-                The bandwidth of the kernel. Options include "scott" (default),
-                "silverman", "isj", and "experimental", or a positive float.
+            * bw : int, float, or str, optional
+                The bandwidth or the method to estimate it. Options include "scott", 
+                "silverman", "isj", "experimental", or "taylor" (if circular). 
+                Defaults to "experimental" (or "taylor" if circular).
+            * bw_fct : float, optional
+                A multiplier for `bw` to tune smoothness manually. Defaults to 1.
             * adaptive : bool, optional
-                Whether to use an adaptive KDE. Defaults to False.
+                If True, uses an adaptive bandwidth. Not compatible with circular KDE. 
+                Defaults to False.
+            * extend : bool, optional
+                If True, extends the observed range for linear KDE. Defaults to False.
+            * extend_fct : float, optional
+                Number of standard deviations to widen bounds if `extend` is True. 
+                Defaults to 0.5.
+            * bound_correction : bool, optional
+                Whether to perform boundary correction on linear bounds. Defaults to True.
+            * custom_lims : list or tuple, optional
+                Custom bounds for the range of `ary`. Defaults to None.
+            * cumulative : bool, optional
+                If True, returns the cumulative PDF instead of the PDF. Defaults to False.
 
         Returns
         -------
