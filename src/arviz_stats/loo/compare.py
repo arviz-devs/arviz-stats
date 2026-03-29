@@ -270,8 +270,8 @@ def compare(
                 subsampling_d_std_err = 0.0 if has_subsampling else None
             else:
                 diff_result = _compute_elpd_diff_subsampled(
-                    ref_elpd_data,
                     current_elpd_data,
+                    ref_elpd_data,
                 )
 
                 d_ic = diff_result["elpd_diff"]
