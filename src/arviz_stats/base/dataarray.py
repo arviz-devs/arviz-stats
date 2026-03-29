@@ -241,10 +241,9 @@ class BaseDataArray:
             Whether the data is circular (e.g., angles).
         grid_len : int, default 512
             Number of points on the KDE grid.
-        **kwargs : dict, optional
-            Additional keyword arguments passed to the array-level KDE
-            implementation. See the underlying array `kde` method for a 
-            complete list of supported arguments (like `bw` and `adaptive`).
+        **kwargs : any, optional
+            Additional keyword arguments forwarded to the array or dataarray interface. 
+            See the base ``kde`` for the full list of supported arguments.
 
         Returns
         -------
