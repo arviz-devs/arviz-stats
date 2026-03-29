@@ -229,7 +229,28 @@ class BaseDataArray:
         return out
 
     def kde(self, da, dim=None, circular=False, grid_len=512, **kwargs):
-        """Compute kde on DataArray input."""
+        """Compute KDE on DataArray input.
+
+        Parameters
+        ----------
+        da : xarray.DataArray
+            Input data.
+        dim : str or sequence of str, optional
+            Dimension(s) over which to compute the KDE.
+        circular : bool, default False
+            Whether the data is circular (e.g., angles).
+        grid_len : int, default 512
+            Number of points on the KDE grid.
+        **kwargs : any, optional
+            Additional keyword arguments forwarded to the array or dataarray interface. 
+            See the base ``kde`` for the full list of supported arguments.
+
+        Returns
+        -------
+        out : xarray.DataArray
+            An xarray DataArray containing the grid and pdf values along the 
+            `plot_axis` dimension, with the bandwidth `bw` stored as a coordinate.
+        """
         dims = validate_dims(dim)
         grid, pdf, bw = apply_ufunc(
             self.array_class.kde,

@@ -467,7 +467,8 @@ def kde(
         of the data for which to perform the computation.
     circular : bool, default False
     **kwargs : any, optional
-        Forwarded to the array or dataarray interface for KDE.
+            Forwarded to the array or dataarray interface for KDE.
+            See the base ``kde`` for the full list of supported arguments.
 
     Returns
     -------
