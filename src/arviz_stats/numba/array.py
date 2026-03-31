@@ -72,6 +72,7 @@ class NumbaArray(BaseArray):
             axes = [(-1,), (0,), (0,)]
 
         quantile_ary = np.atleast_1d(quantile)
+
         # pylint: disable=no-value-for-parameter, unexpected-keyword-arg
         result = _quantile_ufunc(ary, quantile_ary, axes=axes)
 
@@ -79,7 +80,7 @@ class NumbaArray(BaseArray):
 
         if np.ndim(quantile) == 0:
             return result[..., 0]
-            
+
         return result
 
     def _histogram(self, ary, bins=None, range=None, weights=None, density=True):  # pylint: disable=redefined-builtin
