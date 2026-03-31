@@ -124,7 +124,7 @@ class _BaseAccessor:
             Dimension(s) over which to compute the KDE.
         **kwargs : any, optional
             Additional keyword arguments forwarded to the array or dataarray interface. 
-            See the base ``kde`` for the full list of supported arguments.
+            See :func:`arviz_stats.base.array_stats.kde` for the full list of supported arguments.
 
         Returns
         -------

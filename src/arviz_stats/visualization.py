@@ -468,7 +468,7 @@ def kde(
     circular : bool, default False
     **kwargs : any, optional
             Forwarded to the array or dataarray interface for KDE.
-            See the base ``kde`` for the full list of supported arguments.
+            See :func:`arviz_stats.base.array_stats.kde` for the full list of supported arguments.
 
     Returns
     -------
