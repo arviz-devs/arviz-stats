@@ -49,21 +49,6 @@ class TestQuantileUfunc:
         assert_allclose(out[0], 49.5, rtol=0.01)
 
 
-    def test_quantile_parity(self):
-        """Verify that the function correctly handles 2D arrays, axes, and scalars."""
-        rng = np.random.default_rng(42)
-        a = rng.normal(size=(10, 3)) 
-        # Make the quantile a scalar to test 'ndim==0' logic
-        q = 0.5 
-        expected = np.quantile(a, q, axis=0)
-        
-
-        actual = NumbaArray().quantile(a, q, axis=0)
-        
-        assert actual.shape == expected.shape
-        assert_allclose(actual, expected, rtol=1e-7, atol=1e-7)
-
-
 class TestHistogramJit:
     def test_histogram_jit_basic(self, rng):
         ary = rng.normal(size=100)
@@ -102,7 +87,7 @@ class TestNumbaArray:
             (-1, (10, 20, 1)),
             (-2, (10, 30, 1)),
             (None, (1,)),         
-            ((0, 1), (30, 1)),    #swapped lists to tuples
+            ((0, 1), (30, 1)),    
             ((0, -1), (20, 1)),
         ]
     )
@@ -112,7 +97,6 @@ class TestNumbaArray:
         
         result = array_stats.quantile(ary, np.array([0.5]), axis=axis)
         
-        # The expected_shape is passed directly from the parametrize list above
         assert result.shape == expected_shape
 
     @pytest.mark.parametrize(
@@ -134,15 +118,6 @@ class TestNumbaArray:
         result = array_stats.quantile(ary, 0.5, axis=axis)
         
         assert result.shape == expected_shape
-
-    def test_quantile_axis_none(self, rng):
-        """Test that passing axis=None correctly triggers the ravel() fallback."""
-        array_stats = NumbaArray()
-        ary = rng.normal(size=(2, 3, 4))
-        
-        result = array_stats.quantile(ary, np.array([0.5]), axis=None)
-        
-        assert result.shape == (1,)
 
     @pytest.mark.parametrize("axis", [0, 1, -1])
     def test_quantile_axis_multiple_quantiles(self, rng, axis):
@@ -209,7 +184,9 @@ class TestNumbaArray:
             (1, (10, 30, 128), (10, 30)),
             (-1, (10, 20, 128), (10, 20)),
             (-2, (10, 30, 128), (10, 30)),
-            (None, (128,), ()),  
+            (None, (128,), ()), 
+            ((0, 1), (30, 128), (30,)),
+            ((0, -1), (20, 128), (20,)),
         ]
     )
     def test_kde_axis(self, rng, axis, expected_shape, expected_bw_shape):

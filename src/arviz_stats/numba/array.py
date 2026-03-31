@@ -72,6 +72,7 @@ class NumbaArray(BaseArray):
             axes = [(-1,), (0,), (0,)]
 
         quantile_ary = np.atleast_1d(quantile)
+        
         # pylint: disable=no-value-for-parameter, unexpected-keyword-arg
         result = _quantile_ufunc(ary, quantile_ary, axes=axes)
 
