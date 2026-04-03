@@ -85,9 +85,10 @@ def compare(
         - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`).
           Higher ELPD indicates higher out-of-sample predictive fit ("better" model).
         - **p**: pIC, Estimated effective number of parameters.
-        - **elpd_diff**: The difference in ELPD between two models.
-          If more than two models are compared, the difference is computed relative to the
-          top-ranked model, that always has an `elpd_diff` of 0.
+        - **elpd_diff**: The difference in ELPD between each model and the reference model,
+          computed as ``elpd_model - elpd_reference``. By default the reference is the
+          top-ranked model, so all values are negative or zero. The reference model always
+          has an ``elpd_diff`` of 0.
         - **weight**: Relative weight for each model.
           This can be loosely interpreted as the probability of each model
           (among the compared models)
