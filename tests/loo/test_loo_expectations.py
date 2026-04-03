@@ -198,6 +198,7 @@ def test_loo_metrics_round_to(centered_eight):
     assert hasattr(result_3, "mean")
 
 
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter of Pareto distribution:UserWarning")
 def test_loo_r2_summary(datatree_regression):
     result = loo_r2(datatree_regression, var_name="y")
     assert isinstance(result, tuple)
@@ -207,6 +208,7 @@ def test_loo_r2_summary(datatree_regression):
     assert "eti_ub" in result._fields
 
 
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter of Pareto distribution:UserWarning")
 def test_loo_r2_array(datatree_regression):
     n_sims = 1000
     result = loo_r2(datatree_regression, var_name="y", summary=False, n_simulations=n_sims)
@@ -215,12 +217,14 @@ def test_loo_r2_array(datatree_regression):
 
 
 @pytest.mark.parametrize("point_estimate", ["mean", "median"])
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter of Pareto distribution:UserWarning")
 def test_loo_r2_point_estimate(datatree_regression, point_estimate):
     result = loo_r2(datatree_regression, var_name="y", summary=True, point_estimate=point_estimate)
     assert point_estimate in result._fields
 
 
 @pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter of Pareto distribution:UserWarning")
 def test_loo_r2_ci_kind(datatree_regression, ci_kind):
     result = loo_r2(datatree_regression, var_name="y", summary=True, ci_kind=ci_kind)
     assert f"{ci_kind}_lb" in result._fields
@@ -228,6 +232,7 @@ def test_loo_r2_ci_kind(datatree_regression, ci_kind):
 
 
 @pytest.mark.parametrize("ci_prob", [0.9, 0.95])
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter of Pareto distribution:UserWarning")
 def test_loo_r2_ci_prob(datatree_regression, ci_prob):
     result = loo_r2(datatree_regression, var_name="y", summary=True, ci_prob=ci_prob)
     assert hasattr(result, "_fields")

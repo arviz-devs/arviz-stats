@@ -283,7 +283,9 @@ def residual_r2(
     if round_to is None:
         round_to = rcParams["stats.round_to"]
 
-    y_true = extract(data, group="observed_data", var_names=obs_name, combined=False).values
+    y_true = extract(
+        data, group="observed_data", var_names=obs_name, combined=False, sample_dims=[]
+    ).values
     mu_pred = extract(data, group=group, var_names=pred_mean).values.T
 
     r_squared = array_stats.residual_r2(y_true, mu_pred, circular)

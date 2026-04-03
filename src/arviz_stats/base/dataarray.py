@@ -130,7 +130,7 @@ class BaseDataArray:
             },
         )
 
-    def mcse(self, da, sample_dims=None, method="mean", prob=None):
+    def mcse(self, da, sample_dims=None, method="mean", prob=None, circular=False):
         """Compute mcse on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
@@ -141,6 +141,7 @@ class BaseDataArray:
             kwargs={
                 "method": method,
                 "prob": prob,
+                "circular": circular,
                 "chain_axis": chain_axis,
                 "draw_axis": draw_axis,
             },
@@ -161,7 +162,7 @@ class BaseDataArray:
         )
 
     # pylint: disable=redefined-builtin
-    def histogram(self, da, dim=None, bins=None, range=None, weights=None, density=None):
+    def histogram(self, da, dim=None, bins=None, range=None, weights=None, density=True):
         """Compute histogram on DataArray input."""
         dims = validate_dims(dim)
         edges_dim = "edges_dim" if da.name is None else f"edges_dim_{da.name}"
@@ -295,6 +296,25 @@ class BaseDataArray:
         )
         plot_axis = DataArray(["x", "y"], dims="plot_axis")
         return concat((x, y), dim=plot_axis)
+
+    def uniformity_test(self, da, dim=None, method="pot_c", **kwargs):
+        """Pointwise uniformity test on DataArray input."""
+        dims = validate_dims(dim)
+        n_points = 1
+        for d in dims:
+            n_points *= da.sizes[d]
+        p_value, shapley = apply_ufunc(
+            self.array_class.uniformity_test,
+            da,
+            kwargs={
+                "axis": np.arange(-len(dims), 0, 1),
+                "method": method,
+                **kwargs,
+            },
+            input_core_dims=[dims],
+            output_core_dims=[[], ["pit_dim"]],
+        )
+        return p_value, shapley
 
     def thin_factor(self, da, target_ess=None, reduce_func="mean"):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.

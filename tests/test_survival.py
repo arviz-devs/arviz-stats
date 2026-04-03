@@ -44,7 +44,7 @@ def survival_datatree_predictive():
 
 
 def test_kaplan_meier_basic(survival_datatree):
-    result = kaplan_meier(survival_datatree, var_names=["times"], group="observed_data")
+    result = kaplan_meier(survival_datatree, var_names=["times"])
     assert "times" in result.data_vars
     assert "plot_axis" in result.dims
     assert "km_points" in result.dims
@@ -52,20 +52,20 @@ def test_kaplan_meier_basic(survival_datatree):
 
 
 def test_kaplan_meier_survival_decreases(survival_datatree):
-    result = kaplan_meier(survival_datatree, var_names=["times"], group="observed_data")
+    result = kaplan_meier(survival_datatree, var_names=["times"])
     survival_probs = result["times"].values[1]
     assert np.all(np.diff(survival_probs) <= 0)
 
 
 def test_kaplan_meier_starts_near_one(survival_datatree):
-    result = kaplan_meier(survival_datatree, var_names=["times"], group="observed_data")
+    result = kaplan_meier(survival_datatree, var_names=["times"])
     survival_probs = result["times"].values[1]
     assert survival_probs[0] <= 1.0
     assert survival_probs[0] > 0.9
 
 
 def test_kaplan_meier_with_censoring(survival_datatree_censored):
-    result = kaplan_meier(survival_datatree_censored, var_names=["times"], group="observed_data")
+    result = kaplan_meier(survival_datatree_censored, var_names=["times"])
     assert "times" in result.data_vars
     survival_probs = result["times"].values[1]
     assert np.all(np.diff(survival_probs) <= 0)
@@ -76,7 +76,7 @@ def test_kaplan_meier_no_constant_data():
     times = rng.exponential(10, 30)
     dt = azb.from_dict({"observed_data": {"times": times}})
     with pytest.warns(UserWarning, match="No 'constant_data' group found"):
-        result = kaplan_meier(dt, var_names=["times"], group="observed_data")
+        result = kaplan_meier(dt, var_names=["times"])
         assert "times" in result.data_vars
 
 
@@ -86,7 +86,7 @@ def test_kaplan_meier_missing_status_variable():
     other_var = np.ones(30)
     dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"other": other_var}})
     with pytest.warns(UserWarning, match="No status variable found"):
-        result = kaplan_meier(dt, var_names=["times"], group="observed_data")
+        result = kaplan_meier(dt, var_names=["times"])
         assert "times" in result.data_vars
 
 
@@ -102,13 +102,13 @@ def test_kaplan_meier_multiple_vars():
             "constant_data": {"times1": status1, "times2": status2},
         }
     )
-    result = kaplan_meier(dt, var_names=["times1", "times2"], group="observed_data")
+    result = kaplan_meier(dt, var_names=["times1", "times2"])
     assert "times1" in result.data_vars
     assert "times2" in result.data_vars
 
 
 def test_kaplan_meier_sorted_times(survival_datatree):
-    result = kaplan_meier(survival_datatree, var_names=["times"], group="observed_data")
+    result = kaplan_meier(survival_datatree, var_names=["times"])
     times = result["times"].values[0]
     assert np.all(np.diff(times) >= 0)
 
@@ -211,7 +211,7 @@ def test_kaplan_meier_all_censored():
     times = rng.exponential(10, 30)
     status = np.zeros_like(times)
     dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
-    result = kaplan_meier(dt, var_names=["times"], group="observed_data")
+    result = kaplan_meier(dt, var_names=["times"])
     survival_probs = result["times"].values[1]
     assert np.all(survival_probs == 1.0)
 
@@ -221,7 +221,7 @@ def test_kaplan_meier_single_event():
     times = np.array([5.0])
     status = np.array([1.0])
     dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
-    result = kaplan_meier(dt, var_names=["times"], group="observed_data")
+    result = kaplan_meier(dt, var_names=["times"])
     assert "times" in result.data_vars
 
 
@@ -245,7 +245,7 @@ def test_kaplan_meier_tied_events():
     times = np.array([1.0, 1.0, 2.0, 2.0, 3.0])
     status = np.ones_like(times)
     dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
-    result = kaplan_meier(dt, var_names=["times"], group="observed_data")
+    result = kaplan_meier(dt, var_names=["times"])
     survival_probs = result["times"].values[1]
     assert len(survival_probs) == 3
     assert np.all(np.diff(survival_probs) <= 0)
@@ -256,7 +256,7 @@ def test_kaplan_meier_string_var_name():
     times = rng.exponential(10, 20)
     status = np.ones_like(times)
     dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
-    result = kaplan_meier(dt, var_names="times", group="observed_data")
+    result = kaplan_meier(dt, var_names="times")
     assert "times" in result.data_vars
 
 
@@ -264,7 +264,7 @@ def test_kaplan_meier_early_censoring():
     times = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
     status = np.array([0, 1, 1, 1, 1])
     dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
-    result = kaplan_meier(dt, var_names=["times"], group="observed_data")
+    result = kaplan_meier(dt, var_names=["times"])
     survival_probs = result["times"].values[1]
     assert survival_probs[0] == 1.0
 
@@ -273,7 +273,7 @@ def test_kaplan_meier_late_censoring():
     times = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
     status = np.array([1, 1, 1, 1, 0])
     dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
-    result = kaplan_meier(dt, var_names=["times"], group="observed_data")
+    result = kaplan_meier(dt, var_names=["times"])
     survival_probs = result["times"].values[1]
     assert np.all(np.diff(survival_probs) <= 0)
     assert survival_probs[-1] > 0
@@ -284,7 +284,7 @@ def test_kaplan_meier_identical_times():
     times = np.array([5.0, 5.0, 5.0, 5.0])
     status = np.ones_like(times)
     dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
-    result = kaplan_meier(dt, var_names=["times"], group="observed_data")
+    result = kaplan_meier(dt, var_names=["times"])
     survival_probs = result["times"].values[1]
     assert len(survival_probs) == 1
 
@@ -352,7 +352,7 @@ def test_kaplan_meier_ends_near_zero():
     times = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
     status = np.ones_like(times)
     dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
-    result = kaplan_meier(dt, var_names=["times"], group="observed_data")
+    result = kaplan_meier(dt, var_names=["times"])
     survival_probs = result["times"].values[1]
     assert survival_probs[-1] < 0.3
 

@@ -223,7 +223,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         rhat_ufunc = make_ufunc(rhat_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return rhat_ufunc(ary, superchain_ids=superchain_ids)
 
-    def mcse(self, ary, chain_axis=-2, draw_axis=-1, method="mean", prob=None):
+    def mcse(self, ary, chain_axis=-2, draw_axis=-1, method="mean", prob=None, circular=False):
         """Compute of mcse on array-like inputs.
 
         See docstring of :func:`arviz_stats.mcse` for full description of computation
@@ -246,7 +246,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         mcse_func = getattr(self, f"_mcse_{method}")
-        func_kwargs = {} if prob is None else {"prob": prob}
+        func_kwargs = {}
+        if prob is not None:
+            func_kwargs["prob"] = prob
+        if method != "sd":
+            func_kwargs["circular"] = circular
         mcse_array = make_ufunc(mcse_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return mcse_array(ary, **func_kwargs)
 
@@ -419,7 +423,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
     # pylint: disable=redefined-builtin, too-many-return-statements
     # noqa: PLR0911
-    def histogram(self, ary, bins=None, range=None, weights=None, axis=-1, density=None):
+    def histogram(self, ary, bins=None, range=None, weights=None, axis=-1, density=True):
         """Compute histogram over provided axis.
 
         Parameters
@@ -429,7 +433,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         range : (float, float), optional
         weights : array-like, optional
         axis : int, sequence of int or None, default -1
-        density : bool, optional
+        density : bool, default True
 
         Returns
         -------
@@ -657,6 +661,53 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             out_shape=((npoints,), (npoints,)),
             npoints=npoints,
             pit=pit,
+            **kwargs,
+        )
+
+    def uniformity_test(self, ary, axis=-1, method="pot_c", **kwargs):
+        """Pointwise uniformity test for PIT values.
+
+        Computes a uniformity test p-value and Shapley contributions for PIT values.
+
+        Parameters
+        ----------
+        ary : array-like
+            PIT values in [0, 1].
+        axis : int, sequence of int or None, default -1
+            Dimensions to reduce.
+        method : str, optional
+            Method to use for the uniformity test.
+            Valid options are pot_c (default), prit_c and piet_c.
+        **kwargs
+            Additional keyword arguments.
+
+        Returns
+        -------
+        p_value, shapley_vals : array-like
+            ``p_value`` has the batch shape (input shape minus reduced axes).
+            ``shapley_vals`` has the batch shape plus the reduced dimension length.
+        """
+        ary, axes = process_ary_axes(ary, axis)
+        n_points = int(np.prod([ary.shape[ax] for ax in axes]))
+        if method == "pot_c":
+            test_func = self._pot_c
+        elif method == "prit_c":
+            test_func = self._prit_c
+        elif method == "piet_c":
+            test_func = self._piet_c
+        else:
+            raise ValueError(
+                f"Requested method '{method}' but it must be one of 'pot_c', 'prit_c' or 'piet_c'"
+            )
+        uni_test_ufunc = make_ufunc(
+            test_func,
+            n_output=2,
+            n_input=1,
+            n_dims=len(axes),
+        )
+        return uni_test_ufunc(
+            ary,
+            out_shape=((), (n_points,)),
             **kwargs,
         )
 

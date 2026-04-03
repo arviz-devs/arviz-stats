@@ -83,7 +83,7 @@ class NumbaArray(BaseArray):
             
         return result
 
-    def _histogram(self, ary, bins=None, range=None, weights=None, density=None):  # pylint: disable=redefined-builtin
+    def _histogram(self, ary, bins=None, range=None, weights=None, density=True):  # pylint: disable=redefined-builtin
         """Compute the histogram of the data."""
         if bins is None:
             bins = self._get_bins(ary)

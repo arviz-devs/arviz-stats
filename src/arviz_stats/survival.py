@@ -9,7 +9,6 @@ from arviz_base import dict_to_dataset, extract
 def kaplan_meier(
     dt,
     var_names,
-    group="observed_data",
 ):
     """Compute Kaplan-Meier survival curves for observed data.
 
@@ -19,15 +18,20 @@ def kaplan_meier(
         DataTree with "posterior_predictive" and "observed_data" groups
     var_names : str or list of str
         The variables to compute the unique values.
-    group : str
-        The group from which to get the unique values.
     """
     if isinstance(var_names, str):
         var_names = [var_names]
     else:
         var_names = list(var_names)
 
-    pp = extract(dt, group=group, var_names=var_names, keep_dataset=True, combined=False)
+    pp = extract(
+        dt,
+        group="observed_data",
+        var_names=var_names,
+        keep_dataset=True,
+        combined=False,
+        sample_dims=[],
+    )
     try:
         constant_data = dt["constant_data"].dataset
     except KeyError:
@@ -55,28 +59,22 @@ def kaplan_meier(
         sorted_times = var[sorted_indices]
         sorted_status = status[sorted_indices]
 
-        survival_probs = []
-        survival_times = []
         current_prob = 1.0
-
         unique_times = np.unique(sorted_times)
-
-        for t in unique_times:
+        survival_probs = np.empty_like(unique_times)
+        for i, t in enumerate(unique_times):
             n_events = np.sum((sorted_times == t) & (sorted_status == 1))
             n_at_risk_t = np.sum(sorted_times >= t)
 
             if n_at_risk_t > 0 and n_events > 0:
                 current_prob *= 1 - n_events / n_at_risk_t
 
-            survival_times.append(t)
-            survival_probs.append(current_prob)
+            survival_probs[i] = current_prob
 
-        dictio[var_name] = np.stack([survival_times, survival_probs])
+        dictio[var_name] = np.stack([unique_times, survival_probs])
 
-    return (
-        dict_to_dataset(dictio)
-        .rename({"draw": "km_points", "chain": "plot_axis"})
-        .assign_coords({"plot_axis": ["x", "y"]})
+    return dict_to_dataset(
+        dictio, sample_dims=["plot_axis", "km_points"], coords={"plot_axis": ["x", "y"]}
     )
 
 

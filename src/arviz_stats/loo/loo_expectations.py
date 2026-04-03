@@ -96,10 +96,6 @@ def loo_expectations(
            ...: loo_expec, khat = loo_expectations(dt, kind="quantile", probs=[0.25, 0.75])
            ...: loo_expec
 
-    .. ipython::
-
-        In [2]: khat
-
     Compute LOO posterior mean for the parameter ``mu``:
 
     .. ipython::
@@ -111,6 +107,7 @@ def loo_expectations(
 
     References
     ----------
+
     .. [1] Vehtari et al. *Practical Bayesian model evaluation using
         leave-one-out cross-validation and WAIC*. Statistics and Computing,
         27(5) (2017). https://doi.org/10.1007/s11222-016-9696-4

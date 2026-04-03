@@ -84,20 +84,21 @@ def compare(
         - **rank**: The rank-order of the models. 0 is the best.
         - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`).
           Higher ELPD indicates higher out-of-sample predictive fit ("better" model).
-        - **pIC**: Estimated effective number of parameters.
-        - **elpd_diff**: The difference in ELPD between two models.
-          If more than two models are compared, the difference is computed relative to the
-          top-ranked model, that always has an `elpd_diff` of 0.
+        - **p**: pIC, Estimated effective number of parameters.
+        - **elpd_diff**: The difference in ELPD between each model and the reference model,
+          computed as ``elpd_model - elpd_reference``. By default the reference is the
+          top-ranked model, so all values are negative or zero. The reference model always
+          has an ``elpd_diff`` of 0.
         - **weight**: Relative weight for each model.
           This can be loosely interpreted as the probability of each model
           (among the compared models)
           given the data. By default the uncertainty in the weights estimation is considered using
           Bayesian bootstrap.
-        - **SE**: Standard error of the ELPD estimate.
+        - **se**: Standard error of the ELPD estimate.
           If method = BB-pseudo-BMA these values are estimated using Bayesian bootstrap.
-        - **dSE**: Standard error of the difference in ELPD between each model
+        - **dse**: Standard error of the difference in ELPD between each model
           and the top-ranked model. It's always 0 for the top-ranked model.
-        - **subsampling_dSE**: (Only when subsampling is used) The subsampling component
+        - **subsampling_dse**: (Only when subsampling is used) The subsampling component
           of the standard error of the ELPD difference. This quantifies the uncertainty due to
           using a subsample rather than all observations.
         - **warning**: A value of 1 indicates that the computation of the ELPD may not be reliable.
@@ -270,8 +271,8 @@ def compare(
                 subsampling_d_std_err = 0.0 if has_subsampling else None
             else:
                 diff_result = _compute_elpd_diff_subsampled(
-                    ref_elpd_data,
                     current_elpd_data,
+                    ref_elpd_data,
                 )
 
                 d_ic = diff_result["elpd_diff"]
