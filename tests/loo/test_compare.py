@@ -321,7 +321,7 @@ def test_compare_elpd_diff_consistency(centered_eight, non_centered_eight):
     second_elpd = result.iloc[1]["elpd"]
     reported_diff = result.iloc[1]["elpd_diff"]
 
-    expected_diff = best_elpd - second_elpd
+    expected_diff = second_elpd - best_elpd
     assert_almost_equal(reported_diff, expected_diff, decimal=5)
 
 
@@ -411,7 +411,7 @@ def test_compare_elpd_diff_relative_to_best(centered_eight, non_centered_eight):
     best_elpd = result.iloc[0]["elpd"]
 
     for i in range(len(result)):
-        expected_diff = best_elpd - result.iloc[i]["elpd"]
+        expected_diff = result.iloc[i]["elpd"] - best_elpd
         assert_almost_equal(result.iloc[i]["elpd_diff"], expected_diff, decimal=10)
 
 
@@ -485,7 +485,7 @@ def test_compare_reference(centered_eight, non_centered_eight):
 
     ref_elpd = result.loc["centered"]["elpd"]
     other_elpd = result.loc["non_centered"]["elpd"]
-    expected_diff = ref_elpd - other_elpd
+    expected_diff = other_elpd - ref_elpd
     assert_almost_equal(result.loc["non_centered"]["elpd_diff"], expected_diff, decimal=12)
 
 
