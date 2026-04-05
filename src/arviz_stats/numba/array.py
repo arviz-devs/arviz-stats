@@ -71,9 +71,11 @@ class NumbaArray(BaseArray):
             ary = ary.ravel()
 
         # pylint: disable=no-value-for-parameter, unexpected-keyword-arg
-        result = _quantile_ufunc(ary, quantile, axes=axes)
-        if np.ndim(quantile) == 0:
-            return result
+        scalar_quantile = np.ndim(quantile) == 0
+        quantile = np.atleast_1d(quantile)
+        result = _quantile_ufunc(ary, quantile, axes=axes) if axes is not None else _quantile_ufunc(ary, quantile)
+        if scalar_quantile:
+            return result.squeeze(axis=0)
         return np.moveaxis(result, 0, -1)
 
     def _histogram(self, ary, bins=None, range=None, weights=None, density=True):  # pylint: disable=redefined-builtin
@@ -127,7 +129,6 @@ class NumbaArray(BaseArray):
 
     def kde(self, ary, axis=-1, circular=False, grid_len=512, **kwargs):
         """Compute the guvectorized kde.
-
         Notes
         -----
         There currenly is no jit compiling of the kde computation steps other than the
@@ -135,6 +136,10 @@ class NumbaArray(BaseArray):
         The ufunc is cached the first time to avoid unnecessary compilation while
         ensuring the proper method of the initialized class is the one being guvectorized.
         """
+        valid_kwargs = {"bw", "adaptive", "axes", "bound_correction"}
+        invalid = set(kwargs) - valid_kwargs
+        if invalid:
+            raise TypeError(f"kde() got unexpected keyword argument(s): {invalid}")
         if axis is not None:
             ary, axis = process_ary_axes(ary, axis)
             kwargs["axes"] = [(-1,), (0,), (), (), ()]
