@@ -66,15 +66,22 @@ class NumbaArray(BaseArray):
         axes = axis
         if axes is not None:
             ary, axes = process_ary_axes(ary, axes)
-            axes = [(-1,), (0,), (0,)]
+            axes = [axes, (0,), (0,)]
         else:
             ary = ary.ravel()
+            axes = [(-1,), (0,), (0,)]
+
+        quantile_ary = np.atleast_1d(quantile)
 
         # pylint: disable=no-value-for-parameter, unexpected-keyword-arg
-        result = _quantile_ufunc(ary, quantile, axes=axes)
+        result = _quantile_ufunc(ary, quantile_ary, axes=axes)
+
+        result = np.moveaxis(result, 0, -1)
+
         if np.ndim(quantile) == 0:
-            return result
-        return np.moveaxis(result, 0, -1)
+            return result[..., 0]
+
+        return result
 
     def _histogram(self, ary, bins=None, range=None, weights=None, density=True):  # pylint: disable=redefined-builtin
         """Compute the histogram of the data."""
