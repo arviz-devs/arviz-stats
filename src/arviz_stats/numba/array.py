@@ -66,7 +66,7 @@ class NumbaArray(BaseArray):
         axes = axis
         if axes is not None:
             ary, axes = process_ary_axes(ary, axes)
-            axes = [(-1,), (0,), (0,)]
+            axes = [axes, (0,), (0,)]
         else:
             ary = ary.ravel()
             axes = [(-1,), (0,), (0,)]
