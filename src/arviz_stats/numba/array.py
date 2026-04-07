@@ -20,7 +20,7 @@ def process_ary_axes(ary, axes):
     reordered_axes = [i for i in range(ary.ndim) if i not in axes] + list(axes)
     ary = np.transpose(ary, axes=reordered_axes)
     ary = ary.reshape((*ary.shape[: -len(axes)], -1))
-    return ary, axes
+    return ary
 
 
 @guvectorize(
@@ -65,8 +65,8 @@ class NumbaArray(BaseArray):
 
         axes = axis
         if axes is not None:
-            ary, axes = process_ary_axes(ary, axes)
-            axes = [axes, (0,), (0,)]
+            ary = process_ary_axes(ary, axes)
+            axes = [(-1,), (0,), (0,)]
         else:
             ary = ary.ravel()
             axes = [(-1,), (0,), (0,)]
@@ -143,7 +143,7 @@ class NumbaArray(BaseArray):
         ensuring the proper method of the initialized class is the one being guvectorized.
         """
         if axis is not None:
-            ary, axis = process_ary_axes(ary, axis)
+            ary = process_ary_axes(ary, axis)
             kwargs["axes"] = [(-1,), (0,), (), (), ()]
         else:
             ary = ary.ravel()

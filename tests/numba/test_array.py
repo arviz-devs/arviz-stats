@@ -15,21 +15,18 @@ from arviz_stats.numba.array import NumbaArray, _histogram_jit, _quantile_ufunc,
 class TestProcessAryAxes:
     def test_process_ary_axes_single_axis(self, rng):
         ary = rng.normal(size=(3, 4, 5))
-        result, axes = process_ary_axes(ary, -1)
+        result = process_ary_axes(ary, -1)
         assert result.shape == (3, 4, 5)
-        assert axes == [2]
 
     def test_process_ary_axes_multiple_axes(self, rng):
         ary = rng.normal(size=(3, 4, 5))
-        result, axes = process_ary_axes(ary, [1, 2])
+        result = process_ary_axes(ary, [1, 2])
         assert result.shape == (3, 20)
-        assert axes == [1, 2]
 
     def test_process_ary_axes_negative_index(self, rng):
         ary = rng.normal(size=(3, 4, 5))
-        result, axes = process_ary_axes(ary, -2)
+        result = process_ary_axes(ary, -2)
         assert result.shape == (3, 5, 4)
-        assert axes == [1]
 
 
 class TestQuantileUfunc:
