@@ -196,13 +196,17 @@ def rhat(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    method : str, default "rank"
-        Valid methods are:
-        - "rank"        # recommended by Vehtari et al. (2021)
-        - "split"
-        - "folded"
-        - "z_scale"
-        - "identity"
+   method : str, default "rank"
+    Select the R-hat computation method.
+
+    Each method corresponds to a different formulation of the convergence diagnostic:
+
+    - "identity": Original R-hat as proposed in Gelman and Rubin (1992)
+    - "split": Split-chain R-hat, improves detection of non-convergence (Gelman et al.)
+    - "z_scale": Rank-normalized split R-hat using z-transformation (Vehtari et al., 2021)
+    - "folded": Rank-normalized split R-hat on folded values, sensitive to scale differences
+    - "rank": Recommended diagnostic combining rank-normalization and folding approaches
+    
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
