@@ -123,7 +123,7 @@ class _BaseAccessor:
         dim : str or sequence of str, optional
             Dimension(s) over which to compute the KDE.
         **kwargs : any, optional
-            Additional keyword arguments forwarded to the array or dataarray interface. 
+            Additional keyword arguments forwarded to the array or dataarray interface.
             See :func:`arviz_stats.base.array_stats.kde` for the full list of supported arguments.
 
         Returns

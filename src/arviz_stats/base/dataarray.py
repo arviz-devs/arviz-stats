@@ -242,13 +242,13 @@ class BaseDataArray:
         grid_len : int, default 512
             Number of points on the KDE grid.
         **kwargs : any, optional
-            Additional keyword arguments forwarded to the array or dataarray interface. 
+            Additional keyword arguments forwarded to the array or dataarray interface.
             See :func:`arviz_stats.base.array_stats.kde` for the full list of supported arguments.
 
         Returns
         -------
         out : xarray.DataArray
-            An xarray DataArray containing the grid and pdf values along the 
+            An xarray DataArray containing the grid and pdf values along the
             `plot_axis` dimension, with the bandwidth `bw` stored as a coordinate.
         """
         dims = validate_dims(dim)
