@@ -831,8 +831,10 @@ class _DensityBase(_CoreBase):
     def _shapley_mean(values):
         """Compute closed-form Shapley contributions for mean-aggregation."""
         n = len(values)
-        if n <= 1:
+        if n == 0:
             return values.copy()
+        if n == 1:
+            return np.zeros(1)
 
         harmonic_n = np.sum(1.0 / np.arange(1, n + 1))
         sum_values = np.sum(values)
@@ -848,34 +850,27 @@ class _DensityBase(_CoreBase):
         if n == 0:
             return np.nan, np.array([])
 
-        eps = 0
-        x_sorted = np.sort(np.clip(ary, eps, 1 - eps))
+        x_sorted = np.sort(ary)
         i_vals = np.arange(1, n + 1)
 
         probs = betainc(i_vals, i_vals[::-1], x_sorted)
         ps = 2 * np.minimum(probs, 1 - probs)
-
         cauchy_vals = np.tan((0.5 - ps) * np.pi)
-
-        mask = (ps < 0.5).astype(float)
-        cauchy_mean = np.mean(cauchy_vals * mask)
-
-        p_value = 0.5 - np.arctan(cauchy_mean) / np.pi
+        p_value = self._cauchy_combination(ps, cauchy_vals, truncate=True)
 
         shapley_vals = self._shapley_mean(cauchy_vals)
 
         return p_value, shapley_vals
 
     def _prit_c(self, ary):
-        """Pointwise Rank-based Inference Test with Cauchy combination (Binomial-based tests)."""
+        """Pointwise Rank-based Individual Test with Cauchy combination (Binomial-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
 
         if n == 0:
             return np.nan, np.array([])
 
-        eps = 0
-        x = np.sort(np.clip(ary, eps, 1 - eps))
+        x = np.sort(ary)
         N = len(x)
 
         ranks = np.searchsorted(x, x, side="right")
@@ -885,9 +880,7 @@ class _DensityBase(_CoreBase):
         ps = 2 * np.minimum(probs1, 1 - probs2)
 
         cauchy_vals = np.tan((0.5 - ps) * np.pi)
-        mask = (ps < 0.5).astype(float)
-        cauchy_mean = np.mean(cauchy_vals * mask)
-        p_value = 0.5 - np.arctan(cauchy_mean) / np.pi
+        p_value = self._cauchy_combination(ps, cauchy_vals, truncate=True)
         shapley_vals = self._shapley_mean(cauchy_vals)
 
         return p_value, shapley_vals
@@ -900,16 +893,27 @@ class _DensityBase(_CoreBase):
         if n == 0:
             return np.nan, np.array([])
 
-        eps = 0
-        ary = np.clip(ary, eps, 1 - eps)
+        ary = np.sort(ary)
         pe = -np.expm1(np.log(ary))
         ps = 2 * np.minimum(pe, 1 - pe)
         cauchy_vals = np.tan((0.5 - ps) * np.pi)
-        cauchy_mean = np.mean(cauchy_vals)
-        p_value = 0.5 - np.arctan(cauchy_mean) / np.pi
+        p_value = self._cauchy_combination(ps, cauchy_vals, truncate=False)
         shapley_vals = self._shapley_mean(cauchy_vals)
 
         return p_value, shapley_vals
+
+    def _cauchy_combination(self, ps, cauchy_vals, truncate):
+        """Combine p-values using the Cauchy combination method."""
+        if truncate:
+            idx = ps < 0.5
+            if not np.any(idx):
+                raise ValueError(
+                    "Cannot compute truncated Cauchy combination test. No p-values below 0.5 found."
+                )
+            cauchy_mean = np.mean(cauchy_vals[idx])
+        else:
+            cauchy_mean = np.mean(cauchy_vals)
+        return 0.5 - np.arctan(cauchy_mean) / np.pi
 
     def _compute_quantiles_and_binwidth(self, values, nquantiles, binwidth=None):
         """
