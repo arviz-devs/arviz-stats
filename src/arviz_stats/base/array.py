@@ -564,7 +564,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return histogram_ufunc(ary, bins, range, shape_from_1st=True)
 
     def kde(self, ary, axis=-1, circular=False, grid_len=512, **kwargs):
-        """Compute of kde on array-like inputs.
+        """Compute KDE on array-like inputs.
 
         Parameters
         ----------
@@ -573,12 +573,35 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         circular : bool, default False
         grid_len : int, default 512
         **kwargs
+            Additional keyword arguments passed to the underlying KDE implementation.
+            Depending on whether `circular` is True or False, supported arguments include:
+
+            * bw : int, float, or str, optional
+                The bandwidth or the method to estimate it. Options include "scott",
+                "silverman", "isj", "experimental", or "taylor" (if circular).
+                Defaults to "experimental" (or "taylor" if circular).
+            * bw_fct : float, optional
+                A multiplier for `bw` to tune smoothness manually. Defaults to 1.
+            * adaptive : bool, optional
+                If True, uses an adaptive bandwidth. Not compatible with circular KDE.
+                Defaults to False.
+            * extend : bool, optional
+                If True, extends the observed range for linear KDE. Defaults to False.
+            * extend_fct : float, optional
+                Number of standard deviations to widen bounds if `extend` is True.
+                Defaults to 0.5.
+            * bound_correction : bool, optional
+                Whether to perform boundary correction on linear bounds. Defaults to True.
+            * custom_lims : list or tuple, optional
+                Custom bounds for the range of `ary`. Defaults to None.
+            * cumulative : bool, optional
+                If True, returns the cumulative PDF instead of the PDF. Defaults to False.
 
         Returns
         -------
         grid, pdf, bw : array-like
             `grid` and `pdf` will have the same shape: the same as `ary` minus the dimensions
-            in `axis` plus an extra dimension of lenght `grid_len`. Same for `bw`
+            in `axis` plus an extra dimension of length `grid_len`. Same for `bw`
             except it will not have the extra dimension.
         """
         ary, axes = process_ary_axes(ary, axis)
