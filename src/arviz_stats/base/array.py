@@ -573,22 +573,22 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         circular : bool, default False
         grid_len : int, default 512
         **kwargs
-            Additional keyword arguments passed to the underlying KDE implementation. 
+            Additional keyword arguments passed to the underlying KDE implementation.
             Depending on whether `circular` is True or False, supported arguments include:
-            
+
             * bw : int, float, or str, optional
-                The bandwidth or the method to estimate it. Options include "scott", 
-                "silverman", "isj", "experimental", or "taylor" (if circular). 
+                The bandwidth or the method to estimate it. Options include "scott",
+                "silverman", "isj", "experimental", or "taylor" (if circular).
                 Defaults to "experimental" (or "taylor" if circular).
             * bw_fct : float, optional
                 A multiplier for `bw` to tune smoothness manually. Defaults to 1.
             * adaptive : bool, optional
-                If True, uses an adaptive bandwidth. Not compatible with circular KDE. 
+                If True, uses an adaptive bandwidth. Not compatible with circular KDE.
                 Defaults to False.
             * extend : bool, optional
                 If True, extends the observed range for linear KDE. Defaults to False.
             * extend_fct : float, optional
-                Number of standard deviations to widen bounds if `extend` is True. 
+                Number of standard deviations to widen bounds if `extend` is True.
                 Defaults to 0.5.
             * bound_correction : bool, optional
                 Whether to perform boundary correction on linear bounds. Defaults to True.

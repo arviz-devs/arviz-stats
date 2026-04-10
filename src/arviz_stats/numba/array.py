@@ -146,7 +146,7 @@ class NumbaArray(BaseArray):
         grid_len : int, default 512
             Number of points on the KDE grid.
         **kwargs : any, optional
-            Additional keyword arguments forwarded to the array or dataarray interface. 
+            Additional keyword arguments forwarded to the array or dataarray interface.
             See :func:`arviz_stats.base.array_stats.kde` for the full list of supported arguments.
 
         Notes
