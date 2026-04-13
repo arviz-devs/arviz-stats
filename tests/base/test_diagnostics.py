@@ -504,7 +504,7 @@ def test_pareto_pit_constant_draws():
     """Constant draws should not error; falls back to raw PIT."""
     draws = np.full(200, 5.0)
     y_obs = 5.0
-    result = array_stats._pareto_pit(draws, y_obs)
+    result = array_stats._pareto_pit(draws, y_obs, rng=np.random.default_rng(203))
     assert isinstance(result, float)
     assert 0 <= result <= 1
 
@@ -514,7 +514,7 @@ def test_pareto_pit_non_finite_draws_fallback():
     draws = np.arange(1, 100, dtype=float)
     draws = np.append(draws, np.nan)
     y_obs = 50.0
-    result = array_stats._pareto_pit(draws, y_obs)
+    result = array_stats._pareto_pit(draws, y_obs, rng=np.random.default_rng(203))
     assert isinstance(result, float)
     assert 0 <= result <= 1
 
