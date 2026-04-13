@@ -1,6 +1,7 @@
 """Test Diagnostic methods"""
 
 # pylint: disable=redefined-outer-name
+# pylint: disable=protected-access
 import os
 
 import numpy as np
@@ -381,7 +382,179 @@ def test_split_chain_dims(rng, chains, draws):
         data = rng.normal(size=draws)
     else:
         data = rng.normal(size=(chains, draws))
-    split_data = array_stats._split_chains(data)  # pylint: disable=protected-access
+    split_data = array_stats._split_chains(data)
     if chains is None:
         chains = 1
     assert split_data.shape == (chains * 2, draws // 2)
+
+
+def test_pareto_pit_returns_scalar_in_valid_range():
+    rng = np.random.default_rng(1)
+    draws = rng.normal(size=500)
+    y_obs = 0.5
+    result = array_stats._pareto_pit(draws, y_obs)
+    assert isinstance(result, float)
+    assert 0 <= result <= 1
+
+
+def test_pareto_pit_bulk_values_match_raw_pit():
+    """For observations well inside the bulk, pareto_pit and raw ECDF PIT should agree."""
+    rng = np.random.default_rng(42)
+    draws = rng.normal(size=1000)
+    y_obs = 0.0  # near the median
+
+    refined = array_stats._pareto_pit(draws, y_obs, rng=rng)
+    # raw ECDF PIT
+    raw = np.mean(draws < y_obs)
+
+    np.testing.assert_allclose(refined, raw, atol=0.05)
+
+
+def test_pareto_pit_differs_from_ecdf_in_tails():
+    """Pareto-smoothed PIT should differ from raw ECDF in the tails."""
+    rng = np.random.default_rng(42)
+    draws = rng.normal(size=1000)
+    y_obs = 4.0  # far right tail
+
+    refined = array_stats._pareto_pit(draws, y_obs)
+    raw = np.mean(draws < y_obs)
+
+    assert refined != raw
+    assert 0 <= refined <= 1
+
+
+def test_pareto_pit_right_tail_closer_to_true_cdf():
+    """On average, pareto_pit should be closer to the true CDF in the right tail."""
+    rng = np.random.default_rng(123)
+    from scipy import stats as sp_stats
+
+    ndraws = 500
+    n_reps = 200
+    true_prob = 0.999
+    y_obs = sp_stats.t.ppf(true_prob, df=3)
+
+    raw_errors = []
+    refined_errors = []
+    for _ in range(n_reps):
+        draws = sp_stats.t.rvs(df=3, size=ndraws, random_state=rng)
+        raw = np.mean(draws < y_obs)
+        refined = array_stats._pareto_pit(draws, y_obs)
+        raw_errors.append((raw - true_prob) ** 2)
+        refined_errors.append((refined - true_prob) ** 2)
+
+    assert np.mean(refined_errors) < np.mean(raw_errors)
+
+
+def test_pareto_pit_left_tail_closer_to_true_cdf():
+    """On average, pareto_pit should be closer to the true CDF in the left tail."""
+    rng = np.random.default_rng(123)
+    from scipy import stats as sp_stats
+
+    ndraws = 500
+    n_reps = 200
+    true_prob = 0.001
+    y_obs = sp_stats.t.ppf(true_prob, df=3)
+
+    raw_errors = []
+    refined_errors = []
+    for _ in range(n_reps):
+        draws = sp_stats.t.rvs(df=3, size=ndraws, random_state=rng)
+        raw = np.mean(draws < y_obs)
+        refined = array_stats._pareto_pit(draws, y_obs)
+        raw_errors.append((raw - true_prob) ** 2)
+        refined_errors.append((refined - true_prob) ** 2)
+
+    assert np.mean(refined_errors) < np.mean(raw_errors)
+
+
+def test_pareto_pit_extreme_tail_more_varied_than_ecdf():
+    """In extreme tails, GPD extrapolation should give more varied estimates than ECDF."""
+    rng = np.random.default_rng(123)
+    from scipy import stats as sp_stats
+
+    ndraws = 500
+    n_reps = 200
+    y_obs = sp_stats.t.ppf(0.9995, df=3)
+
+    raw_vals = []
+    refined_vals = []
+    for _ in range(n_reps):
+        draws = sp_stats.t.rvs(df=3, size=ndraws, random_state=rng)
+        raw_vals.append(np.mean(draws < y_obs))
+        refined_vals.append(array_stats._pareto_pit(draws, y_obs))
+
+    assert len(set(np.round(refined_vals, 6))) > len(set(np.round(raw_vals, 6)))
+
+
+def test_pareto_pit_discrete_randomization():
+    """With discrete observations matching draws, randomization should produce variation."""
+    draws = np.repeat([0, 1, 2, 3], 250).astype(float)
+    y_obs = 2.0
+
+    results = []
+    for seed in range(100):
+        rng = np.random.default_rng(seed)
+        results.append(array_stats._pareto_pit(draws, y_obs, rng=rng))
+
+    assert np.std(results) > 0
+    assert all(0 <= r <= 1 for r in results)
+
+
+def test_pareto_pit_constant_draws():
+    """Constant draws should not error; falls back to raw PIT."""
+    draws = np.full(200, 5.0)
+    y_obs = 5.0
+    result = array_stats._pareto_pit(draws, y_obs)
+    assert isinstance(result, float)
+    assert 0 <= result <= 1
+
+
+def test_pareto_pit_non_finite_draws_fallback():
+    """Non-finite draws should fall back to raw PIT without error."""
+    draws = np.arange(1, 100, dtype=float)
+    draws = np.append(draws, np.nan)
+    y_obs = 50.0
+    result = array_stats._pareto_pit(draws, y_obs)
+    assert isinstance(result, float)
+    assert 0 <= result <= 1
+
+
+def test_pareto_pit_observation_beyond_all_draws():
+    """Observations far beyond draws should give near-0 or near-1 PIT values."""
+    rng = np.random.default_rng(42)
+    draws = rng.normal(size=500)
+
+    result_right = array_stats._pareto_pit(draws, 100.0)
+    result_left = array_stats._pareto_pit(draws, -100.0)
+
+    assert result_right > 0.99
+    assert result_left < 0.01
+
+
+def test_pareto_pit_values_always_in_valid_range():
+    """PIT values should be in [0, 1] across various quantiles."""
+    rng = np.random.default_rng(42)
+    from scipy import stats as sp_stats
+
+    draws = rng.normal(size=500)
+    quantiles = [0.001, 0.01, 0.05, 0.1, 0.3, 0.7, 0.9, 0.95, 0.99, 0.999]
+
+    for q in quantiles:
+        y_obs = sp_stats.norm.ppf(q)
+        result = array_stats._pareto_pit(draws, y_obs)
+        assert 0 <= result <= 1, f"PIT out of range for quantile {q}: {result}"
+
+
+def test_pareto_pit_with_log_weights():
+    """pareto_pit should work with importance weights."""
+    rng = np.random.default_rng(42)
+    draws = rng.normal(size=500)
+    log_weights = -np.log(500) * np.ones(500)  # uniform weights
+    y_obs = 0.0
+
+    result_weighted = array_stats._pareto_pit(draws, y_obs, log_weights=log_weights)
+    result_unweighted = array_stats._pareto_pit(draws, y_obs)
+
+    # Uniform weights should give similar results to no weights
+    np.testing.assert_allclose(result_weighted, result_unweighted, atol=0.05)
+    assert 0 <= result_weighted <= 1

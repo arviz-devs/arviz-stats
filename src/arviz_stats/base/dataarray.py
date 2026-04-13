@@ -690,6 +690,7 @@ class BaseDataArray:
         pareto_k=None,
         sample_dims=None,
         random_state=None,
+        pareto_pit=False,
     ):
         """Compute LOO-PIT values on DataArray input.
 
@@ -737,6 +738,7 @@ class BaseDataArray:
                 "chain_axis": chain_axis,
                 "draw_axis": draw_axis,
                 "random_state": random_state,
+                "pareto_pit": pareto_pit,
             },
         )
         return pit_values, pareto_k

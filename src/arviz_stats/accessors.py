@@ -221,6 +221,7 @@ class _BaseAccessor:
         pareto_k=None,
         sample_dims=None,
         random_state=None,
+        pareto_pit=False,
         **kwargs,
     ):
         """Compute LOO-PIT values with PSIS-LOO-CV weights."""
@@ -233,6 +234,7 @@ class _BaseAccessor:
             pareto_k=pareto_k,
             sample_dims=sample_dims,
             random_state=random_state,
+            pareto_pit=pareto_pit,
             **kwargs,
         )
 
