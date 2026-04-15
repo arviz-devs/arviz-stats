@@ -13,6 +13,7 @@ def loo_pit(
     log_weights=None,
     pareto_k=None,
     random_state=None,
+    pareto_pit=False,
 ):
     r"""Compute leave one out (PSIS-LOO) probability integral transform (PIT) values.
 
@@ -126,6 +127,7 @@ def loo_pit(
                 r_eff=r_eff,
                 sample_dims=sample_dims,
                 random_state=random_state,
+                pareto_pit=pareto_pit,
             )
         else:
             log_ratios = -log_likelihood[var]
@@ -135,6 +137,7 @@ def loo_pit(
                 r_eff=r_eff,
                 sample_dims=sample_dims,
                 random_state=random_state,
+                pareto_pit=pareto_pit,
             )
         loo_pit_values[var] = pit_values
 
