@@ -1277,8 +1277,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         else:
             rng = np.random.default_rng(random_state)
 
-        loo_pit_ufunc = make_ufunc(self._loo_pit, n_output=1, n_input=3, n_dims=len(axes))
-        return loo_pit_ufunc(ary, y_obs, log_weights, rng=rng, pareto_pit=pareto_pit)
+        n_sample_dims = len(axes)
+        sample_size = int(np.prod(ary.shape[-n_sample_dims:]))
+        ary = ary.reshape(*ary.shape[:-n_sample_dims], sample_size)
+        log_weights = log_weights.reshape(*log_weights.shape[:-n_sample_dims], sample_size)
+
+        return self._loo_pit(ary, y_obs, log_weights, rng=rng, pareto_pit=pareto_pit)
 
     def loo_expectation(
         self,

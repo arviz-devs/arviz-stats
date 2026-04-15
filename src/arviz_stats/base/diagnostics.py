@@ -518,8 +518,7 @@ class _DiagnosticsBase(_CoreBase):
         return -(loo_weighted_abs_error / gini_mean_difference) - 0.5 * np.log(gini_mean_difference)
 
     def _loo_pit(self, ary, y_obs, log_weights, rng=None, pareto_pit=False):
-        """
-        Compute LOO-PIT value for a single observation.
+        """Compute LOO-PIT value.
 
         Parameters
         ----------
@@ -529,39 +528,37 @@ class _DiagnosticsBase(_CoreBase):
             Observed value.
         log_weights : np.ndarray
             1D array of pre-computed PSIS log weights.
-        rng : np.random.Generator, optional
-            Random number generator for tie-breaking. If None, uses midpoint.
+        rng : np.random.Generator
+            Random number generator for tie-breaking.
         pareto_pit : bool, optional
             If True, use Pareto-smoothed PIT values. Default is False.
-
-        Returns
-        -------
-        pit : float
-            LOO-PIT value in [0, 1].
         """
-        ary = np.asarray(ary).ravel()
-        log_weights = np.asarray(log_weights).ravel()
-        y_obs_val = np.asarray(y_obs).ravel()[0]
+        ary = np.asarray(ary, dtype=float)
+        log_weights = np.asarray(log_weights, dtype=float)
+        y_obs_1d = np.asarray(y_obs, dtype=float).ravel()
+
+        obs_shape = ary.shape[:-1]
+        ary_2d = ary.reshape(-1, ary.shape[-1])
+        log_weights_2d = log_weights.reshape(-1, log_weights.shape[-1])
 
         if pareto_pit:
-            return self._pareto_pit(ary, y_obs_val, log_weights=log_weights, rng=rng)
+            pit = self._pareto_pit_vec(ary_2d, y_obs_1d, log_weights=log_weights_2d, rng=rng)
+        else:
+            log_norm = logsumexp(log_weights_2d, axis=-1, keepdims=True)
+            weights = np.exp(log_weights_2d - log_norm)
 
-        log_norm = logsumexp(log_weights)
-        weights = np.exp(log_weights - log_norm)
+            y_obs_col = y_obs_1d[:, None]
+            pit_lower = np.sum(weights * (ary_2d < y_obs_col), axis=-1)
+            pit_at_obs = np.sum(weights * (ary_2d == y_obs_col), axis=-1)
+            if rng is None:
+                pit = pit_lower + 0.5 * pit_at_obs
+            else:
+                urvs = rng.uniform(size=pit_lower.shape)
+                pit = pit_lower + urvs * pit_at_obs
 
-        sel_below = ary < y_obs_val
-        pit_lower = np.sum(weights[sel_below])
-
-        sel_equal = ary == y_obs_val
-        if np.any(sel_equal):
-            pit_at_obs = np.sum(weights[sel_equal])
-            pit_upper = pit_lower + pit_at_obs
-
-            if rng is not None:
-                return rng.uniform(pit_lower, pit_upper)
-            return (pit_lower + pit_upper) / 2.0
-
-        return pit_lower
+        if obs_shape:
+            return pit.reshape(obs_shape)
+        return pit[0]
 
     def _loo_expectation(self, ary, log_weights, kind):
         """
@@ -937,8 +934,8 @@ class _DiagnosticsBase(_CoreBase):
         lppd = elpd + p_loo
         return elpd, se, p_loo, lppd
 
-    def _pareto_pit(self, ary, y_obs, log_weights=None, rng=None):
-        """Compute Pareto-smoothed PIT for a single observation.
+    def _pareto_pit_vec(self, draws_matrix, y_obs_array, log_weights=None, rng=None):
+        """Compute Pareto-smoothed PIT.
 
         Compute PIT value using the ECDF, then refine in the tails by fitting a
         generalized Pareto distribution (GPD) to the tail draws. This gives smoother, more
@@ -947,10 +944,10 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        ary : np.ndarray
-            1D array of posterior predictive draws.
-        y_obs : float
-            Observed value.
+        draws_matrix : np.ndarray
+            2D array of posterior predictive draws with shape (n_obs, n_draws).
+        y_obs_array : np.ndarray
+            1D array of observed values with shape (n_obs,).
         log_weights : np.ndarray, optional
             1D array of normalized log weights matching ary.
             If None, uniform weights are used.
@@ -962,11 +959,7 @@ class _DiagnosticsBase(_CoreBase):
         pit : float
             Pareto-smoothed PIT value, clamped to [1/(n*1e4), 1 - 1/(n*1e4)].
         """
-        draws = np.asarray(ary, dtype=float).ravel()
-        y_val = float(np.asarray(y_obs).flat[0])
-        lw = np.asarray(log_weights, dtype=float).ravel() if log_weights is not None else None
-
-        n_draws = len(draws)
+        n_draws = draws_matrix.shape[-1]
         ndraws_tail = self._get_ps_tails(n_draws, 1, tail="right")
 
         gpd_ok = ndraws_tail >= 5
@@ -976,6 +969,29 @@ class _DiagnosticsBase(_CoreBase):
             gpd_ok = False
 
         tail_ids = np.arange(n_draws - ndraws_tail, n_draws, dtype=int)
+        min_tail_prob = 1.0 / n_draws / 1e4
+
+        results = np.array(
+            [
+                self._pareto_pit_single(
+                    draws,
+                    y,
+                    None if log_weights is None else log_weights[idx],
+                    rng,
+                    gpd_ok,
+                    tail_ids,
+                    ndraws_tail,
+                )
+                for idx, (draws, y) in enumerate(zip(draws_matrix, y_obs_array))
+            ]
+        )
+        return np.clip(results, min_tail_prob, 1.0 - min_tail_prob)
+
+    def _pareto_pit_single(self, draws, y_val, lw, rng, gpd_ok, tail_ids, ndraws_tail):
+        """Compute Pareto-smoothed PIT for a single observation."""
+        draws = np.asarray(draws, dtype=float).ravel()
+        y_val = float(y_val)
+        n_draws = len(draws)
 
         # --- raw PIT ---
         sel_below = draws < y_val
@@ -1031,7 +1047,7 @@ class _DiagnosticsBase(_CoreBase):
         if not right_replaced:
             left_ord = np.argsort(-draws)
             left_sorted = -draws[left_ord]
-            lw_left = lw[left_ord] if lw is not None else None
+            lw_left_sorted = lw[left_ord] if lw is not None else None
 
             left_tail = left_sorted[tail_ids]
             if not np.all(left_tail == left_tail[0]):
@@ -1039,21 +1055,21 @@ class _DiagnosticsBase(_CoreBase):
                 if left_cutoff == left_tail[0]:
                     left_cutoff -= np.finfo(float).eps
 
-                left_wt = np.exp(lw_left[tail_ids]) if lw_left is not None else None
+                left_wt = np.exp(lw_left_sorted[tail_ids]) if lw_left_sorted is not None else None
                 khat, sigma = self._gpdfit(left_tail - left_cutoff, weights=left_wt)
 
                 if np.isfinite(khat) and not np.isnan(sigma) and -y_val > left_cutoff:
                     gpd_cdf = float(
                         self.pgeneralized_pareto(-y_val, mu=left_cutoff, sigma=sigma, k=khat)
                     )
-                    if lw_left is not None:
-                        left_proportion = np.exp(logsumexp(lw_left[tail_ids]))
-                    else:
-                        left_proportion = tail_proportion
+                    left_proportion = (
+                        np.exp(logsumexp(lw_left_sorted[tail_ids]))
+                        if lw_left_sorted is not None
+                        else tail_proportion
+                    )
                     raw_pit = left_proportion * (1.0 - gpd_cdf)
 
-        min_tail_prob = 1.0 / n_draws / 1e4
-        return float(np.clip(raw_pit, min_tail_prob, 1.0 - min_tail_prob))
+        return raw_pit
 
     def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
         """
