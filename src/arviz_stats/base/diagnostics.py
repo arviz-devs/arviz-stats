@@ -948,7 +948,7 @@ class _DiagnosticsBase(_CoreBase):
             2D array of posterior predictive draws with shape (n_obs, n_draws).
         y_obs_array : np.ndarray of shape (n_obs,)
             1D array of observed values with shape (n_obs,).
-        log_weights : np.ndarray, optional
+        log_weights : np.ndarray of shape (n_obs, n_draws) and dtype float, optional
             1D array of normalized log weights matching ary.
             If None, uniform weights are used.
         rng : np.random.Generator, optional
