@@ -517,10 +517,8 @@ class _DiagnosticsBase(_CoreBase):
         gini_mean_difference = 2.0 * np.sum(weights_sorted * values_sorted * bracket)
         return -(loo_weighted_abs_error / gini_mean_difference) - 0.5 * np.log(gini_mean_difference)
 
-    @staticmethod
-    def _loo_pit(ary, y_obs, log_weights, rng=None):
-        """
-        Compute LOO-PIT value for a single observation.
+    def _loo_pit(self, ary, y_obs, log_weights, rng=None, pareto_pit=False):
+        """Compute LOO-PIT value.
 
         Parameters
         ----------
@@ -530,33 +528,37 @@ class _DiagnosticsBase(_CoreBase):
             Observed value.
         log_weights : np.ndarray
             1D array of pre-computed PSIS log weights.
-        rng : np.random.Generator, optional
-            Random number generator for tie-breaking. If None, uses midpoint.
-
-        Returns
-        -------
-        pit : float
-            LOO-PIT value in [0, 1].
+        rng : np.random.Generator
+            Random number generator for tie-breaking.
+        pareto_pit : bool, optional
+            If True, use Pareto-smoothed PIT values. Default is False.
         """
-        ary = np.asarray(ary).ravel()
-        log_weights = np.asarray(log_weights).ravel()
-        y_obs_val = np.asarray(y_obs).ravel()[0]
-        log_norm = logsumexp(log_weights)
-        weights = np.exp(log_weights - log_norm)
+        ary = np.asarray(ary, dtype=float)
+        log_weights = np.asarray(log_weights, dtype=float)
+        y_obs_1d = np.asarray(y_obs, dtype=float).ravel()
 
-        sel_below = ary < y_obs_val
-        pit_lower = np.sum(weights[sel_below])
+        obs_shape = ary.shape[:-1]
+        ary_2d = ary.reshape(-1, ary.shape[-1])
+        log_weights_2d = log_weights.reshape(-1, log_weights.shape[-1])
 
-        sel_equal = ary == y_obs_val
-        if np.any(sel_equal):
-            pit_at_obs = np.sum(weights[sel_equal])
-            pit_upper = pit_lower + pit_at_obs
+        if pareto_pit:
+            pit = self._pareto_pit_vec(ary_2d, y_obs_1d, log_weights=log_weights_2d, rng=rng)
+        else:
+            log_norm = logsumexp(log_weights_2d, axis=-1, keepdims=True)
+            weights = np.exp(log_weights_2d - log_norm)
 
-            if rng is not None:
-                return rng.uniform(pit_lower, pit_upper)
-            return (pit_lower + pit_upper) / 2.0
+            y_obs_col = y_obs_1d[:, None]
+            pit_lower = np.sum(weights * (ary_2d < y_obs_col), axis=-1)
+            pit_at_obs = np.sum(weights * (ary_2d == y_obs_col), axis=-1)
+            if rng is None:
+                pit = pit_lower + 0.5 * pit_at_obs
+            else:
+                urvs = rng.uniform(size=pit_lower.shape)
+                pit = pit_lower + urvs * pit_at_obs
 
-        return pit_lower
+        if obs_shape:
+            return pit.reshape(obs_shape)
+        return pit[0]
 
     def _loo_expectation(self, ary, log_weights, kind):
         """
@@ -932,6 +934,143 @@ class _DiagnosticsBase(_CoreBase):
         lppd = elpd + p_loo
         return elpd, se, p_loo, lppd
 
+    def _pareto_pit_vec(self, draws_matrix, y_obs_array, log_weights=None, rng=None):
+        """Compute Pareto-smoothed PIT.
+
+        Compute PIT value using the ECDF, then refine in the tails by fitting a
+        generalized Pareto distribution (GPD) to the tail draws. This gives smoother, more
+        accurate PIT values in the tails, and avoids PIT values of 0 and 1.
+        The PIT values are not anymore rank based and continuous uniformity test is appropriate.
+
+        Parameters
+        ----------
+        draws_matrix : np.ndarray of shape (n_obs, n_draws)
+            2D array of posterior predictive draws with shape (n_obs, n_draws).
+        y_obs_array : np.ndarray of shape (n_obs,)
+            1D array of observed values with shape (n_obs,).
+        log_weights : np.ndarray of shape (n_obs, n_draws) and dtype float, optional
+            1D array of normalized log weights matching ary.
+            If None, uniform weights are used.
+        rng : np.random.Generator, optional
+            Random number generator for tie-breaking. If None, midpoint is used.
+
+        Returns
+        -------
+        pit : float
+            Pareto-smoothed PIT value, clamped to [1/(n*1e4), 1 - 1/(n*1e4)].
+        """
+        n_draws = draws_matrix.shape[-1]
+        ndraws_tail = self._get_ps_tails(n_draws, 1, tail="right")
+
+        gpd_ok = ndraws_tail >= 5
+        if gpd_ok and ndraws_tail > n_draws // 2:
+            ndraws_tail = n_draws // 2
+        if gpd_ok and ndraws_tail >= n_draws:
+            gpd_ok = False
+
+        tail_ids = np.arange(n_draws - ndraws_tail, n_draws, dtype=int)
+        min_tail_prob = 1.0 / n_draws / 1e4
+
+        results = np.array(
+            [
+                self._pareto_pit_single(
+                    draws,
+                    y,
+                    None if log_weights is None else log_weights[idx],
+                    rng,
+                    gpd_ok,
+                    tail_ids,
+                    ndraws_tail,
+                )
+                for idx, (draws, y) in enumerate(zip(draws_matrix, y_obs_array))
+            ]
+        )
+        return np.clip(results, min_tail_prob, 1.0 - min_tail_prob)
+
+    def _pareto_pit_single(self, draws, y_val, lw, rng, gpd_ok, tail_ids, ndraws_tail):
+        """Compute Pareto-smoothed PIT for a single observation."""
+        draws = np.asarray(draws, dtype=float).ravel()
+        y_val = float(y_val)
+        n_draws = len(draws)
+
+        # --- raw PIT ---
+        sel_below = draws < y_val
+        if not np.any(sel_below):
+            raw_pit = 0.0
+        elif lw is None:
+            raw_pit = np.mean(sel_below)
+        else:
+            raw_pit = np.exp(logsumexp(lw[sel_below]))
+
+        sel_equal = draws == y_val
+        if np.any(sel_equal):
+            if lw is None:
+                pit_upper = raw_pit + np.mean(sel_equal)
+            else:
+                pit_upper = raw_pit + np.exp(logsumexp(lw[sel_equal]))
+            raw_pit = rng.uniform(raw_pit, pit_upper)
+
+        # --- GPD tail refinement ---
+        if not gpd_ok or not np.all(np.isfinite(draws)):
+            min_tail_prob = 1.0 / n_draws / 1e4
+            return float(np.clip(raw_pit, min_tail_prob, 1.0 - min_tail_prob))
+
+        ord_idx = np.argsort(draws)
+        sorted_draws = draws[ord_idx]
+        lw_sorted = lw[ord_idx] if lw is not None else None
+
+        if lw_sorted is not None:
+            tail_proportion = np.exp(logsumexp(lw_sorted[tail_ids]))
+        else:
+            tail_proportion = ndraws_tail / n_draws
+
+        # --- right tail ---
+        right_tail = sorted_draws[tail_ids]
+        right_replaced = False
+
+        if not np.all(right_tail == right_tail[0]):
+            right_cutoff = sorted_draws[tail_ids[0] - 1]
+            if right_cutoff == right_tail[0]:
+                right_cutoff -= np.finfo(float).eps
+
+            right_wt = np.exp(lw_sorted[tail_ids]) if lw_sorted is not None else None
+            khat, sigma = self._gpdfit(right_tail - right_cutoff, weights=right_wt)
+
+            if np.isfinite(khat) and not np.isnan(sigma) and y_val > right_cutoff:
+                gpd_cdf = float(
+                    self.pgeneralized_pareto(y_val, mu=right_cutoff, sigma=sigma, k=khat)
+                )
+                raw_pit = 1.0 - tail_proportion * (1.0 - gpd_cdf)
+                right_replaced = True
+
+        # --- left tail (negate trick) ---
+        if not right_replaced:
+            left_ord = np.argsort(-draws)
+            left_sorted = -draws[left_ord]
+            lw_left_sorted = lw[left_ord] if lw is not None else None
+
+            left_tail = left_sorted[tail_ids]
+            if not np.all(left_tail == left_tail[0]):
+                left_cutoff = left_sorted[tail_ids[0] - 1]
+                if left_cutoff == left_tail[0]:
+                    left_cutoff -= np.finfo(float).eps
+
+                left_wt = np.exp(lw_left_sorted[tail_ids]) if lw_left_sorted is not None else None
+                khat, sigma = self._gpdfit(left_tail - left_cutoff, weights=left_wt)
+
+                if np.isfinite(khat) and not np.isnan(sigma) and -y_val > left_cutoff:
+                    gpd_cdf = float(
+                        self.pgeneralized_pareto(-y_val, mu=left_cutoff, sigma=sigma, k=khat)
+                    )
+                    left_proportion = (
+                        np.exp(logsumexp(lw_left_sorted[tail_ids]))
+                        if lw_left_sorted is not None
+                        else tail_proportion
+                    )
+                    raw_pit = left_proportion * (1.0 - gpd_cdf)
+
+        return raw_pit
+
     def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
         """
         Compute Pareto k-hat diagnostic.
@@ -1082,7 +1221,7 @@ class _DiagnosticsBase(_CoreBase):
         return ary, khat
 
     @staticmethod
-    def _gpdfit(ary):
+    def _gpdfit(ary, weights=None):
         """Estimate the parameters for the Generalized Pareto Distribution (GPD).
 
         Empirical Bayes estimate for the parameters (kappa, sigma) of the generalized Pareto
@@ -1097,6 +1236,9 @@ class _DiagnosticsBase(_CoreBase):
         ----------
         ary: array
             sorted 1D data array
+        weights: array, optional
+            observation weights. If provided, a weighted fit is performed.
+            Weights are normalized internally to sum to ``len(ary)``.
 
         Returns
         -------
@@ -1110,29 +1252,50 @@ class _DiagnosticsBase(_CoreBase):
         n = len(ary)
         m_est = 30 + int(n**0.5)
 
+        if weights is not None:
+            weights = np.asarray(weights, dtype=float)
+            weights = weights / weights.sum() * n
+
+        xstar = ary[int((n / 4 + 0.5) - 1)]  # first quartile of sample
+        if xstar <= ary[0]:
+            # first quartile is not bigger than the minimum, which indicates
+            # that the distribution is far from a generalized Pareto distribution
+            return np.nan, np.nan
+
         b_ary = 1 - np.sqrt(m_est / (np.arange(1, m_est + 1, dtype=float) - 0.5))
-        b_ary /= prior_bs * ary[int(n / 4 + 0.5) - 1]
+        b_ary /= prior_bs * xstar
         b_ary += 1 / ary[-1]
 
-        k_ary = np.mean(np.log1p(-b_ary[:, None] * ary), axis=1)
+        log1p_mat = np.log1p(-b_ary[:, None] * ary)
+        if weights is not None:
+            k_ary = log1p_mat @ weights / n
+        else:
+            k_ary = np.mean(log1p_mat, axis=1)
+
         len_scale = n * (np.log(-b_ary / k_ary) - k_ary - 1)
-        weights = np.exp(len_scale - logsumexp(len_scale))
+        w_theta = np.exp(len_scale - logsumexp(len_scale))
 
         # remove negligible weights
-        real_idxs = weights >= 10 * np.finfo(float).eps
+        real_idxs = w_theta >= 10 * np.finfo(float).eps
         if not np.all(real_idxs):
-            weights = weights[real_idxs]
+            w_theta = w_theta[real_idxs]
             b_ary = b_ary[real_idxs]
         # normalise weights
-        weights /= weights.sum()
+        w_theta /= w_theta.sum()
 
         # posterior mean for b
-        b_post = np.sum(b_ary * weights)
+        b_post = np.sum(b_ary * w_theta)
         # estimate for k
-        kappa = np.mean(np.log1p(-b_post * ary))
+        if weights is not None:
+            kappa = np.sum(weights * np.log1p(-b_post * ary)) / n
+        else:
+            kappa = np.mean(np.log1p(-b_post * ary))
         # add prior for kappa
         sigma = -kappa / b_post
         kappa = (n * kappa + prior_k * 0.5) / (n + prior_k)
+
+        if np.isnan(kappa):
+            return np.inf, np.nan
 
         return kappa, sigma
 
@@ -1148,6 +1311,31 @@ class _DiagnosticsBase(_CoreBase):
             q = mu + sigma * np.expm1(-kappa * np.log1p(-probs)) / kappa
 
         return q
+
+    @staticmethod
+    def pgeneralized_pareto(q, mu=0, sigma=1, k=0, lower_tail=True, log_p=False):
+        q = np.asarray(q, dtype=float)
+
+        if np.isnan(sigma) or sigma <= 0:
+            return np.full(q.shape, np.nan)
+
+        z = (q - mu) / sigma
+
+        if abs(k) < 1e-15:
+            p = -np.expm1(-z)
+        else:
+            with np.errstate(divide="ignore"):
+                p = -np.expm1(np.log1p(np.maximum(k * z, -1)) / -k)
+
+        p = np.clip(p, 0, 1)
+
+        if not lower_tail:
+            p = 1 - p
+
+        if log_p:
+            p = np.log(p)
+
+        return p
 
     def _power_scale_sense(self, ary, lower_w, upper_w, lower_alpha, upper_alpha):
         """Compute power-scaling sensitivity by finite difference second derivative of CJS."""
