@@ -944,7 +944,7 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        draws_matrix : np.ndarray
+        draws_matrix : np.ndarray of shape (n_obs, n_draws)
             2D array of posterior predictive draws with shape (n_obs, n_draws).
         y_obs_array : np.ndarray
             1D array of observed values with shape (n_obs,).
