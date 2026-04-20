@@ -1256,8 +1256,14 @@ class _DiagnosticsBase(_CoreBase):
             weights = np.asarray(weights, dtype=float)
             weights = weights / weights.sum() * n
 
+        xstar = ary[int((n / 4 + 0.5) - 1)]  # first quartile of sample
+        if xstar <= ary[0]:
+            # first quartile is not bigger than the minimum, which indicates
+            # that the distribution is far from a generalized Pareto distribution
+            return np.nan, np.nan
+
         b_ary = 1 - np.sqrt(m_est / (np.arange(1, m_est + 1, dtype=float) - 0.5))
-        b_ary /= prior_bs * ary[int(n / 4 + 0.5) - 1]
+        b_ary /= prior_bs * xstar
         b_ary += 1 / ary[-1]
 
         log1p_mat = np.log1p(-b_ary[:, None] * ary)
@@ -1287,6 +1293,9 @@ class _DiagnosticsBase(_CoreBase):
         # add prior for kappa
         sigma = -kappa / b_post
         kappa = (n * kappa + prior_k * 0.5) / (n + prior_k)
+
+        if np.isnan(kappa):
+            return np.inf, np.nan
 
         return kappa, sigma
 
