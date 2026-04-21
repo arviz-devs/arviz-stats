@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """Class with array functions.
 
 "array" functions work on any dimension array,
