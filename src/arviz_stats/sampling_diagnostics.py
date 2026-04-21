@@ -196,8 +196,8 @@ def rhat(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-   method : str, default "rank"
-    Select the R-hat computation method.
+   method : {"rank", "identity", "split", "z_scale", "folded"}, default "rank"
+    Select the R-hat computation method. See Notes section for more details.
 
     Each method corresponds to a different formulation of the convergence diagnostic:
 
