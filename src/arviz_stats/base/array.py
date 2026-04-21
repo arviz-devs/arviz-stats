@@ -595,7 +595,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             * custom_lims : list or tuple, optional
                 Custom bounds for the range of `ary`. Defaults to None.
             * cumulative : bool, optional
-                If True, returns the cumulative PDF instead of the PDF. Defaults to False.
+                If True, returns the CDF instead of the PDF. Defaults to False.
 
         Returns
         -------
