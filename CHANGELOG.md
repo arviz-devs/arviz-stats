@@ -1,3 +1,55 @@
+<a id="v1.1.0"></a>
+# [v1.1.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.1.0) - 2026-04-23
+
+## What's Changed
+
+### New features
+* Generalize loo expectations by [@aloctavodia](https://github.com/aloctavodia) in [#312](https://github.com/arviz-devs/arviz-stats/pull/312)
+* Add std, var, iqr and mad by [@aloctavodia](https://github.com/aloctavodia) in [#306](https://github.com/arviz-devs/arviz-stats/pull/306)
+* Set histogram density=True by default by [@aatifjunaid](https://github.com/aatifjunaid) in [#307](https://github.com/arviz-devs/arviz-stats/pull/307)
+* Add method to compute influential observations based on leave-one-out expectations by [@aloctavodia](https://github.com/aloctavodia) in [#321](https://github.com/arviz-devs/arviz-stats/pull/321)
+* Add custom log-likelihood to `loo()` by [@jordandeklerk](https://github.com/jordandeklerk) in [#322](https://github.com/arviz-devs/arviz-stats/pull/322)
+* Add new uniformity test by [@aloctavodia](https://github.com/aloctavodia) in [#316](https://github.com/arviz-devs/arviz-stats/pull/316)
+* Fix mcse for circular variables by [@aloctavodia](https://github.com/aloctavodia) in [#341](https://github.com/arviz-devs/arviz-stats/pull/341)
+* Make elpd_diff negative by [@aloctavodia](https://github.com/aloctavodia) in [#342](https://github.com/arviz-devs/arviz-stats/pull/342)
+
+
+### Maintenance and bug fixes
+* Improve error handling and messages in BaseArray by [@ShivamRajSri](https://github.com/ShivamRajSri) in [#281](https://github.com/arviz-devs/arviz-stats/pull/281)
+* Silence edge-case runtime warnings in dispersion helpers by [@sjiang83](https://github.com/sjiang83) in [#319](https://github.com/arviz-devs/arviz-stats/pull/319)
+* ci: treat warnings as errors in arviz-stats test configuration by [@sjiang83](https://github.com/sjiang83) in [#315](https://github.com/arviz-devs/arviz-stats/pull/315)
+* Update rootogram helpers by [@OriolAbril](https://github.com/OriolAbril) in [#330](https://github.com/arviz-devs/arviz-stats/pull/330)
+* Preserve observed_data coordinates in weight_predictions by [@ShivamRajSri](https://github.com/ShivamRajSri) in [#285](https://github.com/arviz-devs/arviz-stats/pull/285)
+* Pre-commit: update ruff hook from v0.6.9 to v0.15.6 by [@mahidhiman12](https://github.com/mahidhiman12) in [#334](https://github.com/arviz-devs/arviz-stats/pull/334)
+* Update pit helpers to support sample_dims by [@OriolAbril](https://github.com/OriolAbril) in [#335](https://github.com/arviz-devs/arviz-stats/pull/335)
+* Add ignore for xarray related timedelta dtype deprecation by [@OriolAbril](https://github.com/OriolAbril) in [#347](https://github.com/arviz-devs/arviz-stats/pull/347)
+* Fix Numba array backend edge cases and maximize pure Python test coverage by [@player3zxcvbnm](https://github.com/player3zxcvbnm) in [#320](https://github.com/arviz-devs/arviz-stats/pull/320)
+* Clean uniform test implementation by [@aloctavodia](https://github.com/aloctavodia) in [#352](https://github.com/arviz-devs/arviz-stats/pull/352)
+* Add pareto_pit by [@aloctavodia](https://github.com/aloctavodia) in [#353](https://github.com/arviz-devs/arviz-stats/pull/353)
+
+### Documentation
+* Remove long docstring examples by [@jordandeklerk](https://github.com/jordandeklerk) in [#326](https://github.com/arviz-devs/arviz-stats/pull/326)
+* Remove `khat` display in example docstring by [@jordandeklerk](https://github.com/jordandeklerk) in [#336](https://github.com/arviz-devs/arviz-stats/pull/336)
+* Fix compare() docstring, return object column name now matches docstring by [@Cab14bacc](https://github.com/Cab14bacc) in [#340](https://github.com/arviz-devs/arviz-stats/pull/340)
+* Update `compare()` docstring by [@jordandeklerk](https://github.com/jordandeklerk) in [#346](https://github.com/arviz-devs/arviz-stats/pull/346)
+* Enhance method descriptions for R-hat computation by [@Gaurav-Borse-dev](https://github.com/Gaurav-Borse-dev) in [#343](https://github.com/arviz-devs/arviz-stats/pull/343)
+* Document kwargs for kde across all layers by [@player3zxcvbnm](https://github.com/player3zxcvbnm) in [#327](https://github.com/arviz-devs/arviz-stats/pull/327)
+
+
+## New Contributors
+* [@ShivamRajSri](https://github.com/ShivamRajSri) made their first contribution in [#281](https://github.com/arviz-devs/arviz-stats/pull/281)
+* [@aatifjunaid](https://github.com/aatifjunaid) made their first contribution in [#307](https://github.com/arviz-devs/arviz-stats/pull/307)
+* [@sjiang83](https://github.com/sjiang83) made their first contribution in [#319](https://github.com/arviz-devs/arviz-stats/pull/319)
+* [@mahidhiman12](https://github.com/mahidhiman12) made their first contribution in [#334](https://github.com/arviz-devs/arviz-stats/pull/334)
+* [@Cab14bacc](https://github.com/Cab14bacc) made their first contribution in [#340](https://github.com/arviz-devs/arviz-stats/pull/340)
+* [@player3zxcvbnm](https://github.com/player3zxcvbnm) made their first contribution in [#320](https://github.com/arviz-devs/arviz-stats/pull/320)
+* [@Gaurav-Borse-dev](https://github.com/Gaurav-Borse-dev) made their first contribution in [#343](https://github.com/arviz-devs/arviz-stats/pull/343)
+
+**Full Changelog**: https://github.com/arviz-devs/arviz-stats/compare/v1.0.0...v1.1.0
+
+[Changes][v1.1.0]
+
+
 <a id="v1.0.0"></a>
 # [v1.0.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.0.0) - 2026-03-02
 
@@ -282,6 +334,7 @@
 [Changes][v.0.4.0]
 
 
+[v1.1.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.0.0...v1.1.0
 [v1.0.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.8.0...v1.0.0
 [v0.8.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.7.0...v0.8.0
 [v0.7.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.6.0...v0.7.0
