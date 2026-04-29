@@ -324,7 +324,7 @@ class BaseDataArray:
         n_points = 1
         for d in dims:
             n_points *= da.sizes[d]
-        p_value, shapley = apply_ufunc(
+        p_value, shapley, shapley_unsorted = apply_ufunc(
             self.array_class.uniformity_test,
             da,
             kwargs={
@@ -333,9 +333,9 @@ class BaseDataArray:
                 **kwargs,
             },
             input_core_dims=[dims],
-            output_core_dims=[[], ["pit_dim"]],
+            output_core_dims=[[], ["pit_dim"], ["pit_dim"]],
         )
-        return p_value, shapley
+        return p_value, shapley, shapley_unsorted
 
     def thin_factor(self, da, target_ess=None, reduce_func="mean"):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.

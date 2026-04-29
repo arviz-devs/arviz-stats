@@ -707,9 +707,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        p_value, shapley_vals : array-like
+        p_value, shapley_vals, shapley_unsorted : array-like
             ``p_value`` has the batch shape (input shape minus reduced axes).
             ``shapley_vals`` has the batch shape plus the reduced dimension length.
+            ``shapley_unsorted`` has the same shape as ``shapley_vals``.
         """
         ary, axes = process_ary_axes(ary, axis)
         n_points = int(np.prod([ary.shape[ax] for ax in axes]))
@@ -725,13 +726,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             )
         uni_test_ufunc = make_ufunc(
             test_func,
-            n_output=2,
+            n_output=3,
             n_input=1,
             n_dims=len(axes),
         )
         return uni_test_ufunc(
             ary,
-            out_shape=((), (n_points,)),
+            out_shape=((), (n_points,), (n_points,)),
             **kwargs,
         )
 
