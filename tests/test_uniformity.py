@@ -98,7 +98,7 @@ class TestUniformityTestPotC:
         ps = 2*min(cdf, 1-cdf) = [0.38, 0.02] (both < 0.5 for truncation)
         """
         x = np.array([0.1, 0.9])
-        p_value, shapley = array_stats.uniformity_test(x, method="pot_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, method="pot_c")
 
         x_sorted = np.sort(x)
         n = len(x)
@@ -110,32 +110,36 @@ class TestUniformityTestPotC:
         assert_allclose(p_value, expected_p, atol=1e-10)
         assert 0 <= p_value <= 1
         assert len(shapley) == len(x)
+        assert len(shapley_unsorted) == len(x)
+        assert_allclose(shapley[np.argsort(x)], shapley_unsorted, atol=1e-10)
 
     def test_uniform_samples_high_pvalue(self):
         rng = np.random.default_rng(42)
         x = rng.uniform(size=200)
-        p_value, shapley = array_stats.uniformity_test(x, method="pot_c")
+        p_value, shapley, _ = array_stats.uniformity_test(x, method="pot_c")
         assert p_value > 0.05, f"Uniform sample yielded p={p_value}, expected > 0.05"
         assert len(shapley) == len(x)
 
     def test_non_uniform_samples_low_pvalue(self):
         rng = np.random.default_rng(123)
         x = rng.beta(2, 5, size=200)
-        p_value, _ = array_stats.uniformity_test(x, method="pot_c")
+        p_value, *_ = array_stats.uniformity_test(x, method="pot_c")
         assert p_value < 0.05, f"Non-uniform sample yielded p={p_value}, expected < 0.05"
 
     def test_shapley_length_matches_input(self):
         rng = np.random.default_rng(42)
         x = rng.uniform(size=50)
-        _, shapley = array_stats.uniformity_test(x, method="pot_c")
+        _, shapley, shapley_unsorted = array_stats.uniformity_test(x, method="pot_c")
         assert shapley.shape == (len(x),)
+        assert shapley_unsorted.shape == (len(x),)
 
     def test_batched_2d(self):
         rng = np.random.default_rng(7)
         x = rng.uniform(size=(3, 100))
-        p_value, shapley = array_stats.uniformity_test(x, axis=-1, method="pot_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, axis=-1, method="pot_c")
         assert p_value.shape == (3,)
         assert shapley.shape == (3, 100)
+        assert shapley_unsorted.shape == (3, 100)
 
 
 class TestUniformityTestPritC:
@@ -147,7 +151,7 @@ class TestUniformityTestPritC:
         Test binomial probabilities to ensure some ps < 0.5 for truncation.
         """
         x = np.array([0.1, 0.9])
-        p_value, shapley = array_stats.uniformity_test(x, method="prit_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, method="prit_c")
 
         x_sorted = np.sort(x)
         len_x = len(x_sorted)
@@ -159,33 +163,39 @@ class TestUniformityTestPritC:
 
         assert_allclose(p_value, expected_p, atol=1e-10)
         assert len(shapley) == len(x)
+        assert len(shapley_unsorted) == len(x)
+        assert_allclose(shapley[np.argsort(x)], shapley_unsorted, atol=1e-10)
 
     def test_uniform_samples_high_pvalue(self):
         rng = np.random.default_rng(42)
         x = rng.uniform(size=200)
-        p_value, shapley = array_stats.uniformity_test(x, method="prit_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, method="prit_c")
         assert p_value > 0.05, f"Uniform sample yielded p={p_value}, expected > 0.05"
         assert len(shapley) == len(x)
+        assert len(shapley_unsorted) == len(x)
 
     def test_non_uniform_samples_low_pvalue(self):
         rng = np.random.default_rng(123)
         x = rng.beta(2, 5, size=200)
-        p_value, _ = array_stats.uniformity_test(x, method="prit_c")
+        p_value, *_ = array_stats.uniformity_test(x, method="prit_c")
         assert p_value < 0.05, f"Non-uniform sample yielded p={p_value}, expected < 0.05"
 
     def test_batched_2d(self):
         rng = np.random.default_rng(7)
         x = rng.uniform(size=(3, 100))
-        p_value, shapley = array_stats.uniformity_test(x, axis=-1, method="prit_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(
+            x, axis=-1, method="prit_c"
+        )
         assert p_value.shape == (3,)
         assert shapley.shape == (3, 100)
+        assert shapley_unsorted.shape == (3, 100)
 
 
 class TestUniformityTestPietC:
     def test_basic_values(self):
         """pe = expon.cdf(-log(x)), ps = 2*min(pe, 1-pe), then Cauchy combination."""
         x = np.array([0.1, 0.25, 0.5, 0.75, 0.9])
-        p_value, shapley = array_stats.uniformity_test(x, method="piet_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, method="piet_c")
 
         pe = expon.cdf(-np.log(x))
         ps = 2 * np.minimum(pe, 1 - pe)
@@ -193,26 +203,32 @@ class TestUniformityTestPietC:
 
         assert_allclose(p_value, expected_p, atol=1e-10)
         assert len(shapley) == len(x)
+        assert len(shapley_unsorted) == len(x)
+        assert_allclose(shapley[np.argsort(x)], shapley_unsorted, atol=1e-10)
 
     def test_uniform_samples_high_pvalue(self):
         rng = np.random.default_rng(42)
         x = rng.uniform(size=200)
-        p_value, shapley = array_stats.uniformity_test(x, method="piet_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, method="piet_c")
         assert p_value > 0.05, f"Uniform sample yielded p={p_value}, expected > 0.05"
         assert len(shapley) == len(x)
+        assert len(shapley_unsorted) == len(x)
 
     def test_non_uniform_samples_low_pvalue(self):
         rng = np.random.default_rng(123)
         x = rng.beta(0.5, 0.5, size=500)
-        p_value, _ = array_stats.uniformity_test(x, method="piet_c")
+        p_value, *_ = array_stats.uniformity_test(x, method="piet_c")
         assert p_value < 0.05, f"Non-uniform sample yielded p={p_value}, expected < 0.05"
 
     def test_batched_2d(self):
         rng = np.random.default_rng(7)
         x = rng.uniform(size=(3, 100))
-        p_value, shapley = array_stats.uniformity_test(x, axis=-1, method="piet_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(
+            x, axis=-1, method="piet_c"
+        )
         assert p_value.shape == (3,)
         assert shapley.shape == (3, 100)
+        assert shapley_unsorted.shape == (3, 100)
 
 
 class TestUniformityTestGeneral:
@@ -224,8 +240,8 @@ class TestUniformityTestGeneral:
     def test_default_method_is_pot_c(self):
         rng = np.random.default_rng(42)
         x = rng.uniform(size=50)
-        p_default, sh_default = array_stats.uniformity_test(x)
-        p_pot, sh_pot = array_stats.uniformity_test(x, method="pot_c")
+        p_default, sh_default, _ = array_stats.uniformity_test(x)
+        p_pot, sh_pot, _ = array_stats.uniformity_test(x, method="pot_c")
         assert_allclose(p_default, p_pot)
         assert_allclose(sh_default, sh_pot)
 
@@ -233,7 +249,7 @@ class TestUniformityTestGeneral:
     def test_pvalue_in_unit_interval(self, method):
         rng = np.random.default_rng(0)
         x = rng.uniform(size=50)
-        p_value, _ = array_stats.uniformity_test(x, method=method)
+        p_value, *_ = array_stats.uniformity_test(x, method=method)
         assert 0 <= p_value <= 1
 
     @pytest.mark.parametrize("method", ["pot_c", "prit_c", "piet_c"])
@@ -241,15 +257,19 @@ class TestUniformityTestGeneral:
         """axis=None should flatten the input."""
         rng = np.random.default_rng(11)
         x = rng.uniform(size=(4, 50))
-        p_value, shapley = array_stats.uniformity_test(x, axis=None, method=method)
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(
+            x, axis=None, method=method
+        )
         assert np.ndim(p_value) == 0
         assert shapley.shape == (200,)
+        assert shapley_unsorted.shape == (200,)
 
     @pytest.mark.parametrize("method", ["pot_c", "prit_c", "piet_c"])
     def test_3d_batched(self, method):
         """Works with higher-rank batch dimensions."""
         rng = np.random.default_rng(99)
         x = rng.uniform(size=(2, 3, 80))
-        p_value, shapley = array_stats.uniformity_test(x, axis=-1, method=method)
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, axis=-1, method=method)
         assert p_value.shape == (2, 3)
         assert shapley.shape == (2, 3, 80)
+        assert shapley_unsorted.shape == (2, 3, 80)

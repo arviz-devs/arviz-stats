@@ -848,9 +848,11 @@ class _DensityBase(_CoreBase):
         n = len(ary)
 
         if n == 0:
-            return np.nan, np.array([])
+            return np.nan, np.array([]), np.array([])
 
-        x_sorted = np.sort(ary)
+        sort_idx = np.argsort(ary)
+        x_sorted = ary[sort_idx]
+
         i_vals = np.arange(1, n + 1)
 
         probs = betainc(i_vals, i_vals[::-1], x_sorted)
@@ -860,7 +862,10 @@ class _DensityBase(_CoreBase):
 
         shapley_vals = self._shapley_mean(cauchy_vals)
 
-        return p_value, shapley_vals
+        shapley_unsorted = np.empty_like(shapley_vals)
+        shapley_unsorted[sort_idx] = shapley_vals
+
+        return p_value, shapley_vals, shapley_unsorted
 
     def _prit_c(self, ary):
         """Pointwise Rank-based Individual Test with Cauchy combination (Binomial-based tests)."""
@@ -868,9 +873,10 @@ class _DensityBase(_CoreBase):
         n = len(ary)
 
         if n == 0:
-            return np.nan, np.array([])
+            return np.nan, np.array([]), np.array([])
 
-        x = np.sort(ary)
+        sort_idx = np.argsort(ary)
+        x = ary[sort_idx]
         N = len(x)
 
         ranks = np.searchsorted(x, x, side="right")
@@ -883,7 +889,10 @@ class _DensityBase(_CoreBase):
         p_value = self._cauchy_combination(ps, cauchy_vals, truncate=True)
         shapley_vals = self._shapley_mean(cauchy_vals)
 
-        return p_value, shapley_vals
+        shapley_unsorted = np.empty_like(shapley_vals)
+        shapley_unsorted[sort_idx] = shapley_vals
+
+        return p_value, shapley_vals, shapley_unsorted
 
     def _piet_c(self, ary):
         """Pointwise Inverse-CDF Evaluation Tests Combination (Exp(1)-based tests)."""
@@ -891,16 +900,20 @@ class _DensityBase(_CoreBase):
         n = len(ary)
 
         if n == 0:
-            return np.nan, np.array([])
+            return np.nan, np.array([]), np.array([])
 
-        ary = np.sort(ary)
+        sort_idx = np.argsort(ary)
+        ary = ary[sort_idx]
         pe = -np.expm1(np.log(ary))
         ps = 2 * np.minimum(pe, 1 - pe)
         cauchy_vals = np.tan((0.5 - ps) * np.pi)
         p_value = self._cauchy_combination(ps, cauchy_vals, truncate=False)
         shapley_vals = self._shapley_mean(cauchy_vals)
 
-        return p_value, shapley_vals
+        shapley_unsorted = np.empty_like(shapley_vals)
+        shapley_unsorted[sort_idx] = shapley_vals
+
+        return p_value, shapley_vals, shapley_unsorted
 
     def _cauchy_combination(self, ps, cauchy_vals, truncate):
         """Combine p-values using the Cauchy combination method."""
