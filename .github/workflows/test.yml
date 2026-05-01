@@ -30,7 +30,7 @@ jobs:
         env:
           JOB: ${{ matrix.job }}
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           name: Python ${{ matrix.python-version }} ${{ matrix.job }}
           fail_ci_if_error: false
