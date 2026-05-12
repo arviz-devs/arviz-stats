@@ -488,6 +488,56 @@ class TestKDE:
         assert bw.shape == tuple(s for i, s in enumerate(ary.shape) if i != axis % ary.ndim)
 
 
+class TestKDE2D:
+    def test_kde2d_basic(self, array_stats):
+        rng = np.random.default_rng(42)
+        x = rng.normal(size=500)
+        y = rng.normal(size=500)
+        grid, x_coords, y_coords = array_stats.kde2d(x, y)
+        assert grid.shape == (128, 128)
+        assert x_coords.shape == (128,)
+        assert y_coords.shape == (128,)
+
+    @pytest.mark.parametrize("gridsize", [(128, 128), (64, 32)])
+    def test_kde2d_grid_len(self, array_stats, gridsize):
+        rng = np.random.default_rng(42)
+        x = rng.normal(size=500)
+        y = rng.normal(size=500)
+        grid, x_coords, y_coords = array_stats.kde2d(x, y, gridsize=gridsize)
+        assert grid.shape == gridsize
+        assert x_coords.shape == (gridsize[0],)
+        assert y_coords.shape == (gridsize[1],)
+
+    def test_kde2d_circular(self, array_stats):
+        rng = np.random.default_rng(42)
+        x = rng.normal(size=500)
+        y = rng.normal(size=500)
+        grid, x_coords, y_coords = array_stats.kde2d(x, y, circular=True)
+        assert grid.shape == (128, 128)
+        assert x_coords.shape == (128,)
+        assert y_coords.shape == (128,)
+
+    def test_kde2d_axis(self, array_stats):
+        rng = np.random.default_rng(42)
+        x = rng.normal(size=500)
+        y = rng.normal(size=500)
+        grid, x_coords, y_coords = array_stats.kde2d(x, y, axis=0)
+        assert grid.shape == (128, 128)
+        assert x_coords.shape == (128,)
+        assert y_coords.shape == (128,)
+
+    def test_kde2d_hdi_probs(self, array_stats):
+        rng = np.random.default_rng(42)
+        x = rng.normal(size=500)
+        y = rng.normal(size=500)
+        grid, x_coords, y_coords, contours = array_stats.kde2d(x, y, hdi_probs=[0.5, 0.9])
+        assert grid.shape == (128, 128)
+        assert x_coords.shape == (128,)
+        assert y_coords.shape == (128,)
+        assert contours.shape == (2,)
+        assert contours[0] > contours[1]
+
+
 class TestQuantileDots:
     def test_qds_basic(self, array_stats, rng):
         ary = rng.normal(size=(100,))

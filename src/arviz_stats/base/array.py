@@ -620,6 +620,74 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
+    def kde2d(self, x, y, gridsize=(128, 128), circular=False, hdi_probs=None, axis=-1):
+        """Compute a 2D kernel density estimate.
+
+        Parameters
+        ----------
+        x : array-like
+            Samples for the first variable.
+        y : array-like
+            Samples for the second variable.
+        gridsize : tuple of int, default (128, 128)
+            Number of grid points along each axis. Use powers of 2 for FFT efficiency.
+        circular : bool, default False
+            Whether to use circular (wrap) boundary conditions.
+        hdi_probs : array-like, optional
+            If provided, also compute and return the density contour levels that
+            enclose the given highest-density-interval probabilities.
+        axis : int or sequence of int, default -1
+            Axis or axes along which to reduce ``x`` and ``y``.
+
+        Returns
+        -------
+        grid : array-like
+            2D density array of shape ``(*batch, n_x, n_y)``.
+        x_coords : array-like
+            Grid coordinates along the x axis, shape ``(*batch, n_x)``.
+        y_coords : array-like
+            Grid coordinates along the y axis, shape ``(*batch, n_y)``.
+        contours : array-like, optional
+            Returned only when hdi_probs is not ``None``.
+            Density contour levels of shape ``(*batch, len(hdi_probs))``.
+        """
+        x, axes = process_ary_axes(x, axis)
+        y, _ = process_ary_axes(y, axis)
+
+        n_x, n_y = gridsize
+
+        def _kde2d_wrapper(x_flat, y_flat):
+            g, xmin, xmax, ymin, ymax = self._fast_kde_2d(
+                x_flat, y_flat, gridsize=gridsize, circular=circular
+            )
+            return g, np.linspace(xmin, xmax, n_x), np.linspace(ymin, ymax, n_y)
+
+        kde2d_ufunc = make_ufunc(
+            _kde2d_wrapper,
+            n_output=3,
+            n_input=2,
+            n_dims=len(axes),
+        )
+        grid, x_coords, y_coords = kde2d_ufunc(x, y, out_shape=((n_x, n_y), (n_x,), (n_y,)))
+
+        if hdi_probs is not None:
+            hdi_probs = np.atleast_1d(np.asarray(hdi_probs, dtype=float))
+            n_hdi = len(hdi_probs)
+
+            def _contours_wrapper(g):
+                return self._find_hdi_contours(g, hdi_probs)
+
+            contours_ufunc = make_ufunc(
+                _contours_wrapper,
+                n_output=1,
+                n_input=1,
+                n_dims=2,
+            )
+            contours = contours_ufunc(grid, out_shape=(n_hdi,))
+            return grid, x_coords, y_coords, contours
+
+        return grid, x_coords, y_coords
+
     def qds(
         self,
         ary,

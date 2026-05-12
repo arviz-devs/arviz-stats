@@ -8,7 +8,7 @@ from collections.abc import Sequence
 
 import numpy as np
 from arviz_base import rcParams
-from xarray import DataArray, apply_ufunc, broadcast, concat
+from xarray import DataArray, Dataset, apply_ufunc, broadcast, concat
 from xarray_einstats.stats import _apply_nonreduce_func
 
 from arviz_stats.base.array import array_stats
@@ -267,6 +267,91 @@ class BaseDataArray:
         plot_axis = DataArray(["x", "y"], dims="plot_axis")
         out = concat((grid, pdf), dim=plot_axis)
         return out.assign_coords({"bw" if da.name is None else f"bw_{da.name}": bw})
+
+    def kde2d(
+        self,
+        da_x,
+        da_y,
+        dim=None,
+        gridsize=(128, 128),
+        circular=False,
+        hdi_probs=None,
+    ):
+        """Compute a 2D kernel density estimate on two DataArray inputs.
+
+        Parameters
+        ----------
+        da_x : xarray.DataArray
+            Samples for the first variable (x axis).
+        da_y : xarray.DataArray
+            Samples for the second variable (y axis).
+        dim : str or sequence of str, optional
+            Dimension(s) over which to reduce (i.e. the sample dimensions).
+        gridsize : tuple of int, default (128, 128)
+            Number of grid points along each axis.
+        circular : bool, default False
+            Whether to use circular boundary conditions.
+        hdi_probs : array-like, optional
+            Highest-density-interval probabilities for which contour levels are
+            computed and stored as a ``contours`` variable in the returned Dataset.
+
+        Returns
+        -------
+        out : xarray.Dataset
+            A Dataset with variables:
+
+            * ``density`` - 2D KDE on a grid, dims ``(*batch_dims, kde2d_x, kde2d_y)``.
+            * ``x_coords`` - Grid coordinates for the x axis, dims ``(*batch_dims, kde2d_x)``.
+            * ``y_coords`` - Grid coordinates for the y axis, dims ``(*batch_dims, kde2d_y)``.
+            * ``contours`` - (only when hdi_probs is given) Density contour levels,
+              dims ``(*batch_dims, hdi_prob)`` with hdi_probs stored as a coordinate.
+        """
+        dims = validate_dims(dim)
+        axis = np.arange(-len(dims), 0, 1)
+
+        if hdi_probs is not None:
+            hdi_probs_arr = np.atleast_1d(np.asarray(hdi_probs, dtype=float))
+
+            def _kde2d_with_contours(x, y):
+                return self.array_class.kde2d(
+                    x,
+                    y,
+                    gridsize=gridsize,
+                    circular=circular,
+                    hdi_probs=hdi_probs_arr,
+                    axis=axis,
+                )
+
+            grid, x_coords, y_coords, contours = apply_ufunc(
+                _kde2d_with_contours,
+                da_x,
+                da_y,
+                input_core_dims=[dims, dims],
+                output_core_dims=[
+                    ["kde2d_x", "kde2d_y"],
+                    ["kde2d_x"],
+                    ["kde2d_y"],
+                    ["hdi_prob"],
+                ],
+            )
+            contours = contours.assign_coords(hdi_prob=DataArray(hdi_probs_arr, dims="hdi_prob"))
+            return Dataset(
+                {"density": grid, "x_coords": x_coords, "y_coords": y_coords, "contours": contours}
+            )
+
+        grid, x_coords, y_coords = apply_ufunc(
+            self.array_class.kde2d,
+            da_x,
+            da_y,
+            kwargs={
+                "gridsize": gridsize,
+                "circular": circular,
+                "axis": axis,
+            },
+            input_core_dims=[dims, dims],
+            output_core_dims=[["kde2d_x", "kde2d_y"], ["kde2d_x"], ["kde2d_y"]],
+        )
+        return Dataset({"density": grid, "x_coords": x_coords, "y_coords": y_coords})
 
     def qds(
         self,

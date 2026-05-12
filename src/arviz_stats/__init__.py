@@ -30,7 +30,7 @@ try:
     from arviz_stats.summary import summary, ci_in_rope, mean, median, mode, std, var, iqr, mad
     from arviz_stats.manipulation import thin, weight_predictions
     from arviz_stats.bayes_factor import bayes_factor
-    from arviz_stats.visualization import ecdf, eti, hdi, histogram, kde, qds
+    from arviz_stats.visualization import ecdf, eti, hdi, histogram, kde, kde2d, qds
     from arviz_stats.survival import kaplan_meier, generate_survival_curves
 
 except ModuleNotFoundError:

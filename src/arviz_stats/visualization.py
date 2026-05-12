@@ -1,7 +1,11 @@
 """Top level functions related to visualization of distributions."""
 
-from arviz_stats.utils import _apply_multi_input_function
-from arviz_stats.validate import validate_ci_prob
+import numpy as np
+import xarray as xr
+from arviz_base import convert_to_dataset
+
+from arviz_stats.utils import _apply_multi_input_function, get_function
+from arviz_stats.validate import validate_ci_prob, validate_dims
 
 
 def hdi(
@@ -642,4 +646,132 @@ def qds(
         stackratio=stackratio,
         top_only=top_only,
         **kwargs,
+    )
+
+
+def kde2d(
+    da_x,
+    da_y,
+    dim=None,
+    group="posterior",
+    gridsize=(128, 128),
+    circular=False,
+    hdi_probs=None,
+):
+    r"""Compute a 2D kernel density estimate (KDE) for two variables.
+
+    Parameters
+    ----------
+    da_x : array-like or DataArray or DataTree or idata-like
+        Samples for the first variable (x axis).
+
+        - array-like: call the array layer within ``arviz-stats`` directly.
+        - :class:`xarray.DataArray`: apply the dimension-aware function.
+        - :class:`xarray.DataTree` / InferenceData-like: the group indicated by
+          *group* is used; the object must contain a single variable, or you
+          should extract the DataArray beforehand.
+    da_y : array-like or DataArray or DataTree or idata-like
+        Samples for the second variable (y axis).  Must be the same type as
+        da_x and contain the same number of samples along the sample dimensions.
+    dim : str or sequence of hashable, optional
+        Dimensions to reduce over (the sample dimensions).
+        Defaults to ``rcParams["data.sample_dims"]``.
+    group : hashable, default "posterior"
+        Group to use when da_x / da_y are DataTree or InferenceData objects.
+    gridsize : tuple of int, default (128, 128)
+        Number of grid points along each axis.  Powers of 2 are recommended for
+        FFT efficiency.
+    circular : bool, default False
+        Whether to use circular (wrap) boundary conditions.
+    hdi_probs : list of float, optional
+        If given, compute the HDI contour levels for the specified probabilities and
+        return them together with the KDE grid and coordinates.
+
+    Returns
+    -------
+    tuple or xarray.Dataset
+        When da_x and da_y are plain arrays the raw outputs of the array
+        layer are returned: a tuple ``(grid, x_coords, y_coords)`` or
+        ``(grid, x_coords, y_coords, contours)`` if hdi_probs is given.
+
+        For xarray inputs an :class:`xarray.Dataset` is returned with variables:
+
+        * ``density`` - 2D KDE on a regular grid, dims ``(*batch_dims, kde2d_x, kde2d_y)``.
+        * ``x_coords`` - Grid coordinates for the x axis, dims ``(*batch_dims, kde2d_x)``.
+        * ``y_coords`` - Grid coordinates for the y axis, dims ``(*batch_dims, kde2d_y)``.
+        * ``contours`` - (only when hdi_probs is given) Contour levels,
+          dims ``(*batch_dims, hdi_prob)`` with the requested probabilities as
+          coordinate values.
+
+    See Also
+    --------
+    arviz_stats.kde : 1D marginal KDE.
+
+    Examples
+    --------
+    Compute the 2D KDE of two correlated normal variables:
+
+    .. ipython::
+
+        In [1]: import arviz_stats as azs
+           ...: import numpy as np
+           ...: rng = np.random.default_rng(0)
+           ...: x = rng.normal(size=2000)
+           ...: y = 0.8 * x + rng.normal(scale=0.6, size=2000)
+           ...: azs.kde2d(x, y)
+
+    Include HDI contour levels:
+
+    .. ipython::
+
+        In [1]: azs.kde2d(x, y, hdi_probs=[0.5, 0.9])
+
+    Compute on posterior DataArrays:
+
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: dt = azb.load_arviz_data("centered_eight")
+           ...: azs.kde2d(
+           ...:     dt.posterior["mu"],
+           ...:     dt.posterior["tau"],
+           ...: )
+    """
+    if isinstance(da_x, np.ndarray | list | tuple) and isinstance(da_y, np.ndarray | list | tuple):
+        from arviz_stats.utils import get_array_function
+
+        x = np.asarray(da_x)
+        y = np.asarray(da_y)
+        return get_array_function("kde2d")(
+            x, y, gridsize=gridsize, circular=circular, hdi_probs=hdi_probs
+        )
+
+    dims = validate_dims(dim)
+    if not isinstance(da_x, xr.DataArray):
+        ds_x = convert_to_dataset(da_x, group=group)
+        var_names_x = list(ds_x.data_vars)
+        if len(var_names_x) != 1:
+            raise ValueError(
+                "When da_x is not a DataArray it must contain exactly one variable. "
+                f"Found: {var_names_x}"
+            )
+        da_x = ds_x[var_names_x[0]]
+
+    if not isinstance(da_y, xr.DataArray):
+        ds_y = convert_to_dataset(da_y, group=group)
+        var_names_y = list(ds_y.data_vars)
+        if len(var_names_y) != 1:
+            raise ValueError(
+                "When da_y is not a DataArray it must contain exactly one variable. "
+                f"Found: {var_names_y}"
+            )
+        da_y = ds_y[var_names_y[0]]
+
+    return get_function("kde2d")(
+        da_x,
+        da_y,
+        dim=dims,
+        gridsize=gridsize,
+        circular=circular,
+        hdi_probs=hdi_probs,
     )
