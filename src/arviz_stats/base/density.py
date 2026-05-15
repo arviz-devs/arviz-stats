@@ -150,7 +150,9 @@ class _DensityBase(_CoreBase):
         k_sq = np.arange(1, grid_len) ** 2
         a_sq = a_k[range(1, grid_len)] ** 2
 
-        t = self._root(self._fixed_point, x_len, args=(x_len, k_sq, a_sq), x=x, grid_range=grid_range)
+        t = self._root(
+            self._fixed_point, x_len, args=(x_len, k_sq, a_sq), x=x, grid_range=grid_range
+        )
         h = t**0.5 * grid_range
         return h
 
