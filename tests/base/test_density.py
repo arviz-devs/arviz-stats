@@ -68,7 +68,7 @@ class TestBandwidthEstimators:
         x_std = np.std(x)
         x_range = x.max() - x.min()
         grid_counts, _ = density._histogram(x, bins=256)
-        bw = density.bw_isj(x, grid_counts=grid_counts, x_std=x_std, x_range=x_range)
+        bw = density.bw_isj(x, grid_counts=grid_counts, x_std=x_std, grid_range=x_range)
         assert bw > 0
 
     def test_bw_experimental(self, density, rng):

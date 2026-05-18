@@ -74,7 +74,7 @@ class _DensityBase(_CoreBase):
         out = t - (2 * n * np.pi**0.5 * f) ** (-0.4)
         return out
 
-    def _root(self, function, n, args, x, x_range):
+    def _root(self, function, n, args, x, grid_range):
         # The right bound is at most 0.01
         found = False
         n = max(min(1050, n), 50)
@@ -89,7 +89,7 @@ class _DensityBase(_CoreBase):
                 tol *= 2.0
                 found = False
             if bw <= 0 or tol >= 1:
-                bw = (self.bw_silverman(x) / x_range) ** 2
+                bw = (self.bw_silverman(x) / grid_range) ** 2
                 return bw
         return bw
 
@@ -110,7 +110,7 @@ class _DensityBase(_CoreBase):
         bw = 0.9 * a * len(x) ** (-0.2)
         return bw
 
-    def bw_isj(self, x, grid_counts=None, x_std=None, x_range=None):
+    def bw_isj(self, x, grid_counts=None, x_std=None, grid_range=None):
         """Improved Sheather-Jones bandwidth estimation.
 
         Notes
@@ -126,17 +126,16 @@ class _DensityBase(_CoreBase):
         Ann. Statist. 38 (2010), no. 5, 2916--2957.
         """
         x_len = len(x)
-        if x_range is None:
-            x_min = np.min(x)
-            x_max = np.max(x)
-            x_range = x_max - x_min
 
         # Relative frequency per bin
         if grid_counts is None:
+            x_min = np.min(x)
+            x_max = np.max(x)
             x_std = np.std(x)
             grid_len = 256
             grid_min = x_min - 0.5 * x_std
             grid_max = x_max + 0.5 * x_std
+            grid_range = grid_max - grid_min
             grid_counts, _ = self._histogram(
                 x, bins=grid_len, range=(grid_min, grid_max), density=False
             )
@@ -151,17 +150,19 @@ class _DensityBase(_CoreBase):
         k_sq = np.arange(1, grid_len) ** 2
         a_sq = a_k[range(1, grid_len)] ** 2
 
-        t = self._root(self._fixed_point, x_len, args=(x_len, k_sq, a_sq), x=x, x_range=x_range)
-        h = t**0.5 * x_range
+        t = self._root(
+            self._fixed_point, x_len, args=(x_len, k_sq, a_sq), x=x, grid_range=grid_range
+        )
+        h = t**0.5 * grid_range
         return h
 
-    def bw_experimental(self, x, grid_counts=None, x_std=None, x_range=None):
+    def bw_experimental(self, x, grid_counts=None, x_std=None, grid_range=None):
         """Experimental bandwidth estimator."""
         bw_silverman = self.bw_silverman(x, x_std=x_std)
-        bw_isj = self.bw_isj(x, grid_counts=grid_counts, x_range=x_range)
+        bw_isj = self.bw_isj(x, grid_counts=grid_counts, grid_range=grid_range)
         return 0.5 * (bw_silverman + bw_isj)
 
-    def get_bw(self, x, bw, grid_counts=None, x_std=None, x_range=None):
+    def get_bw(self, x, bw, grid_counts=None, x_std=None, grid_range=None):
         """Compute bandwidth for a given data `x` and `bw`.
 
         Also checks `bw` is correctly specified.
@@ -200,7 +201,7 @@ class _DensityBase(_CoreBase):
                 )
 
             bw_fun = getattr(self, f"bw_{bw}")
-            bw = bw_fun(x, grid_counts=grid_counts, x_std=x_std, x_range=x_range)
+            bw = bw_fun(x, grid_counts=grid_counts, x_std=x_std, grid_range=grid_range)
         else:
             raise ValueError(
                 "Unrecognized `bw` argument.\n"
@@ -450,18 +451,18 @@ class _DensityBase(_CoreBase):
         x_min = x.min()
         x_max = x.max()
         x_std = np.std(x)
-        x_range = x_max - x_min
 
         # Determine grid
         grid_min, grid_max, grid_len = self.get_grid(
             x_min, x_max, x_std, extend_fct, grid_len, custom_lims, extend, bound_correction
         )
+        grid_range = grid_max - grid_min
         grid_counts, grid_edges = self._histogram(
             x, bins=grid_len, range=(grid_min, grid_max), density=False
         )
 
         # Bandwidth estimation
-        bw = bw_fct * self.get_bw(x, bw, grid_counts, x_std, x_range)
+        bw = bw_fct * self.get_bw(x, bw, grid_counts, x_std, grid_range)
 
         # Density estimation
         if adaptive:
