@@ -15,25 +15,25 @@ def test_bayes_factor_default_prior(fake_dt):
     result = bayes_factor(data=fake_dt, var_names=["a", "b"], ref_vals=[0, 0])
 
     for var in ["a", "b"]:
-        assert "BF10" in result[var]
-        assert "BF01" in result[var]
-        assert isinstance(result[var]["BF10"], float)
-        assert isinstance(result[var]["BF01"], float)
-        assert result[var]["BF10"] > 0
-        assert result[var]["BF01"] > 0
+        assert "BF10" in result[var].coords["bf_type"].values
+        assert "BF01" in result[var].coords["bf_type"].values
+        assert isinstance(result[var].sel(bf_type="BF10").item(), float)
+        assert isinstance(result[var].sel(bf_type="BF01").item(), float)
+        assert result[var].sel(bf_type="BF10") > 0
+        assert result[var].sel(bf_type="BF01") > 0
 
 
 def test_bayes_factor_with_custom_prior(fake_dt):
-    custom_prior = {"a": np.random.normal(1, 2, 5000), "b": np.random.normal(2, 1, 5000)}
+    custom_prior = {"a": np.random.normal(1, 2, (4, 1000)), "b": np.random.normal(2, 1, (4, 1000))}
     result = bayes_factor(data=fake_dt, var_names=["a", "b"], ref_vals=[1, 2], prior=custom_prior)
 
     for var in ["a", "b"]:
-        assert "BF10" in result[var]
-        assert "BF01" in result[var]
-        assert isinstance(result[var]["BF10"], float)
-        assert isinstance(result[var]["BF01"], float)
-        assert result[var]["BF10"] > 0
-        assert result[var]["BF01"] > 0
+        assert "BF10" in result[var].coords["bf_type"].values
+        assert "BF01" in result[var].coords["bf_type"].values
+        assert isinstance(result[var].sel(bf_type="BF10").item(), float)
+        assert isinstance(result[var].sel(bf_type="BF01").item(), float)
+        assert result[var].sel(bf_type="BF10") > 0
+        assert result[var].sel(bf_type="BF01") > 0
 
 
 def test_bayes_factor_invalid_ref_vals(fake_dt):
@@ -47,33 +47,35 @@ def test_bayes_factor_multiple_ref_vals(fake_dt):
     for ref_vals in ref_vals_list:
         result = bayes_factor(data=fake_dt, var_names=["a", "b"], ref_vals=ref_vals)
         for var in ["a", "b"]:
-            assert "BF10" in result[var]
-            assert "BF01" in result[var]
-            assert result[var]["BF10"] > 0
-            assert result[var]["BF01"] > 0
+            assert "BF10" in result[var].coords["bf_type"].values
+            assert "BF01" in result[var].coords["bf_type"].values
+            assert result[var].sel(bf_type="BF10") > 0
+            assert result[var].sel(bf_type="BF01") > 0
 
 
 def test_bayes_factor_single_var_string(fake_dt):
     result = bayes_factor(data=fake_dt, var_names="a", ref_vals=0)
     assert "a" in result
-    assert "BF10" in result["a"]
-    assert "BF01" in result["a"]
-    assert result["a"]["BF10"] > 0
-    assert result["a"]["BF01"] > 0
+    assert "BF10" in result["a"].coords["bf_type"].values
+    assert "BF01" in result["a"].coords["bf_type"].values
+    assert result["a"].sel(bf_type="BF10") > 0
+    assert result["a"].sel(bf_type="BF01") > 0
 
 
 def test_bayes_factor_broadcast_ref_val(fake_dt):
     result = bayes_factor(data=fake_dt, var_names=["a", "b"], ref_vals=0.5)
     for var in ["a", "b"]:
-        assert "BF10" in result[var]
-        assert "BF01" in result[var]
-        assert result[var]["BF10"] > 0
-        assert result[var]["BF01"] > 0
+        assert "BF10" in result[var].coords["bf_type"].values
+        assert "BF01" in result[var].coords["bf_type"].values
+        assert result[var].sel(bf_type="BF10") > 0
+        assert result[var].sel(bf_type="BF01") > 0
 
 
 def test_bayes_factor_reciprocal(fake_dt):
     result = bayes_factor(data=fake_dt, var_names=["a"], ref_vals=[0])
-    assert np.isclose(result["a"]["BF10"] * result["a"]["BF01"], 1.0)
+    assert np.isclose(
+        result["a"].sel(bf_type="BF10").item() * result["a"].sel(bf_type="BF01").item(), 1.0
+    )
 
 
 def test_bayes_factor_with_ref_vals(fake_dt):
@@ -84,12 +86,12 @@ def test_bayes_factor_with_ref_vals(fake_dt):
     for var in ["a", "b"]:
         assert var in result
         assert var in ref_vals
-        assert "prior" in ref_vals[var]
-        assert "posterior" in ref_vals[var]
-        assert ref_vals[var]["prior"] > 0
-        assert ref_vals[var]["posterior"] > 0
-        assert isinstance(ref_vals[var]["prior"], float)
-        assert isinstance(ref_vals[var]["posterior"], float)
+        assert "prior" in ref_vals[var].coords["density_type"].values
+        assert "posterior" in ref_vals[var].coords["density_type"].values
+        assert ref_vals[var].sel(density_type="prior") > 0
+        assert ref_vals[var].sel(density_type="posterior") > 0
+        assert isinstance(ref_vals[var].sel(density_type="prior").item(), float)
+        assert isinstance(ref_vals[var].sel(density_type="posterior").item(), float)
 
 
 def test_bayes_factor_mismatched_lengths(fake_dt):
@@ -112,15 +114,15 @@ def test_bayes_factor_outside_prior(fake_dt):
 def test_bayes_factor_int_ref_val(fake_dt):
     result = bayes_factor(data=fake_dt, var_names=["a"], ref_vals=0)
     assert "a" in result
-    assert result["a"]["BF10"] > 0
-    assert result["a"]["BF01"] > 0
+    assert result["a"].sel(bf_type="BF10") > 0
+    assert result["a"].sel(bf_type="BF01") > 0
 
 
 def test_bayes_factor_float_ref_val(fake_dt):
     result = bayes_factor(data=fake_dt, var_names=["a"], ref_vals=0.0)
     assert "a" in result
-    assert result["a"]["BF10"] > 0
-    assert result["a"]["BF01"] > 0
+    assert result["a"].sel(bf_type="BF10") > 0
+    assert result["a"].sel(bf_type="BF01") > 0
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
@@ -137,5 +139,5 @@ def test_bayes_factor_narrow_distribution():
 
     with pytest.warns(UserWarning):
         result = bayes_factor(data=data, var_names=["narrow_var"], ref_vals=[0])
-        assert result["narrow_var"]["BF10"] > 0
-        assert result["narrow_var"]["BF01"] > 0
+        assert result["narrow_var"].sel(bf_type="BF10") > 0
+        assert result["narrow_var"].sel(bf_type="BF01") > 0
