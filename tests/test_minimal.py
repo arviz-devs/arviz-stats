@@ -304,6 +304,21 @@ def test_kde(data_c0d1, circular):
     assert bw.shape == (3,)
 
 
+@pytest.mark.parametrize("circular", [False, True])
+def test_kde2d(data_c0d1, circular):
+    grid, x_coords, y_coords, contours = array_stats.kde2d(
+        data_c0d1[:, :, 0],
+        data_c0d1[:, :, 1],
+        circular=circular,
+        gridsize=(100, 100),
+        hdi_probs=[0.5, 0.8],
+    )
+    assert grid.shape == (4, 100, 100)
+    assert x_coords.shape == (4, 100)
+    assert y_coords.shape == (4, 100)
+    assert contours.shape == (4, 2)
+
+
 def test_qds(data_c0d1):
     x, y, marker_size = array_stats.qds(data_c0d1, axis=(0, 1), nquantiles=50)
     assert x.shape == (3, 50)
