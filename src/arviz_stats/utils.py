@@ -287,7 +287,9 @@ def _warn_non_unique_coords(xr_obj, dims_to_reduce):
     non_unique_coords = [
         dim
         for dim in xr_obj.dims
-        if len(np.unique(xr_obj.coords[dim])) != xr_obj.sizes[dim] and dim not in dims_to_reduce
+        if (dim not in dims_to_reduce)
+        and (dim in xr_obj.coords)
+        and (len(np.unique(xr_obj.coords[dim])) != xr_obj.sizes[dim])
     ]
     if non_unique_coords:
         warnings.warn(
