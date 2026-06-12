@@ -1,3 +1,22 @@
+<a id="v1.2.0"></a>
+# [v1.2.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.2.0) - 2026-06-12
+
+## What's Changed
+* Return shapley values in original order by [@aloctavodia](https://github.com/aloctavodia) in [#358](https://github.com/arviz-devs/arviz-stats/pull/358)
+* scale ISJ bw estimate by grid range rather than data range by [@zachjweiner](https://github.com/zachjweiner) in [#360](https://github.com/arviz-devs/arviz-stats/pull/360)
+* Add kde2d functions by [@aloctavodia](https://github.com/aloctavodia) in [#362](https://github.com/arviz-devs/arviz-stats/pull/362)
+* Generalize and refactor bayes_factor by [@aloctavodia](https://github.com/aloctavodia) in [#361](https://github.com/arviz-devs/arviz-stats/pull/361)
+* Add p_worse, diff and elpd diagnostics to compare by [@aloctavodia](https://github.com/aloctavodia) in [#363](https://github.com/arviz-devs/arviz-stats/pull/363)
+* prepare release by [@OriolAbril](https://github.com/OriolAbril) in [#364](https://github.com/arviz-devs/arviz-stats/pull/364)
+
+## New Contributors
+* [@zachjweiner](https://github.com/zachjweiner) made their first contribution in [#360](https://github.com/arviz-devs/arviz-stats/pull/360)
+
+**Full Changelog**: https://github.com/arviz-devs/arviz-stats/compare/v1.1.0...v1.2.0
+
+[Changes][v1.2.0]
+
+
 <a id="v1.1.0"></a>
 # [v1.1.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.1.0) - 2026-04-23
 
@@ -334,6 +353,7 @@
 [Changes][v.0.4.0]
 
 
+[v1.2.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.1.0...v1.2.0
 [v1.1.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.0.0...v1.1.0
 [v1.0.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.8.0...v1.0.0
 [v0.8.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.7.0...v0.8.0
