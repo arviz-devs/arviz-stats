@@ -89,27 +89,31 @@ def compare(
           has an ``elpd_diff`` of 0.
         - **dse**: Standard error of the difference in ELPD between each model
         - **p_worse**: The probability that each model is worse than the best ranked model.
-        Probabilities are computed with a normal approximation. [5]_ presents the conditions when
-        this approximation is good.
-        If a reference model is specified, this column is renamed to **p_better** and reflects
-        the probability that each model is better than the reference model.
+          Probabilities are computed with a normal approximation. [5]_ presents the conditions when
+          this approximation is good.
+          If a reference model is specified, this column is renamed to **p_better** and reflects
+          the probability that each model is better than the reference model.
         - **diag_diff**: Potential issues with the ELPD difference. It can take 3 values:
-        `N < 100` (small data), `|elpd_diff| < 4` (models make similar predictions), or empty string
-        (no issues detected). If either of the first two values are shown, the ELPD differences and
-        probabilities (worse or better) should be interpreted with caution as the error distribution
-        is skewed or thick tailed and the normal approximation not well calibrated. However,
-        `elpd_diff` and `dse` values will still be useful for understanding the magnitude of the
-        differences. For example, if `|elpd_diff|` is many times larger than `dse` the difference is
-        quite certain even if the exact probability value is not well calibrated
-        (and likely overestimated). In addition, if the model is not well specified and there are
-        outliers, the error distribution can also be skewed or thick tailed and the
-        normal approximation is not well calibrated. Possible model misspecification
-        and outliers can be diagnosed with usual predictive checking methods.
+          `N < 100` (small data), `|elpd_diff| < 4` (models make similar predictions),
+          or empty string (no issues detected).
+          If either of the first two values are shown, the ELPD differences and probabilities
+          (worse or better) should be interpreted with caution as the error distribution
+          is skewed or thick tailed and the normal approximation not well calibrated.
+          However, `elpd_diff` and `dse` values will still be useful for understanding
+          the magnitude of the differences.
+          For example, if `|elpd_diff|` is many times larger than `dse` the difference is
+          quite certain even if the exact probability value is not well calibrated
+          (and likely overestimated).
+          In addition, if the model is not well specified and there are
+          outliers, the error distribution can also be skewed or thick tailed and the
+          normal approximation is not well calibrated. Possible model misspecification
+          and outliers can be diagnosed with usual predictive checking methods.
         - **diag_elpd**: Potential issues with the ELPD estimate.
-        It can take the value `K k_psis > 0.7` where `K` is the number of high Pareto k values in
-        the PSIS computation, or empty string if no issues detected. If `K k_psis > 0.7` is shown,
-        there may be significant bias in ELPD differences favoring models with a large number of
-        high Pareto k values.
+          It can take the value ``K k_psis > threshold`` where `K` is the number of
+          high Pareto k values in the PSIS computation, or empty string if no issues detected.
+          If ``K k_psis > threshold`` is shown, there may be significant bias in ELPD differences
+          favoring models with a large number of high Pareto k values.
+          The ``threshold`` is the ``good_k`` attribute in the input ELPD results.
         - **p**: pIC, Estimated effective number of parameters.
         - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`).
           Higher ELPD indicates higher out-of-sample predictive fit ("better" model).
@@ -219,7 +223,6 @@ def compare(
         "elpd": pd.Series(index=names, dtype="float"),
         "se": pd.Series(index=names, dtype="float"),
         "weight": pd.Series(index=names, dtype="float"),
-        "warning": pd.Series(index=names, dtype="boolean"),
     }
     if has_subsampling:
         df_cols["subsampling_dse"] = pd.Series(index=names, dtype="float")
@@ -347,7 +350,6 @@ def compare(
                 "elpd": res["elpd"],
                 "se": std_err,
                 "weight": weight,
-                "warning": res["warning"],
             }
             if has_subsampling:
                 row_data["subsampling_dse"] = subsampling_d_std_err
@@ -370,7 +372,6 @@ def compare(
                     )
 
     df_comp["rank"] = df_comp["rank"].astype(int)
-    df_comp["warning"] = df_comp["warning"].astype(bool)
 
     result = df_comp.sort_values(by="elpd", ascending=False)
 

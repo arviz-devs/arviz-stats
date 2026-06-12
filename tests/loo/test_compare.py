@@ -252,7 +252,7 @@ def test_compare_columns(centered_eight, non_centered_eight, method):
     model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
     result = compare(model_dict, method=method)
 
-    expected_cols = [
+    expected_cols = {
         "rank",
         "elpd",
         "p",
@@ -260,17 +260,15 @@ def test_compare_columns(centered_eight, non_centered_eight, method):
         "weight",
         "se",
         "dse",
-        "warning",
         "p_worse",
         "diag_diff",
         "diag_elpd",
-    ]
-    assert all(col in result.columns for col in expected_cols)
+    }
+    assert set(result.columns) == expected_cols
     assert result["rank"].dtype == int
     assert result["elpd"].dtype == float
     assert result["p"].dtype == float
     assert result["weight"].dtype == float
-    assert result["warning"].dtype == bool
     assert result["p_worse"].dtype == float
     assert result["diag_diff"].dtype == "string"
     assert result["diag_elpd"].dtype == "string"
@@ -520,7 +518,6 @@ def test_round_auto():
             "elpd": [-31.026, -31.004, -1000],
             "se": [1.52, 1.43, 0.0],
             "weight": [0.91, 0.09, 0.0001],
-            "warning": [False, False, False],
         },
         index=["m1", "m2", "m3"],
     )
@@ -536,7 +533,6 @@ def test_round_auto():
     assert_allclose(result["elpd"].to_numpy(), np.array([-31.0, -31.0, -1000.0]))
     assert_allclose(result["se"].to_numpy(), np.array([1.52, 1.43, 0.0]))
     assert_allclose(result["weight"].to_numpy(), np.array([0.91, 0.09, 0]))
-    assert_allclose(result["warning"].to_numpy(), np.array([False, False, False]))
 
 
 def test_round_int(centered_eight, non_centered_eight):
@@ -550,7 +546,6 @@ def test_round_int(centered_eight, non_centered_eight):
     assert_allclose(result["weight"].to_numpy(), np.array([1.0, 0.0]))
     assert_allclose(result["se"].to_numpy(), np.array([1.38, 1.34]))
     assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06]))
-    assert_allclose(result["warning"].to_numpy(), np.array([False, False]))
 
 
 def test_compare_many_diff_models(centered_eight, rng):
