@@ -26,11 +26,11 @@ def compare(
 
     The ELPD is estimated by Pareto smoothed importance sampling leave-one-out
     cross-validation, the same method used by :func:`arviz_stats.loo`.
-    The method is described in [2]_ and [3]_.
-    By default, the weights are estimated using ``"stacking"`` as described in [4]_.
+    The method is described in [1]_ and [2]_.
+    By default, the weights are estimated using ``"stacking"`` as described in [3]_.
 
     If more than 11 models are compared, a diagnostic check for selection bias
-    is performed. If detected, avoid LOO-based selection and use model averaging
+    is performed [4]_. If detected, avoid LOO-based selection and use model averaging/stacking
     or `projection predictive inference <https://kulprit.readthedocs.io/en/latest/index.html>`_.
 
     See the EABM chapters on `Model Comparison <https://arviz-devs.github.io/EABM/Chapters/Model_comparison.html>`_,
@@ -82,22 +82,44 @@ def compare(
         The columns are:
 
         - **rank**: The rank-order of the models. 0 is the best.
-        - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`).
-          Higher ELPD indicates higher out-of-sample predictive fit ("better" model).
-        - **p**: pIC, Estimated effective number of parameters.
+
         - **elpd_diff**: The difference in ELPD between each model and the reference model,
           computed as ``elpd_model - elpd_reference``. By default the reference is the
           top-ranked model, so all values are negative or zero. The reference model always
           has an ``elpd_diff`` of 0.
+        - **dse**: Standard error of the difference in ELPD between each model
+        - **p_worse**: The probability that each model is worse than the best ranked model.
+        Probabilities are computed with a normal approximation. [5]_ presents the conditions when
+        this approximation is good.
+        If a reference model is specified, this column is renamed to **p_better** and reflects
+        the probability that each model is better than the reference model.
+        - **diag_diff**: Potential issues with the ELPD difference. It can take 3 values:
+        `N < 100` (small data), `|elpd_diff| < 4` (models make similar predictions), or empty string
+        (no issues detected). If either of the first two values are shown, the ELPD differences and
+        probabilities (worse or better) should be interpreted with caution as the error distribution
+        is skewed or thick tailed and the normal approximation not well calibrated. However,
+        `elpd_diff` and `dse` values will still be useful for understanding the magnitude of the
+        differences. For example, if `|elpd_diff|` is many times larger than `dse` the difference is
+        quite certain even if the exact probability value is not well calibrated
+        (and likely overestimated). In addition, if the model is not well specified and there are
+        outliers, the error distribution can also be skewed or thick tailed and the
+        normal approximation is not well calibrated. Possible model misspecification
+        and outliers can be diagnosed with usual predictive checking methods.
+        - **diag_elpd**: Potential issues with the ELPD estimate.
+        It can take the value `K k_psis > 0.7` where `K` is the number of high Pareto k values in
+        the PSIS computation, or empty string if no issues detected. If `K k_psis > 0.7` is shown,
+        there may be significant bias in ELPD differences favoring models with a large number of
+        high Pareto k values.
+        - **p**: pIC, Estimated effective number of parameters.
+        - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`).
+          Higher ELPD indicates higher out-of-sample predictive fit ("better" model).
+        - **se**: Standard error of the ELPD estimate.
+          If method = BB-pseudo-BMA these values are estimated using Bayesian bootstrap.
         - **weight**: Relative weight for each model.
           This can be loosely interpreted as the probability of each model
           (among the compared models)
           given the data. By default the uncertainty in the weights estimation is considered using
           Bayesian bootstrap.
-        - **se**: Standard error of the ELPD estimate.
-          If method = BB-pseudo-BMA these values are estimated using Bayesian bootstrap.
-        - **dse**: Standard error of the difference in ELPD between each model
-          and the top-ranked model. It's always 0 for the top-ranked model.
         - **subsampling_dse**: (Only when subsampling is used) The subsampling component
           of the standard error of the ELPD difference. This quantifies the uncertainty due to
           using a subsample rather than all observations.
@@ -148,22 +170,25 @@ def compare(
     References
     ----------
 
-    .. [1] McLatchie, Y., Vehtari, A. *Efficient estimation and correction of selection-induced
+    .. [1] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
+        arXiv preprint https://arxiv.org/abs/1507.04544.
+
+    .. [2] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
+        arXiv preprint https://arxiv.org/abs/1507.02646
+
+    .. [3] Yao et al. *Using stacking to average Bayesian predictive distributions*
+        Bayesian Analysis, 13, 3 (2018). https://doi.org/10.1214/17-BA1091
+        arXiv preprint https://arxiv.org/abs/1704.02030.
+
+    .. [4] McLatchie, Y., Vehtari, A. *Efficient estimation and correction of selection-induced
         bias with order statistics*. Statistics and Computing, 34, 132 (2024).
         https://doi.org/10.1007/s11222-024-10442-4
         arXiv preprint https://arxiv.org/abs/2309.03742
 
-    .. [2] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
-        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
-        arXiv preprint https://arxiv.org/abs/1507.04544.
-
-    .. [3] Vehtari et al. *Pareto Smoothed Importance Sampling*.
-        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
-        arXiv preprint https://arxiv.org/abs/1507.02646
-
-    .. [4] Yao et al. *Using stacking to average Bayesian predictive distributions*
-        Bayesian Analysis, 13, 3 (2018). https://doi.org/10.1214/17-BA1091
-        arXiv preprint https://arxiv.org/abs/1704.02030.
+    .. [5] Sivula et al. *Uncertainty in Bayesian Leave-One-Out Cross-Validation Based Model
+        Comparison*. (2025). https://doi.org/10.48550/arXiv.2008.10296
     """
     if round_to == "auto" or round_to is None:
         round_val = rcParams["stats.round_to"]
@@ -176,15 +201,24 @@ def compare(
     has_subsampling = any(
         getattr(elpd, "subsample_size", None) is not None for elpd in ics_dict.values()
     )
+    if reference is not None:
+        prob_direction = "p_better"
+        sign = -1
+    else:
+        prob_direction = "p_worse"
+        sign = 1
 
     df_cols = {
         "rank": pd.Series(index=names, dtype="int"),
-        "elpd": pd.Series(index=names, dtype="float"),
-        "p": pd.Series(index=names, dtype="float"),
         "elpd_diff": pd.Series(index=names, dtype="float"),
-        "weight": pd.Series(index=names, dtype="float"),
-        "se": pd.Series(index=names, dtype="float"),
         "dse": pd.Series(index=names, dtype="float"),
+        prob_direction: pd.Series(index=names, dtype="float"),
+        "diag_diff": pd.Series(index=names, dtype="string"),
+        "diag_elpd": pd.Series(index=names, dtype="string"),
+        "p": pd.Series(index=names, dtype="float"),
+        "elpd": pd.Series(index=names, dtype="float"),
+        "se": pd.Series(index=names, dtype="float"),
+        "weight": pd.Series(index=names, dtype="float"),
         "warning": pd.Series(index=names, dtype="boolean"),
     }
     if has_subsampling:
@@ -285,18 +319,38 @@ def compare(
             std_err = ses.loc[val]
             weight = weights[idx]
 
-            row_data = [
-                idx,
-                res["elpd"],
-                res["p"],
-                d_ic,
-                weight,
-                std_err,
-                d_std_err,
-                res["warning"],
-            ]
+            if d_ic == 0.0:
+                prob_val = np.nan
+            else:
+                prob_val = norm.cdf(0, (sign * d_ic), d_std_err + 1e-12)
+
+            if current_elpd_data.n_data_points < 100:
+                diag_diff = "N < 100" if d_ic != 0 else ""
+            else:
+                diag_diff = "|elpd_diff| < 4" if abs(d_ic) > 0 and abs(d_ic) < 4 else ""
+
+            diag_elpd = ""
+            k_vals = current_elpd_data.pareto_k.values
+            khat_threshold = current_elpd_data.good_k
+            n_k_exceed = np.sum(k_vals > khat_threshold)
+            if n_k_exceed > 0:
+                diag_elpd = f"{n_k_exceed} k̂ > {khat_threshold:.2f}"
+
+            row_data = {
+                "rank": idx,
+                "elpd_diff": d_ic,
+                "dse": d_std_err,
+                prob_direction: prob_val,
+                "diag_diff": diag_diff,
+                "diag_elpd": diag_elpd,
+                "p": res["p"],
+                "elpd": res["elpd"],
+                "se": std_err,
+                "weight": weight,
+                "warning": res["warning"],
+            }
             if has_subsampling:
-                row_data.append(subsampling_d_std_err)
+                row_data["subsampling_dse"] = subsampling_d_std_err
 
             df_comp.loc[val] = row_data
 
@@ -321,10 +375,10 @@ def compare(
     result = df_comp.sort_values(by="elpd", ascending=False)
 
     if round_to == "auto":
-        result = _round_compare(result, round_val)
+        result = _round_compare(result, round_val, prob_direction)
     else:
         if round_to not in ("None", "none"):
-            cols_to_round = ["elpd", "p", "elpd_diff", "weight", "se", "dse"]
+            cols_to_round = ["elpd", "p", "elpd_diff", "weight", "se", "dse", prob_direction]
             result[cols_to_round] = result[cols_to_round].map(lambda x: round_num(x, round_val))
 
     model_order = list(ics.index)
@@ -637,7 +691,7 @@ def _order_stat_check(ics_dict, model_order, has_subsampling):
         )
 
 
-def _round_compare(result, round_val):
+def _round_compare(result, round_val, prob_direction):
     """Apply custom rounding rules to compare.
 
     Parameters
@@ -646,6 +700,8 @@ def _round_compare(result, round_val):
         The compare result to round
     round_val : int or str
         Number of decimals or significant figures to round to.
+    prob_direction : str
+        The name of the probability column to round, either "p_worse" or "p_better"
 
     Returns
     -------
@@ -673,5 +729,8 @@ def _round_compare(result, round_val):
         max_weight = result["weight"].to_numpy(dtype=float).max()
         decimals = int(np.ceil(-np.log10(max_weight))) + 1
         result["weight"] = result["weight"].apply(lambda x: round_num(x, decimals))
+
+    if prob_direction in result.columns:
+        result[prob_direction] = result[prob_direction].apply(lambda x: round_num(x, 2))
 
     return result

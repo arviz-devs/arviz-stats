@@ -227,6 +227,7 @@ def test_compare_single_model(centered_eight, method):
     assert result["elpd_diff"].iloc[0] == 0.0
     assert result["dse"].iloc[0] == 0.0
     assert result["weight"].iloc[0] == 1.0
+    assert np.isnan(result["p_worse"].iloc[0])
     assert_allclose(result["weight"].sum(), 1.0)
 
 
@@ -251,13 +252,28 @@ def test_compare_columns(centered_eight, non_centered_eight, method):
     model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
     result = compare(model_dict, method=method)
 
-    expected_cols = ["rank", "elpd", "p", "elpd_diff", "weight", "se", "dse", "warning"]
+    expected_cols = [
+        "rank",
+        "elpd",
+        "p",
+        "elpd_diff",
+        "weight",
+        "se",
+        "dse",
+        "warning",
+        "p_worse",
+        "diag_diff",
+        "diag_elpd",
+    ]
     assert all(col in result.columns for col in expected_cols)
     assert result["rank"].dtype == int
     assert result["elpd"].dtype == float
     assert result["p"].dtype == float
     assert result["weight"].dtype == float
     assert result["warning"].dtype == bool
+    assert result["p_worse"].dtype == float
+    assert result["diag_diff"].dtype == "string"
+    assert result["diag_elpd"].dtype == "string"
 
 
 @pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
@@ -270,6 +286,7 @@ def test_compare_best_model_properties(centered_eight, non_centered_eight, metho
     assert best_model["elpd_diff"] == 0.0
     assert best_model["dse"] == 0.0
     assert best_model["elpd"] >= result.iloc[1]["elpd"]
+    assert np.isnan(best_model["p_worse"])
 
 
 @pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
@@ -482,6 +499,7 @@ def test_compare_reference(centered_eight, non_centered_eight):
 
     assert result.loc["centered"]["elpd_diff"] == 0.0
     assert result.loc["centered"]["dse"] == 0.0
+    assert np.isnan(result.loc["centered"]["p_better"])
 
     ref_elpd = result.loc["centered"]["elpd"]
     other_elpd = result.loc["non_centered"]["elpd"]
@@ -493,25 +511,31 @@ def test_round_auto():
     input_df = pd.DataFrame(
         {
             "rank": [0, 1, 2],
-            "elpd": [-31.026, -31.004, -1000],
-            "p": [0.94, 0.91, 2.2234],
             "elpd_diff": [0.0, -0.031, -1.5],
-            "weight": [0.91, 0.09, 0.0001],
-            "se": [1.52, 1.43, 0.0],
             "dse": [0.0, 0.061, 0.0],
+            "p_worse": [0.9123, 0.9123, 0.0001],
+            "diag_diff": ["", "", "N < 100"],
+            "diag_elpd": ["", "", ""],
+            "p": [0.94, 0.91, 2.2234],
+            "elpd": [-31.026, -31.004, -1000],
+            "se": [1.52, 1.43, 0.0],
+            "weight": [0.91, 0.09, 0.0001],
             "warning": [False, False, False],
         },
         index=["m1", "m2", "m3"],
     )
 
-    result = _round_compare(input_df, 2)
+    result = _round_compare(input_df, 2, "p_worse")
 
-    assert_allclose(result["elpd"].to_numpy(), np.array([-31.0, -31.0, -1000.0]))
     assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.0, 0.0, -2]))
-    assert_allclose(result["p"].to_numpy(), np.array([0.9, 0.9, 2.2]))
-    assert_allclose(result["weight"].to_numpy(), np.array([0.91, 0.09, 0]))
-    assert_allclose(result["se"].to_numpy(), np.array([1.52, 1.43, 0.0]))
     assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06, 0.0]))
+    assert_allclose(result["p_worse"].to_numpy(), np.array([0.91, 0.91, 0.0]))
+    assert (result["diag_diff"] == ["", "", "N < 100"]).all()
+    assert (result["diag_elpd"] == ["", "", ""]).all()
+    assert_allclose(result["p"].to_numpy(), np.array([0.9, 0.9, 2.2]))
+    assert_allclose(result["elpd"].to_numpy(), np.array([-31.0, -31.0, -1000.0]))
+    assert_allclose(result["se"].to_numpy(), np.array([1.52, 1.43, 0.0]))
+    assert_allclose(result["weight"].to_numpy(), np.array([0.91, 0.09, 0]))
     assert_allclose(result["warning"].to_numpy(), np.array([False, False, False]))
 
 
@@ -527,3 +551,27 @@ def test_round_int(centered_eight, non_centered_eight):
     assert_allclose(result["se"].to_numpy(), np.array([1.38, 1.34]))
     assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06]))
     assert_allclose(result["warning"].to_numpy(), np.array([False, False]))
+
+
+def test_compare_many_diff_models(centered_eight, rng):
+    models = {}
+    base_loo = loo(centered_eight, pointwise=True)
+
+    for i in range(4):
+        loo_result = copy.deepcopy(base_loo)
+        shift = rng.normal(0, 0.1, size=loo_result.elpd_i.shape)
+        loo_result.elpd_i = loo_result.elpd_i + shift
+        loo_result.elpd = np.sum(loo_result.elpd_i)
+        models[f"model_{i}"] = loo_result
+
+    result = compare(models)
+    assert len(result) == 4
+    assert result["rank"].min() == 0
+    assert result["rank"].max() == 3
+    assert_allclose(result["weight"].sum(), 1.0)
+    assert result.iloc[0]["elpd_diff"] == 0.0
+    assert result.iloc[0]["dse"] == 0.0
+    assert np.isnan(result.iloc[0]["p_worse"])
+    assert np.min(result["p_worse"].values[1:]) <= 1.0
+    assert np.max(result["p_worse"].values[1:]) >= 0.0
+    assert (result["diag_diff"] == "N < 100").sum() == 3
