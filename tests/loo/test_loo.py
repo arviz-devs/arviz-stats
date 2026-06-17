@@ -554,3 +554,19 @@ def test_loo_mixture(centered_eight):
     assert np.isfinite(result_mix.elpd)
     assert np.all(np.isfinite(result_mix.elpd_i.values))
     assert np.all(np.isfinite(result_mix.pareto_k.values))
+
+
+def test_loo_jax_arrays(centered_eight):
+    """loo() must not raise when log_likelihood contains JAX arrays (immutability regression)."""
+    jnp = importorskip("jax.numpy")
+
+    # Replace the log_likelihood group values with JAX arrays to simulate a JAX backend.
+    ll_np = centered_eight.log_likelihood["obs"].values
+    ll_jax = jnp.array(ll_np)
+    centered_eight.log_likelihood["obs"] = xr.DataArray(
+        ll_jax, dims=centered_eight.log_likelihood["obs"].dims
+    )
+
+    result = loo(centered_eight, pointwise=True)
+    assert np.isfinite(result.elpd)
+    assert np.all(np.isfinite(result.pareto_k.values))
