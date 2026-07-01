@@ -164,3 +164,26 @@ def test_loo_influence_standardize_scale_invariant(kind, centered_eight):
         result_scaled["mu"].values,
         decimal=5,
     )
+
+@pytest.mark.parametrize("kind", ["std", "var"])
+def test_loo_influence_standardize_scale_invariant(kind, centered_eight):
+    """Standardized loo_influence for std/var should be scale-invariant.
+
+    For std: dividing shift by std makes the influence dimensionless —
+    scaling data by b scales both numerator and denominator by b.
+    For var: dividing shift by var makes the influence dimensionless —
+    scaling data by b scales both numerator and denominator by b².
+    """
+    scale = 3.0
+    result_orig = loo_influence(centered_eight, kind=kind, standardize=True)
+
+    idata_scaled = centered_eight.copy()
+    for group in ("posterior", "observed_data"):
+        if hasattr(idata_scaled, group):
+            grp = getattr(idata_scaled, group)
+            for var in grp.data_vars:
+                grp[var] = grp[var] * scale
+
+    result_scaled = loo_influence(idata_scaled, kind=kind, standardize=True)
+
+    xr.testing.assert_allclose(result_orig, result_scaled, atol=1e-5)
