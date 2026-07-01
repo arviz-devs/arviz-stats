@@ -138,3 +138,29 @@ def test_loo_influential_posterior_group(centered_eight):
     assert shift["mu"].shape == (8,)
     assert np.all(np.isfinite(shift["mu"].values))
     assert np.all(shift["mu"].values >= 0)
+
+@pytest.mark.parametrize("kind", ["std", "var"])
+def test_loo_influence_standardize_scale_invariant(kind, centered_eight):
+    """Scaling data by a constant should not change the standardized influence.
+
+    For std: shift/std is dimensionless — scaling data by b scales both
+    the shift and std by b, so the ratio is unchanged.
+    For var: shift/var is dimensionless — scaling data by b scales both
+    the shift and var by b², so the ratio is unchanged.
+    """
+    idata = centered_eight
+    scale = 3.0
+
+    result_orig = loo_influence(idata, kind=kind, standardize=True)
+    # Scale the posterior draws by a constant factor.
+    idata_scaled = idata.copy()
+    idata_scaled.posterior["mu"] = idata.posterior["mu"] * scale
+    idata_scaled.posterior["theta"] = idata.posterior["theta"] * scale
+    result_scaled = loo_influence(idata_scaled, kind=kind, standardize=True)
+
+    # Standardized influence should be scale-invariant.
+    assert_array_almost_equal(
+        result_orig["mu"].values,
+        result_scaled["mu"].values,
+        decimal=5,
+    )
