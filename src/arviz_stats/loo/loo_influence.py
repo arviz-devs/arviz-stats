@@ -135,7 +135,7 @@ def loo_influence(
         )
 
         func = None
-        func_s = None
+        func_s = func
         if kind == "mean":
             func = mean
             func_s = std
@@ -152,7 +152,7 @@ def loo_influence(
             - func(data, group=group, var_names=var_names, dim=sample_dims, round_to="none").dataset
         )
 
-        if standardize and kind in ["mean", "median"]:
+        if standardize and kind in ["mean", "median", "std", "var"]:
             shift /= func_s(
                 data, group=group, var_names=var_names, dim=sample_dims, round_to="none"
             ).dataset
