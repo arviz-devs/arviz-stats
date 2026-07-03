@@ -254,3 +254,14 @@ def test_loo_kfold_se_positive(centered_eight, fresh_wrapper):
 def test_loo_kfold_p_positive(centered_eight, fresh_wrapper):
     result = loo_kfold(data=centered_eight, wrapper=fresh_wrapper, k=4, pointwise=False)
     assert result.p > 0
+
+
+def test_loo_kfold_grouped_ngroups_not_multiple_of_k(centered_eight, fresh_wrapper):
+    groups = np.array([1, 1, 2, 2, 3, 3, 3, 3])
+    result = loo_kfold(
+        data=centered_eight, wrapper=fresh_wrapper, k=2, group_by=groups, pointwise=True
+    )
+    assert result.n_folds == 2
+    assert fresh_wrapper.fit_count == 2
+    assert np.isfinite(result.elpd)
+    assert result.elpd_i.size == 8
