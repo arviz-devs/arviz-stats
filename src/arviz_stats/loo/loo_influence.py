@@ -158,3 +158,5 @@ def loo_influence(
             shift /= func_s(
                 data, group=group, var_names=var_names, dim=sample_dims, round_to="none"
             ).dataset
+
+    return shift, khat
