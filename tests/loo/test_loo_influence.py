@@ -64,12 +64,15 @@ def test_loo_influential_standardize_median(centered_eight):
     assert np.all(shift_raw["obs"].values >= 0)
 
 
-def test_loo_influential_standardize_ignored_for_sd(centered_eight):
-    """Standardization should be ignored for non-mean/median kinds."""
-    shift_std, khat_std = loo_influence(centered_eight, kind="sd", standardize=True)
-    shift_raw, khat_raw = loo_influence(centered_eight, kind="sd", standardize=False)
+@pytest.mark.parametrize("kind", ["sd", "var"])
+def test_loo_influential_standardize_applied_for_sd_var(centered_eight, kind):
+    """Standardization should change the shift for sd/var, but khat is unaffected."""
+    shift_std, khat_std = loo_influence(centered_eight, kind=kind, standardize=True)
+    shift_raw, khat_raw = loo_influence(centered_eight, kind=kind, standardize=False)
 
-    assert_array_equal(shift_std["obs"].values, shift_raw["obs"].values)
+    assert not np.allclose(shift_std["obs"].values, shift_raw["obs"].values)
+    assert np.all(shift_std["obs"].values >= 0)
+    assert np.all(shift_raw["obs"].values >= 0)
     assert_array_equal(khat_std.values, khat_raw.values)
 
 
@@ -139,33 +142,7 @@ def test_loo_influential_posterior_group(centered_eight):
     assert np.all(np.isfinite(shift["mu"].values))
     assert np.all(shift["mu"].values >= 0)
 
-@pytest.mark.parametrize("kind", ["std", "var"])
-def test_loo_influence_standardize_scale_invariant(kind, centered_eight):
-    """Scaling data by a constant should not change the standardized influence.
-
-    For std: shift/std is dimensionless — scaling data by b scales both
-    the shift and std by b, so the ratio is unchanged.
-    For var: shift/var is dimensionless — scaling data by b scales both
-    the shift and var by b², so the ratio is unchanged.
-    """
-    idata = centered_eight
-    scale = 3.0
-
-    result_orig = loo_influence(idata, kind=kind, standardize=True)
-    # Scale the posterior draws by a constant factor.
-    idata_scaled = idata.copy()
-    idata_scaled.posterior["mu"] = idata.posterior["mu"] * scale
-    idata_scaled.posterior["theta"] = idata.posterior["theta"] * scale
-    result_scaled = loo_influence(idata_scaled, kind=kind, standardize=True)
-
-    # Standardized influence should be scale-invariant.
-    assert_array_almost_equal(
-        result_orig["mu"].values,
-        result_scaled["mu"].values,
-        decimal=5,
-    )
-
-@pytest.mark.parametrize("kind", ["std", "var"])
+@pytest.mark.parametrize("kind", ["sd", "var"])
 def test_loo_influence_standardize_scale_invariant(kind, centered_eight):
     """Standardized loo_influence for std/var should be scale-invariant.
 
@@ -175,7 +152,7 @@ def test_loo_influence_standardize_scale_invariant(kind, centered_eight):
     scaling data by b scales both numerator and denominator by b².
     """
     scale = 3.0
-    result_orig = loo_influence(centered_eight, kind=kind, standardize=True)
+    result_orig, _ = loo_influence(centered_eight, kind=kind, standardize=True)
 
     idata_scaled = centered_eight.copy()
     for group in ("posterior", "observed_data"):
@@ -184,6 +161,6 @@ def test_loo_influence_standardize_scale_invariant(kind, centered_eight):
             for var in grp.data_vars:
                 grp[var] = grp[var] * scale
 
-    result_scaled = loo_influence(idata_scaled, kind=kind, standardize=True)
+    result_scaled, _ = loo_influence(idata_scaled, kind=kind, standardize=True)
 
     xr.testing.assert_allclose(result_orig, result_scaled, atol=1e-5)
