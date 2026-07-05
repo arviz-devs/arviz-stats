@@ -142,6 +142,7 @@ def test_loo_influential_posterior_group(centered_eight):
     assert np.all(np.isfinite(shift["mu"].values))
     assert np.all(shift["mu"].values >= 0)
 
+
 @pytest.mark.parametrize("kind", ["sd", "var"])
 def test_loo_influence_standardize_scale_invariant(kind, centered_eight):
     """Standardized loo_influence for std/var should be scale-invariant.
