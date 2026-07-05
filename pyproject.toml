@@ -85,6 +85,7 @@ select = [
     "NPY", # numpy specific rules
     "UP",  # pyupgrade
     "I",  # isort
+    "TID",  # flake8-tidy-imports (relative imports)
     # "PL",  # Pylint
 ]
 ignore = [
@@ -97,10 +98,13 @@ ignore = [
 "src/arviz_stats/__init__.py" = ["I", "F401", "E402", "F403"]
 "src/arviz_stats/numba/*" = ["F841"]
 "src/arviz_stats/**/__init__.py" = ["I", "F401", "E402", "F403"]
-"tests/**/*" = ["D", "E402", "PLR2004", "NPY002"]
+"tests/**/*" = ["D", "E402", "PLR2004", "NPY002", "TID252"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
 
 [tool.ruff.format]
 docstring-code-format = false
