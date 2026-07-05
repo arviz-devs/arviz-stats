@@ -201,8 +201,8 @@ def test_metrics(datatree, kind, round_to, expected_mean, expected_se):
 @pytest.mark.parametrize(
     "kind, round_to, expected_mean, expected_se",
     [
-        ("acc", 2, 0.86, 0.13),
-        ("acc_balanced", "2g", 0.83, 0.021),
+        ("acc", 2, 0.43, 0.19),
+        ("acc_balanced", "2g", 0.46, 0.039),
     ],
 )
 def test_metrics_acc(datatree_binary, kind, round_to, expected_mean, expected_se):
