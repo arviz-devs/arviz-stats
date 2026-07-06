@@ -144,15 +144,17 @@ def loo_influence(
             func_s = mad
         elif kind == "sd":
             func = std
+            func_s = func
         elif kind == "var":
             func = var
+            func_s = func
 
         shift = np.abs(
             loo_expec
             - func(data, group=group, var_names=var_names, dim=sample_dims, round_to="none").dataset
         )
 
-        if standardize and kind in ["mean", "median"]:
+        if standardize and kind in ["mean", "median", "sd", "var"]:
             shift /= func_s(
                 data, group=group, var_names=var_names, dim=sample_dims, round_to="none"
             ).dataset
