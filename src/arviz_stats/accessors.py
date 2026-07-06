@@ -157,6 +157,10 @@ class _BaseAccessor:
         """Compute pointwise uniformity test for all variables in the dataset."""
         return self._apply("uniformity_test", dim=dim, method=method, **kwargs)
 
+    def mchain_uniformity_test(self, dim=None, **kwargs):
+        """Compute multi-chain uniformity test for all variables in the dataset."""
+        return self._apply("mchain_uniformity_test", dim=dim, **kwargs)
+
     def pareto_min_ss(self, sample_dims=None, **kwargs):
         """Compute the min sample size for all variables in the dataset."""
         return self._apply("pareto_min_ss", sample_dims=sample_dims, **kwargs)
