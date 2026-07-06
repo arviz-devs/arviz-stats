@@ -135,7 +135,7 @@ def loo_influence(
         )
 
         func = None
-        func_s = func
+        func_s = None
         if kind == "mean":
             func = mean
             func_s = std
