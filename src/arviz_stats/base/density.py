@@ -933,9 +933,11 @@ class _DensityBase(_CoreBase):
         p_value : float
             Global p-value from the multi-chain test.
         b_shapley_vals : ndarray
-            Shapley contributions for each chain and partition point, shape (K, n_chains).
+            Between-chain Shapley contributions for each chain per draw,
+            shape (n_draws, n_chains).
         w_shapley_vals : ndarray
-            Within-chain Shapley values at each partition point, shape (K,).
+            Draw-wise Shapley contributions to the global p-value,
+            shape (n_draws,).
         """
         ary = np.asarray(ary)
         if ary.ndim != 2:

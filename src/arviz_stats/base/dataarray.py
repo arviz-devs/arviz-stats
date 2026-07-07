@@ -439,9 +439,9 @@ class BaseDataArray:
         p_value : DataArray
             Global p-value from the multi-chain test.
         b_shapley_vals : DataArray
-            Shapley contributions for each chain and partition point.
+            Between-chain Shapley contributions for each chain per draw, shape (n_draws, n_chains).
         w_shapley_vals : DataArray
-            Within-chain Shapley values at each partition point.
+            Draw-wise Shapley contributions to the global p-value, shape (n_draws,).
         """
         dims = validate_dims(dim)
         if len(dims) != 2:
@@ -455,7 +455,7 @@ class BaseDataArray:
                 **kwargs,
             },
             input_core_dims=[dims],
-            output_core_dims=[[], ["partition", dims[0]], ["partition"]],
+            output_core_dims=[[], ["pit_dim", dims[0]], ["pit_dim"]],
         )
         return p_value, b_shapley_vals, w_shapley_vals
 

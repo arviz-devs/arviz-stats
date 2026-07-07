@@ -827,9 +827,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         p_value : array-like
             Global p-value from the multi-chain test.
         b_shapley_vals : array-like
-            Shapley contributions for each chain and partition point.
+            Between-chain Shapley contributions for each chain per draw, shape (n_draws, n_chains).
         w_shapley_vals : array-like
-            Within-chain Shapley values at each partition point.
+            Draw-wise Shapley contributions to the global p-value, shape (n_draws,).
         """
         ary = np.asarray(ary)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
