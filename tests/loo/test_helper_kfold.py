@@ -522,7 +522,7 @@ def test_kfold_split_grouped_always_produces_k_folds(n_levels, k):
 def test_kfold_split_grouped_balanced_fold_sizes(n_levels, k):
     x = np.repeat(np.arange(n_levels), 2)
     folds = _kfold_split_grouped(k=k, x=x)
-    groups_per_fold = [
-        len({g for g in np.unique(x) if folds[x == g][0] == fold}) for fold in range(1, k + 1)
-    ]
-    assert max(groups_per_fold) - min(groups_per_fold) <= 1
+    _, unique_indices = np.unique(x, return_index=True)
+    group_folds = folds[unique_indices]
+    _, fold_counts = np.unique(group_folds, return_counts=True)
+    assert fold_counts.max() - fold_counts.min() <= 1
