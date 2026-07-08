@@ -1,6 +1,6 @@
 """Test summary."""
 
-# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name,protected-access
 from copy import deepcopy
 
 import numpy as np
@@ -14,7 +14,7 @@ pd = importorskip("pandas")
 xr = importorskip("xarray")
 
 from arviz_stats import ci_in_rope, eti, hdi, mode, qds, summary
-from arviz_stats.summary import _round_summary
+from arviz_stats.summary import SummaryDataFrame, _build_fmt_map
 
 
 def test_summary_ndarray():
@@ -450,7 +450,7 @@ def test_mode_single_value_array():
 def test_summary_zero_variance():
     array = np.ones((4, 100, 2))
     summary_df = summary(array)
-    assert summary_df["sd"].iloc[0] == "0"
+    assert summary_df["sd"].iloc[0] == 0
 
 
 @pytest.mark.parametrize("prob", [0.5, 0.89, 0.95])
@@ -479,7 +479,7 @@ def test_summary_fmt(datatree, fmt):
         assert "summary" in result.dims
 
 
-def test_round_summary():
+def test_build_fmt_map():
     labels = ["a", "bb", "ccc", "d", "e"]
     data = {
         "mean": [111.11, 1.2345e-6, 5.4321e8, np.inf, np.nan],
@@ -490,23 +490,103 @@ def test_round_summary():
         "ess_tail": [9.2345, 876.321, 999.99, np.inf, np.nan],
     }
     df = pd.DataFrame(data, index=labels)
-    result = _round_summary(df, round_val=2)
+    result = _build_fmt_map(df, round_val=2)
 
-    assert result["ess_bulk"].dtype == "Int64"
-    assert result["ess_tail"].dtype == "Int64"
-    expected_ess_bulk = pd.Series(
-        [312, 23, 1011, pd.NA, pd.NA], index=labels, dtype="Int64", name="ess_bulk"
-    )
-    pd.testing.assert_series_equal(result["ess_bulk"], expected_ess_bulk)
-    expected_ess_tail = pd.Series(
-        [9, 876, 999, pd.NA, pd.NA], index=labels, dtype="Int64", name="ess_tail"
-    )
-    pd.testing.assert_series_equal(result["ess_tail"], expected_ess_tail)
-    expected_r_hat = pd.Series(["1.01", "1.01", "0.99", np.inf, np.nan], index=labels, name="r_hat")
-    pd.testing.assert_series_equal(result["r_hat"], expected_r_hat, check_dtype=False)
-    expected_mcse = pd.Series(["0", "0", "212340", np.inf, np.nan], index=labels, name="mcse_mean")
-    pd.testing.assert_series_equal(result["mcse_mean"], expected_mcse, check_dtype=False)
-    expected_mean = pd.Series(["111", "0", "5e+08"], index=labels[:3], name="mean")
-    pd.testing.assert_series_equal(result.loc[labels[:3], "mean"], expected_mean, check_dtype=False)
-    expected_sd = pd.Series(["0", "0", "212340"], index=labels[:3], name="sd")
-    pd.testing.assert_series_equal(result.loc[labels[:3], "sd"], expected_sd, check_dtype=False)
+    assert isinstance(result, dict)
+    assert result["ess_bulk"] == {
+        "a": "312",
+        "bb": "23",
+        "ccc": "1011",
+        "d": "inf",
+        "e": "nan",
+    }
+    assert result["ess_tail"] == {
+        "a": "9",
+        "bb": "876",
+        "ccc": "999",
+        "d": "inf",
+        "e": "nan",
+    }
+    assert result["r_hat"] == {
+        "a": "1.01",
+        "bb": "1.01",
+        "ccc": "0.99",
+        "d": "inf",
+        "e": "nan",
+    }
+    assert result["mcse_mean"] == {
+        "a": "0",
+        "bb": "0",
+        "ccc": "212340",
+        "d": "inf",
+        "e": "nan",
+    }
+    assert result["mean"] == {
+        "a": "111.11",
+        "bb": "0",
+        "ccc": "5.43e+08",
+        "d": "inf",
+        "e": "nan",
+    }
+    assert result["sd"] == {
+        "a": "0",
+        "bb": "0",
+        "ccc": "212340",
+        "d": "inf",
+        "e": "nan",
+    }
+
+
+def test_summary_data_frame():
+    data = {
+        "mean": [0.123456, -1.987654],
+        "r_hat": [1.001234, 1.056789],
+    }
+    fmt_map = {
+        "mean": {"mu_1": "0.123", "tau": "-1.988"},
+        "r_hat": {"mu_1": "1.00", "tau": "1.06"},
+    }
+    sdf = SummaryDataFrame(data, index=["mu_1", "tau"], fmt_map=fmt_map)
+
+    repr_str = repr(sdf)
+    assert "0.123" in repr_str
+    assert "-1.988" in repr_str
+    assert "1.00" in repr_str
+    assert "1.06" in repr_str
+
+    str_out = sdf.to_string()
+    assert "0.123" in str_out
+    assert "1.06" in str_out
+
+    html = sdf._repr_html_()
+    assert "0.123" in html
+    assert "1.06" in html
+
+    html = sdf.to_html()
+    assert "0.123" in html
+    assert "1.06" in html
+
+    latex = sdf._repr_latex_()
+    assert "0.123" in latex
+    assert "-1.988" in latex
+    assert "1.00" in latex
+    assert "1.06" in latex
+    assert "r\\_hat" in latex
+    assert "mu\\_1" in latex
+
+    latex = sdf.to_latex()
+    assert "0.123" in latex
+    assert "1.06" in latex
+    assert "r\\_hat" in latex
+    assert "mu\\_1" in latex
+
+    sdf_t = sdf.T
+    assert sdf_t._fmt_map is not None
+    latex_t = sdf_t._repr_latex_()
+    assert "0.123" in latex_t
+    assert "1.06" in latex_t
+    assert "r\\_hat" in latex_t
+
+    plain = SummaryDataFrame(data, index=["mu_1", "tau"])
+    assert "0.123456" in plain.to_latex()
+    assert "r_hat" in plain.to_latex()
