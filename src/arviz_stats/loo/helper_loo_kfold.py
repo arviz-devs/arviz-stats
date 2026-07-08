@@ -215,40 +215,18 @@ def _kfold_split_grouped(k=10, x=None):
     k = _validate_k_value(k, len(x))
 
     unique_vals = np.unique(x)
-    x_int = np.zeros(len(x), dtype=int)
-    for i, val in enumerate(unique_vals):
-        x_int[x == val] = i + 1
-
     n_levels = len(unique_vals)
 
     if n_levels < k:
         raise ValueError("k must not be bigger than the number of levels/groups in x")
 
+    level_of_obs = np.searchsorted(unique_vals, x) + 1
+
     if n_levels == k:
-        return x_int
+        return level_of_obs
 
-    s1 = int(np.ceil(n_levels / k))
-    n_s2 = s1 * k - n_levels
-    n_s1 = k - n_s2
-
-    rng = np.random.default_rng()
-    perm = rng.permutation(n_levels) + 1
-
-    breaks = []
-    if n_s1 > 0:
-        breaks.extend(np.arange(s1 + 0.5, s1 * n_s1 + 0.5, s1))
-    if n_s2 > 0:
-        start = breaks[-1] if breaks else 0.5
-        breaks.extend(np.arange(start + s1 - 1, start + (s1 - 1) * n_s2, s1 - 1))
-
-    breaks = np.array(breaks)
-    groups = np.searchsorted(breaks, perm, side="right") + 1
-
-    bins = np.zeros(len(x), dtype=int)
-    for j in range(1, n_levels + 1):
-        bins[x_int == j] = groups[j - 1]
-
-    return bins
+    fold_of_level = _kfold_split_random(k=k, n=n_levels)
+    return fold_of_level[level_of_obs - 1]
 
 
 def _extract_fold_data(data, fold_indices, train=True):

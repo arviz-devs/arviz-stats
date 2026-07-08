@@ -171,8 +171,7 @@ def test_kfold_split_grouped_many_groups():
     x_many_groups = np.repeat(np.arange(10), 3)
     k = 3
     folds = _kfold_split_grouped(k=k, x=x_many_groups)
-    assert len(set(folds)) <= k
-    assert len(set(folds)) >= 1
+    assert set(folds.tolist()) == set(range(1, k + 1))
     assert min(folds) >= 1
     assert max(folds) <= k
 
@@ -483,3 +482,47 @@ def test_get_fold_indices_unequal_folds():
     np.testing.assert_array_equal(fold_indices[1]["test_indices"], [0, 1, 2])
     np.testing.assert_array_equal(fold_indices[2]["test_indices"], [3, 4])
     np.testing.assert_array_equal(fold_indices[3]["test_indices"], [5])
+
+
+@pytest.mark.parametrize(
+    "n_levels,k",
+    [
+        (3, 2),
+        (5, 2),
+        (5, 3),
+        (7, 3),
+        (10, 4),
+        (6, 4),
+        (9, 4),
+        (13, 5),
+    ],
+)
+def test_kfold_split_grouped_always_produces_k_folds(n_levels, k):
+    x = np.repeat(np.arange(n_levels), 3)
+    for _ in range(50):
+        folds = _kfold_split_grouped(k=k, x=x)
+        assert set(folds.tolist()) == set(range(1, k + 1)), (
+            f"grouped split produced folds {sorted(set(folds.tolist()))} "
+            f"for n_levels={n_levels}, k={k}; expected exactly {k} folds"
+        )
+        for group_id in np.unique(x):
+            group_folds = folds[x == group_id]
+            assert len(set(group_folds.tolist())) == 1
+
+
+@pytest.mark.parametrize(
+    "n_levels,k",
+    [
+        (7, 3),
+        (10, 4),
+        (13, 5),
+        (11, 3),
+    ],
+)
+def test_kfold_split_grouped_balanced_fold_sizes(n_levels, k):
+    x = np.repeat(np.arange(n_levels), 2)
+    folds = _kfold_split_grouped(k=k, x=x)
+    _, unique_indices = np.unique(x, return_index=True)
+    group_folds = folds[unique_indices]
+    _, fold_counts = np.unique(group_folds, return_counts=True)
+    assert fold_counts.max() - fold_counts.min() <= 1
