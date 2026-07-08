@@ -386,7 +386,7 @@ class SummaryDataFrame(pd.DataFrame):
         return SummaryDataFrame
 
     @property
-    def T(self):
+    def T(self):  # pylint: disable=invalid-name
         return self.transpose()
 
     def transpose(self, *args, **kwargs):
