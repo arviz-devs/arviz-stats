@@ -58,6 +58,7 @@ test-xarray = [
     "pytest",
     "pytest-cov",
     "h5netcdf[h5py]",
+    "jinja2",
 ]
 doc = [
     "sphinx-book-theme",
