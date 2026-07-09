@@ -265,3 +265,39 @@ def test_loo_kfold_grouped_ngroups_not_multiple_of_k(centered_eight, fresh_wrapp
     assert fresh_wrapper.fit_count == 2
     assert np.isfinite(result.elpd)
     assert result.elpd_i.size == 8
+
+
+def test_loo_kfold_custom_folds_zero_indexed(centered_eight, fresh_wrapper):
+    result = loo_kfold(
+        data=centered_eight, wrapper=fresh_wrapper, folds=[0, 0, 1, 1, 2, 2, 3, 3], pointwise=True
+    )
+    assert result.n_folds == 4
+    assert fresh_wrapper.fit_count == 4
+    assert result.elpd_i.size == 8
+    assert np.all(np.isfinite(result.elpd_i.values))
+
+
+def test_loo_kfold_custom_folds_noncontiguous_labels(centered_eight, fresh_wrapper):
+    result = loo_kfold(
+        data=centered_eight, wrapper=fresh_wrapper, folds=[10, 10, 20, 20, 30, 30, 40, 40]
+    )
+    assert result.n_folds == 4
+    assert fresh_wrapper.fit_count == 4
+
+
+def test_loo_kfold_custom_folds_single_value_raises(centered_eight, fresh_wrapper):
+    with pytest.raises(ValueError, match="k must be greater than 1"):
+        loo_kfold(data=centered_eight, wrapper=fresh_wrapper, folds=[1, 1, 1, 1, 1, 1, 1, 1])
+
+
+def test_loo_kfold_multiple_obs_dims_raises(fresh_wrapper):
+    rng = np.random.default_rng(0)
+    idata = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 50))},
+            "log_likelihood": {"obs": rng.normal(size=(2, 50, 3, 2))},
+        },
+        dims={"obs": ["g", "h"]},
+    )
+    with pytest.raises(NotImplementedError, match="single observation dimension"):
+        loo_kfold(data=idata, wrapper=fresh_wrapper, k=2)
