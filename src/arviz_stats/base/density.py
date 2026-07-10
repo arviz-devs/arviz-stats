@@ -942,6 +942,8 @@ class _DensityBase(_CoreBase):
         ary = np.asarray(ary)
         if ary.ndim != 2:
             raise ValueError("_mtc_c expects a 2D array")
+        if not np.all(np.isfinite(ary)):
+            raise ValueError("_mtc_c requires finite fractional ranks (no NaN or Inf).")
 
         n_chains, n_draws = ary.shape
 
