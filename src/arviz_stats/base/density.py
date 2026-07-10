@@ -962,7 +962,7 @@ class _DensityBase(_CoreBase):
         for j in range(n_chains):
             probs1 = hypergeom.cdf(ecdfs[:, j], samples, m, k)
             probs2 = hypergeom.sf(ecdfs[:, j] - 1, samples, m, k)
-            gamma_chains[:, j] = 2 * np.minimum(probs1, probs2)
+            gamma_chains[:, j] = np.minimum(2 * np.minimum(probs1, probs2), 1.0)
 
         b_cauchy_vals = np.tan((0.5 - gamma_chains) * np.pi)
         ps = 0.5 - np.arctan(b_cauchy_vals.mean(axis=1)) / np.pi
