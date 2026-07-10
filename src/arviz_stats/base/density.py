@@ -964,9 +964,14 @@ class _DensityBase(_CoreBase):
 
         gamma_chains = np.empty((n_draws, n_chains))
         for j in range(n_chains):
-            probs1 = hypergeom.cdf(ecdfs[:, j], samples, m, k)
-            probs2 = hypergeom.sf(ecdfs[:, j] - 1, samples, m, k)
-            gamma_chains[:, j] = np.minimum(2 * np.minimum(probs1, probs2), 1.0)
+            # Calculate the exact probability mass at the observed point
+            p_exact = hypergeom.pmf(ecdfs[:, j], samples, m, k)
+            # Mid-p lower tail
+            probs1 = hypergeom.cdf(ecdfs[:, j], samples, m, k) - 0.5 * p_exact
+            # Mid-p upper tail.
+            probs2 = 1.0 - probs1
+
+            gamma_chains[:, j] = 2 * np.minimum(probs1, probs2)
 
         b_cauchy_vals = np.tan((0.5 - gamma_chains) * np.pi)
         ps = 0.5 - np.arctan(b_cauchy_vals.mean(axis=1)) / np.pi
