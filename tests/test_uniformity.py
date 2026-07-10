@@ -273,3 +273,39 @@ class TestUniformityTestGeneral:
         assert p_value.shape == (2, 3)
         assert shapley.shape == (2, 3, 80)
         assert shapley_unsorted.shape == (2, 3, 80)
+
+
+class TestMchainUniformity:
+    """Tests for the multi-chain uniformity test."""
+
+    def test_basic_shape(self):
+        rng = np.random.default_rng(42)
+        ranks = rng.uniform(size=(4, 100))
+        p_value, b_shapley_vals, w_shapley_vals = array_stats.mchain_uniformity_test(ranks)
+        assert np.ndim(p_value) == 0
+        assert b_shapley_vals.shape == (100, 4)
+        assert w_shapley_vals.shape == (100,)
+        assert 0 <= p_value <= 1
+
+    def test_uniform_chains_high_pvalue(self):
+        rng = np.random.default_rng(42)
+        ranks = rng.uniform(size=(4, 50))
+        p_value, *_ = array_stats.mchain_uniformity_test(ranks)
+        assert p_value > 0.01, f"Uniform chains yielded p={p_value}, expected > 0.01"
+
+    def test_different_chains_low_pvalue(self):
+        rng = np.random.default_rng(123)
+        n_chains, n_draws = 4, 200
+        ranks = np.empty((n_chains, n_draws))
+        for i in range(n_chains):
+            ranks[i] = rng.beta(0.5 + i * 2, 5 - i, size=n_draws)
+        p_value, *_ = array_stats.mchain_uniformity_test(ranks)
+        assert p_value < 0.05, f"Different chains yielded p={p_value}, expected < 0.05"
+
+    def test_batched_3d(self):
+        rng = np.random.default_rng(7)
+        ranks = rng.uniform(size=(3, 4, 100))
+        p_value, b_shapley_vals, w_shapley_vals = array_stats.mchain_uniformity_test(ranks)
+        assert p_value.shape == (3,)
+        assert b_shapley_vals.shape == (3, 100, 4)
+        assert w_shapley_vals.shape == (3, 100)

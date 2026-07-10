@@ -332,6 +332,28 @@ def test_check_var_name_subset_dataarray(idata):
     assert result is da
 
 
+def test_dataarray_mchain_uniformity_test(idata):
+    da = idata.posterior["a"]
+    p_value, b_shapley_vals, w_shapley_vals = da.azstats.mchain_uniformity_test()
+    assert isinstance(p_value, xr.DataArray)
+    assert p_value.shape == ()
+    assert isinstance(b_shapley_vals, xr.DataArray)
+    assert b_shapley_vals.dims == ("pit_dim", "chain")
+    assert isinstance(w_shapley_vals, xr.DataArray)
+    assert w_shapley_vals.dims == ("pit_dim",)
+
+
+def test_dataset_mchain_uniformity_test(idata):
+    p_value, b_shapley_vals, w_shapley_vals = idata.posterior.ds.azstats.mchain_uniformity_test()
+    assert isinstance(p_value, xr.Dataset)
+    assert "a" in p_value.data_vars
+    assert "b" in p_value.data_vars
+    assert p_value["a"].shape == ()
+    assert p_value["b"].shape == (3,)
+    assert isinstance(b_shapley_vals, xr.Dataset)
+    assert isinstance(w_shapley_vals, xr.Dataset)
+
+
 def test_datatree_process_input_invalid_group(idata):
     accessor = idata.azstats
     with pytest.raises(ValueError, match="Group.*not available"):

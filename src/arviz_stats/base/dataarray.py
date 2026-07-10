@@ -422,6 +422,43 @@ class BaseDataArray:
         )
         return p_value, shapley, shapley_unsorted
 
+    def mchain_uniformity_test(self, da, dim=None, **kwargs):
+        """Multi-chain rank uniformity test on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+            Array of fractional ranks in [0, 1].
+        dim : sequence of hashable
+            Two dimensions, the chain dimension followed by the draw dimension.
+        **kwargs
+            Additional keyword arguments.
+
+        Returns
+        -------
+        p_value : DataArray
+            Global p-value from the multi-chain test.
+        b_shapley_vals : DataArray
+            Between-chain Shapley contributions for each chain per draw, shape (n_draws, n_chains).
+        w_shapley_vals : DataArray
+            Draw-wise Shapley contributions to the global p-value, shape (n_draws,).
+        """
+        dims = validate_dims(dim)
+        if len(dims) != 2:
+            raise ValueError("mchain_uniformity_test expects two dimensions: chain and draw")
+        p_value, b_shapley_vals, w_shapley_vals = apply_ufunc(
+            self.array_class.mchain_uniformity_test,
+            da,
+            kwargs={
+                "chain_axis": -2,
+                "draw_axis": -1,
+                **kwargs,
+            },
+            input_core_dims=[dims],
+            output_core_dims=[[], ["pit_dim", dims[0]], ["pit_dim"]],
+        )
+        return p_value, b_shapley_vals, w_shapley_vals
+
     def thin_factor(self, da, target_ess=None, reduce_func="mean"):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
 

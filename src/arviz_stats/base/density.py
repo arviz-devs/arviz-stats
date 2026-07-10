@@ -10,7 +10,7 @@ from scipy.signal import convolve, convolve2d
 from scipy.signal.windows import gaussian
 from scipy.sparse import coo_matrix
 from scipy.special import betainc, ive  # pylint: disable=no-name-in-module
-from scipy.stats import binom
+from scipy.stats import binom, hypergeom
 
 from arviz_stats.base.core import _CoreBase
 
@@ -915,6 +915,74 @@ class _DensityBase(_CoreBase):
         shapley_unsorted[sort_idx] = shapley_vals
 
         return p_value, shapley_vals, shapley_unsorted
+
+    def _mtc_c(self, ary):
+        """Pointwise multi-chain uniformity test with Cauchy combination.
+
+        Tests whether multiple chains have the same rank distribution using a
+        hypergeometric-based test. The input is expected to be a 2D array of
+        fractional ranks with shape ``(n_chains, n_draws)``.
+
+        Parameters
+        ----------
+        ary : array-like
+            2D array of fractional ranks in [0, 1], with shape (n_chains, n_draws).
+
+        Returns
+        -------
+        p_value : float
+            Global p-value from the multi-chain test.
+        b_shapley_vals : ndarray
+            Between-chain Shapley contributions for each chain per draw,
+            shape (n_draws, n_chains).
+        w_shapley_vals : ndarray
+            Draw-wise Shapley contributions to the global p-value,
+            shape (n_draws,).
+        """
+        ary = np.asarray(ary)
+        if ary.ndim != 2:
+            raise ValueError("_mtc_c expects a 2D array")
+        if not np.all(np.isfinite(ary)):
+            raise ValueError("_mtc_c requires finite fractional ranks (no NaN or Inf).")
+
+        n_chains, n_draws = ary.shape
+
+        if n_draws == 0:
+            return np.nan, np.array([]), np.array([])
+        if n_chains < 2:
+            raise ValueError("_mtc_c requires at least 2 chains for a multi-chain test.")
+
+        z = np.arange(1, n_draws + 1) / (n_draws + 1)
+        samples = n_chains * n_draws
+        m = n_draws
+        k = np.floor(z * samples).astype(int)
+
+        sorted_ary = np.sort(ary, axis=1)
+        ecdfs = np.empty((n_draws, n_chains), dtype=int)
+        for j in range(n_chains):
+            ecdfs[:, j] = np.searchsorted(sorted_ary[j], z, side="right")
+
+        gamma_chains = np.empty((n_draws, n_chains))
+        for j in range(n_chains):
+            # Calculate the exact probability mass at the observed point
+            p_exact = hypergeom.pmf(ecdfs[:, j], samples, m, k)
+            # Mid-p lower tail
+            probs1 = hypergeom.cdf(ecdfs[:, j], samples, m, k) - 0.5 * p_exact
+            # Mid-p upper tail.
+            probs2 = 1.0 - probs1
+
+            gamma_chains[:, j] = 2 * np.minimum(probs1, probs2)
+
+        b_cauchy_vals = np.tan((0.5 - gamma_chains) * np.pi)
+        ps = 0.5 - np.arctan(b_cauchy_vals.mean(axis=1)) / np.pi
+
+        w_cauchy_vals = np.tan((0.5 - ps) * np.pi)
+        p_value = 0.5 - np.arctan(w_cauchy_vals.mean()) / np.pi
+
+        b_shapley_vals = np.apply_along_axis(self._shapley_mean, 1, b_cauchy_vals)
+        w_shapley_vals = self._shapley_mean(w_cauchy_vals)
+
+        return p_value, b_shapley_vals, w_shapley_vals
 
     def _cauchy_combination(self, ps, cauchy_vals, truncate):
         """Combine p-values using the Cauchy combination method."""
