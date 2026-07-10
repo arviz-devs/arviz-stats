@@ -947,8 +947,10 @@ class _DensityBase(_CoreBase):
 
         n_chains, n_draws = ary.shape
 
-        if n_chains == 0 or n_draws == 0:
+        if n_draws == 0:
             return np.nan, np.array([]), np.array([])
+        if n_chains < 2:
+            raise ValueError("_mtc_c requires at least 2 chains for a multi-chain test.")
 
         z = np.arange(1, n_draws + 1) / (n_draws + 1)
         samples = n_chains * n_draws
