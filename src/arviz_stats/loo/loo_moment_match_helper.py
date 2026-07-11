@@ -127,12 +127,12 @@ def _validate_model(model):
     """
     if model.discrete_value_vars:
         raise NotImplementedError(
-            "Moment matching is not supported for models with discrete random"
+            "Moment matching is not supported for models with discrete random variables. "
             f"Found discrete value variables: {[v.name for v in model.discrete_value_vars]}."
         )
     if model.potentials:
         raise NotImplementedError(
-            "Moment matching for models with potentials is not supported"
+            "Moment matching for models with potentials is not supported. "
             "Remove the potentials or supply the moment matching functions manually."
         )
 
