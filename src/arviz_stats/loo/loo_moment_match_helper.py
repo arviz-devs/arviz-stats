@@ -55,9 +55,12 @@ def mm_from_pymc(
     """
     from pymc.model import modelcontext
 
-    model = modelcontext(model)
-    if model is None:
-        raise ValueError("A PyMC model is required to build moment matching functions.")
+    try:
+        model = modelcontext(model)
+    except TypeError as err:
+        raise ValueError(
+            "A PyMC model is required to build moment matching functions."
+        ) from err
 
     _validate_model(model)
     obs_rv, var_name = _get_observed_rv(model, idata, var_name)
