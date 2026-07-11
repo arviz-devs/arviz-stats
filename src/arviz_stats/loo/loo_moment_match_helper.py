@@ -23,7 +23,7 @@ def mm_from_pymc(
     model=None,
     var_name=None,
 ):
-    """Build the functions and posterior array needed by loo_moment_match from a PyMC model.
+    """Build the functions and posterior array needed by :func:`arviz_stats.loo_moment_match` from a PyMC model.
 
     Parameters
     ----------
