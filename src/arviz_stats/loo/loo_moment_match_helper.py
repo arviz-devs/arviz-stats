@@ -1,15 +1,4 @@
-"""Helper for PSIS-LOO-CV moment matching.
-
-function arviz_stats.loo_moment_match requires the user to supply an
-array of posterior draws in the unconstrained parameter space and two
-functions:
-
-* ``log_prob_upars_func(upars)`` - log posterior density evaluated at
-  unconstrained parameter draws.
-* ``log_lik_i_upars_func(upars, i)`` - log likelihood of a single observation
-  ``i`` evaluated at unconstrained parameter draws.
-* ``upars`` - posterior draws transformed to the unconstrained space
-"""
+"""Helper functions for PSIS-LOO-CV moment matching."""
 
 import numpy as np
 from xarray import DataArray
@@ -23,7 +12,14 @@ def mm_from_pymc(
     model=None,
     var_name=None,
 ):
-    """Build the functions and posterior array needed by :func:`arviz_stats.loo_moment_match` from a PyMC model.
+    """Build the inputs needed by :func:`arviz_stats.loo_moment_match` from a PyMC model.
+
+    :func:`arviz_stats.loo_moment_match` requires an array of posterior draws in the
+    unconstrained parameter space together with two functions evaluated at unconstrained
+    draws: one computing the log posterior density and one computing the log likelihood
+    of a single observation. This helper compiles both functions and transforms the
+    posterior draws to the unconstrained space directly from the PyMC model, so they
+    do not have to be constructed manually.
 
     Parameters
     ----------
@@ -52,15 +48,17 @@ def mm_from_pymc(
         dims ``(chain, draw, unconstrained_parameter)`` and coordinate values
         given by the (possibly transformed) value-variable names (with
         ``[i,j,...]`` suffixes for multi-element value variables).
+
+    See Also
+    --------
+    loo_moment_match : Moment matching for problematic observations in PSIS-LOO-CV.
     """
     from pymc.model import modelcontext
 
     try:
         model = modelcontext(model)
     except TypeError as err:
-        raise ValueError(
-            "A PyMC model is required to build moment matching functions."
-        ) from err
+        raise ValueError("A PyMC model is required to build moment matching functions.") from err
 
     _validate_model(model)
     obs_rv, var_name = _get_observed_rv(model, idata, var_name)
@@ -75,10 +73,15 @@ def mm_from_pymc(
         initial_point=initial_point,
     )
 
+    def flatten_upars(upars_da):
+        upars_da = upars_da.transpose("chain", "draw", ...)
+        flat = np.asarray(upars_da.values).reshape(-1, n_params)
+        return upars_da, flat
+
     def log_prob_upars(upars_da):
+        upars_da, flat = flatten_upars(upars_da)
         chain = upars_da.sizes["chain"]
         draw = upars_da.sizes["draw"]
-        flat = np.asarray(upars_da.values).reshape(-1, n_params)
         vals = np.asarray(logp_func(flat)[0]).reshape(chain, draw)
         return DataArray(
             vals,
@@ -95,9 +98,9 @@ def mm_from_pymc(
     )
 
     def log_lik_i_upars(upars_da, obs_i):
+        upars_da, flat = flatten_upars(upars_da)
         chain = upars_da.sizes["chain"]
         draw = upars_da.sizes["draw"]
-        flat = np.asarray(upars_da.values).reshape(-1, n_params)
         out = np.asarray(lik_func(flat)[0])
         if out.ndim == 1:
             vals = out
@@ -148,7 +151,8 @@ def _get_observed_rv(model, idata, var_name):
     model : Model
         The PyMC model to check.
     idata : DataTree
-        The DataTree object with an observed_data group.
+        The DataTree object. If it contains an ``observed_data`` group,
+        ``var_name`` is validated against it. Otherwise, the group is optional.
     var_name : str or None
         The name of the observed variable to use. If None, the function will
         attempt to infer the observed variable.
@@ -162,7 +166,11 @@ def _get_observed_rv(model, idata, var_name):
     """
     observed = list(model.observed_RVs)
 
-    if var_name is not None and var_name not in idata.observed_data:
+    if (
+        var_name is not None
+        and hasattr(idata, "observed_data")
+        and var_name not in idata.observed_data
+    ):
         raise ValueError(
             f"`{var_name!r}` is not present in `idata.observed_data`. Make sure "
             "the InferenceData contains the observed variable whose log-likelihood "
@@ -178,6 +186,11 @@ def _get_observed_rv(model, idata, var_name):
         return observed[0], observed[0].name
 
     matches = [rv for rv in observed if rv.name == var_name]
+    if not matches:
+        raise ValueError(
+            f"`{var_name!r}` does not match any observed random variable in the model. "
+            f"Available: {[rv.name for rv in observed]}."
+        )
     return matches[0], var_name
 
 
@@ -205,9 +218,10 @@ def _get_upars_da(idata, model, initial_point, value_vars):
     import pytensor
     import pytensor.tensor as pt
 
-    chain = idata.posterior.sizes["chain"]
-    draw = idata.posterior.sizes["draw"]
-    posterior_data_vars = set(idata.posterior.data_vars)
+    posterior = getattr(idata.posterior, "dataset", idata.posterior).transpose("chain", "draw", ...)
+    chain = posterior.sizes["chain"]
+    draw = posterior.sizes["draw"]
+    posterior_data_vars = set(posterior.data_vars)
 
     # Build the PyTensor transform graph: for each value var, either apply the
     # forward transform or use the identity.
@@ -215,6 +229,7 @@ def _get_upars_da(idata, model, initial_point, value_vars):
     outputs_for_func = []  # PyTensor output expressions (post-transform or identity)
     posterior_names = []  # variable names to look up in idata.posterior
     unc_shapes = []  # unconstrained shapes (from initial_point)
+    in_shapes = []  # input (posterior/constrained) shapes
 
     for v in value_vars:
         rv = model.values_to_rvs[v]
@@ -227,6 +242,7 @@ def _get_upars_da(idata, model, initial_point, value_vars):
             inputs_for_func.append(cvar)
             outputs_for_func.append(transform.forward(cvar, *rv.owner.inputs))
             posterior_names.append(rv.name)
+            in_shapes.append(posterior[rv.name].shape[2:])
         else:
             post_name = rv.name if rv.name in posterior_data_vars else v.name
             if post_name not in posterior_data_vars:
@@ -237,6 +253,7 @@ def _get_upars_da(idata, model, initial_point, value_vars):
             inputs_for_func.append(v)
             outputs_for_func.append(v)
             posterior_names.append(post_name)
+            in_shapes.append(unc_shape)
 
         unc_shapes.append(unc_shape)
 
@@ -244,9 +261,9 @@ def _get_upars_da(idata, model, initial_point, value_vars):
     joined = pt.matrix("upars_input", dtype="float64")
     replace = {}
     last = 0
-    for cvar, unc_shape in zip(inputs_for_func, unc_shapes):
-        alen = int(np.prod(unc_shape, dtype=int)) if unc_shape else 1
-        replace[cvar] = joined[:, last : last + alen].reshape((joined.shape[0], *unc_shape))
+    for cvar, in_shape in zip(inputs_for_func, in_shapes):
+        alen = int(np.prod(in_shape, dtype=int)) if in_shape else 1
+        replace[cvar] = joined[:, last : last + alen].reshape((joined.shape[0], *in_shape))
         last += alen
     new_outputs = pytensor.graph.vectorize_graph(outputs_for_func, replace)
     joined_unc = pt.concatenate([pt.reshape(b, (pt.shape(b)[0], -1)) for b in new_outputs], axis=1)
@@ -254,11 +271,9 @@ def _get_upars_da(idata, model, initial_point, value_vars):
 
     # Assemble the input matrix from posterior draws and apply the transform
     flat_blocks = []
-    for post_name, unc_shape in zip(posterior_names, unc_shapes):
-        alen = int(np.prod(unc_shape, dtype=int)) if unc_shape else 1
-        flat_blocks.append(
-            np.asarray(idata.posterior[post_name].values).reshape(chain * draw, alen)
-        )
+    for post_name, in_shape in zip(posterior_names, in_shapes):
+        alen = int(np.prod(in_shape, dtype=int)) if in_shape else 1
+        flat_blocks.append(np.asarray(posterior[post_name].values).reshape(chain * draw, alen))
     upars_flat = transform_func(np.concatenate(flat_blocks, axis=1)).reshape(chain, draw, -1)
     n_params = upars_flat.shape[2]
 
@@ -277,8 +292,8 @@ def _get_upars_da(idata, model, initial_point, value_vars):
             upars_flat,
             dims=("chain", "draw", "unconstrained_parameter"),
             coords={
-                "chain": idata.posterior["chain"],
-                "draw": idata.posterior["draw"],
+                "chain": posterior["chain"],
+                "draw": posterior["draw"],
                 "unconstrained_parameter": labels,
             },
             name="upars",

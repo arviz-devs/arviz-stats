@@ -193,6 +193,12 @@ def loo_moment_match(
         if upars is None:
             upars = auto_upars
 
+    if log_prob_upars_fn is None or log_lik_i_upars_fn is None:
+        raise ValueError(
+            "Both log_prob_upars_fn and log_lik_i_upars_fn are required for moment matching. "
+            "Pass them explicitly or provide model to build them automatically."
+        )
+
     sample_dims = ["chain", "draw"]
 
     if upars is None:
@@ -220,6 +226,8 @@ def loo_moment_match(
         param_dim_name = param_dim_list[0]
     else:
         raise ValueError("upars must have at most one dimension besides 'chain' and 'draw'.")
+
+    upars = upars.transpose(*sample_dims, param_dim_name)
 
     loo_data = deepcopy(loo_orig)
     loo_data.method = "loo_moment_match"
