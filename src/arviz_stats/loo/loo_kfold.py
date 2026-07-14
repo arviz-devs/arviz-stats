@@ -232,7 +232,7 @@ def loo_kfold(
         good_k=None,
         elpd_i=kfold_results.elpd_i if pointwise else None,
         pareto_k=None,
-        n_folds=k,
+        n_folds=kfold_inputs.k,
     )
 
     if save_fits:

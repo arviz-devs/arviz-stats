@@ -63,6 +63,12 @@ def _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_
     sample_dims = ["chain", "draw"]
 
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
+    if len(obs_dims) > 1:
+        raise NotImplementedError(
+            "loo_kfold only supports a single observation dimension in the log likelihood, "
+            f"but found {len(obs_dims)}: {obs_dims}. Stack the observation dimensions into a "
+            "single dimension before calling loo_kfold."
+        )
     n_data_points = int(np.prod([log_likelihood.sizes[dim] for dim in obs_dims]))
     n_samples = int(np.prod([log_likelihood.sizes[dim] for dim in sample_dims]))
 
@@ -70,7 +76,9 @@ def _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_
 
     if folds is not None:
         folds = _validate_array_length(folds, n_data_points, "folds")
-        k = len(np.unique(folds))
+        _, folds = np.unique(folds, return_inverse=True)
+        folds = np.reshape(folds, -1) + 1
+        k = _validate_k_value(len(np.unique(folds)), n_data_points)
     elif stratify_by is not None:
         stratify_by = _validate_array_length(stratify_by, n_data_points, "stratify_by")
         folds = _kfold_split_stratified(k=k, x=stratify_by)
