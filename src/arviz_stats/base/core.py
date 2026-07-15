@@ -17,12 +17,34 @@ from arviz_stats.base.stats_utils import round_num
 
 class _CoreBase:
     def fft(self, x):
+        """Compute the one-dimensional discrete Fourier Transform.
+
+        Parameters
+        ----------
+        x : array-like
+        """
         return np.fft.fft(x)
 
     def rfft(self, ary, n, axis=-1):
+        """Compute the one-dimensional discrete Fourier Transform for real input.
+
+        Parameters
+        ----------
+        ary : array-like
+        n : int
+        axis : int, default -1
+        """
         return np.fft.rfft(ary, n=n, axis=axis)
 
     def irfft(self, ary, n, axis=-1):
+        """Compute the inverse of the n-point DFT for real input.
+
+        Parameters
+        ----------
+        ary : array-like
+        n : int
+        axis : int, default -1
+        """
         return np.fft.irfft(ary, n=n, axis=axis)
 
     def autocov(self, ary, axis=-1):
@@ -82,6 +104,10 @@ class _CoreBase:
         """Compute mean of circular variable measured in radians.
 
         The result is between -pi and pi.
+
+        Parameters
+        ----------
+        ary : array-like
         """
         return circmean(ary, high=np.pi, low=-np.pi)
 
@@ -233,7 +259,8 @@ class _CoreBase:
 
         Returns
         -------
-        array with the bins
+        array-like
+            Array with the bins.
 
         Notes
         -----
@@ -566,7 +593,7 @@ class _CoreBase:
         ----------
         values : array-like
             Input array.
-        quantiles : tuple of two floats, default (0.25, 0.75)
+        quantiles : tuple of (float, float), default (0.25, 0.75)
             Quantiles to compute the interquantile range. Defaults to (0.25, 0.75), that is,
             the interquartile range.
         round_to : int or str, optional

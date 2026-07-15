@@ -731,7 +731,7 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        y_sample : 1D array
+        y_sample : array-like
             Values of the statistic (e.g., p_loo) for the subsample, shape (m,).
         n_data_points : int
             Total number of data points (N).
@@ -777,11 +777,11 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        elpd_loo_i_sample : 1D array
+        elpd_loo_i_sample : array-like
             Pointwise ELPD values for the subsample, shape (m,).
-        lpd_approx_sample : 1D array
+        lpd_approx_sample : array-like
             LPD approximation values for the subsample, shape (m,).
-        lpd_approx_all : 1D array
+        lpd_approx_all : array-like
             LPD approximation values for the full dataset, shape (N,).
         n_data_points : int
             Total number of data points (N).
@@ -944,11 +944,11 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        draws_matrix : np.ndarray of shape (n_obs, n_draws)
+        draws_matrix : array-like
             2D array of posterior predictive draws with shape (n_obs, n_draws).
-        y_obs_array : np.ndarray of shape (n_obs,)
+        y_obs_array : array-like
             1D array of observed values with shape (n_obs,).
-        log_weights : np.ndarray of shape (n_obs, n_draws) and dtype float, optional
+        log_weights : array-like, optional
             1D array of normalized log weights matching ary.
             If None, uniform weights are used.
         rng : np.random.Generator, optional
@@ -1079,10 +1079,10 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        ary : Array
+        ary : array-like
         r_eff : float, optional
             Relative efficiency. Effective sample size divided the number of samples.
-        tail : srt, optional
+        tail : str, optional
             Which tail to fit. Can be 'right', 'left', or 'both'.
         log_weights : bool, optional
             Whether dt represents log-weights.
@@ -1242,9 +1242,9 @@ class _DiagnosticsBase(_CoreBase):
 
         Returns
         -------
-        kappa: float
+        kappa : float
             estimated shape parameter
-        sigma: float
+        sigma : float
             estimated scale parameter
         """
         prior_bs = 3
@@ -1314,6 +1314,17 @@ class _DiagnosticsBase(_CoreBase):
 
     @staticmethod
     def pgeneralized_pareto(q, mu=0, sigma=1, k=0, lower_tail=True, log_p=False):
+        """Compute the generalized Pareto distribution CDF.
+
+        Parameters
+        ----------
+        q : array-like
+        mu : float, default 0
+        sigma : float, default 1
+        k : float, default 0
+        lower_tail : bool, default True
+        log_p : bool, default False
+        """
         q = np.asarray(q, dtype=float)
 
         if np.isnan(sigma) or sigma <= 0:
@@ -1514,9 +1525,9 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        mu_pred: array-like of shape = (n_posterior_samples, n_outputs)
+        mu_pred : array-like
             Estimated mean for the response variable.
-        var : array-like of shape (n_posterior_samples,), optional
+        var : array-like, optional
             Posterior draws of the variance or pseudo-variance.
             - If provided: treated as the model-implied residual variance.
             - If None: assumes Bernoulli-like model and computes pseudo-variance
@@ -1530,7 +1541,7 @@ class _DiagnosticsBase(_CoreBase):
 
         Returns
         -------
-        array-like  (sample, dims)
+        array-like
 
         """
         if scale is None:
@@ -1563,16 +1574,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        y_obs: array-like of shape = (n_outputs,)
+        y_obs : array-like
             Observed values for the response variable.
-        mu_pred: array-like of shape = (n_posterior_samples, n_outputs)
+        mu_pred : array-like
             Estimated mean for the response variable.
         circular: bool, optional
             Whether the response variable is circular.
 
         Returns
         -------
-        array-like  (sample, dims)
+        array-like
         """
         if circular:
             return 1 - circular_var(circular_diff(y_obs, mu_pred))
@@ -1589,16 +1600,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Mean absolute error.
-        std_error: float
+        std_error : float
             Standard error of the mean absolute error.
         """
         n_obs = len(observed)
@@ -1613,16 +1624,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Mean squared error.
-        std_error: float
+        std_error : float
             Standard error of the mean squared error.
         """
         n_obs = len(observed)
@@ -1637,16 +1648,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Root mean squared error.
-        std_error: float
+        std_error : float
             Standard error of the root mean squared error.
         """
         n_obs = len(observed)
@@ -1665,16 +1676,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Accuracy.
-        std_error: float
+        std_error : float
             Standard error of the accuracy.
         """
         n_obs = len(observed)
@@ -1690,16 +1701,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Balanced accuracy.
-        std_error: float
+        std_error : float
             Standard error of the balanced accuracy.
         """
         n_obs = len(observed)

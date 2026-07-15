@@ -99,6 +99,7 @@ ignore = [
 "src/arviz_stats/__init__.py" = ["I", "F401", "E402", "F403"]
 "src/arviz_stats/numba/*" = ["F841"]
 "src/arviz_stats/**/__init__.py" = ["I", "F401", "E402", "F403"]
+"src/arviz_stats/**/*.pyi" = ["F401", "F403", "F811", "TID252"]  # stub files re-export / relative imports
 "tests/**/*" = ["D", "E402", "PLR2004", "NPY002", "TID252"]
 
 [tool.ruff.lint.pydocstyle]

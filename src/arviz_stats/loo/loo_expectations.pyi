@@ -1,0 +1,43 @@
+# File generated with docstub
+
+from collections.abc import Hashable, Sequence
+from typing import NamedTuple
+
+import xarray
+from _typeshed import Incomplete
+from numpy.typing import NDArray
+from xarray import DataArray, Dataset
+
+def loo_expectations(
+    data: xarray.DataTree | xarray.DataTree,
+    var_name: str | None = ...,
+    group: str = ...,
+    sample_dims: str | Sequence[Hashable] | None = ...,
+    log_likelihood_var_name: str | None = ...,
+    kind: str = ...,
+    probs: float | list[float] | None = ...,
+    log_weights: DataArray | None = ...,
+    pareto_k: DataArray | None = ...,
+) -> tuple[DataArray | Dataset, DataArray | Dataset]: ...
+def loo_metrics(
+    data: xarray.DataTree | xarray.DataTree,
+    kind: str = ...,
+    var_name: str | None = ...,
+    round_to: int | str | None | None = ...,
+) -> Incomplete: ...
+def loo_r2(
+    data: xarray.DataTree | xarray.DataTree,
+    var_name: str,
+    n_simulations: int = ...,
+    summary: bool = ...,
+    point_estimate: str | None = ...,
+    ci_kind: str | None = ...,
+    ci_prob: float | None = ...,
+    circular: bool = ...,
+    round_to: int | str | None | None = ...,
+) -> NamedTuple | NDArray: ...
+def _get_function_khat(
+    values: NDArray,
+    log_weights: NDArray,
+    kind: str,
+) -> float: ...
