@@ -21,6 +21,7 @@ def loo_kfold(
     stratify_by=None,
     group_by=None,
     save_fits=False,
+    seed=271,
 ):
     """Perform exact K-fold cross-validation.
 
@@ -63,6 +64,10 @@ def loo_kfold(
         `stratify_by`.
     save_fits : bool, default=False
         If True, store the fitted models and fold indices in the returned object.
+    seed : int, default=271
+        Seed for the random fold assignment used by the random, stratified and grouped
+        splitting strategies, making repeated calls reproducible. Pass ``None`` to draw
+        a different split on every call. Ignored when `folds` is provided explicitly.
 
     Returns
     -------
@@ -212,7 +217,9 @@ def loo_kfold(
     """
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
-    kfold_inputs = _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_by)
+    kfold_inputs = _prepare_kfold_inputs(
+        data, var_name, wrapper, k, folds, stratify_by, group_by, seed
+    )
     kfold_results = _compute_kfold_results(kfold_inputs, wrapper, save_fits)
 
     combined_results = _combine_fold_elpds([kfold_results.elpds], kfold_inputs.n_data_points)

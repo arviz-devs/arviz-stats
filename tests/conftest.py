@@ -394,6 +394,76 @@ def fresh_wrapper(mock_wrapper):
 
 
 @pytest.fixture
+def dim_style_wrapper(centered_eight):
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    sp = importorskip("scipy")
+    xr = importorskip("xarray")
+    azb = importorskip("arviz_base")
+
+    class DimStyleWrapper(SamplingWrapper):
+        def __init__(self, idata, ll_style):
+            super().__init__(model=None, idata_orig=idata)
+            self.ll_style = ll_style
+            self.y_obs = idata.observed_data["obs"].values
+            self.sigma = np.array([15, 10, 16, 11, 9, 11, 10, 18])
+            self.rng = np.random.default_rng(42)
+
+        def sel_observations(self, idx):
+            all_indices = np.arange(len(self.y_obs))
+            train_indices = np.setdiff1d(all_indices, idx)
+            train_data = {
+                "y": self.y_obs[train_indices],
+                "sigma": self.sigma[train_indices],
+                "indices": train_indices,
+            }
+            test_data = {
+                "y": self.y_obs[idx],
+                "sigma": self.sigma[idx],
+                "indices": np.asarray(idx),
+            }
+            return train_data, test_data
+
+        def sample(self, modified_observed_data):
+            n_samples = 500
+            train_y = modified_observed_data["y"]
+            mu = self.rng.normal(np.mean(train_y), 5, n_samples)
+            tau = np.abs(self.rng.normal(10, 2, n_samples))
+            return {"mu": mu, "tau": tau}
+
+        def get_inference_data(self, fitted_model):
+            posterior = {
+                "mu": fitted_model["mu"].reshape(1, -1),
+                "tau": fitted_model["tau"].reshape(1, -1),
+            }
+            return azb.from_dict({"posterior": posterior})
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            test_y = excluded_obs["y"]
+            test_sigma = excluded_obs["sigma"]
+            mu = idata__i.posterior["mu"].values.flatten()
+            tau = idata__i.posterior["tau"].values.flatten()
+            var_total = tau[:, np.newaxis] ** 2 + test_sigma**2
+            log_lik = sp.stats.norm.logpdf(test_y, loc=mu[:, np.newaxis], scale=np.sqrt(var_total))
+            if self.ll_style == "no_obs_dim":
+                return xr.DataArray(log_lik[:, 0][np.newaxis, :], dims=["chain", "draw"])
+            if self.ll_style == "flat_sample":
+                return xr.DataArray(log_lik, dims=["sample", "obs"])
+            if self.ll_style == "summed":
+                return xr.DataArray(log_lik.sum(axis=1)[np.newaxis, :], dims=["chain", "draw"])
+            return xr.DataArray(
+                log_lik.T[np.newaxis, :, :],
+                dims=["chain", "school", "draw"],
+                coords={"school": excluded_obs["indices"]},
+            )
+
+    def make(ll_style):
+        return DimStyleWrapper(centered_eight, ll_style)
+
+    return make
+
+
+@pytest.fixture
 def mock_wrapper_reloo(non_centered_eight):
     from arviz_stats.loo.wrapper import SamplingWrapper
 
