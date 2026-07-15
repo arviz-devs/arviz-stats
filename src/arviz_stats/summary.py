@@ -77,14 +77,12 @@ def summary(
         * For all floating point numbers except R-hat, trailing zeros are removed and values are
           converted to string for consistent display.
 
-        Note: "auto" is intended for display purposes, using it is not recommended when the output
-        will be used for further numerical computations.
     skipna: bool
         If true ignores nan values when computing the summary statistics. Defaults to false.
 
     Returns
     -------
-    pandas.DataFrame or xarray.Dataset
+    SummaryDataFrame, pandas.DataFrame or xarray.Dataset
         Return type determined by `fmt` argument.
 
     See Also
@@ -120,6 +118,21 @@ def summary(
 
         In [1]: summary(data, var_names=["~^t"], filter_vars="regex")
 
+    Notes
+    -----
+    When ``round_to="auto"``, the returned object is a ``SummaryDataFrame`` (a subclass
+    of ``pandas.DataFrame``). It retains raw values under the hood but applies custom formatting
+    intended for sensible DISPLAY of decimal places and significant figures.
+
+    Formatting is only guaranteed to be preserved for basic view-altering DataFrame operations,
+    like row filtering or slicing (e.g., ``df.loc[["mu", "tau"]]``) or Transposition.
+
+    Formatting will be lost if the structure is modified via renaming, concatenating, merging,
+    or if the DataFrame is converted to other objects like a ``pandas.Series``
+    (e.g., ``df["r_hat"]``), NumPy arrays, or Xarray datasets.
+
+    File export methods like ``df.to_csv()`` will write the unrounded,raw
+    data to disk rather than the formatted strings.
     """
     if ci_kind not in ("hdi", "eti", None):
         raise ValueError("ci_kind must be either 'hdi' or 'eti'")
@@ -250,7 +263,8 @@ def summary(
             summary_result = xr.apply_ufunc(round_num, summary_result, round_val, vectorize=True)
     else:
         if round_to == "auto":
-            summary_result = _round_summary(summary_result, round_val)
+            fmt_map = _build_fmt_map(summary_result, round_val)
+            summary_result = SummaryDataFrame(summary_result, fmt_map=fmt_map)
         else:
             if round_to not in ("None", "none"):
                 summary_result = summary_result.map(lambda x: round_num(x, round_val))
@@ -258,7 +272,7 @@ def summary(
     return summary_result
 
 
-def _round_summary(summary_result, round_val):
+def _build_fmt_map(summary_result, round_val):
     """Apply custom rounding rules to summary statistics.
 
     Parameters
@@ -270,74 +284,163 @@ def _round_summary(summary_result, round_val):
 
     Returns
     -------
-    pandas.DataFrame
+    dict[str, dict[Any, str]]
+        Nested dict ``{column: {index: formatted_string}}``.
     """
-    result = summary_result.copy()
-    columns = result.columns
-    rounded_columns = set()
+    columns = summary_result.columns
+    fmt_map = {col: {} for col in columns}
+    formatted_columns = set()
     use_scientific = {}
 
     # Rule 1: ESS columns and min_ss are rounded down to int
     ess_cols = [col for col in columns if col.startswith("ess_") or col == "min_ss"]
     for col in ess_cols:
-        result[col] = result[col].apply(lambda x: pd.NA if not np.isfinite(x) else np.floor(x))
-        result[col] = result[col].astype("Int64")
-        rounded_columns.add(col)
+        for idx, val in summary_result[col].items():
+            if pd.isna(val) or not np.isfinite(val):
+                fmt_map[col][idx] = str(val)
+            else:
+                fmt_map[col][idx] = str(int(np.floor(val)))
+        formatted_columns.add(col)
 
     # Rule 2: R-hat always shows 2 digits after decimal
     if "r_hat" in columns:
-        result["r_hat"] = result["r_hat"].round(2)
-        rounded_columns.add("r_hat")
+        for idx, val in summary_result["r_hat"].items():
+            if pd.isna(val) or not np.isfinite(val):
+                fmt_map["r_hat"][idx] = str(val)
+            else:
+                fmt_map["r_hat"][idx] = f"{val:.2f}"
+        formatted_columns.add("r_hat")
 
     # Rule 3: Handle stat/mcse pairs
     stat_se_pairs = []
     for col in columns:
         if col.startswith("mcse_"):
-            stat_col = col[5:]
+            stat_col = col[5:]  # "mcse_mean" -> "mean"
             if stat_col in columns:
                 stat_se_pairs.append((stat_col, col))
 
     for stat_col, se_col in stat_se_pairs:
-        result[se_col] = result[se_col].apply(lambda x: round_num(x, round_val))
+        for idx in summary_result.index:
+            se_val = summary_result.loc[idx, se_col]
+            stat_val = summary_result.loc[idx, stat_col]
 
-        for idx in result.index:
-            stat_val = result.loc[idx, stat_col]
-            se_val = result.loc[idx, se_col]
-            if not np.isfinite(se_val):
-                continue
-            decimal_places = get_decimal_places_from_se(se_val)
-            if decimal_places < 0:
-                use_scientific[(idx, stat_col)] = True
+            if pd.isna(se_val) or not np.isfinite(se_val):
+                fmt_map[se_col][idx] = str(se_val)
             else:
-                result.loc[idx, stat_col] = round_num(stat_val, decimal_places)
+                rounded_se = round_num(se_val, round_val)
+                fmt_map[se_col][idx] = f"{rounded_se:g}"
 
-        rounded_columns.add(stat_col)
-        rounded_columns.add(se_col)
-
-    # Rule 4: Other floating point numbers to round_val significant figures
-    for col in columns:
-        if col not in rounded_columns:
-            if result[col].dtype.kind == "f":
-                result[col] = result[col].apply(lambda x: round_num(x, round_val))
-
-    # Rule 5: Format
-    for col in columns:
-        if result[col].dtype.kind == "f":
-            if col == "r_hat":
-                result[col] = result[col].apply(lambda x: f"{x:.2f}" if np.isfinite(x) else x)
+            if pd.isna(stat_val) or not np.isfinite(stat_val):
+                fmt_map[stat_col][idx] = str(stat_val)
+            elif pd.isna(se_val) or not np.isfinite(se_val):
+                rounded_stat = round_num(stat_val, round_val)
+                fmt_map[stat_col][idx] = f"{rounded_stat:g}"
             else:
-                formatted_values = []
-                for idx, val in zip(result.index, result[col]):
-                    if not np.isfinite(val):
-                        formatted_values.append(val)
-                    elif use_scientific.get((idx, col), False):
-                        formatted_values.append(f"{val:.0e}")
+                decimal_places = get_decimal_places_from_se(se_val)
+                if decimal_places < 0:
+                    use_scientific[(idx, stat_col)] = True
+                else:
+                    rounded_stat = round(stat_val, decimal_places)
+                    fmt_map[stat_col][idx] = f"{rounded_stat:g}"
+
+        formatted_columns.add(se_col)
+        formatted_columns.add(stat_col)
+
+    # Rule 4 + 5: remaining float columns + deferred scientific cells
+    for col in columns:
+        is_float_col = summary_result[col].dtype.kind == "f"
+        col_has_sci_cells = any(k[1] == col for k in use_scientific)
+
+        if col not in formatted_columns and is_float_col:
+            for idx, val in summary_result[col].items():
+                if pd.isna(val) or not np.isfinite(val):
+                    fmt_map[col][idx] = str(val)
+                elif use_scientific.get((idx, col), False):
+                    fmt_map[col][idx] = f"{val:.2e}"
+                else:
+                    rounded = round_num(val, round_val)
+                    fmt_map[col][idx] = f"{rounded:g}"
+
+        elif col in formatted_columns and col_has_sci_cells and is_float_col:
+            for idx, val in summary_result[col].items():
+                if use_scientific.get((idx, col), False):
+                    if pd.isna(val) or not np.isfinite(val):
+                        fmt_map[col][idx] = str(val)
                     else:
-                        formatted_values.append(f"{val:g}")
+                        fmt_map[col][idx] = f"{val:.2e}"
 
-                result[col] = formatted_values
+    return fmt_map
 
-    return result
+
+class SummaryDataFrame(pd.DataFrame):
+    """A pandas DataFrame subclass displaying sensible default digits."""
+
+    _metadata = ["_fmt_map"]
+
+    def __init__(self, *args, fmt_map=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._fmt_map = fmt_map
+
+    @property
+    def _constructor(self):
+        return SummaryDataFrame
+
+    @property
+    def T(self):  # pylint: disable=invalid-name
+        return self.transpose()
+
+    def transpose(self, *args, **kwargs):
+        transposed_df = super().transpose(*args, **kwargs)
+
+        if self._fmt_map:
+            transposed_df._fmt_map = pd.DataFrame(self._fmt_map).T.to_dict()  # pylint: disable=protected-access
+        return transposed_df
+
+    def _display_df(self):
+        """Return a plain object-dtype DataFrame with formatted strings."""
+        display = pd.DataFrame(self).astype(object)
+        if self._fmt_map:
+            for col, idx_map in self._fmt_map.items():
+                if col not in display.columns:
+                    continue
+                for idx, fmt_val in idx_map.items():
+                    if idx in display.index:
+                        display.loc[idx, col] = fmt_val
+        return display
+
+    def _repr_html_(self):  # pylint: disable=overridden-final-method
+        if self._fmt_map is None:
+            return super()._repr_html_()
+        return self._display_df().to_html()
+
+    def _repr_latex_(self):  # pylint: disable=overridden-final-method
+        if self._fmt_map is None:
+            return super()._repr_latex_()
+        return self.to_latex(escape=True)
+
+    def to_html(self, *args, **kwargs):
+        if self._fmt_map is None:
+            return super().to_html(*args, **kwargs)
+        return pd.DataFrame.to_html(self._display_df(), *args, **kwargs)
+
+    def to_latex(self, *args, **kwargs):
+        if self._fmt_map is None:
+            return super().to_latex(*args, **kwargs)
+        kwargs.setdefault("escape", True)
+        return pd.DataFrame.to_latex(self._display_df(), *args, **kwargs)
+
+    def __repr__(self):
+        if self._fmt_map is None:
+            return super().__repr__()
+        return pd.DataFrame.to_string(self._display_df())
+
+    def __str__(self):
+        return self.__repr__()
+
+    def to_string(self, *args, **kwargs):
+        if self._fmt_map is None:
+            return super().to_string(*args, **kwargs)
+        return pd.DataFrame.to_string(self._display_df(), *args, **kwargs)
 
 
 def ci_in_rope(
