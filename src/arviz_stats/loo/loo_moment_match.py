@@ -178,9 +178,10 @@ def loo_moment_match(
     ):
         from arviz_stats.loo.loo_moment_match_helper import mm_from_pymc
 
-        ## if model is Bambis's, apply moment match correction to data
-        if hasattr(model, "moment_match_correction"):
-            data = model.moment_match_correction(data)
+        ## if model is Bambi's, re-center the intercept so it matches the PyMC value variable
+        re_center_intercept = getattr(model, "_re_center_intercept", None)
+        if re_center_intercept is not None:
+            data = re_center_intercept(data)
             model = model.backend.model
 
         auto_log_prob, auto_log_lik_i, auto_upars = mm_from_pymc(
