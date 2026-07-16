@@ -35,8 +35,8 @@ LooMomentMatchResult = namedtuple(
 def loo_moment_match(
     data,
     loo_orig,
-    log_prob_upars_fn,
-    log_lik_i_upars_fn,
+    log_prob_upars_fn=None,
+    log_lik_i_upars_fn=None,
     upars=None,
     var_name=None,
     reff=None,
@@ -45,6 +45,7 @@ def loo_moment_match(
     split=True,
     cov=True,
     pointwise=None,
+    model=None,
 ):
     r"""Compute moment matching for problematic observations in PSIS-LOO-CV.
 
@@ -67,26 +68,28 @@ def loo_moment_match(
     loo_orig : ELPDData
         An existing ELPDData object from a previous `loo` result. Must contain
         pointwise Pareto k values (`pointwise=True` must have been used).
-    log_prob_upars_fn : callable
+    log_prob_upars_fn : callable, optional
         Function that computes the log probability density of the full posterior
         distribution evaluated at unconstrained parameter draws.
         The function signature is ``log_prob_upars_fn(upars)`` where ``upars``
         is a :class:`~xarray.DataArray` of unconstrained parameter draws with dimensions
         ``chain``, ``draw``, and a parameter dimension. It should return a
         :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
-    log_lik_i_upars_fn : callable
+        If not provided, must be auto-built from ``model``.
+    log_lik_i_upars_fn : callable, optional
         Function that computes the log-likelihood of a single left-out observation
         evaluated at unconstrained parameter draws.
         The function signature is ``log_lik_i_upars_fn(upars, i)`` where ``upars``
         is a :class:`~xarray.DataArray` of unconstrained parameter draws and ``i``
         is the integer index of the left-out observation. It should return a
         :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
+        If not provided, must be auto-built from ``model``.
     upars : DataArray, optional
         Posterior draws transformed to the unconstrained parameter space. Must have
         ``chain`` and ``draw`` dimensions, plus one additional dimension containing all
         parameters. Parameter names can be provided as coordinate values on this
         dimension. If not provided, will attempt to use the ``unconstrained_posterior``
-        group from the input data if available.
+        group from the input data if available, or auto-build from ``model``.
     var_name : str, optional
         The name of the variable in log_likelihood group storing the pointwise log
         likelihood data to use for loo computation.
@@ -109,6 +112,10 @@ def loo_moment_match(
         ``rcParams["stats.ic_pointwise"]``. Moment matching always requires
         pointwise data from ``loo_orig``. This argument controls whether the returned
         object includes pointwise data.
+    model : Model, optional
+        A model object. Curently supported models are PyMC and Bambi.
+        If provided, it will be used to auto-build ``log_prob_upars_fn``,
+        ``log_lik_i_upars_fn``, and ``upars`` if any of them are not provided.
 
     Returns
     -------
@@ -165,6 +172,34 @@ def loo_moment_match(
             "Please compute the initial LOO with pointwise=True."
         )
 
+    # Auto-build moment matching functions from model if provided
+    if model is not None and (
+        log_prob_upars_fn is None or log_lik_i_upars_fn is None or upars is None
+    ):
+        from arviz_stats.loo.loo_moment_match_helper import mm_from_pymc
+
+        ## if model is Bambi's, re-center the intercept so it matches the PyMC value variable
+        re_center_intercept = getattr(model, "_re_center_intercept", None)
+        if re_center_intercept is not None:
+            data = re_center_intercept(data)
+            model = model.backend.model
+
+        auto_log_prob, auto_log_lik_i, auto_upars = mm_from_pymc(
+            data, model=model, var_name=var_name
+        )
+        if log_prob_upars_fn is None:
+            log_prob_upars_fn = auto_log_prob
+        if log_lik_i_upars_fn is None:
+            log_lik_i_upars_fn = auto_log_lik_i
+        if upars is None:
+            upars = auto_upars
+
+    if log_prob_upars_fn is None or log_lik_i_upars_fn is None:
+        raise ValueError(
+            "Both log_prob_upars_fn and log_lik_i_upars_fn are required for moment matching. "
+            "Pass them explicitly or provide model to build them automatically."
+        )
+
     sample_dims = ["chain", "draw"]
 
     if upars is None:
@@ -192,6 +227,8 @@ def loo_moment_match(
         param_dim_name = param_dim_list[0]
     else:
         raise ValueError("upars must have at most one dimension besides 'chain' and 'draw'.")
+
+    upars = upars.transpose(*sample_dims, param_dim_name)
 
     loo_data = deepcopy(loo_orig)
     loo_data.method = "loo_moment_match"

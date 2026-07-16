@@ -471,3 +471,24 @@ def test_influence_pareto_k(roaches_r_example):
 
     assert loo_mm.influence_pareto_k is not None
     assert loo_mm.influence_pareto_k.shape == loo_mm.pareto_k.shape
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.parametrize(
+    "provided",
+    [{}, {"log_prob_upars_fn": "log_prob_fn"}, {"log_lik_i_upars_fn": "log_lik_i_fn"}],
+)
+def test_missing_upars_functions_raises(roaches_r_example, provided):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+    kwargs = {name: example[key] for name, key in provided.items()}
+
+    with pytest.raises(ValueError, match="are required for moment matching"):
+        loo_moment_match(
+            example["data_tree"],
+            loo_orig,
+            upars=example["upars"],
+            var_name="log_lik",
+            **kwargs,
+        )
