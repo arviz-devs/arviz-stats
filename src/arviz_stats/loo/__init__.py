@@ -7,6 +7,7 @@ from arviz_stats.loo.loo_influence import loo_influence
 from arviz_stats.loo.loo_score import loo_score
 from arviz_stats.loo.loo_pit import loo_pit
 from arviz_stats.loo.loo_subsample import loo_subsample, update_subsample
+from arviz_stats.loo.loo_subsample_helper import ll_from_pymc
 from arviz_stats.loo.loo_moment_match import loo_moment_match
 from arviz_stats.loo.loo_moment_match_helper import mm_from_pymc
 from arviz_stats.loo.reloo import reloo
