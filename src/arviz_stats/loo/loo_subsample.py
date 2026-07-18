@@ -37,6 +37,7 @@ def loo_subsample(
     param_names=None,
     log=True,
     log_jacobian=None,
+    model=None,
 ):
     r"""Compute PSIS-LOO-CV using sub-sampling.
 
@@ -90,7 +91,8 @@ def loo_subsample(
         Method used for approximating the pointwise log predictive density:
 
         - ``lpd``: Use standard log predictive density approximation (default)
-        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
+        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``
+          or a ``model`` from which one is built.
     thin: int or str, optional
         Thinning factor for posterior draws. Can be an integer to thin by that factor,
         "auto" to automatically determine thinning based on bulk and tail ESS, or None
@@ -118,6 +120,11 @@ def loo_subsample(
         original response scale :math:`y`. The value should be :math:`\log|\frac{dz}{dy}|`
         (the log absolute value of the derivative of the transformation). Must be a DataArray
         with dimensions matching the observation dimensions.
+    model : Model, optional
+        A model object. Currently supported models are PyMC and Bambi.
+        If provided and ``log_lik_fn`` is not, it will be used to auto-build ``log_lik_fn``,
+        so it does not have to be constructed manually. ``param_names`` is not needed in
+        this case.
 
     Returns
     -------
@@ -194,8 +201,23 @@ def loo_subsample(
 
     if method not in ["lpd", "plpd"]:
         raise ValueError("Method must be either 'lpd' or 'plpd'")
+
+    # Auto-build the log likelihood function from the model if provided
+    if model is not None and log_lik_fn is None:
+        if not log:
+            raise ValueError("log must be True when log_lik_fn is auto-built from model.")
+        from arviz_stats.loo.loo_subsample_helper import ll_from_pymc
+
+        ## if model is Bambi's, re-center the intercept so it matches the PyMC value variable
+        re_center_intercept = getattr(model, "_re_center_intercept", None)
+        if re_center_intercept is not None:
+            data = re_center_intercept(data)
+            model = model.backend.model
+
+        log_lik_fn = ll_from_pymc(data, model=model, var_name=loo_inputs.var_name)
+
     if method == "plpd" and log_lik_fn is None:
-        raise ValueError("log_lik_fn must be provided when method='plpd'")
+        raise ValueError("log_lik_fn or model must be provided when method='plpd'")
 
     log_likelihood = loo_inputs.log_likelihood
     if reff is None:
@@ -372,6 +394,7 @@ def update_subsample(
     log_lik_fn=None,
     param_names=None,
     log=True,
+    model=None,
 ):
     """Update a sub-sampled PSIS-LOO-CV object with new observations.
 
@@ -416,7 +439,8 @@ def update_subsample(
         Method used for approximating the pointwise log predictive density:
 
         - ``lpd``: Use standard log predictive density approximation (default)
-        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
+        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``
+          or a ``model`` from which one is built.
     log_lik_fn : callable, optional
         Custom log-likelihood function. The signature must be ``log_lik_fn(observed, data)``
         where ``observed`` is a :class:`~xarray.DataArray` containing one or more observations
@@ -432,6 +456,11 @@ def update_subsample(
     log: bool, optional
         Whether the ``log_lik_fn`` returns log-likelihood (True) or likelihood (False).
         Default is True.
+    model : Model, optional
+        A model object. Currently supported models are PyMC and Bambi.
+        If provided and ``log_lik_fn`` is not, it will be used to auto-build ``log_lik_fn``,
+        so it does not have to be constructed manually. ``param_names`` is not needed in
+        this case.
 
     Returns
     -------
@@ -498,11 +527,27 @@ def update_subsample(
         raise ValueError("Original loo_subsample result must have pointwise=True")
     if method not in ["lpd", "plpd"]:
         raise ValueError("Method must be either 'lpd' or 'plpd'")
-    if method == "plpd" and log_lik_fn is None:
-        raise ValueError("log_lik_fn must be provided when method='plpd'")
 
     thin = getattr(loo_orig, "thin_factor", None)
     loo_inputs = _prepare_loo_inputs(data, var_name, thin)
+
+    # Auto-build the log likelihood function from the model if provided
+    if model is not None and log_lik_fn is None:
+        if not log:
+            raise ValueError("log must be True when log_lik_fn is auto-built from model.")
+        from arviz_stats.loo.loo_subsample_helper import ll_from_pymc
+
+        ## if model is Bambi's, re-center the intercept so it matches the PyMC value variable
+        re_center_intercept = getattr(model, "_re_center_intercept", None)
+        if re_center_intercept is not None:
+            data = re_center_intercept(data)
+            model = model.backend.model
+
+        log_lik_fn = ll_from_pymc(data, model=model, var_name=loo_inputs.var_name)
+
+    if method == "plpd" and log_lik_fn is None:
+        raise ValueError("log_lik_fn or model must be provided when method='plpd'")
+
     update_data = _prepare_update_subsample(
         loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log, thin
     )
