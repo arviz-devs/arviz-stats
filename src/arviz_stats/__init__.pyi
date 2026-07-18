@@ -1,5 +1,7 @@
 # File generated with docstub
 
+from arviz_stats._version import __version__
+
 try:
     from arviz_stats.accessors import *
     from arviz_stats.bayes_factor import bayes_factor

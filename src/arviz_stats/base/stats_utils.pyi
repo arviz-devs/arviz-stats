@@ -1,15 +1,16 @@
 # File generated with docstub
 
+import logging
 import numbers
 from collections.abc import Callable, Sequence
 
 import numpy
-from _typeshed import Incomplete
+import numpy as np
 from numpy.typing import ArrayLike
 
 __all__ = ["make_ufunc", "calculate_khat_bin_edges"]
 
-_log: Incomplete
+_log: logging.Logger
 
 def make_ufunc(
     func: Callable,

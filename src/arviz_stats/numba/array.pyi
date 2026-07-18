@@ -3,7 +3,9 @@
 from collections.abc import Sequence
 from typing import Any
 
+import numpy as np
 from _typeshed import Incomplete
+from numba import guvectorize, jit
 from numpy.typing import ArrayLike
 
 from arviz_stats.base.array import BaseArray

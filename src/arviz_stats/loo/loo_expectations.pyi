@@ -3,10 +3,18 @@
 from collections.abc import Hashable, Sequence
 from typing import NamedTuple
 
+import numpy as np
 import xarray
+import xarray as xr
 from _typeshed import Incomplete
+from arviz_base import convert_to_datatree, extract, rcParams
 from numpy.typing import NDArray
-from xarray import DataArray, Dataset
+from xarray import DataArray, Dataset, apply_ufunc
+
+from arviz_stats.loo.helper_loo import _get_r_eff, _warn_pareto_k
+from arviz_stats.metrics import _metrics, _summary_r2
+from arviz_stats.utils import get_log_likelihood_dataset
+from arviz_stats.validate import validate_dims
 
 def loo_expectations(
     data: xarray.DataTree | xarray.DataTree,

@@ -1,9 +1,16 @@
 # File generated with docstub
 
+import warnings
 from collections.abc import Sequence
 
+import numpy as np
 from _typeshed import Incomplete
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
+from scipy.fftpack import next_fast_len
+from scipy.interpolate import CubicSpline
+from scipy.stats import circmean
+
+from arviz_stats.base.stats_utils import round_num
 
 class _CoreBase:
     def fft(self, x: ArrayLike) -> None: ...
@@ -12,7 +19,7 @@ class _CoreBase:
     def autocov(self, ary: ArrayLike, axis: int = ...) -> None: ...
     def autocorr(self, ary: ArrayLike, axis: int = ...) -> None: ...
     def circular_mean(self, ary: ArrayLike) -> None: ...
-    def _circular_standardize(self, ary: Incomplete) -> None: ...
+    def _circular_standardize(self, ary: ArrayLike) -> None: ...
     def quantile(
         self,
         ary: ArrayLike,
@@ -31,115 +38,102 @@ class _CoreBase:
         skipna: bool = ...,
         weights: ArrayLike | None = ...,
     ) -> None: ...
-    def _float_rankdata(self, ary: Incomplete) -> None: ...
-    def _compute_ranks(self, ary: Incomplete, relative: Incomplete = ...) -> None: ...
-    def _get_bininfo(self, values: Incomplete, bins: Incomplete = ...) -> None: ...
-    def _get_bins(self, values: ArrayLike, bins: int = ...) -> ArrayLike: ...
+    def _float_rankdata(self, ary: ArrayLike) -> None: ...
+    def _compute_ranks(self, ary: ArrayLike, relative: bool = ...) -> None: ...
+    def _get_bininfo(self, values: ArrayLike, bins: int | str | ArrayLike = ...) -> None: ...
+    def _get_bins(self, values: ArrayLike, bins: int | str | ArrayLike = ...) -> NDArray: ...
     def _histogram(
         self,
-        ary: Incomplete,
-        bins: Incomplete = ...,
-        range: Incomplete = ...,
-        weights: Incomplete = ...,
-        density: Incomplete = ...,
+        ary: ArrayLike,
+        bins: int | str | ArrayLike | None = ...,
+        range: tuple | None = ...,
+        weights: ArrayLike | None = ...,
+        density: bool = ...,
     ) -> None: ...
-    def _hdi_linear_nearest_common(self, ary: Incomplete, prob: Incomplete) -> None: ...
-    def _hdi_nearest(
-        self,
-        ary: Incomplete,
-        prob: Incomplete,
-        circular: Incomplete,
-        skipna: Incomplete,
-    ) -> None: ...
+    def _hdi_linear_nearest_common(self, ary: ArrayLike, prob: float) -> None: ...
+    def _hdi_nearest(self, ary: ArrayLike, prob: float, circular: bool, skipna: bool) -> None: ...
     def _hdi_multimodal_continuous(
         self,
-        ary: Incomplete,
-        prob: Incomplete,
-        skipna: Incomplete,
-        max_modes: Incomplete,
-        circular: Incomplete,
-        from_sample: Incomplete = ...,
+        ary: ArrayLike,
+        prob: float,
+        skipna: bool,
+        max_modes: int,
+        circular: bool,
+        from_sample: bool = ...,
         **kwargs: Incomplete,
     ) -> None: ...
     def _hdi_multimodal_discrete(
         self,
-        ary: Incomplete,
-        prob: Incomplete,
-        max_modes: Incomplete,
-        bins: Incomplete = ...,
+        ary: ArrayLike,
+        prob: float,
+        max_modes: int,
+        bins: int | str | ArrayLike | None = ...,
     ) -> None: ...
     def _hdi_from_point_densities(
-        self,
-        points: Incomplete,
-        densities: Incomplete,
-        prob: Incomplete,
-        circular: Incomplete,
+        self, points: ArrayLike, densities: ArrayLike, prob: float, circular: bool
     ) -> None: ...
     def _hdi_from_bin_probabilities(
         self,
-        bins: Incomplete,
-        bin_probs: Incomplete,
-        prob: Incomplete,
-        circular: Incomplete,
-        dx: Incomplete,
+        bins: ArrayLike,
+        bin_probs: ArrayLike,
+        prob: float,
+        circular: bool,
+        dx: float,
     ) -> None: ...
     def _interval_points_to_bounds(
         self,
-        points: Incomplete,
-        probs: Incomplete,
-        dx: Incomplete,
-        circular: Incomplete,
-        period: Incomplete = ...,
+        points: ArrayLike,
+        probs: ArrayLike,
+        dx: float,
+        circular: bool,
+        period: float = ...,
     ) -> None: ...
     def _pad_hdi_to_maxmodes(
-        self,
-        hdi_intervals: Incomplete,
-        interval_probs: Incomplete,
-        max_modes: Incomplete,
+        self, hdi_intervals: ArrayLike, interval_probs: ArrayLike, max_modes: int
     ) -> None: ...
     def _mean(
         self,
-        ary: Incomplete,
+        ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None | None = ...,
     ) -> None: ...
     def _median(
         self,
-        ary: Incomplete,
+        ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None | None = ...,
     ) -> None: ...
     def _mode(
-        self, ary: Incomplete, round_to: Incomplete = ..., skipna: Incomplete = ...
+        self, ary: ArrayLike, round_to: int | str | None = ..., skipna: bool = ...
     ) -> None: ...
     def _std(
         self,
-        ary: Incomplete,
+        ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None | None = ...,
     ) -> None: ...
     def _var(
         self,
-        ary: Incomplete,
+        ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None | None = ...,
     ) -> None: ...
     def _mad(
         self,
-        ary: Incomplete,
+        ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None | None = ...,
     ) -> None: ...
     def _iqr(
         self,
-        ary: Incomplete,
+        ary: ArrayLike,
         quantiles: tuple[float, float] = ...,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None | None = ...,
     ) -> None: ...

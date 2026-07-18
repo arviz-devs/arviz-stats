@@ -11,7 +11,7 @@ from arviz_base import rcParams
 from xarray import DataArray, Dataset, apply_ufunc, broadcast, concat
 from xarray_einstats.stats import _apply_nonreduce_func
 
-from arviz_stats.base.array import array_stats
+from arviz_stats.base.array import BaseArray, array_stats
 from arviz_stats.validate import (
     validate_ci_prob,
     validate_dims,
@@ -23,7 +23,7 @@ from arviz_stats.validate import (
 class BaseDataArray:
     """Class with numpy+scipy only functions that take DataArray inputs."""
 
-    def __init__(self, array_class=None):
+    def __init__(self, array_class: BaseArray | None = None):
         self.array_class = array_stats if array_class is None else array_class
 
     def eti(self, da, prob=None, dim=None, method="linear", **kwargs):
@@ -33,9 +33,9 @@ class BaseDataArray:
         ----------
         da : DataArray
         prob : float, optional
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         method : str, default "linear"
-        **kwargs : dict, optional
+        **kwargs
         """
         dims = validate_dims(dim)
         prob = validate_ci_prob(prob)
@@ -59,9 +59,9 @@ class BaseDataArray:
         ----------
         da : DataArray
         prob : float, optional
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         method : str, default "nearest"
-        **kwargs : dict, optional
+        **kwargs
         """
         dims = validate_dims(dim)
         prob = validate_ci_prob(prob)
@@ -121,7 +121,7 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         relative : bool, default False
         """
         dims = validate_dims(dim)
@@ -159,7 +159,7 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-        superchain_ids : array-like
+        superchain_ids : array-like of dtype int
         sample_dims : list of str, optional
         method : str, default "rank"
         """
@@ -211,7 +211,7 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         bins : str, scalar or array-like, optional
         """
         dims = validate_dims(dim)
@@ -233,7 +233,7 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         bins : str, scalar or array-like, optional
         range : tuple of (float, float), optional
         weights : array-like, optional
@@ -449,8 +449,8 @@ class BaseDataArray:
         dotsize : float, default 1
         stackratio : float, default 1
         top_only : bool, default False
-        dim : sequence of hashable, optional
-        **kwargs : dict, optional
+        dim : hashable or sequence of hashable, optional
+        **kwargs
         """
         dims = validate_dims(dim)
         x, y, radius = apply_ufunc(
@@ -480,8 +480,8 @@ class BaseDataArray:
         da : DataArray
         npoints : int, default 200
         pit : bool, default False
-        dim : sequence of hashable, optional
-        **kwargs : dict, optional
+        dim : hashable or sequence of hashable, optional
+        **kwargs
         """
         dims = validate_dims(dim)
         x, y = apply_ufunc(
@@ -505,9 +505,9 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         method : str, default "pot_c"
-        **kwargs : dict, optional
+        **kwargs
         """
         dims = validate_dims(dim)
         n_points = 1
@@ -535,7 +535,7 @@ class BaseDataArray:
             Array of fractional ranks in [0, 1].
         dim : sequence of hashable
             Two dimensions, the chain dimension followed by the draw dimension.
-        **kwargs : dict, optional
+        **kwargs
             Additional keyword arguments.
 
         Returns
@@ -662,7 +662,7 @@ class BaseDataArray:
         ----------
         da : DataArray
         r_eff : float, default 1
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
         return apply_ufunc(
@@ -744,7 +744,7 @@ class BaseDataArray:
 
         Returns
         -------
-        tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
+        tuple of (elpd_i, pareto_k, p_loo_i) : DataArray
             Pointwise LOO values for each observation.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
@@ -817,7 +817,7 @@ class BaseDataArray:
 
         Returns
         -------
-        tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
+        tuple of (elpd_i, pareto_k, p_loo_i) : DataArray
             Pointwise LOO values for each observation.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
@@ -1219,7 +1219,7 @@ class BaseDataArray:
         ----------
         da : DataArray
         alpha : float, default 0
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
         return apply_ufunc(
@@ -1260,7 +1260,7 @@ class BaseDataArray:
         Parameters
         ----------
         da : DataArray
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
         return apply_ufunc(
@@ -1278,7 +1278,7 @@ class BaseDataArray:
         da : DataArray
         round_to : int or str, optional
         skipna : bool, default False
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
 
@@ -1298,7 +1298,7 @@ class BaseDataArray:
         da : DataArray
         round_to : int or str, optional
         skipna : bool, default False
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
 
@@ -1318,7 +1318,7 @@ class BaseDataArray:
         da : DataArray
         round_to : int or str, optional
         skipna : bool, default False
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
 
@@ -1338,7 +1338,7 @@ class BaseDataArray:
         da : DataArray
         round_to : int or str, optional
         skipna : bool, default False
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
 
@@ -1358,7 +1358,7 @@ class BaseDataArray:
         da : DataArray
         round_to : int or str, optional
         skipna : bool, default False
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
 
@@ -1378,7 +1378,7 @@ class BaseDataArray:
         da : DataArray
         round_to : int or str, optional
         skipna : bool, default False
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
 
@@ -1399,7 +1399,7 @@ class BaseDataArray:
         quantiles : tuple of (float, float), default (0.25, 0.75)
         round_to : int or str, optional
         skipna : bool, default False
-        dim : sequence of hashable, optional
+        dim : hashable or sequence of hashable, optional
         """
         dims = validate_dims(dim)
 

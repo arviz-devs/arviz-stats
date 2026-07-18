@@ -7,6 +7,8 @@ from _typeshed import Incomplete
 from _typeshed import Incomplete as fitted_model
 from _typeshed import Incomplete as modified_observed_data
 from _typeshed import Incomplete as optional
+from arviz_base import convert_to_datatree
+from xarray import apply_ufunc
 
 class SamplingWrapper:
     def __init__(

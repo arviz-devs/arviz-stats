@@ -1,11 +1,17 @@
 # File generated with docstub
 
-from collections.abc import Iterable, Sequence
+import warnings
+from collections.abc import Hashable, Iterable, Sequence
 from typing import Any, Literal
 
+import numpy as np
+import xarray as xr
 from _typeshed import Incomplete
 from _typeshed import Incomplete as accessor
+from arviz_base.utils import _var_names
 from xarray import Dataset
+
+from arviz_stats.utils import get_function
 
 __all__ = ["AzStatsDsAccessor", "AzStatsDaAccessor", "AzStatsDtAccessor"]
 

@@ -1,10 +1,18 @@
 # File generated with docstub
 
+import sys
+import warnings
 from collections.abc import Hashable, Iterable
 from typing import Any, Literal
 
+import numpy as np
 import xarray
+import xarray as xr
+from arviz_base import convert_to_dataset, convert_to_datatree, rcParams
 from numpy.typing import ArrayLike, NDArray
+
+from arviz_stats.utils import _apply_multi_input_function, get_array_function
+from arviz_stats.validate import validate_dims
 
 def ess(
     data: ArrayLike,

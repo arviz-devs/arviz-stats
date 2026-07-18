@@ -373,7 +373,7 @@ def loo_r2(
 
     Returns
     -------
-    Namedtuple or array
+    namedtuple or array
 
     See Also
     --------

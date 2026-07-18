@@ -1,9 +1,14 @@
 # File generated with docstub
 
 from collections.abc import Generator
+from functools import lru_cache
 
+import numpy as np
+import xarray as xr
 from _typeshed import Incomplete
+from arviz_base import dict_to_dataset
 from numpy.typing import ArrayLike
+from scipy.special import bdtr, bdtrik, gammaln
 from xarray import Dataset
 
 def difference_ecdf_pit(

@@ -1,12 +1,20 @@
 # File generated with docstub
 
+from collections import namedtuple
 from collections.abc import Hashable, Iterable
 from typing import NamedTuple
 
+import numpy as np
 import xarray
 from _typeshed import Incomplete
+from arviz_base import convert_to_datatree, dataset_to_dataarray, extract, rcParams
 from numpy.typing import NDArray
+from scipy.spatial import cKDTree
+from scipy.stats import wasserstein_distance, wasserstein_distance_nd
 from xarray import DataArray
+
+from arviz_stats.base import array_stats
+from arviz_stats.base.stats_utils import round_num
 
 def bayesian_r2(
     data: xarray.DataTree | xarray.DataTree,

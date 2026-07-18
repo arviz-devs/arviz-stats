@@ -1,11 +1,17 @@
 # File generated with docstub
 
-from collections.abc import Callable
+import warnings
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass
+from importlib import import_module
 
 import numpy as np
+import xarray as xr
 from _typeshed import Incomplete
+from arviz_base import convert_to_dataset, rcParams
 from xarray import DataArray
+
+from arviz_stats.validate import validate_dims
 
 __all__ = ["ELPDData", "get_function", "get_log_likelihood"]
 

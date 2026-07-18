@@ -1,9 +1,13 @@
 # File generated with docstub
 
+import warnings
 from typing import Literal
 
+import numpy as np
 import xarray
+from arviz_base import dict_to_dataset, extract
 from numpy.typing import ArrayLike
+from scipy.optimize import isotonic_regression
 from xarray import Dataset
 
 def isotonic_fit(

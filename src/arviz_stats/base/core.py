@@ -8,6 +8,7 @@ should go here. e.g. fft is used for kde bandwidth estimation and for ess.
 import warnings
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy.fftpack import next_fast_len
 from scipy.interpolate import CubicSpline
 from scipy.stats import circmean
@@ -111,7 +112,7 @@ class _CoreBase:
         """
         return circmean(ary, high=np.pi, low=-np.pi)
 
-    def _circular_standardize(self, ary):
+    def _circular_standardize(self, ary: ArrayLike):
         """Standardize circular data to the interval [-pi, pi]."""
         return np.mod(ary + np.pi, 2 * np.pi) - np.pi
 
@@ -175,7 +176,7 @@ class _CoreBase:
             weights=weights,
         )
 
-    def _float_rankdata(self, ary):
+    def _float_rankdata(self, ary: ArrayLike):
         """Compute ranks on continuous data, assuming there are no ties.
 
         Notes
@@ -189,7 +190,7 @@ class _CoreBase:
         ranks[np.argsort(ary, axis=None)] = np.arange(1, ary.size + 1)
         return ranks
 
-    def _compute_ranks(self, ary, relative=False):
+    def _compute_ranks(self, ary: ArrayLike, relative: bool = False):
         """Compute ranks for continuous and discrete variables."""
         ary_shape = ary.shape
         ary = ary.flatten()
@@ -203,7 +204,7 @@ class _CoreBase:
             return out / out.size
         return out
 
-    def _get_bininfo(self, values, bins="arviz"):
+    def _get_bininfo(self, values: ArrayLike, bins: int | str | ArrayLike = "arviz"):
         dtype = values.dtype.kind
 
         if isinstance(bins, str) and bins != "arviz":
@@ -249,7 +250,7 @@ class _CoreBase:
         Parameters
         ----------
         values : array_like
-        bins : int, str or array_like, default "arviz"
+        bins : int or str or array_like, default "arviz"
             If `bins` "arviz", use ArviZ default rule (explained in detail in notes),
             if it is a different string it is passed to :func:`numpy.histogram_bin_edges`.
             If `bins` is an integer it is interpreted as the number of bins, however,
@@ -259,7 +260,7 @@ class _CoreBase:
 
         Returns
         -------
-        array-like
+        ndarray
             Array with the bins.
 
         Notes
@@ -291,12 +292,19 @@ class _CoreBase:
         return bins
 
     # pylint: disable=redefined-builtin
-    def _histogram(self, ary, bins=None, range=None, weights=None, density=True):
+    def _histogram(
+        self,
+        ary: ArrayLike,
+        bins: int | str | ArrayLike | None = None,
+        range: tuple | None = None,
+        weights: ArrayLike | None = None,
+        density: bool = True,
+    ):
         if bins is None:
             bins = self._get_bins(ary)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
 
-    def _hdi_linear_nearest_common(self, ary, prob):
+    def _hdi_linear_nearest_common(self, ary: ArrayLike, prob: float):
         n = len(ary)
 
         ary = np.sort(ary)
@@ -312,7 +320,7 @@ class _CoreBase:
 
         return hdi_interval
 
-    def _hdi_nearest(self, ary, prob, circular, skipna):
+    def _hdi_nearest(self, ary: ArrayLike, prob: float, circular: bool, skipna: bool):
         """Compute HDI over the flattened array as closest samples that contain the given prob."""
         ary = ary.flatten()
         if skipna:
@@ -332,7 +340,14 @@ class _CoreBase:
         return hdi_interval
 
     def _hdi_multimodal_continuous(
-        self, ary, prob, skipna, max_modes, circular, from_sample=False, **kwargs
+        self,
+        ary: ArrayLike,
+        prob: float,
+        skipna: bool,
+        max_modes: int,
+        circular: bool,
+        from_sample: bool = False,
+        **kwargs,
     ):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
@@ -355,7 +370,9 @@ class _CoreBase:
 
         return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
-    def _hdi_multimodal_discrete(self, ary, prob, max_modes, bins=None):
+    def _hdi_multimodal_discrete(
+        self, ary: ArrayLike, prob: float, max_modes: int, bins: int | str | ArrayLike | None = None
+    ):
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
 
@@ -375,7 +392,9 @@ class _CoreBase:
 
         return self._pad_hdi_to_maxmodes(hdi_intervals, interval_probs, max_modes)
 
-    def _hdi_from_point_densities(self, points, densities, prob, circular):
+    def _hdi_from_point_densities(
+        self, points: ArrayLike, densities: ArrayLike, prob: float, circular: bool
+    ):
         if circular:
             points = self._circular_standardize(points)
 
@@ -397,7 +416,9 @@ class _CoreBase:
 
         return points[interval_bounds_idx], interval_probs
 
-    def _hdi_from_bin_probabilities(self, bins, bin_probs, prob, circular, dx):
+    def _hdi_from_bin_probabilities(
+        self, bins: ArrayLike, bin_probs: ArrayLike, prob: float, circular: bool, dx: float
+    ):
         if circular:
             bins = self._circular_standardize(bins)
             sorted_idx = np.argsort(bins)
@@ -417,7 +438,14 @@ class _CoreBase:
 
         return self._interval_points_to_bounds(intervals, probs_in_interval, dx, circular)
 
-    def _interval_points_to_bounds(self, points, probs, dx, circular, period=2 * np.pi):
+    def _interval_points_to_bounds(
+        self,
+        points: ArrayLike,
+        probs: ArrayLike,
+        dx: float,
+        circular: bool,
+        period: float = 2 * np.pi,
+    ):
         cum_probs = probs.cumsum()
 
         is_bound = np.diff(points) > dx * 1.01
@@ -440,7 +468,9 @@ class _CoreBase:
 
         return interval_bounds, interval_probs
 
-    def _pad_hdi_to_maxmodes(self, hdi_intervals, interval_probs, max_modes):
+    def _pad_hdi_to_maxmodes(
+        self, hdi_intervals: ArrayLike, interval_probs: ArrayLike, max_modes: int
+    ):
         if hdi_intervals.shape[0] > max_modes:
             warnings.warn(
                 f"found more modes than {max_modes}, returning only the {max_modes} highest "
@@ -458,7 +488,7 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -466,7 +496,7 @@ class _CoreBase:
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
-        axis : int, sequence of int or None, default None
+        axis : int or sequence of int or None, default None
             Axis or axes along which to compute the mean.
         """
         if skipna:
@@ -478,7 +508,7 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -486,14 +516,14 @@ class _CoreBase:
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
-        axis : int, sequence of int or None, default None
+        axis : int or sequence of int or None, default None
             Axis or axes along which to compute the median.
         """
         if skipna:
             ary = ary[~np.isnan(ary)]
         return round_num(np.median(ary, axis=axis), round_to)
 
-    def _mode(self, ary, round_to=None, skipna=False):
+    def _mode(self, ary: ArrayLike, round_to: int | str | None = None, skipna: bool = False):
         ary = ary.flatten()
 
         if ary.size == 0:
@@ -523,7 +553,7 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -531,7 +561,7 @@ class _CoreBase:
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
-        axis : int, sequence of int or None, default None
+        axis : int or sequence of int or None, default None
             Axis or axes along which to compute the standard deviation.
         """
         if skipna:
@@ -545,7 +575,7 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -553,7 +583,7 @@ class _CoreBase:
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
-        axis : int, sequence of int or None, default None
+        axis : int or sequence of int or None, default None
             Axis or axes along which to compute the variance.
         """
         if skipna:
@@ -567,7 +597,7 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -575,7 +605,7 @@ class _CoreBase:
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
-        axis : int, sequence of int or None, default None
+        axis : int or sequence of int or None, default None
             Axis or axes along which to compute the median absolute deviation.
         """
         if skipna:
@@ -591,7 +621,7 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         quantiles : tuple of (float, float), default (0.25, 0.75)
             Quantiles to compute the interquantile range. Defaults to (0.25, 0.75), that is,
@@ -602,7 +632,7 @@ class _CoreBase:
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
-        axis : int, sequence of int or None, default None
+        axis : int or sequence of int or None, default None
             Axis or axes along which to compute the interquartile range.
         """
         if skipna:

@@ -1,12 +1,13 @@
 # File generated with docstub
 
-from arviz_stats.loo.compare import compare
+from arviz_stats.loo.compare import _calculate_ics, compare
 from arviz_stats.loo.loo import loo, loo_i
 from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
 from arviz_stats.loo.loo_expectations import loo_expectations, loo_metrics, loo_r2
 from arviz_stats.loo.loo_influence import loo_influence
 from arviz_stats.loo.loo_kfold import loo_kfold
 from arviz_stats.loo.loo_moment_match import loo_moment_match
+from arviz_stats.loo.loo_moment_match_helper import mm_from_pymc
 from arviz_stats.loo.loo_pit import loo_pit
 from arviz_stats.loo.loo_score import loo_score
 from arviz_stats.loo.loo_subsample import loo_subsample, update_subsample

@@ -3,8 +3,10 @@
 
 import math
 import warnings
+from collections.abc import Callable
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy.optimize import brentq
 from scipy.signal import convolve, convolve2d
 from scipy.signal.windows import gaussian
@@ -18,7 +20,7 @@ from arviz_stats.base.core import _CoreBase
 class _DensityBase(_CoreBase):
     """Class with numpy+scipy only density related functions."""
 
-    bw_methods_linear = ("scott", "silverman", "isj", "experimental")
+    bw_methods_linear: tuple[str, ...] = ("scott", "silverman", "isj", "experimental")
 
     def dct1d(self, x):
         """Discrete Cosine Transform in 1 Dimension.
@@ -46,7 +48,7 @@ class _DensityBase(_CoreBase):
 
         return output
 
-    def _fixed_point(self, t, n, k_sq, a_sq):  # pylint: disable=no-self-use
+    def _fixed_point(self, t: float, n: int, k_sq: ArrayLike, a_sq: ArrayLike):  # pylint: disable=no-self-use
         """Calculate t-zeta*gamma^[l](t).
 
         Implementation of the function t-zeta*gamma^[l](t) derived from equation (30) in [1].
@@ -75,7 +77,7 @@ class _DensityBase(_CoreBase):
         out = t - (2 * n * np.pi**0.5 * f) ** (-0.4)
         return out
 
-    def _root(self, function, n, args, x, grid_range):
+    def _root(self, function: Callable, n: int, args: tuple, x: ArrayLike, grid_range: float):
         # The right bound is at most 0.01
         found = False
         n = max(min(1050, n), 50)
@@ -243,7 +245,7 @@ class _DensityBase(_CoreBase):
             )
         return bw
 
-    def _normalize_angle(self, x, zero_centered=True):  # pylint: disable=no-self-use
+    def _normalize_angle(self, x: ArrayLike, zero_centered: bool = True):  # pylint: disable=no-self-use
         """Normalize angles.
 
         Normalize angles in radians to [-pi, pi) or [0, 2 * pi) according to `zero_centered`.
@@ -252,14 +254,14 @@ class _DensityBase(_CoreBase):
             return (x + np.pi) % (2 * np.pi) - np.pi
         return x % (2 * np.pi)
 
-    def _vonmises_pdf(self, x, mu, kappa):  # pylint: disable=no-self-use
+    def _vonmises_pdf(self, x: ArrayLike, mu: float, kappa: float):  # pylint: disable=no-self-use
         """Calculate vonmises_pdf."""
         if kappa <= 0:
             raise ValueError("Argument 'kappa' must be positive.")
         pdf = 1 / (2 * np.pi * ive(0, kappa)) * np.exp(np.cos(x - mu) - 1) ** kappa
         return pdf
 
-    def _a1inv(self, x):  # pylint: disable=no-self-use
+    def _a1inv(self, x: float):  # pylint: disable=no-self-use
         """Compute inverse function.
 
         Inverse function of the ratio of the first and
@@ -273,7 +275,7 @@ class _DensityBase(_CoreBase):
             return -0.4 + 1.39 * x + 0.43 / (1 - x)
         return 1 / (x**3 - 4 * x**2 + 3 * x)
 
-    def _kappa_mle(self, x):
+    def _kappa_mle(self, x: ArrayLike):
         mean = self.circular_mean(x)
         kappa = self._a1inv(np.mean(np.cos(x - mean)))
         return kappa
@@ -726,7 +728,7 @@ class _DensityBase(_CoreBase):
 
         return grid, pdf, bw
 
-    def _kde(self, x, circular=False, grid_len=512, **kwargs):
+    def _kde(self, x: ArrayLike, circular: bool = False, grid_len: int = 512, **kwargs):
         x = x.flatten()
         x = x[np.isfinite(x)]
         if x.size == 0 or np.all(x == x[0]):
@@ -849,7 +851,15 @@ class _DensityBase(_CoreBase):
 
         return contours
 
-    def _qds(self, x, nquantiles, binwidth, dotsize, stackratio, top_only):
+    def _qds(
+        self,
+        x: ArrayLike,
+        nquantiles: int,
+        binwidth: float | None,
+        dotsize: float,
+        stackratio: float,
+        top_only: bool,
+    ):
         """Compute quantile dot stacking for 1D data."""
         x = x.flatten()
         x = x[np.isfinite(x)]
@@ -872,7 +882,7 @@ class _DensityBase(_CoreBase):
         )
         return x, y, radius
 
-    def _ecdf(self, ary, npoints, pit):
+    def _ecdf(self, ary: ArrayLike, npoints: int, pit: bool):
         """Compute empirical cumulative distribution function (ECDF)."""
         ary = ary[np.isfinite(ary)]
         total_points = len(ary)
@@ -895,7 +905,7 @@ class _DensityBase(_CoreBase):
         return eval_points, ecdf
 
     @staticmethod
-    def _shapley_mean(values):
+    def _shapley_mean(values: ArrayLike):
         """Compute closed-form Shapley contributions for mean-aggregation."""
         n = len(values)
         if n == 0:
@@ -909,7 +919,7 @@ class _DensityBase(_CoreBase):
 
         return (values / n) + ((harmonic_n - 1) / n) * (values - mean_others)
 
-    def _pot_c(self, ary):
+    def _pot_c(self, ary: ArrayLike):
         """Pointwise Order-based Test with Cauchy combination (Beta-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
@@ -934,7 +944,7 @@ class _DensityBase(_CoreBase):
 
         return p_value, shapley_vals, shapley_unsorted
 
-    def _prit_c(self, ary):
+    def _prit_c(self, ary: ArrayLike):
         """Pointwise Rank-based Individual Test with Cauchy combination (Binomial-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
@@ -961,7 +971,7 @@ class _DensityBase(_CoreBase):
 
         return p_value, shapley_vals, shapley_unsorted
 
-    def _piet_c(self, ary):
+    def _piet_c(self, ary: ArrayLike):
         """Pointwise Inverse-CDF Evaluation Tests Combination (Exp(1)-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
@@ -1050,7 +1060,7 @@ class _DensityBase(_CoreBase):
 
         return p_value, b_shapley_vals, w_shapley_vals
 
-    def _cauchy_combination(self, ps, cauchy_vals, truncate):
+    def _cauchy_combination(self, ps: ArrayLike, cauchy_vals: ArrayLike, truncate: bool):
         """Combine p-values using the Cauchy combination method."""
         if truncate:
             idx = ps < 0.5

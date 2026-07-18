@@ -3,10 +3,16 @@
 from collections.abc import Hashable, Sequence
 from typing import Any, Literal
 
+import numpy as np
 import xarray
+import xarray as xr
 from _typeshed import Incomplete
+from arviz_base import convert_to_dataset
 from numpy.typing import ArrayLike, NDArray
 from xarray import DataArray, Dataset
+
+from arviz_stats.utils import _apply_multi_input_function, get_function
+from arviz_stats.validate import validate_ci_prob, validate_dims
 
 def hdi(
     data: ArrayLike,

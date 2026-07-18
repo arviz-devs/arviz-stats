@@ -1,13 +1,34 @@
 # File generated with docstub
 
+import warnings
+from collections import namedtuple
 from collections.abc import Callable
+from copy import deepcopy
 
+import arviz_base as azb
+import numpy as np
 import xarray
+import xarray as xr
 from _typeshed import Incomplete
+from _typeshed import Incomplete as Model
 from _typeshed import Incomplete as SplitMomentMatch
+from arviz_base import dataset_to_dataarray, rcParams
 from numpy.typing import NDArray
 from xarray import DataArray
+from xarray_einstats.stats import logsumexp
 
+from arviz_stats.loo.helper_loo import (
+    _get_log_likelihood_i,
+    _get_r_eff,
+    _get_r_eff_i,
+    _get_weights_and_k_i,
+    _prepare_loo_inputs,
+    _shift,
+    _shift_and_cov,
+    _shift_and_scale,
+    _warn_pareto_k,
+)
+from arviz_stats.sampling_diagnostics import ess
 from arviz_stats.utils import ELPDData
 
 SplitMomentMatch: Incomplete
@@ -17,8 +38,8 @@ LooMomentMatchResult: Incomplete
 def loo_moment_match(
     data: xarray.DataTree | xarray.DataTree,
     loo_orig: ELPDData,
-    log_prob_upars_fn: Callable,
-    log_lik_i_upars_fn: Callable,
+    log_prob_upars_fn: Callable | None = ...,
+    log_lik_i_upars_fn: Callable | None = ...,
     upars: DataArray | None = ...,
     var_name: str | None = ...,
     reff: float | None = ...,
@@ -27,6 +48,7 @@ def loo_moment_match(
     split: bool = ...,
     cov: bool = ...,
     pointwise: bool | None = ...,
+    model: Model | None = ...,
 ) -> ELPDData: ...
 def _split_moment_match(
     upars: DataArray,

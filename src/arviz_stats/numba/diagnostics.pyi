@@ -1,7 +1,13 @@
 # File generated with docstub
 
+import numba
+import numpy as np
+import scipy
 import xarray as xr
 from _typeshed import Incomplete
+from scipy.fftpack import next_fast_len
+from xarray_einstats import stats
+from xarray_einstats.einops import rearrange
 
 __all__ = ["rhat", "ess"]
 

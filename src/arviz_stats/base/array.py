@@ -20,7 +20,7 @@ def process_chain_none(ary, chain_axis, draw_axis):
     Parameters
     ----------
     ary : array-like
-    chain_axis : int
+    chain_axis : int or None
     draw_axis : int
     """
     if chain_axis is None:
@@ -36,7 +36,7 @@ def process_chain_none_multi(*arys, chain_axis, draw_axis):
     Parameters
     ----------
     *arys : array-like
-    chain_axis : int
+    chain_axis : int or None
     draw_axis : int
     """
     if chain_axis is None:
@@ -99,7 +99,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         circular : bool, default False
         max_modes : int, default 10
         skipna : bool, default False
-        **kwargs : dict, optional
+        **kwargs
             Only used for multimodal methods with continuous data.
             Passed to kde computation with a ``bw`` default of "taylor" for
             circular data, "isj" otherwise.
@@ -427,7 +427,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         axis : int, sequence of int or None, default -1
-        bins : str, scalar or array-like, default "arviz"
+        bins : str or scalar or array-like, default "arviz"
         """
         ary, axes = process_ary_axes(ary, axis)
         get_bininfo_ufunc = make_ufunc(
@@ -452,7 +452,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        bins : str, scalar or array-like, optional
+        bins : str or scalar or array-like, optional
         range : tuple of (float, float), optional
         weights : array-like, optional
         axis : int, sequence of int or None, default -1
@@ -595,7 +595,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         axis : int, sequence of int or None, default -1
         circular : bool, default False
         grid_len : int, default 512
-        **kwargs : dict, optional
+        **kwargs
             Additional keyword arguments passed to the underlying KDE implementation.
             Depending on whether `circular` is True or False, supported arguments include:
 
@@ -732,7 +732,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         stackratio : float, default 1
         top_only : bool, default False
         axis : int, sequence of int or None, default -1
-        **kwargs : dict, optional
+        **kwargs
         """
         ary, axes = process_ary_axes(ary, axis)
         qd_ufunc = make_ufunc(
@@ -767,7 +767,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             If True compute the difference between the ecdf and the uniform ecdf
             and the x values will be normalized to the [0, 1] range.
         axis : int, sequence of int or None, default -1
-        **kwargs : dict, optional
+        **kwargs
 
         Returns
         -------
@@ -804,7 +804,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         method : str, optional
             Method to use for the uniformity test.
             Valid options are pot_c (default), prit_c and piet_c.
-        **kwargs : dict, optional
+        **kwargs
             Additional keyword arguments.
 
         Returns
@@ -853,7 +853,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Axis corresponding to the chain dimension.
         draw_axis : int, default -1
             Axis corresponding to the draw dimension.
-        **kwargs : dict, optional
+        **kwargs
             Additional keyword arguments passed to :meth:`_mtc_c`.
 
         Returns

@@ -1,15 +1,20 @@
 # File generated with docstub
 
+import numbers
+import warnings
 from collections.abc import Generator, Sequence
 from typing import Literal
 
+import numpy as np
+from _typeshed import Incomplete
 from numpy.typing import ArrayLike
 
 from arviz_stats.base.density import _DensityBase
 from arviz_stats.base.diagnostics import _DiagnosticsBase
+from arviz_stats.base.stats_utils import make_ufunc
 
-def process_chain_none(ary: ArrayLike, chain_axis: int, draw_axis: int) -> None: ...
-def process_chain_none_multi(*arys: ArrayLike, chain_axis: int, draw_axis: int) -> None: ...
+def process_chain_none(ary: ArrayLike, chain_axis: int | None, draw_axis: int) -> None: ...
+def process_chain_none_multi(*arys: ArrayLike, chain_axis: int | None, draw_axis: int) -> None: ...
 def process_ary_axes(ary: ArrayLike, axes: int | Sequence[int]) -> None: ...
 
 class BaseArray(_DensityBase, _DiagnosticsBase):
@@ -22,7 +27,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         circular: bool = ...,
         max_modes: int = ...,
         skipna: bool = ...,
-        **kwargs: dict,
+        **kwargs: Incomplete,
     ) -> None: ...
     def ess(
         self,
@@ -85,11 +90,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         draw_axis: int = ...,
     ) -> None: ...
     def compute_ranks(self, ary: ArrayLike, axis: int = ..., relative: bool = ...) -> None: ...
-    def get_bins(self, ary: ArrayLike, axis: int = ..., bins: str = ...) -> None: ...
+    def get_bins(
+        self,
+        ary: ArrayLike,
+        axis: int = ...,
+        bins: str | numbers.Number | ArrayLike = ...,
+    ) -> None: ...
     def histogram(
         self,
         ary: ArrayLike,
-        bins: str | None = ...,
+        bins: str | numbers.Number | ArrayLike | None = ...,
         range: tuple[float, float] | None = ...,
         weights: ArrayLike | None = ...,
         axis: int = ...,
@@ -101,7 +111,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         axis: int = ...,
         circular: bool = ...,
         grid_len: int = ...,
-        **kwargs: dict,
+        **kwargs: Incomplete,
     ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
     def kde2d(
         self,
@@ -121,7 +131,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         stackratio: float = ...,
         top_only: bool = ...,
         axis: int = ...,
-        **kwargs: dict,
+        **kwargs: Incomplete,
     ) -> None: ...
     def ecdf(
         self,
@@ -129,17 +139,17 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         npoints: int = ...,
         pit: bool = ...,
         axis: int = ...,
-        **kwargs: dict,
+        **kwargs: Incomplete,
     ) -> tuple[ArrayLike, ArrayLike]: ...
     def uniformity_test(
-        self, ary: ArrayLike, axis: int = ..., method: str = ..., **kwargs: dict
+        self, ary: ArrayLike, axis: int = ..., method: str = ..., **kwargs: Incomplete
     ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
     def mchain_uniformity_test(
         self,
         ary: ArrayLike,
         chain_axis: int = ...,
         draw_axis: int = ...,
-        **kwargs: dict,
+        **kwargs: Incomplete,
     ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
     def bayesian_r2(
         self,

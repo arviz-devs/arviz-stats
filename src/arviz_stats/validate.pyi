@@ -1,6 +1,7 @@
 # File generated with docstub
 
 from _typeshed import Incomplete
+from arviz_base import rcParams
 
 def validate_dims(dims: str) -> list: ...
 def validate_dims_chain_draw_axis(dims: Incomplete) -> list: ...

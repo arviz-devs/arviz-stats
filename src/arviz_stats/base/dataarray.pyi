@@ -1,30 +1,42 @@
 # File generated with docstub
 
 import numbers
+import warnings
 from collections.abc import Generator, Hashable, Sequence
 from typing import Any, Literal
 
+import numpy as np
 from _typeshed import Incomplete
+from arviz_base import rcParams
 from numpy.typing import ArrayLike, NDArray
-from xarray import DataArray, Dataset
+from xarray import DataArray, Dataset, apply_ufunc, broadcast, concat
+from xarray_einstats.stats import _apply_nonreduce_func
+
+from arviz_stats.base.array import BaseArray, array_stats
+from arviz_stats.validate import (
+    validate_ci_prob,
+    validate_dims,
+    validate_dims_chain_draw_axis,
+    validate_prob,
+)
 
 class BaseDataArray:
-    def __init__(self, array_class: Incomplete = ...) -> None: ...
+    def __init__(self, array_class: BaseArray | None = ...) -> None: ...
     def eti(
         self,
         da: DataArray,
         prob: float | None = ...,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
         method: str = ...,
-        **kwargs: dict,
+        **kwargs: Incomplete,
     ) -> None: ...
     def hdi(
         self,
         da: DataArray,
         prob: float | None = ...,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
         method: str = ...,
-        **kwargs: dict,
+        **kwargs: Incomplete,
     ) -> None: ...
     def ess(
         self,
@@ -35,7 +47,10 @@ class BaseDataArray:
         prob: float | None = ...,
     ) -> None: ...
     def compute_ranks(
-        self, da: DataArray, dim: Sequence[Hashable] | None = ..., relative: bool = ...
+        self,
+        da: DataArray,
+        dim: Hashable | Sequence[Hashable] | None = ...,
+        relative: bool = ...,
     ) -> None: ...
     def rhat(
         self, da: DataArray, sample_dims: list[str] | None = ..., method: str = ...
@@ -43,7 +58,7 @@ class BaseDataArray:
     def rhat_nested(
         self,
         da: DataArray,
-        superchain_ids: ArrayLike,
+        superchain_ids: ArrayLike[int],
         sample_dims: list[str] | None = ...,
         method: str = ...,
     ) -> None: ...
@@ -56,12 +71,15 @@ class BaseDataArray:
         circular: bool = ...,
     ) -> None: ...
     def get_bins(
-        self, da: DataArray, dim: Sequence[Hashable] | None = ..., bins: str = ...
+        self,
+        da: DataArray,
+        dim: Hashable | Sequence[Hashable] | None = ...,
+        bins: str = ...,
     ) -> None: ...
     def histogram(
         self,
         da: DataArray,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
         bins: str | None = ...,
         range: tuple[float, float] | None = ...,
         weights: ArrayLike | None = ...,
@@ -92,26 +110,26 @@ class BaseDataArray:
         dotsize: float = ...,
         stackratio: float = ...,
         top_only: bool = ...,
-        dim: Sequence[Hashable] | None = ...,
-        **kwargs: dict,
+        dim: Hashable | Sequence[Hashable] | None = ...,
+        **kwargs: Incomplete,
     ) -> None: ...
     def ecdf(
         self,
         da: DataArray,
         npoints: int = ...,
         pit: bool = ...,
-        dim: Sequence[Hashable] | None = ...,
-        **kwargs: dict,
+        dim: Hashable | Sequence[Hashable] | None = ...,
+        **kwargs: Incomplete,
     ) -> None: ...
     def uniformity_test(
         self,
         da: DataArray,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
         method: str = ...,
-        **kwargs: dict,
+        **kwargs: Incomplete,
     ) -> None: ...
     def mchain_uniformity_test(
-        self, da: DataArray, dim: Sequence[Hashable] | None = ..., **kwargs: dict
+        self, da: DataArray, dim: Sequence[Hashable] | None = ..., **kwargs: Incomplete
     ) -> tuple[DataArray, DataArray, DataArray]: ...
     def thin_factor(
         self,
@@ -127,7 +145,10 @@ class BaseDataArray:
     ) -> None: ...
     def pareto_min_ss(self, da: DataArray, sample_dims: list[str] | None = ...) -> None: ...
     def psislw(
-        self, da: DataArray, r_eff: float = ..., dim: Sequence[Hashable] | None = ...
+        self,
+        da: DataArray,
+        r_eff: float = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
     def bfmi(self, da: DataArray, sample_dims: list[str] | None = ...) -> None: ...
     def pareto_khat(
@@ -216,7 +237,10 @@ class BaseDataArray:
         random_state: int = ...,
     ) -> NDArray: ...
     def power_scale_lw(
-        self, da: DataArray, alpha: float = ..., dim: Sequence[Hashable] | None = ...
+        self,
+        da: DataArray,
+        alpha: float = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
     def power_scale_sense(
         self,
@@ -227,48 +251,48 @@ class BaseDataArray:
         upper_alpha: float,
         sample_dims: list[str] | None = ...,
     ) -> None: ...
-    def autocorr(self, da: DataArray, dim: Sequence[Hashable] | None = ...) -> None: ...
+    def autocorr(self, da: DataArray, dim: Hashable | Sequence[Hashable] | None = ...) -> None: ...
     def mean(
         self,
         da: DataArray,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
     def median(
         self,
         da: DataArray,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
     def mode(
         self,
         da: DataArray,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
     def std(
         self,
         da: DataArray,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
     def var(
         self,
         da: DataArray,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
     def mad(
         self,
         da: DataArray,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
     def iqr(
         self,
@@ -276,7 +300,7 @@ class BaseDataArray:
         quantiles: tuple[float, float] = ...,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        dim: Sequence[Hashable] | None = ...,
+        dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
     def srs_estimator(self, da: DataArray, n_data_points: int) -> tuple[float, float, float]: ...
     def diff_srs_estimator(

@@ -7,7 +7,7 @@ import numpy as np
 
 __all__ = ["make_ufunc", "calculate_khat_bin_edges"]
 
-_log = logging.getLogger(__name__)
+_log: logging.Logger = logging.getLogger(__name__)
 
 
 def make_ufunc(func, n_dims=2, n_output=1, n_input=1, index=Ellipsis, ravel=True, check_shape=None):

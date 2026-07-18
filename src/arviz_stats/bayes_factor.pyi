@@ -1,8 +1,12 @@
 # File generated with docstub
 
+import warnings
+
+import numpy as np
 import xarray
 import xarray as xr
 from _typeshed import Incomplete
+from arviz_base import convert_to_datatree, from_dict
 
 def bayes_factor(
     data: xarray.DataTree,

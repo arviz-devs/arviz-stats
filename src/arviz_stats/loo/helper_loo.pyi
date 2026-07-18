@@ -1,8 +1,19 @@
 # File generated with docstub
 
+import warnings
+from collections import namedtuple
+from collections.abc import Mapping
+from copy import deepcopy
+
+import numpy as np
+import xarray as xr
 from _typeshed import Incomplete
+from arviz_base import convert_to_datatree, extract, ndarray_to_dataarray, rcParams
 from numpy.typing import ArrayLike
 from xarray import DataArray
+from xarray_einstats.stats import logsumexp
+
+from arviz_stats.utils import ELPDData, get_log_likelihood
 
 __all__ = [
     "_shift",
