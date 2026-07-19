@@ -7,8 +7,8 @@ import xarray as xr
 from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.loo.helper_loo import _prepare_loo_inputs
 from arviz_stats.loo.loo import loo
+from arviz_stats.loo.loo_helper import _prepare_loo_inputs
 from arviz_stats.loo.wrapper import SamplingWrapper
 from arviz_stats.utils import ELPDData
 

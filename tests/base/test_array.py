@@ -19,7 +19,7 @@ xr = importorskip("xarray")
 from numpy.testing import assert_allclose, assert_array_equal
 
 from arviz_stats import loo, loo_approximate_posterior, loo_pit, loo_score
-from arviz_stats.loo.helper_loo import _get_r_eff, _prepare_loo_inputs
+from arviz_stats.loo.loo_helper import _get_r_eff, _prepare_loo_inputs
 from arviz_stats.utils import get_log_likelihood_dataset
 
 

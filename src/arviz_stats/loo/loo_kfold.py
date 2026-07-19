@@ -3,7 +3,7 @@
 import numpy as np
 from arviz_base import rcParams
 
-from arviz_stats.loo.helper_loo_kfold import (
+from arviz_stats.loo.loo_kfold_helper import (
     _combine_fold_elpds,
     _compute_kfold_results,
     _prepare_kfold_inputs,

@@ -11,7 +11,7 @@ azb = importorskip("arviz_base")
 from numpy.testing import assert_almost_equal
 
 from arviz_stats import loo_score
-from arviz_stats.loo.helper_loo import _get_r_eff, _prepare_loo_inputs
+from arviz_stats.loo.loo_helper import _get_r_eff, _prepare_loo_inputs
 
 
 def test_loo_score_invalid_kind(centered_eight):

@@ -13,7 +13,7 @@ azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 sp = importorskip("scipy")
 
-from arviz_stats.loo.helper_loo import (
+from arviz_stats.loo.loo_helper import (
     _align_data_to_obs,
     _check_log_density,
     _check_log_jacobian,
