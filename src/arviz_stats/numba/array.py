@@ -182,4 +182,4 @@ so this function alone accelerates slightly a significant part of the codebase.
 """
 )
 
-array_stats = NumbaArray()
+array_stats: NumbaArray = NumbaArray()

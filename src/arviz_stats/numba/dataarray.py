@@ -8,4 +8,4 @@ class NumbaDataArray(BaseDataArray):
     """DataArray compatible functions that use numba."""
 
 
-dataarray_stats = NumbaDataArray(array_class=array_stats)
+dataarray_stats: NumbaDataArray = NumbaDataArray(array_class=array_stats)

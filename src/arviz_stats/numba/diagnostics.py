@@ -5,6 +5,7 @@ import numpy as np
 import scipy
 import xarray as xr
 from scipy.fftpack import next_fast_len
+from xarray import DataArray
 from xarray_einstats import stats
 from xarray_einstats.einops import rearrange
 
@@ -16,14 +17,14 @@ def _backtransform_ranks(da, c=3 / 8):  # pylint: disable=invalid-name
 
     Parameters
     ----------
-    da : xr.DataArray
+    da : DataArray
         Ranks array. It must have dimensions named `chain` and `draw`
     c : float
         Fractional offset. Defaults to c = 3/8 as recommended by Blom (1958).
 
     Returns
     -------
-    xr.DataArray
+    DataArray
 
     References
     ----------
@@ -38,12 +39,12 @@ def _z_scale(da, **kwargs):
 
     Parameters
     ----------
-    da : xr.DataArray
+    da : DataArray
         Input array. It must have dimensions named `chain` and `draw`
 
     Returns
     -------
-    xr.DataArray
+    DataArray
     """
     kwargs = kwargs.copy()
     if kwargs.get("dask", None) == "allowed":
@@ -56,7 +57,7 @@ def _z_scale(da, **kwargs):
     return norm_dist.ppf(rank, apply_kwargs=kwargs)
 
 
-def _split_chains(da, **kwargs):
+def _split_chains(da: DataArray, **kwargs):
     """Split and stack chains."""
     half = len(da.draw) // 2
     kwargs = kwargs.copy()
@@ -71,14 +72,14 @@ def _split_chains(da, **kwargs):
     )
 
 
-def _z_fold(da, **kwargs):
+def _z_fold(da: DataArray, **kwargs):
     """Fold and z-scale values."""
     da = abs(da - da.median(("chain", "draw")))
     da = _z_scale(da, **kwargs)
     return da
 
 
-def _rhat(da):
+def _rhat(da: DataArray):
     """Compute the rhat for an n-D DataArray."""
     num_samples = len(da.draw)
 
@@ -97,7 +98,7 @@ def _rhat(da):
     return rhat_value
 
 
-def _rhat_rank(da, **kwargs):
+def _rhat_rank(da: DataArray, **kwargs):
     """Compute the rank normalized rhat for an n-D DataArray.
 
     Computation follows https://arxiv.org/abs/1903.08008
@@ -112,7 +113,15 @@ def _rhat_rank(da, **kwargs):
 
 
 def rhat(ds, group="posterior", method="rank", **kwargs):
-    """Calculate rhat diagnostic."""
+    """Calculate rhat diagnostic.
+
+    Parameters
+    ----------
+    ds : Dataset or DataTree or DataArray
+    group : str, default "posterior"
+    method : str, default "rank"
+    **kwargs
+    """
     func_map = {"identity": _rhat, "rank": _rhat_rank}
     if method not in func_map:
         raise ValueError("method not recognized")
@@ -132,6 +141,15 @@ def rhat(ds, group="posterior", method="rank", **kwargs):
 # help, rfft and irfft exist both in numpy and dask, so the wrappers below will
 # support dask="allowed" without problem
 def rfft(da, dim=None, n=None, prefix="freq_", **kwargs):
+    """Apply numpy rfft along a DataArray dimension.
+
+    Parameters
+    ----------
+    da : DataArray
+    dim : str, optional
+    n : int, optional
+    prefix : str, default "freq_"
+    """
     return xr.apply_ufunc(
         np.fft.rfft,
         da,
@@ -143,6 +161,15 @@ def rfft(da, dim=None, n=None, prefix="freq_", **kwargs):
 
 
 def irfft(da, dim=None, n=None, prefix="freq_", **kwargs):
+    """Apply numpy irfft along a DataArray dimension.
+
+    Parameters
+    ----------
+    da : DataArray
+    dim : str, optional
+    n : int, optional
+    prefix : str, default "freq_"
+    """
     out_dim = dim.replace(prefix, "")
     return xr.apply_ufunc(
         np.fft.irfft,
@@ -159,12 +186,14 @@ def autocov(da, dim="draw", **kwargs):
 
     Parameters
     ----------
-    ary : xr.DataArray
-        A DataArray containing MCMC samples. It must have the ``draw`` dimension
+    da : DataArray
+        A DataArray containing MCMC samples. It must have the ``draw`` dimension.
+    dim : str, default "draw"
 
     Returns
     -------
-    DataArray same size as the input array
+    DataArray
+        Same size as the input array.
     """
     draw_coord = da[dim]
     n = len(draw_coord)
@@ -180,6 +209,14 @@ def autocov(da, dim="draw", **kwargs):
 
 
 def autocorr(da, dim="draw", **kwargs):
+    """Compute autocorrelation estimates for every lag for the input array.
+
+    Parameters
+    ----------
+    da : DataArray
+        A DataArray containing MCMC samples. It must have the ``draw`` dimension.
+    dim : str, default "draw"
+    """
     da = autocov(da, dim=dim, **kwargs)
     return da / da.isel({dim: 0})
 
@@ -232,7 +269,7 @@ def geyer(acov, chain_mean_term, tau_hat):
     )
 
 
-def _ess(da, relative=False, **kwargs):
+def _ess(da: DataArray, relative: bool = False, **kwargs):
     n_chain = len(da["chain"])
     n_draw = len(da["draw"])
     maxmin_keep = da.max(("chain", "draw")) - da.min(("chain", "draw")) > np.finfo(float).resolution
@@ -267,17 +304,25 @@ def _ess(da, relative=False, **kwargs):
     return ess_value
 
 
-def _ess_mean(da, relative=False, **kwargs):
+def _ess_mean(da: DataArray, relative: bool = False, **kwargs):
     return _ess(_split_chains(da, **kwargs), relative=relative, **kwargs)
 
 
-def _ess_bulk(da, relative=False, **kwargs):
+def _ess_bulk(da: DataArray, relative: bool = False, **kwargs):
     da = _z_scale(_split_chains(da, **kwargs), **kwargs)
     return _ess(da, relative=relative, **kwargs)
 
 
 def ess(ds, group="posterior", method="bulk", **kwargs):
-    """Calculate ess statistic/diagnostic."""
+    """Calculate ess statistic/diagnostic.
+
+    Parameters
+    ----------
+    ds : Dataset or DataTree or DataArray
+    group : str, default "posterior"
+    method : str, default "bulk"
+    **kwargs
+    """
     func_map = {"mean": _ess_mean, "bulk": _ess_bulk}
     if method not in func_map:
         raise ValueError("method not recognized")

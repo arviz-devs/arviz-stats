@@ -48,4 +48,4 @@ NumbaArray: Incomplete
 histogram: Incomplete
 __doc__: Incomplete
 
-array_stats: Incomplete
+array_stats: NumbaArray
