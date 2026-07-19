@@ -5,7 +5,7 @@ import xarray as xr
 from arviz_base import convert_to_datatree, extract, rcParams
 from xarray import apply_ufunc
 
-from arviz_stats.loo.helper_loo import _get_r_eff, _warn_pareto_k
+from arviz_stats.loo.loo_helper import _get_r_eff, _warn_pareto_k
 from arviz_stats.metrics import _metrics, _summary_r2
 from arviz_stats.utils import get_log_likelihood_dataset
 from arviz_stats.validate import validate_dims

@@ -9,7 +9,7 @@ from ..helpers import importorskip
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
-from arviz_stats.loo.helper_loo_kfold import (
+from arviz_stats.loo.loo_kfold_helper import (
     _combine_fold_elpds,
     _extract_fold_data,
     _get_fold_indices,

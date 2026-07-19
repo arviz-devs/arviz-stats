@@ -12,7 +12,7 @@ azb = importorskip("arviz_base")
 from numpy.testing import assert_almost_equal
 
 from arviz_stats import loo_pit
-from arviz_stats.loo.helper_loo import _get_r_eff
+from arviz_stats.loo.loo_helper import _get_r_eff
 from arviz_stats.utils import get_log_likelihood_dataset
 
 

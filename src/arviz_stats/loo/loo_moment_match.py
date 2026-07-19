@@ -10,7 +10,7 @@ import xarray as xr
 from arviz_base import dataset_to_dataarray, rcParams
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.loo.helper_loo import (
+from arviz_stats.loo.loo_helper import (
     _get_log_likelihood_i,
     _get_r_eff,
     _get_r_eff_i,
