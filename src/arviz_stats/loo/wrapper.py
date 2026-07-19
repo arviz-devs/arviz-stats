@@ -152,7 +152,10 @@ class SamplingWrapper:
         -------
         log_likelihood: xr.Dataarray
             Log likelihood of ``excluded_obs`` evaluated at each of the posterior samples
-            stored in ``idata__i``.
+            stored in ``idata__i``. When more than one observation is excluded, the returned
+            array must keep a dimension with one entry per excluded observation, in the same
+            order as the requested indices. All other dimensions (e.g. ``chain`` and ``draw``)
+            are treated as sample dimensions and reduced over.
         """
         if self.log_lik_fun is None:
             raise NotImplementedError(

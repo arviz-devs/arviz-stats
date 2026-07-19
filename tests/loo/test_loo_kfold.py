@@ -301,3 +301,42 @@ def test_loo_kfold_multiple_obs_dims_raises(fresh_wrapper):
     )
     with pytest.raises(NotImplementedError, match="single observation dimension"):
         loo_kfold(data=idata, wrapper=fresh_wrapper, k=2)
+
+
+@pytest.mark.parametrize(
+    "ll_style,folds",
+    [
+        ("flat_sample", [1, 1, 2, 2, 3, 3, 4, 4]),
+        ("no_obs_dim", [1, 2, 3, 4, 5, 6, 7, 8]),
+    ],
+)
+def test_loo_kfold_wrapper_dim_styles_match_canonical(
+    centered_eight, dim_style_wrapper, ll_style, folds
+):
+    result = loo_kfold(
+        data=centered_eight, wrapper=dim_style_wrapper(ll_style), folds=folds, pointwise=True
+    )
+    reference = loo_kfold(
+        data=centered_eight, wrapper=dim_style_wrapper("canonical"), folds=folds, pointwise=True
+    )
+    assert np.all(np.isfinite(result.elpd_i.values))
+    assert_almost_equal(result.elpd_i.values, reference.elpd_i.values, decimal=8)
+    assert_almost_equal(result.elpd, reference.elpd, decimal=8)
+
+
+def test_loo_kfold_wrapper_reduced_loglik_raises(centered_eight, dim_style_wrapper):
+    with pytest.raises(ValueError, match="one entry per test observation"):
+        loo_kfold(data=centered_eight, wrapper=dim_style_wrapper("summed"), k=4)
+
+
+@pytest.mark.parametrize("seed", ["default", 7])
+def test_loo_kfold_seed_reproducible(centered_eight, dim_style_wrapper, seed):
+    kwargs = {} if seed == "default" else {"seed": seed}
+    result_1 = loo_kfold(
+        data=centered_eight, wrapper=dim_style_wrapper("canonical"), k=4, pointwise=True, **kwargs
+    )
+    result_2 = loo_kfold(
+        data=centered_eight, wrapper=dim_style_wrapper("canonical"), k=4, pointwise=True, **kwargs
+    )
+    assert_almost_equal(result_1.elpd, result_2.elpd, decimal=12)
+    assert_almost_equal(result_1.elpd_i.values, result_2.elpd_i.values, decimal=12)
