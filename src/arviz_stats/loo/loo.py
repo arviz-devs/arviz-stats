@@ -16,6 +16,7 @@ from arviz_stats.loo.loo_helper import (
     _warn_pareto_k,
     _warn_pointwise_loo,
 )
+from arviz_stats.loo.loo_moment_match import loo_moment_match
 from arviz_stats.utils import ELPDData
 
 
@@ -29,13 +30,22 @@ def loo(
     pareto_k=None,
     log_jacobian=None,
     mixture=False,
+    moment_match=False,
+    log_prob_upars_fn=None,
+    log_lik_i_upars_fn=None,
+    upars=None,
+    max_iters=30,
+    k_threshold=None,
+    split=True,
+    cov=True,
+    model=None,
 ):
     r"""Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV). Also calculates LOO's
-    standard error and the effective number of parameters. The method is described in [2]_
-    and [3]_.
+    standard error and the effective number of parameters. The method is described in [3]_
+    and [4]_.
 
     Parameters
     ----------
@@ -73,7 +83,54 @@ def loo(
     mixture : bool, optional
         If True, use mixture importance sampling LOO (Mix-IS-LOO) instead of PSIS-LOO.
         This is appropriate when the log-likelihood was generated from a mixture distribution.
-        The method is described in [1]_. Defaults to False.
+        The method is described in [2]_. Defaults to False.
+    moment_match : bool, default False
+        If True, apply the moment matching algorithm described in [1]_ to observations with
+        Pareto k values above ``k_threshold``. This is equivalent to computing LOO with
+        ``pointwise=True`` and passing the result to :func:`loo_moment_match`. Requires
+        either ``model`` or both ``log_prob_upars_fn`` and ``log_lik_i_upars_fn``. Cannot
+        be combined with ``mixture=True``, ``log_lik_fn`` or ``log_jacobian``.
+    log_prob_upars_fn : callable, optional
+        Only used when ``moment_match=True``. Function that computes the log probability
+        density of the full posterior distribution evaluated at unconstrained parameter
+        draws. The function signature is ``log_prob_upars_fn(upars)`` where ``upars``
+        is a :class:`~xarray.DataArray` of unconstrained parameter draws with dimensions
+        ``chain``, ``draw``, and a parameter dimension. It should return a
+        :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
+        If not provided, must be auto-built from ``model``.
+    log_lik_i_upars_fn : callable, optional
+        Only used when ``moment_match=True``. Function that computes the log-likelihood
+        of a single left-out observation evaluated at unconstrained parameter draws.
+        The function signature is ``log_lik_i_upars_fn(upars, i)`` where ``upars``
+        is a :class:`~xarray.DataArray` of unconstrained parameter draws and ``i``
+        is the integer index of the left-out observation. It should return a
+        :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
+        If not provided, must be auto-built from ``model``.
+    upars : DataArray, optional
+        Only used when ``moment_match=True``. Posterior draws transformed to the
+        unconstrained parameter space. Must have ``chain`` and ``draw`` dimensions, plus
+        one additional dimension containing all parameters. Parameter names can be
+        provided as coordinate values on this dimension. If not provided, will attempt
+        to use the ``unconstrained_posterior`` group from the input data if available,
+        or auto-build from ``model``.
+    max_iters : int, default 30
+        Only used when ``moment_match=True``. Maximum number of moment matching
+        iterations for each problematic observation.
+    k_threshold : float, optional
+        Only used when ``moment_match=True``. Threshold value for Pareto k values above
+        which moment matching is applied. Defaults to
+        :math:`\min(1 - 1/\log_{10}(S), 0.7)`, where S is the number of samples.
+    split : bool, default True
+        Only used when ``moment_match=True``. If True, only transform half of the draws
+        and use multiple importance sampling to combine them with untransformed draws.
+    cov : bool, default True
+        Only used when ``moment_match=True``. If True, match the covariance structure
+        during the transformation, in addition to the mean and marginal variances.
+    model : Model, optional
+        Only used when ``moment_match=True``. A model object. Currently supported models
+        are PyMC and Bambi. If provided, it will be used to auto-build
+        ``log_prob_upars_fn``, ``log_lik_i_upars_fn``, and ``upars`` if any of them are
+        not provided.
 
     Returns
     -------
@@ -98,6 +155,13 @@ def loo(
         - **approx_posterior**: False (not used for standard LOO)
         - **log_weights**: Smoothed log weights.
         - **log_jacobian**: Log-Jacobian adjustment for variable transformations.
+        - **influence_pareto_k**: :class:`~xarray.DataArray` with the original
+          (pre-moment-matching) Pareto shape values, only if ``moment_match=True``
+          and ``pointwise=True``
+        - **n_eff_i**: :class:`~xarray.DataArray` with effective sample size per
+          observation, only if ``moment_match=True`` and ``pointwise=True`` and at least
+          one observation was successfully moment matched (NaN for observations that
+          were not adjusted)
 
     Examples
     --------
@@ -146,24 +210,50 @@ def loo(
     See Also
     --------
     :func:`compare` : Compare models based on their ELPD.
+    :func:`loo_moment_match` : Moment matching for problematic observations in PSIS-LOO-CV.
     :func:`arviz_plots.plot_compare` : Summary plot for model comparison.
 
     References
     ----------
 
-    .. [1] Silva and Zanella. *Robust Leave-One-Out Cross-Validation for High-Dimensional
+    .. [1] Paananen, T., Piironen, J., Buerkner, P.-C., Vehtari, A. (2021). Implicitly Adaptive
+       Importance Sampling. Statistics and Computing. 31(2) (2021)
+       https://doi.org/10.1007/s11222-020-09982-2
+       arXiv preprint https://arxiv.org/abs/1906.08850.
+
+    .. [2] Silva and Zanella. *Robust Leave-One-Out Cross-Validation for High-Dimensional
        Bayesian Models*. Journal of the American Statistical Association. 119(547) (2023)
        2369-2381. https://doi.org/10.1080/01621459.2023.2257893
        arXiv preprint https://arxiv.org/abs/2209.09190
 
-    .. [2] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+    .. [3] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
        arXiv preprint https://arxiv.org/abs/1507.04544.
 
-    .. [3] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+    .. [4] Vehtari et al. *Pareto Smoothed Importance Sampling*.
        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
        arXiv preprint https://arxiv.org/abs/1507.02646
     """
+    if moment_match:
+        if mixture:
+            raise ValueError("moment_match=True cannot be combined with mixture=True.")
+        if log_lik_fn is not None:
+            raise ValueError(
+                "moment_match=True cannot be combined with log_lik_fn. Moment matching "
+                "requires the log_likelihood group in data."
+            )
+        if log_jacobian is not None:
+            raise ValueError("moment_match=True cannot be combined with log_jacobian.")
+        if model is None and (log_prob_upars_fn is None or log_lik_i_upars_fn is None):
+            raise ValueError(
+                "Both log_prob_upars_fn and log_lik_i_upars_fn are required for moment "
+                "matching. Pass them explicitly or provide model to build them automatically."
+            )
+        if model is None and upars is None and not hasattr(data, "unconstrained_posterior"):
+            raise ValueError(
+                "upars must be provided or data must contain an 'unconstrained_posterior' group."
+            )
+
     loo_inputs = _prepare_loo_inputs(data, var_name, log_lik_fn=log_lik_fn)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
@@ -223,6 +313,34 @@ def loo(
             pareto_k=mix_pareto_k if pointwise else None,
             approx_posterior=False,
             log_weights=mix_log_weights,
+        )
+
+    if moment_match:
+        loo_orig = _compute_loo_results(
+            log_likelihood=loo_inputs.log_likelihood,
+            var_name=loo_inputs.var_name,
+            pointwise=True,
+            sample_dims=loo_inputs.sample_dims,
+            n_samples=loo_inputs.n_samples,
+            n_data_points=loo_inputs.n_data_points,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+            approx_posterior=False,
+        )
+        return loo_moment_match(
+            data,
+            loo_orig,
+            log_prob_upars_fn=log_prob_upars_fn,
+            log_lik_i_upars_fn=log_lik_i_upars_fn,
+            upars=upars,
+            var_name=var_name,
+            reff=reff,
+            max_iters=max_iters,
+            k_threshold=k_threshold,
+            split=split,
+            cov=cov,
+            pointwise=pointwise,
+            model=model,
         )
 
     return _compute_loo_results(

@@ -492,3 +492,129 @@ def test_missing_upars_functions_raises(roaches_r_example, provided):
             var_name="log_lik",
             **kwargs,
         )
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.parametrize("split", [True, False])
+def test_loo_moment_match_flag_matches_manual(roaches_r_example, split):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+    loo_manual = loo_moment_match(
+        example["data_tree"],
+        loo_orig,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=example["upars"],
+        var_name="log_lik",
+        split=split,
+        pointwise=True,
+    )
+    loo_flag = loo(
+        example["data_tree"],
+        pointwise=True,
+        var_name="log_lik",
+        moment_match=True,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=example["upars"],
+        split=split,
+    )
+
+    assert loo_flag.method == "loo_moment_match"
+    assert loo_flag.elpd == pytest.approx(loo_manual.elpd)
+    assert loo_flag.se == pytest.approx(loo_manual.se)
+    assert loo_flag.p == pytest.approx(loo_manual.p)
+    xr.testing.assert_allclose(loo_flag.elpd_i, loo_manual.elpd_i)
+    xr.testing.assert_allclose(loo_flag.pareto_k, loo_manual.pareto_k)
+    xr.testing.assert_allclose(loo_flag.influence_pareto_k, loo_manual.influence_pareto_k)
+    xr.testing.assert_allclose(loo_flag.log_weights, loo_manual.log_weights)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_loo_moment_match_flag_pointwise_false(roaches_r_example):
+    example = roaches_r_example
+    result = loo(
+        example["data_tree"],
+        pointwise=False,
+        var_name="log_lik",
+        moment_match=True,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=example["upars"],
+    )
+
+    assert result.method == "loo_moment_match"
+    assert result.elpd_i is None
+    assert result.pareto_k is None
+    assert result.influence_pareto_k is None
+    assert result.n_eff_i is None
+    assert np.isfinite(result.elpd)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_loo_moment_match_flag_no_bad_k(roaches_r_example):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+
+    with pytest.warns(UserWarning, match="No Pareto k values exceed"):
+        result = loo(
+            example["data_tree"],
+            pointwise=True,
+            var_name="log_lik",
+            moment_match=True,
+            log_prob_upars_fn=example["log_prob_fn"],
+            log_lik_i_upars_fn=example["log_lik_i_fn"],
+            upars=example["upars"],
+            k_threshold=5.0,
+        )
+
+    assert result.elpd == pytest.approx(loo_orig.elpd)
+    xr.testing.assert_allclose(result.elpd_i, loo_orig.elpd_i)
+    xr.testing.assert_allclose(result.pareto_k, loo_orig.pareto_k)
+
+
+def test_loo_moment_match_flag_errors(roaches_r_example):
+    example = roaches_r_example
+    mm_kwargs = {
+        "log_prob_upars_fn": example["log_prob_fn"],
+        "log_lik_i_upars_fn": example["log_lik_i_fn"],
+        "upars": example["upars"],
+    }
+    n_obs = example["data_tree"]["log_likelihood"]["log_lik"].sizes["obs"]
+    log_jacobian = xr.DataArray(np.zeros(n_obs), dims=["obs"])
+
+    with pytest.raises(ValueError, match="mixture=True"):
+        loo(example["data_tree"], var_name="log_lik", moment_match=True, mixture=True, **mm_kwargs)
+
+    with pytest.raises(ValueError, match="log_lik_fn"):
+        loo(
+            example["data_tree"],
+            var_name="log_lik",
+            moment_match=True,
+            log_lik_fn=lambda observed, data: None,
+            **mm_kwargs,
+        )
+
+    with pytest.raises(ValueError, match="log_jacobian"):
+        loo(
+            example["data_tree"],
+            var_name="log_lik",
+            moment_match=True,
+            log_jacobian=log_jacobian,
+            **mm_kwargs,
+        )
+
+    with pytest.raises(ValueError, match="are required for moment matching"):
+        loo(example["data_tree"], var_name="log_lik", moment_match=True, upars=example["upars"])
+
+    with pytest.raises(ValueError, match="upars must be provided"):
+        loo(
+            example["data_tree"],
+            var_name="log_lik",
+            moment_match=True,
+            log_prob_upars_fn=example["log_prob_fn"],
+            log_lik_i_upars_fn=example["log_lik_i_fn"],
+        )
