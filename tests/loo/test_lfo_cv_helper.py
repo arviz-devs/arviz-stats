@@ -1,6 +1,7 @@
-"""Test helper functions for LFO-CV."""
+"""Tests for LFO-CV helper functions."""
 
 # pylint: disable=redefined-outer-name
+import numpy as np
 import pytest
 
 from ..helpers import importorskip
@@ -10,205 +11,83 @@ xr = importorskip("xarray")
 
 from arviz_stats.loo.lfo_cv_helper import (
     LFOInputs,
-    LFOResults,
-    LFOStepResult,
-    _combine_lfo_elpds,
     _prepare_lfo_inputs,
     _validate_lfo_parameters,
 )
 
 
-# Parameter validation tests
 @pytest.mark.parametrize(
-    "min_obs,forecast,n_time,valid",
+    "min_obs, horizon, n_time, valid",
     [
         (10, 5, 30, True),
-        (10, 5, 16, True),  # Minimal
-        (10, 5, 14, False),  # Too small
-        (0, 5, 30, False),  # min_obs not positive
-        (10, 0, 30, False),  # forecast not positive
-        (-1, 5, 30, False),  # min_obs negative
-        (10, -1, 30, False),  # forecast negative
+        (1, 1, 2, True),
+        (0, 5, 30, False),
+        (10, 0, 30, False),
+        (30, 5, 30, False),
+        (28, 5, 30, False),
     ],
 )
-def test_validate_lfo_parameters(min_obs, forecast, n_time, valid):
-    """Test LFO parameter validation."""
+def test_validate_lfo_parameters(min_obs, horizon, n_time, valid):
     if valid:
-        _validate_lfo_parameters(min_obs, forecast, n_time)
+        _validate_lfo_parameters(min_obs, horizon, n_time)
     else:
         with pytest.raises(ValueError):
-            _validate_lfo_parameters(min_obs, forecast, n_time)
+            _validate_lfo_parameters(min_obs, horizon, n_time)
 
 
-def test_validate_lfo_parameters_boundary():
-    """Test boundary conditions for parameter validation."""
-    # Exactly enough data: min_obs + forecast = n_time (allows exactly 1 step)
-    _validate_lfo_parameters(10, 5, 15)  # 10 + 5 = 15 <= 15, valid
+def test_prepare_lfo_inputs(constant_lfo_wrapper, lfo_constant_data):
+    log_lik = lfo_constant_data.log_likelihood["obs"]
+    inputs = _prepare_lfo_inputs(lfo_constant_data, None, constant_lfo_wrapper, 5, 3, "time")
 
-    # One less than needed (not enough room for even 1 forecast)
-    with pytest.raises(ValueError):
-        _validate_lfo_parameters(10, 5, 14)  # 10 + 5 = 15 > 14, invalid
+    assert isinstance(inputs, LFOInputs)
+    assert inputs.n_time_points == log_lik.sizes["time"]
+    assert inputs.n_samples == log_lik.sizes["chain"] * log_lik.sizes["draw"]
+    assert inputs.time_dim == "time"
+    assert inputs.sample_dims == ["chain", "draw"]
 
 
-# Input preparation tests
-def test_prepare_lfo_inputs(data_with_time, fresh_lfo_wrapper):
-    """Test LFO input preparation."""
-    result = _prepare_lfo_inputs(
-        data=data_with_time,
-        var_name=None,
-        wrapper=fresh_lfo_wrapper,
-        min_observations=10,
-        forecast_horizon=5,
-        time_dim="time",
+def test_prepare_lfo_inputs_selects_var_name(constant_lfo_wrapper):
+    n_chains, n_draws, n_time = 2, 20, 12
+    data = azb.from_dict(
+        {
+            "posterior": {"mu": np.zeros((n_chains, n_draws))},
+            "log_likelihood": {
+                "obs": np.full((n_chains, n_draws, n_time), -1.0),
+                "decoy": np.zeros((n_chains, n_draws, n_time)),
+            },
+            "observed_data": {"obs": np.arange(n_time, dtype=float)},
+        },
+        dims={"obs": ["time"], "decoy": ["time"]},
+        coords={"time": np.arange(n_time)},
     )
 
-    assert isinstance(result, LFOInputs)
-    assert result.log_likelihood is not None
-    assert result.n_time_points > 0
-    assert result.min_observations == 10
-    assert result.forecast_horizon == 5
-    assert result.time_dim == "time"
+    inputs = _prepare_lfo_inputs(data, "obs", constant_lfo_wrapper, 5, 3, "time")
+
+    assert inputs.log_likelihood.name == "obs"
+    assert inputs.n_time_points == n_time
 
 
-def test_prepare_lfo_inputs_with_var_name(data_with_time, fresh_lfo_wrapper):
-    """Test LFO input preparation with explicit var_name."""
-    result = _prepare_lfo_inputs(
-        data=data_with_time,
-        var_name="obs",
-        wrapper=fresh_lfo_wrapper,
-        min_observations=10,
-        forecast_horizon=5,
-        time_dim="time",
-    )
-
-    assert isinstance(result, LFOInputs)
-    assert result.var_name == "obs"
+def test_prepare_lfo_inputs_missing_time_dim(constant_lfo_wrapper, lfo_constant_data):
+    with pytest.raises(ValueError, match="Time dimension 'week' not found"):
+        _prepare_lfo_inputs(lfo_constant_data, None, constant_lfo_wrapper, 5, 3, "week")
 
 
-def test_prepare_lfo_inputs_invalid_wrapper(data_with_time):
-    """Test that invalid wrapper raises error."""
+def test_prepare_lfo_inputs_requires_wrapper(lfo_constant_data):
     with pytest.raises(TypeError, match="wrapper must be an instance of SamplingWrapper"):
-        _prepare_lfo_inputs(
-            data=data_with_time,
-            var_name=None,
-            wrapper="not_a_wrapper",
-            min_observations=10,
-            forecast_horizon=5,
-            time_dim="time",
-        )
+        _prepare_lfo_inputs(lfo_constant_data, None, object(), 5, 3, "time")
 
 
-def test_prepare_lfo_inputs_invalid_time_dim(data_with_time, fresh_lfo_wrapper):
-    """Test that invalid time dimension raises error."""
-    with pytest.raises(ValueError, match="not found"):
-        _prepare_lfo_inputs(
-            data=data_with_time,
-            var_name=None,
-            wrapper=fresh_lfo_wrapper,
-            min_observations=10,
-            forecast_horizon=5,
-            time_dim="invalid_dim",
-        )
+def test_prepare_lfo_inputs_rejects_extra_obs_dims(constant_lfo_wrapper):
+    n_chains, n_draws = 2, 20
+    data = azb.from_dict(
+        {
+            "posterior": {"mu": np.zeros((n_chains, n_draws))},
+            "log_likelihood": {"obs": np.zeros((n_chains, n_draws, 6, 2))},
+            "observed_data": {"obs": np.zeros((6, 2))},
+        },
+        dims={"obs": ["time", "group"]},
+        coords={"time": np.arange(6), "group": [0, 1]},
+    )
 
-
-# Result combination tests
-def test_combine_lfo_elpds_basic():
-    """Test basic combining of LFO ELPD results."""
-    import xarray as xr
-
-    # Create mock LFOStepResult objects with xarray DataArrays for elpd_i
-    step_results = []
-    for i in range(5):
-        elpd_val = float(i + 1)
-        elpd_i = xr.DataArray([elpd_val], dims=["time"])
-        step_results.append(
-            LFOStepResult(
-                elpd_i=elpd_i,
-                pareto_k=0.1 * (i + 1),
-                refitted=(i == 0),
-                time_index=i,
-            )
-        )
-
-    result = _combine_lfo_elpds(step_results, "time", 10, 1)
-
-    assert "elpd" in result
-    assert "se" in result
-    assert "refit_indices" in result
-    assert result["se"] >= 0
-
-
-def test_combine_lfo_elpds_negative():
-    """Test combining negative ELPD values."""
-    import xarray as xr
-
-    step_results = []
-    for i in range(3):
-        elpd_val = float(-(i + 1))
-        elpd_i = xr.DataArray([elpd_val], dims=["time"])
-        step_results.append(
-            LFOStepResult(
-                elpd_i=elpd_i,
-                pareto_k=0.1 * (i + 1),
-                refitted=(i == 0),
-                time_index=i,
-            )
-        )
-
-    result = _combine_lfo_elpds(step_results, "time", 10, 1)
-
-    assert result["elpd"] < 0
-    assert result["se"] >= 0
-
-
-def test_combine_lfo_elpds_single_value():
-    """Test combining single ELPD value."""
-    import xarray as xr
-
-    elpd_i = xr.DataArray([5.0], dims=["time"])
-    step_results = [
-        LFOStepResult(
-            elpd_i=elpd_i,
-            pareto_k=0.3,
-            refitted=True,
-            time_index=0,
-        )
-    ]
-
-    result = _combine_lfo_elpds(step_results, "time", 10, 1)
-
-    assert "elpd" in result
-
-
-# Named tuple tests
-def test_lfo_inputs_namedtuple():
-    """Test LFOInputs named tuple structure."""
-    assert hasattr(LFOInputs, "_fields")
-    expected_fields = {
-        "data",
-        "log_likelihood",
-        "var_name",
-        "sample_dims",
-        "obs_dims",
-        "time_dim",
-        "n_data_points",
-        "n_samples",
-        "n_time_points",
-        "min_observations",
-        "forecast_horizon",
-    }
-    assert set(LFOInputs._fields) == expected_fields
-
-
-def test_lfo_step_result_namedtuple():
-    """Test LFOStepResult named tuple structure."""
-    assert hasattr(LFOStepResult, "_fields")
-    expected_fields = {"elpd_i", "pareto_k", "refitted", "time_index"}
-    assert set(LFOStepResult._fields) == expected_fields
-
-
-def test_lfo_results_namedtuple():
-    """Test LFOResults named tuple structure."""
-    assert hasattr(LFOResults, "_fields")
-    expected_fields = {"elpd_values", "pareto_k_values", "refit_indices", "time_indices"}
-    assert set(LFOResults._fields) == expected_fields
+    with pytest.raises(ValueError, match="single time dimension"):
+        _prepare_lfo_inputs(data, None, constant_lfo_wrapper, 3, 1, "time")
