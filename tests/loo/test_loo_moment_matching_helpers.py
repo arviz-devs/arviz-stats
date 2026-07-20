@@ -271,9 +271,9 @@ def test_loo_moment_match_flag_with_model(poisson_setup):
     loo_flag = loo(idata, pointwise=True, moment_match=True, model=model)
 
     assert loo_flag.method == "loo_moment_match"
-    assert loo_flag.elpd == pytest.approx(loo_manual.elpd)
-    assert loo_flag.se == pytest.approx(loo_manual.se)
-    assert loo_flag.p == pytest.approx(loo_manual.p)
+    np.testing.assert_allclose(loo_flag.elpd, loo_manual.elpd)
+    np.testing.assert_allclose(loo_flag.se, loo_manual.se)
+    np.testing.assert_allclose(loo_flag.p, loo_manual.p)
     xr.testing.assert_allclose(loo_flag.elpd_i, loo_manual.elpd_i)
     xr.testing.assert_allclose(loo_flag.pareto_k, loo_manual.pareto_k)
     xr.testing.assert_allclose(loo_flag.influence_pareto_k, loo_manual.influence_pareto_k)
