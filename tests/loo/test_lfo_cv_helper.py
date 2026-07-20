@@ -8,7 +8,7 @@ from ..helpers import importorskip
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
-from arviz_stats.loo.helper_lfo_cv import (
+from arviz_stats.loo.lfo_cv_helper import (
     LFOInputs,
     LFOResults,
     LFOStepResult,

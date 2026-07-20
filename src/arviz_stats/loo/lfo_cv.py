@@ -6,7 +6,7 @@ import numpy as np
 from arviz_base import rcParams
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.loo.helper_lfo_cv import (
+from arviz_stats.loo.lfo_cv_helper import (
     _combine_lfo_elpds,
     _compute_lfo_step_approx,
     _compute_lfo_step_exact,
