@@ -356,7 +356,7 @@ def rhat_nested(
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
     superchain_ids : list
-        Lisf ot length ``chains`` specifying which superchain each chain belongs to.
+        List of length ``chains`` specifying which superchain each chain belongs to.
         There should be equal numbers of chains in each superchain. All chains within
         the same superchain are assumed to have been initialized at the same point.
     chain_axis, draw_axis : int, optional
@@ -365,8 +365,8 @@ def rhat_nested(
 
     See Also
     --------
-    arviz.rhat : Calculate estimate of the effective sample size (ess).
-    arviz.ess : Calculate Markov Chain Standard Error statistic.
+    rhat : Compute split R-hat convergence diagnostic
+    ess : Estimate the effective sample size (ess).
     plot_forest : Forest plot to compare HDI intervals from a number of distributions.
 
     References
@@ -713,7 +713,7 @@ def diagnose(
 
     Examples
     --------
-    Get diagnostics printted to stdout:
+    Get diagnostics printed to stdout:
 
     .. ipython::
 
@@ -879,7 +879,7 @@ def diagnose(
     if bad_ess_params:
         has_errors = True
         messages.append(
-            f"The following parameters has fewer than {ess_min_ratio:.3f} effective draws per "
+            f"The following parameters have fewer than {ess_min_ratio:.3f} effective draws per "
             f"transition:\n  {', '.join(bad_ess_params)}\n"
             "Such low values indicate that the effective sample size estimators may be "
             "biased high and actual performance may be substantially lower than quoted."
@@ -905,7 +905,7 @@ def diagnose(
         if below_minimum_params:
             has_errors = True
             messages.append(
-                f"The following parameters has fewer than {ess_threshold} effective samples:\n"
+                f"The following parameters have fewer than {ess_threshold} effective samples:\n"
                 f"  {', '.join(below_minimum_params)}\n"
                 "This suggests that the sampler may not have fully explored the posterior "
                 "distribution for this parameter.\nConsider reparameterizing the model or "
@@ -950,7 +950,7 @@ def diagnose(
     if bad_rhat_params:
         has_errors = True
         messages.append(
-            f"The following parameters has R-hat values greater than {rhat_max:.2f}:\n"
+            f"The following parameters have R-hat values greater than {rhat_max:.2f}:\n"
             f"  {', '.join(bad_rhat_params)}\n"
             "Such high values indicate incomplete mixing and biased estimation.\n"
             "You should consider regularizing your model with additional prior information or "
