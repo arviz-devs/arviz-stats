@@ -492,12 +492,11 @@ class _DiagnosticsBase(_CoreBase):
         y_obs = np.asarray(y_obs).flat[0]
         abs_error = np.abs(ary - y_obs)
 
-        log_den = logsumexp(log_weights)
-        loo_weighted_abs_error = np.exp(logsumexp(log_weights, b=abs_error) - log_den)
-        loo_weighted_mean_prediction = np.exp(logsumexp(log_weights, b=ary) - log_den)
-
         weights = np.exp(log_weights - log_weights.max())
         weights /= np.sum(weights)
+
+        loo_weighted_abs_error = np.sum(weights * abs_error)
+        loo_weighted_mean_prediction = np.sum(weights * ary)
 
         idx = np.argsort(ary, kind="mergesort")
         values_sorted = ary[idx]

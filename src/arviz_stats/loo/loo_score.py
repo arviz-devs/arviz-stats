@@ -23,38 +23,47 @@ def loo_score(
     log_weights=None,
     pareto_k=None,
 ):
-    r"""Compute PWM-based CRPS/SCRPS with PSIS-LOO-CV weights.
+    r"""Compute CRPS or SCRPS with PSIS-LOO-CV weights.
 
-    Implements the probability-weighted-moment (PWM) identity for the continuous ranked
-    probability score (CRPS) with Pareto-smoothed importance sampling leave-one-out (PSIS-LOO-CV)
-    weights, but returns its negative as a maximization score (larger is better). This assumes
-    that the PSIS-LOO-CV approximation is working well.
+    Computes the continuous ranked probability score (CRPS) or its scale-invariant variant
+    (SCRPS) using Pareto-smoothed importance sampling leave-one-out (PSIS-LOO-CV) weights, and
+    returns its negative as a maximization score (larger is better). This assumes that the
+    PSIS-LOO-CV approximation is working well.
 
-    Specifically, the PWM identity used here is
+    Writing :math:`E_{\text{loo}}` for the PSIS-LOO-CV weighted expectation over
+    posterior-predictive draws :math:`X` (with :math:`X'` an independent copy), the CRPS is
 
     .. math::
 
         \operatorname{CRPS}_{\text{loo}}(F, y)
         = E_{\text{loo}}\left[|X - y|\right]
-        + E_{\text{loo}}[X]
-        - 2\cdot E_{\text{loo}} \left[X\,F_{\text{mid}}(X) \right],
+        - \frac{1}{2}\, E_{\text{loo}}\left[|X - X'|\right],
 
-    where :math:`F_{\text{mid}}` is the midpoint CDF estimator defined as
-    :math:`F_{\text{mid}}(x_{(i)}) := F^-_{(i)} + w_{(i)}/2`. This midpoint formulation
-    provides improved accuracy for weighted samples compared to the left-continuous CDF.
+    and the SCRPS is
 
-    The PWM identity is described in [3]_, traditional CRPS and SCRPS are described in
-    [1]_ and [2]_, and the PSIS-LOO-CV method is described in [4]_ and [5]_.
+    .. math::
+
+        S_{\text{SCRPS}}(F, y)
+        = -\frac{E_{\text{loo}}\left[|X - y|\right]}{E_{\text{loo}}\left[|X - X'|\right]}
+        - \frac{1}{2}\log E_{\text{loo}}\left[|X - X'|\right].
+
+    Both are evaluated with the probability-weighted-moment (PWM) estimator of [3]_, which
+    computes them exactly in :math:`\mathcal{O}(S \log S)` from a single set of draws.
+    Traditional CRPS and SCRPS are described in [1]_ and [2]_, and the PSIS-LOO-CV method in
+    [4]_ and [5]_.
 
     Parameters
     ----------
     data : DataTree or InferenceData
         Input data. It should contain the ``posterior_predictive``, ``observed_data`` and
-        ``log_likelihood`` groups.
+        ``log_likelihood`` groups. A ``posterior`` group is also required when
+        ``log_weights`` and ``pareto_k`` are not provided, as it is used to compute the
+        relative efficiency of the importance sampling estimate.
     var_name : str, optional
-        The name of the variable in the log_likelihood group to use. If None, the first
-        variable in ``observed_data`` is used and assumed to match ``log_likelihood`` and
-        ``posterior_predictive`` names.
+        The name of the variable in the log_likelihood group to use. If None, the only
+        variable in the ``log_likelihood`` group is used (an error is raised if there are
+        several) and assumed to match the ``observed_data`` and ``posterior_predictive``
+        names.
     kind : str, default "crps"
         The kind of score to compute. Available options are:
 
@@ -64,8 +73,8 @@ def loo_score(
         If True, include per-observation score values in the return object.
     round_to : int or str, optional
         If integer, number of decimal places to round the result. If string of the
-        form '2g' number of significant digits to round the result. Defaults to '2g'.
-        Use None to return raw numbers.
+        form '2g' number of significant digits to round the result. Defaults to None,
+        which returns raw numbers.
     log_weights : DataArray, optional
         Pre-computed smoothed log weights from PSIS. Must be provided together with pareto_k.
         If not provided, PSIS will be computed internally.
@@ -96,66 +105,6 @@ def loo_score(
 
         In [2]: loo_score(dt, kind="scrps")
 
-    Notes
-    -----
-    For a single observation with posterior-predictive draws :math:`x_1, \ldots, x_S`
-    and PSIS-LOO-CV weights :math:`w_i \propto \exp(\ell_i)` normalized so that
-    :math:`\sum_{i=1}^S w_i = 1`, define the PSIS-LOO-CV expectation as
-
-    .. math::
-
-        E_{\text{loo}}[g(X)] := \sum_{i=1}^S w_i\, g(x_i).
-
-    For weighted samples, we use the midpoint CDF estimator rather than the left-continuous CDF.
-    Given sorted values :math:`x_{(1)} \leq \cdots \leq x_{(S)}` with corresponding weights
-    :math:`w_{(i)}`, define the left-cumulative weight :math:`F^-_{(i)} = \sum_{j<i} w_{(j)}`
-    and the midpoint CDF as
-
-    .. math::
-
-        F_{\text{mid}}(x_{(i)}) := F^-_{(i)} + \frac{w_{(i)}}{2}.
-
-    The first probability-weighted moment using the midpoint CDF is
-    :math:`b_1 := \sum_{i=1}^S w_{(i)}\, x_{(i)}\, F_{\text{mid}}(x_{(i)})`.
-    With this, the nonnegative CRPS under PSIS-LOO-CV is
-
-    .. math::
-
-        \operatorname{CRPS}_{\text{loo}}(F, y)
-        = E_{\text{loo}}\left[\,|X-y|\,\right]
-        + E_{\text{loo}}[X] - 2\,b_1.
-
-    For the scale term for the SCRPS, we use the PSIS-LOO-CV weighted Gini mean difference given by
-    :math:`\Delta_{\text{loo}} := E_{\text{loo}}\left[\,|X - X'|\,\right]`.
-    This admits the PWM representation given by
-
-    .. math::
-
-        \Delta_{\text{loo}} =
-        2\,E_{\text{loo}}\left[\,X\,\left(2F_{\text{loo}}(X') - 1\right)\,\right].
-
-    A finite-sample weighted order-statistic version of this is used in the function and is given by
-
-    .. math::
-
-        \Delta_{\text{loo}} =
-        2 \sum_{i=1}^S w_{(i)}\, x_{(i)} \left\{\,2 F^-_{(i)} + w_{(i)} - 1\,\right\},
-
-    where :math:`x_{(i)}` are the values sorted increasingly, :math:`w_{(i)}` are the
-    corresponding normalized weights, and :math:`F^-_{(i)} = \sum_{j<i} w_{(j)}`.
-
-    The locally scale-invariant score returned for ``kind="scrps"`` is
-
-    .. math::
-
-        S_{\text{SCRPS}}(F, y)
-        = -\frac{E_{\text{loo}}\left[\,|X-y|\,\right]}{\Delta_{\text{loo}}}
-        - \frac{1}{2}\log \Delta_{\text{loo}}.
-
-    When PSIS weights are highly variable (large Pareto :math:`k`), Monte-Carlo noise can
-    increase. This function surfaces PSIS-LOO-CV diagnostics via ``pareto_k`` and warns when
-    tail behavior suggests unreliability.
-
     References
     ----------
 
@@ -178,6 +127,8 @@ def loo_score(
     """
     if kind not in {"crps", "scrps"}:
         raise ValueError(f"kind must be either 'crps' or 'scrps'. Got {kind}")
+    if (log_weights is None) != (pareto_k is None):
+        raise ValueError("log_weights and pareto_k must be provided together.")
 
     data = convert_to_datatree(data)
 
@@ -187,7 +138,6 @@ def loo_score(
     n_samples = loo_inputs.n_samples
     sample_dims = loo_inputs.sample_dims
     obs_dims = loo_inputs.obs_dims
-    r_eff = _get_r_eff(data, n_samples)
 
     y_pred = extract(
         data,
@@ -200,16 +150,16 @@ def loo_score(
 
     _validate_crps_input(y_pred, y_obs, log_likelihood, sample_dims=sample_dims, obs_dims=obs_dims)
 
-    if log_weights is not None and pareto_k is not None:
+    if log_weights is not None:
         pointwise_scores, pareto_k_out = y_pred.azstats.loo_score(
             y_obs=y_obs,
             log_weights=log_weights,
             pareto_k=pareto_k,
             kind=kind,
-            r_eff=r_eff,
             sample_dims=sample_dims,
         )
     else:
+        r_eff = _get_r_eff(data, n_samples)
         log_ratios = -log_likelihood
         pointwise_scores, pareto_k_out = y_pred.azstats.loo_score(
             y_obs=y_obs, log_ratios=log_ratios, kind=kind, r_eff=r_eff, sample_dims=sample_dims

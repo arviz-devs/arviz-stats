@@ -1,17 +1,29 @@
 """Test score functions for PSIS-LOO-CV."""
 
-# pylint: disable=redefined-outer-name, unused-argument
+# pylint: disable=redefined-outer-name, unused-argument, protected-access
 import pytest
 
 from ..helpers import importorskip
 
 np = importorskip("numpy")
 azb = importorskip("arviz_base")
+xr = importorskip("xarray")
 
 from numpy.testing import assert_almost_equal
 
 from arviz_stats import loo_score
+from arviz_stats.base import array_stats
 from arviz_stats.loo.loo_helper import _get_r_eff, _prepare_loo_inputs
+
+
+def _brute_force_score(values, log_weights, y_obs, kind):
+    weights = np.exp(log_weights - log_weights.max())
+    weights /= weights.sum()
+    e_abs = np.sum(weights * np.abs(values - y_obs))
+    delta = np.sum(weights[:, None] * weights[None, :] * np.abs(values[:, None] - values[None, :]))
+    if kind == "crps":
+        return -(e_abs - 0.5 * delta)
+    return -e_abs / delta - 0.5 * np.log(delta)
 
 
 def test_loo_score_invalid_kind(centered_eight):
@@ -184,3 +196,147 @@ def test_loo_score_precomputed_weights(centered_eight, kind):
         result_precomputed.pointwise.values, result_auto.pointwise.values, decimal=10
     )
     assert_almost_equal(result_precomputed.pareto_k.values, result_auto.pareto_k.values, decimal=10)
+
+
+@pytest.mark.parametrize("kind", ["crps", "scrps"])
+@pytest.mark.parametrize("center", [-100.0, -5.0, 0.0, 5.0])
+def test_loo_score_kernel_matches_brute_force(kind, center):
+    rng = np.random.default_rng(42)
+    values = rng.normal(center, 2.0, size=500)
+    log_weights = rng.normal(0, 1.5, size=500)
+    y_obs = center + 0.5
+
+    result = array_stats._loo_score(values, y_obs, log_weights, kind)
+    expected = _brute_force_score(values, log_weights, y_obs, kind)
+
+    assert_almost_equal(result, expected, decimal=12)
+
+
+@pytest.mark.parametrize("kind", ["crps", "scrps"])
+def test_loo_score_kernel_discrete_ties(kind):
+    rng = np.random.default_rng(42)
+    values = rng.poisson(3, size=400).astype(float)
+    log_weights = rng.normal(0, 1.0, size=400)
+
+    result = array_stats._loo_score(values, 2.0, log_weights, kind)
+    expected = _brute_force_score(values, log_weights, 2.0, kind)
+
+    assert_almost_equal(result, expected, decimal=12)
+
+
+def test_loo_score_kernel_small_samples():
+    result = array_stats._loo_score(np.array([2.0]), 3.0, np.array([0.0]), "crps")
+    assert_almost_equal(result, -1.0, decimal=14)
+
+    values = np.array([1.0, 3.0])
+    log_weights = np.zeros(2)
+    result = array_stats._loo_score(values, 2.0, log_weights, "crps")
+    expected = _brute_force_score(values, log_weights, 2.0, "crps")
+    assert_almost_equal(result, expected, decimal=14)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize("kind", ["crps", "scrps"])
+def test_loo_score_shift_invariance(kind):
+    rng = np.random.default_rng(42)
+    mu = rng.normal(size=(2, 50))
+    y_pred = rng.normal(size=(2, 50, 5))
+    log_lik = rng.normal(size=(2, 50, 5))
+    y = rng.normal(size=5)
+    shift = -50.0
+
+    dt = azb.from_dict(
+        {
+            "posterior": {"mu": mu},
+            "posterior_predictive": {"y": y_pred},
+            "log_likelihood": {"y": log_lik},
+            "observed_data": {"y": y},
+        }
+    )
+    dt_shifted = azb.from_dict(
+        {
+            "posterior": {"mu": mu},
+            "posterior_predictive": {"y": y_pred + shift},
+            "log_likelihood": {"y": log_lik},
+            "observed_data": {"y": y + shift},
+        }
+    )
+
+    result = loo_score(dt, kind=kind, pointwise=True)
+    result_shifted = loo_score(dt_shifted, kind=kind, pointwise=True)
+
+    assert np.all(np.isfinite(result.pointwise.values))
+    assert_almost_equal(result_shifted.pointwise.values, result.pointwise.values, decimal=10)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize("kind", ["crps", "scrps"])
+def test_loo_score_negative_data(kind):
+    rng = np.random.default_rng(42)
+    mu = rng.normal(-5, 0.1, size=(4, 100))
+    y = rng.normal(-5, 1, size=6)
+    y_pred = rng.normal(mu[..., None], 1.0, size=(4, 100, 6))
+    log_lik = -0.5 * (y[None, None, :] - mu[..., None]) ** 2 - 0.5 * np.log(2 * np.pi)
+
+    dt = azb.from_dict(
+        {
+            "posterior": {"mu": mu},
+            "posterior_predictive": {"y": y_pred},
+            "log_likelihood": {"y": log_lik},
+            "observed_data": {"y": y},
+        }
+    )
+
+    result = loo_score(dt, kind=kind, pointwise=True)
+
+    assert np.isfinite(result.mean)
+    assert np.isfinite(result.se)
+    assert np.all(np.isfinite(result.pointwise.values))
+    if kind == "crps":
+        assert np.all(result.pointwise.values <= 0)
+
+
+def test_loo_score_lone_precomputed_arg_raises(centered_eight):
+    loo_inputs = _prepare_loo_inputs(centered_eight, None)
+    log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
+        dim=["chain", "draw"],
+        r_eff=_get_r_eff(centered_eight, loo_inputs.n_samples),
+    )
+
+    with pytest.raises(ValueError, match="must be provided together"):
+        loo_score(centered_eight, log_weights=log_weights)
+    with pytest.raises(ValueError, match="must be provided together"):
+        loo_score(centered_eight, pareto_k=pareto_k)
+
+
+@pytest.mark.parametrize("kind", ["crps", "scrps"])
+def test_loo_score_precomputed_weights_used(centered_eight, kind):
+    result_auto = loo_score(centered_eight, kind=kind, pointwise=True)
+
+    uniform_log_weights = xr.zeros_like(centered_eight.log_likelihood["obs"])
+    flat_pareto_k = xr.zeros_like(centered_eight.observed_data["obs"])
+    result_uniform = loo_score(
+        centered_eight,
+        kind=kind,
+        pointwise=True,
+        log_weights=uniform_log_weights,
+        pareto_k=flat_pareto_k,
+    )
+
+    assert not np.allclose(result_uniform.pointwise.values, result_auto.pointwise.values)
+
+
+@pytest.mark.parametrize("kind", ["crps", "scrps"])
+def test_loo_score_precomputed_no_posterior(centered_eight, kind):
+    loo_inputs = _prepare_loo_inputs(centered_eight, None)
+    log_weights, pareto_k = loo_inputs.log_likelihood.azstats.psislw(
+        dim=["chain", "draw"],
+        r_eff=_get_r_eff(centered_eight, loo_inputs.n_samples),
+    )
+    dt_no_posterior = centered_eight.drop_nodes("posterior")
+
+    result = loo_score(dt_no_posterior, kind=kind, log_weights=log_weights, pareto_k=pareto_k)
+    result_full = loo_score(centered_eight, kind=kind, log_weights=log_weights, pareto_k=pareto_k)
+
+    assert_almost_equal(result.mean, result_full.mean, decimal=10)
+    assert_almost_equal(result.se, result_full.se, decimal=10)
