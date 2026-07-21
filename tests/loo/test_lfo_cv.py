@@ -89,6 +89,26 @@ def test_lfo_cv_min_observations(constant_lfo_wrapper, lfo_constant_data, min_ob
     assert result.n_data_points == n_time - horizon - min_obs + 1
 
 
+def test_lfo_cv_single_forecast_origin(constant_lfo_wrapper, lfo_constant_data):
+    n_time = lfo_constant_data.log_likelihood["obs"].sizes["time"]
+    horizon = 3
+    min_obs = n_time - horizon
+
+    result = lfo_cv(
+        lfo_constant_data,
+        constant_lfo_wrapper,
+        min_observations=min_obs,
+        forecast_horizon=horizon,
+        method="exact",
+        pointwise=True,
+    )
+
+    assert result.n_data_points == 1
+    assert result.elpd_i.sizes["time"] == 1
+    assert result.se == 0.0
+    np.testing.assert_allclose(result.elpd, horizon * constant_lfo_wrapper.const)
+
+
 def test_lfo_cv_custom_time_dim(custom_dim_lfo_wrapper, lfo_custom_dim_data):
     min_obs, horizon = 5, 2
     n_time = lfo_custom_dim_data.log_likelihood["obs"].sizes["week"]
@@ -132,6 +152,36 @@ def test_lfo_cv_elpd_and_se(varying_lfo_wrapper, lfo_varying_data):
     elpd_i = result.elpd_i.values
     assert np.isclose(elpd_i.sum(), result.elpd)
     assert np.isclose(result.se, np.sqrt(result.n_data_points * np.var(elpd_i)))
+
+
+def test_lfo_cv_p_nonzero(constant_lfo_wrapper, lfo_constant_data):
+    log_lik = lfo_constant_data.log_likelihood["obs"]
+    n_chains, n_draws = log_lik.sizes["chain"], log_lik.sizes["draw"]
+    n_time = log_lik.sizes["time"]
+    data = azb.from_dict(
+        {
+            "posterior": {"mu": np.zeros((n_chains, n_draws))},
+            "log_likelihood": {"obs": np.full((n_chains, n_draws, n_time), -2.0)},
+            "observed_data": {"obs": np.arange(n_time, dtype=float)},
+        },
+        dims={"obs": ["time"]},
+        coords={"time": np.arange(n_time)},
+    )
+    min_obs, horizon = 5, 3
+    n_origins = n_time - horizon - min_obs + 1
+
+    result = lfo_cv(
+        data,
+        constant_lfo_wrapper,
+        min_observations=min_obs,
+        forecast_horizon=horizon,
+        method="exact",
+        pointwise=True,
+    )
+
+    expected_p = n_origins * horizon * (-2.0 - constant_lfo_wrapper.const)
+    assert not np.isclose(result.p, 0.0)
+    assert np.isclose(result.p, expected_p)
 
 
 def test_lfo_cv_approx_tracks_exact(varying_lfo_wrapper, lfo_varying_data):

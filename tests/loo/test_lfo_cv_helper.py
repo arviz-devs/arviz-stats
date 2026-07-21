@@ -77,6 +77,14 @@ def test_prepare_lfo_inputs_requires_wrapper(lfo_constant_data):
         _prepare_lfo_inputs(lfo_constant_data, None, object(), 5, 3, "time")
 
 
+def test_prepare_lfo_inputs_incomplete_wrapper(lfo_constant_data):
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    bare_wrapper = SamplingWrapper(model=None, idata_orig=lfo_constant_data)
+    with pytest.raises(ValueError, match="must be implemented"):
+        _prepare_lfo_inputs(lfo_constant_data, None, bare_wrapper, 5, 3, "time")
+
+
 def test_prepare_lfo_inputs_rejects_extra_obs_dims(constant_lfo_wrapper):
     n_chains, n_draws = 2, 20
     data = azb.from_dict(
