@@ -175,7 +175,6 @@ def lfo_cv(
     See Also
     --------
     :func:`loo` : Pareto-smoothed importance sampling LOO-CV.
-    :func:`loo_kfold` : Exact :math:`K`-fold cross-validation.
     :func:`compare` : Compare models based on their ELPD.
 
     References

@@ -134,6 +134,27 @@ def test_lfo_cv_elpd_and_se(varying_lfo_wrapper, lfo_varying_data):
     assert np.isclose(result.se, np.sqrt(result.n_data_points * np.var(elpd_i)))
 
 
+def test_lfo_cv_approx_tracks_exact(varying_lfo_wrapper, lfo_varying_data):
+    exact = lfo_cv(
+        lfo_varying_data,
+        varying_lfo_wrapper,
+        min_observations=8,
+        forecast_horizon=2,
+        method="exact",
+        pointwise=True,
+    )
+    approx = lfo_cv(
+        lfo_varying_data,
+        varying_lfo_wrapper,
+        min_observations=8,
+        forecast_horizon=2,
+        method="approx",
+        pointwise=True,
+    )
+
+    np.testing.assert_allclose(approx.elpd_i.values, exact.elpd_i.values, atol=0.1)
+
+
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_lfo_cv_forced_refit_matches_exact(varying_lfo_wrapper, lfo_varying_data):
     exact = lfo_cv(

@@ -160,7 +160,7 @@ def _compute_lfo_approx(lfo_inputs, wrapper, k_threshold):
         else:
             log_ratios = ll_star.isel({time_dim: slice(0, offset)}).sum(time_dim)
             try:
-                log_weights, pareto_k = log_ratios.azstats.psislw(dim=star_dims, r_eff=r_eff)
+                log_weights, pareto_k = (-log_ratios).azstats.psislw(dim=star_dims, r_eff=r_eff)
             except ValueError:
                 log_weights, pareto_k = None, np.inf
             if pareto_k > k_threshold:
