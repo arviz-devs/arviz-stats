@@ -13,9 +13,9 @@ from arviz_stats.utils import get_log_likelihood
 
 __all__ = [
     "_prepare_lfo_inputs",
-    "_validate_lfo_parameters",
     "_compute_lfo_exact",
     "_compute_lfo_approx",
+    "_validate_lfo_parameters",
 ]
 
 LFOInputs = namedtuple(
@@ -82,33 +82,32 @@ def _prepare_lfo_inputs(data, var_name, wrapper, min_observations, forecast_hori
     )
 
 
-def _validate_lfo_parameters(min_observations, forecast_horizon, n_time_points):
-    """Check that the LFO-CV window parameters are consistent with the data."""
-    if not isinstance(min_observations, int | np.integer) or min_observations < 1:
-        raise ValueError(f"min_observations must be a positive integer, got {min_observations}")
-
-    if not isinstance(forecast_horizon, int | np.integer) or forecast_horizon < 1:
-        raise ValueError(f"forecast_horizon must be a positive integer, got {forecast_horizon}")
-
-    if min_observations >= n_time_points:
-        raise ValueError(
-            f"min_observations ({min_observations}) must be less than "
-            f"the number of time points ({n_time_points})"
-        )
-
-    if min_observations + forecast_horizon > n_time_points:
-        raise ValueError(
-            f"min_observations ({min_observations}) + forecast_horizon ({forecast_horizon}) "
-            f"= {min_observations + forecast_horizon} exceeds the number of "
-            f"time points ({n_time_points})"
-        )
-
-
 def _compute_lfo_exact(lfo_inputs, wrapper):
     """Compute LFO-CV by refitting the model at every forecast origin.
 
     For each origin ``i`` the model is refit on ``y[:i]`` and scored on the joint predictive
     density of the block ``y[i:i + forecast_horizon]``.
+
+    Parameters
+    ----------
+    lfo_inputs : LFOInputs
+        Prepared inputs from ``_prepare_lfo_inputs``.
+    wrapper : SamplingWrapper
+        Wrapper instance handling model refitting.
+
+    Returns
+    -------
+    LFOResults
+        A namedtuple containing:
+
+        - elpd: Total expected log pointwise predictive density
+        - se: Standard error of the elpd
+        - p: Effective number of parameters
+        - n_data_points: Number of forecast origins evaluated
+        - elpd_i: Per-origin elpd values along the time dimension
+        - p_lfo_i: Per-origin effective number of parameters
+        - refits: Time indices where refits occurred, every origin for the exact method
+        - pareto_k: None for the exact method
     """
     ll_full = lfo_inputs.log_likelihood
     sample_dims = lfo_inputs.sample_dims
@@ -136,6 +135,30 @@ def _compute_lfo_approx(lfo_inputs, wrapper, k_threshold):
     Starting from a fit on ``y[:min_observations]``, the posterior is carried forward with
     importance weights over the observations added since the last refit, and the model is only
     refit when the Pareto :math:`k` of those weights exceeds ``k_threshold``.
+
+    Parameters
+    ----------
+    lfo_inputs : LFOInputs
+        Prepared inputs from ``_prepare_lfo_inputs``.
+    wrapper : SamplingWrapper
+        Wrapper instance handling model refitting.
+    k_threshold : float
+        Pareto k threshold above which the model is refit.
+
+    Returns
+    -------
+    LFOResults
+        A namedtuple containing:
+
+        - elpd: Total expected log pointwise predictive density
+        - se: Standard error of the elpd
+        - p: Effective number of parameters
+        - n_data_points: Number of forecast origins evaluated
+        - elpd_i: Per-origin elpd values along the time dimension
+        - p_lfo_i: Per-origin effective number of parameters
+        - refits: Time indices where PSIS triggered a refit
+        - pareto_k: Per-origin Pareto k values, NaN at the first origin and wherever a
+          refit occurred
     """
     ll_full = lfo_inputs.log_likelihood
     sample_dims = lfo_inputs.sample_dims
@@ -190,8 +213,28 @@ def _refit_loglik(lfo_inputs, wrapper, cutoff):
 
     The returned array is indexed so that position ``0`` corresponds to observation ``cutoff``,
     which lets a caller slice out the importance-ratio observations and the forecast block by
-    their offset from the refit. Also returns the sample dimensions, sample count, and inference
-    data of the refit.
+    their offset from the refit.
+
+    Parameters
+    ----------
+    lfo_inputs : LFOInputs
+        Prepared inputs from ``_prepare_lfo_inputs``.
+    wrapper : SamplingWrapper
+        Wrapper instance handling model refitting.
+    cutoff : int
+        Number of leading observations to train on.
+
+    Returns
+    -------
+    log_lik : DataArray
+        Log likelihood of observations ``cutoff`` onward, evaluated at the refit
+        posterior draws.
+    sample_dims : list of str
+        Dimensions of ``log_lik`` other than the time dimension.
+    n_samples : int
+        Number of posterior draws in the refit.
+    idata : DataTree
+        Inference data of the refit returned by the wrapper.
     """
     exclude_idx = np.arange(cutoff, lfo_inputs.n_time_points)
     train_data, excluded_data = wrapper.sel_observations(exclude_idx)
@@ -228,3 +271,25 @@ def _assemble_results(lfo_inputs, origins, elpds, lpds, refits, pareto_k_values)
         refits=refits,
         pareto_k=pareto_k,
     )
+
+
+def _validate_lfo_parameters(min_observations, forecast_horizon, n_time_points):
+    """Check that the LFO-CV window parameters are consistent with the data."""
+    if not isinstance(min_observations, int | np.integer) or min_observations < 1:
+        raise ValueError(f"min_observations must be a positive integer, got {min_observations}")
+
+    if not isinstance(forecast_horizon, int | np.integer) or forecast_horizon < 1:
+        raise ValueError(f"forecast_horizon must be a positive integer, got {forecast_horizon}")
+
+    if min_observations >= n_time_points:
+        raise ValueError(
+            f"min_observations ({min_observations}) must be less than "
+            f"the number of time points ({n_time_points})"
+        )
+
+    if min_observations + forecast_horizon > n_time_points:
+        raise ValueError(
+            f"min_observations ({min_observations}) + forecast_horizon ({forecast_horizon}) "
+            f"= {min_observations + forecast_horizon} exceeds the number of "
+            f"time points ({n_time_points})"
+        )

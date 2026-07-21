@@ -31,9 +31,6 @@ def lfo_cv(
     Estimates the expected log pointwise predictive density (elpd) for time series models by
     forecasting future observations from progressively expanding training windows, scoring the
     joint predictive density of the next few observations at each step as described in [1]_.
-    The exact method refits the model at every step, whereas the approximate method carries the
-    posterior forward with Pareto-smoothed importance sampling (PSIS) [3]_ and refits only
-    when the importance weights become unreliable.
 
     Parameters
     ----------
@@ -61,7 +58,9 @@ def lfo_cv(
         The name of the variable in log_likelihood group storing the pointwise log
         likelihood data to use for computation.
     method : str, default="approx"
-        Method to use: "exact" (always refit) or "approx" (use PSIS when possible).
+        Whether to refit the model at every forecast origin ("exact") or to carry the
+        posterior forward with Pareto-smoothed importance sampling (PSIS) [3]_, refitting
+        only when the importance weights become unreliable ("approx").
     k_threshold : float, default=0.7
         Pareto k threshold for triggering refit. If k > k_threshold, refit the model.
         Recommended values: 0.6 (conservative) or 0.7 (default).
@@ -171,6 +170,19 @@ def lfo_cv(
     .. ipython::
 
         In [4]: lfo_cv(idata, wrapper, min_observations=10, forecast_horizon=4)
+
+    Notes
+    -----
+    For ``forecast_horizon > 1``, results depend on the prediction pattern used to score
+    the forecast block. ``lfo_cv`` follows the conditional pattern, where each block
+    observation is scored given the observed values of the ones before it, yielding the
+    chain-rule factorization of the joint predictive density.
+
+    An alternative forecasting pattern scores each block observation against simulated
+    values of its predecessors rather than the observed ones, letting predictive
+    uncertainty propagate through the block. The two patterns estimate different quantities
+    and should not be mixed when comparing models. They coincide for ``forecast_horizon=1``
+    and whenever the likelihood does not depend on lagged response values.
 
     See Also
     --------
