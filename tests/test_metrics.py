@@ -99,6 +99,22 @@ def test_residual_r2_invalid_shapes():
         array_stats.residual_r2(y_true, y_pred)
 
 
+def test_bayesian_r2_no_scale_warns():
+    rng = np.random.default_rng(0)
+    mu_pred = rng.uniform(0.1, 0.9, size=(200, 40))
+    with pytest.warns(UserWarning, match="Bernoulli"):
+        r2 = array_stats.bayesian_r2(mu_pred)
+    assert np.all((r2 >= 0) & (r2 <= 1))
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_bayesian_r2_continuous_no_scale_errors():
+    rng = np.random.default_rng(0)
+    mu_pred = rng.normal(0.0, 0.05, size=(200, 40))
+    with pytest.raises(ValueError, match=r"outside \[0, 1\]"):
+        array_stats.bayesian_r2(mu_pred)
+
+
 def test_bayesian_r2_summary(datatree_regression):
     result = bayesian_r2(datatree_regression, pred_mean="mu", scale="sigma")
     assert isinstance(result, tuple)
