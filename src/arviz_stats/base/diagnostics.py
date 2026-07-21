@@ -1538,9 +1538,10 @@ class _DiagnosticsBase(_CoreBase):
                 raise ValueError("scale must be provided for circular response.")
 
             warnings.warn(
-                "`scale` not provided; assuming a Bernoulli-like model and using the Tjur "
-                "pseudo-variance mean(mu_pred * (1 - mu_pred)). For continuous models pass the "
-                "modelled residual `scale`.",
+                "`scale` was not provided, so a Bernoulli/binary model is assumed and the "
+                "pseudo-variance `mean(mu_pred * (1 - mu_pred))` is used as the residual "
+                "variance. This is only valid when `mu_pred` are probabilities in [0, 1]. "
+                "For continuous (e.g. Gaussian) models, pass the modelled residual `scale`.",
                 UserWarning,
                 stacklevel=2,
             )
