@@ -107,6 +107,7 @@ def test_bayesian_r2_no_scale_warns():
     assert np.all((r2 >= 0) & (r2 <= 1))
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_bayesian_r2_continuous_no_scale_errors():
     rng = np.random.default_rng(0)
     mu_pred = rng.normal(0.0, 0.05, size=(200, 40))
