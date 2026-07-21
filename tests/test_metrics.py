@@ -100,7 +100,6 @@ def test_residual_r2_invalid_shapes():
 
 
 def test_bayesian_r2_no_scale_warns():
-    # Bernoulli-appropriate mu_pred in [0, 1], scale omitted -> Tjur fallback + warning.
     rng = np.random.default_rng(0)
     mu_pred = rng.uniform(0.1, 0.9, size=(200, 40))
     with pytest.warns(UserWarning, match="Bernoulli"):
