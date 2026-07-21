@@ -108,8 +108,6 @@ def test_bayesian_r2_no_scale_warns():
 
 
 def test_bayesian_r2_continuous_no_scale_errors():
-    # Continuous mu_pred (real-valued), scale omitted -> Bernoulli fallback yields R² outside
-    # [0, 1], which must raise instead of returning silently.
     rng = np.random.default_rng(0)
     mu_pred = rng.normal(0.0, 0.05, size=(200, 40))
     with pytest.raises(ValueError, match=r"outside \[0, 1\]"):
