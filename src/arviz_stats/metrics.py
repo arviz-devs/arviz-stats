@@ -107,9 +107,11 @@ def bayesian_r2(
 
     Examples
     --------
-    Calculate Bayesian :math:`R^2` for logistic regression:
+    Calculate Bayesian :math:`R^2` for logistic regression. ``scale`` is omitted, so the
+    Bernoulli pseudo-variance is used and a warning is emitted (expected here):
 
     .. ipython::
+        :okwarning:
 
         In [1]: from arviz_stats import bayesian_r2
            ...: from arviz_base import load_arviz_data
