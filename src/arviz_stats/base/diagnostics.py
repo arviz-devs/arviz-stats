@@ -1566,9 +1566,10 @@ class _DiagnosticsBase(_CoreBase):
         r2 = var_y_est / (var_y_est + scale)
         if np.any((r2 < 0) | (r2 > 1)):
             raise ValueError(
-                "Computed R² outside [0, 1]. This usually means the Bernoulli "
-                "pseudo-variance fallback was applied to a non-probability `mu_pred`; "
-                "pass the modelled residual `scale` for continuous models."
+                "Computed R-squared outside [0, 1]. The Bernoulli pseudo-variance "
+                "`mean(mu_pred * (1 - mu_pred))` was used because `scale` was not provided, "
+                "but `mu_pred` are not probabilities in [0, 1]. Pass the modelled residual "
+                "`scale` for continuous models."
             )
         return r2
 
