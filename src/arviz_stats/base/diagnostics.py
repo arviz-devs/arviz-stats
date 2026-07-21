@@ -1537,6 +1537,13 @@ class _DiagnosticsBase(_CoreBase):
             if circular:
                 raise ValueError("scale must be provided for circular response.")
 
+            warnings.warn(
+                "`scale` not provided; assuming a Bernoulli-like model and using the Tjur "
+                "pseudo-variance mean(mu_pred * (1 - mu_pred)). For continuous models pass the "
+                "modelled residual `scale`.",
+                UserWarning,
+                stacklevel=2,
+            )
             # Bernoulli-like models: use Tjur’s pseudo-variance
             scale = np.mean(mu_pred * (1 - mu_pred), axis=1)
         else:
@@ -1555,7 +1562,14 @@ class _DiagnosticsBase(_CoreBase):
             return 1 - scale
 
         var_y_est = np.var(mu_pred, axis=1, ddof=1)
-        return var_y_est / (var_y_est + scale)
+        r2 = var_y_est / (var_y_est + scale)
+        if np.any((r2 < 0) | (r2 > 1)):
+            raise ValueError(
+                "Computed R² outside [0, 1]. This usually means the Bernoulli "
+                "pseudo-variance fallback was applied to a non-probability `mu_pred`; "
+                "pass the modelled residual `scale` for continuous models."
+            )
+        return r2
 
     @staticmethod
     def _residual_r2(y_obs, mu_pred, circular):
