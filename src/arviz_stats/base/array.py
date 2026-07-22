@@ -849,7 +849,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
-    def bayesian_r2(self, mu_pred, scale=None, scale_kind="sd", circular=False):
+    def bayesian_r2(self, mu_pred, scale, scale_kind="sd", circular=False):
         """Compute Bayesian R² for regression models."""
         r2_ufunc = make_ufunc(
             self._bayesian_r2,
