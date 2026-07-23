@@ -7,10 +7,10 @@ from copy import deepcopy
 
 import arviz_base as azb
 import numpy as np
+import pymc
 import xarray
 import xarray as xr
 from _typeshed import Incomplete
-from _typeshed import Incomplete as Model
 from _typeshed import Incomplete as SplitMomentMatch
 from arviz_base import dataset_to_dataarray, rcParams
 from numpy.typing import NDArray
@@ -48,7 +48,7 @@ def loo_moment_match(
     split: bool = ...,
     cov: bool = ...,
     pointwise: bool | None = ...,
-    model: Model | None = ...,
+    model: pymc.Model | None = ...,
 ) -> ELPDData: ...
 def _split_moment_match(
     upars: DataArray,
@@ -62,48 +62,48 @@ def _split_moment_match(
     log_lik_i_upars_fn: Callable,
 ) -> SplitMomentMatch: ...
 def _loo_moment_match_i(
-    i: Incomplete,
-    upars: Incomplete,
-    log_likelihood: Incomplete,
-    log_prob_upars_fn: Incomplete,
-    log_lik_i_upars_fn: Incomplete,
-    max_iters: Incomplete,
-    k_threshold: Incomplete,
-    split: Incomplete,
-    cov: Incomplete,
-    orig_log_prob: Incomplete,
-    ks: Incomplete,
-    log_weights: Incomplete,
-    pareto_k: Incomplete,
-    r_eff: Incomplete,
-    sample_dims: Incomplete,
-    obs_dims: Incomplete,
-    n_samples: Incomplete,
-    n_params: Incomplete,
-    param_dim_name: Incomplete,
-    var_name: Incomplete,
+    i: int,
+    upars: xr.DataArray,
+    log_likelihood: xr.DataArray,
+    log_prob_upars_fn: Callable,
+    log_lik_i_upars_fn: Callable,
+    max_iters: int,
+    k_threshold: float,
+    split: bool,
+    cov: bool,
+    orig_log_prob: xr.DataArray,
+    ks: np.ndarray,
+    log_weights: xr.DataArray | None,
+    pareto_k: xr.DataArray,
+    r_eff: xr.DataArray | float | None,
+    sample_dims: list,
+    obs_dims: list,
+    n_samples: int,
+    n_params: int,
+    param_dim_name: str,
+    var_name: str,
 ) -> None: ...
 def _update_loo_data_i(
-    loo_data: Incomplete,
-    i: Incomplete,
-    new_elpd_i: Incomplete,
-    new_pareto_k: Incomplete,
-    log_liki: Incomplete,
-    sample_dims: Incomplete,
-    obs_dims: Incomplete,
-    n_samples: Incomplete,
-    n_eff_i: Incomplete = ...,
-    original_log_liki: Incomplete = ...,
-    log_weights_i: Incomplete = ...,
-    suppress_warnings: Incomplete = ...,
+    loo_data: ELPDData,
+    i: int,
+    new_elpd_i: float,
+    new_pareto_k: float,
+    log_liki: xr.DataArray,
+    sample_dims: list,
+    obs_dims: list,
+    n_samples: int,
+    n_eff_i: float | None = ...,
+    original_log_liki: xr.DataArray | None = ...,
+    log_weights_i: xr.DataArray | None = ...,
+    suppress_warnings: bool = ...,
 ) -> None: ...
 def _update_quantities_i(
-    upars: Incomplete,
-    i: Incomplete,
-    orig_log_prob: Incomplete,
-    log_prob_upars_fn: Incomplete,
-    log_lik_i_upars_fn: Incomplete,
-    reff_i: Incomplete,
-    sample_dims: Incomplete,
+    upars: xr.DataArray,
+    i: int,
+    orig_log_prob: xr.DataArray,
+    log_prob_upars_fn: Callable,
+    log_lik_i_upars_fn: Callable,
+    reff_i: float,
+    sample_dims: list,
 ) -> None: ...
-def _wrap__psislw(log_weights: Incomplete, sample_dims: Incomplete, r_eff: Incomplete) -> None: ...
+def _wrap__psislw(log_weights: xr.DataArray, sample_dims: list, r_eff: float) -> None: ...

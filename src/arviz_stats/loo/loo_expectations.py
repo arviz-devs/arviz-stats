@@ -46,19 +46,19 @@ def loo_expectations(
 
     Parameters
     ----------
-    data: DataTree or InferenceData
+    data : DataTree or InferenceData
         It should contain the selected `group` and `log_likelihood`.
-    var_name: str, optional
+    var_name : str, optional
         The name of the variable to compute the expectations for.
-    group: str
+    group : str
         Group from which to compute weighted expectations. Defaults to ``posterior_predictive``.
     sample_dims : str or sequence of hashable, optional
         Defaults to ``rcParams["data.sample_dims"]``
-    log_likelihood_var_name: str, optional
+    log_likelihood_var_name : str, optional
         The name of the variable in the log_likelihood group to use for loo computation.
         When log_likelihood contains more than one variable and group is ``posterior``,
         this must be provided.
-    kind: str, optional
+    kind : str, optional
         The kind of expectation to compute. Available options are:
 
         - 'mean'. Default.
@@ -69,7 +69,7 @@ def loo_expectations(
         - 'circular_mean'.
         - 'circular_var'.
         - 'circular_sd'.
-    probs: float or list of float, optional
+    probs : float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
     log_weights : DataArray, optional
         Pre-computed smoothed log weights from PSIS. Must be provided together with pareto_k.
@@ -258,9 +258,9 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to=None):
 
     Parameters
     ----------
-    data: DataTree or InferenceData
+    data : DataTree or InferenceData
         It should contain groups `observed_data`, `posterior_predictive` and  `log_likelihood`.
-    kind: str
+    kind : str
         The kind of metric to compute. Available options are:
 
         - 'mae': mean absolute error.
@@ -269,16 +269,16 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to=None):
         - 'acc': classification accuracy.
         - 'acc_balanced': balanced classification accuracy.
 
-    var_name: str, optional
+    var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
         If integer, number of decimal places to round the result. If string of the
         form '2g' number of significant digits to round the result. Defaults to '2g'.
 
     Returns
     -------
-    estimate: namedtuple
+    estimate : namedtuple
         A namedtuple with the mean of the computed metric and its standard error.
 
     Examples
@@ -337,35 +337,33 @@ def loo_r2(
 
     Parameters
     ----------
-    data: DataTree or InferenceData
+    data : DataTree or InferenceData
         It should contain groups `observed_data`, `posterior_predictive` and `log_likelihood`.
     var_name : str
         Name of the observed variable
     n_simulations : int, default 4000
         Number of Dirichlet-weighted bootstrap samples for variance estimation.
-    circular : bool, default False
-        Whether the variable is circular (angles in radians, range [-π, π]).
-    summary: bool
+    summary : bool
         Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
-    point_estimate: str
+    point_estimate : str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
         summary is False.
-    ci_kind: str
+    ci_kind : str
         The kind of credible interval to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.ci_kind"]. Ignored if
         summary is False.
-    ci_prob: float
+    ci_prob : float
         The probability for the credible interval. If None, the default value is used.
         Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
         summary is False.
-    circular: bool
+    circular : bool
         Whether to compute the Bayesian :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
         We use the same definition of :math:`R^2` for circular data as in the linear case,
         but using circular variance instead of regular variance.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to

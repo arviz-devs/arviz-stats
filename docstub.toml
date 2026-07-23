@@ -3,6 +3,8 @@ numbers = "numbers"
 xarray = "xarray"
 pandas = "pandas"
 types = "types"
+pymc = "pymc"
+pytensor = "pytensor"
 
 # Specify human-friendly aliases that can be used instead of Python-parsable
 # annotations.

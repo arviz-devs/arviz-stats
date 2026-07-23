@@ -6,6 +6,7 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from arviz_base import rcParams
+from numpy.typing import ArrayLike
 from scipy.optimize import Bounds, LinearConstraint, minimize
 from scipy.stats import dirichlet, norm
 
@@ -40,9 +41,9 @@ def compare(
 
     Parameters
     ----------
-    compare_dict: dict of {str: DataTree or ELPDData}
+    compare_dict : dict of {str: DataTree or ELPDData}
         A dictionary of model names and :class:`xr.DataTree` or ``ELPDData``.
-    method: str, optional
+    method : str, optional
         Method used to estimate the weights for each model. Available options are:
 
         - 'stacking' : stacking of predictive distributions.
@@ -52,10 +53,10 @@ def compare(
           weighting, without Bootstrap stabilization (not recommended).
 
         For more information read https://arxiv.org/abs/1704.02030
-    var_name: str, optional
+    var_name : str, optional
         If there is more than a single observed variable in the ``InferenceData``, which
         should be used as the basis for comparison.
-    reference: str, optional
+    reference : str, optional
         Name of the reference model used for computing ``elpd_diff``. If ``None`` (default),
         the best-performing model (highest ELPD) is used as the reference. When specified,
         all ``elpd_diff`` values are computed relative to this model, which will have
@@ -388,7 +389,7 @@ def compare(
     return result
 
 
-def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
+def _compute_elpd_diff_subsampled(elpd_a: ELPDData, elpd_b: ELPDData):
     """Compute ELPD differences for subsampled models."""
     subsample_a = getattr(elpd_a, "loo_subsample_observations", None)
     subsample_b = getattr(elpd_b, "loo_subsample_observations", None)
@@ -454,7 +455,13 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
     return result
 
 
-def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subsample_b=None):
+def _difference_estimator(
+    elpd_a: ELPDData,
+    elpd_b: ELPDData,
+    shared_indices: ArrayLike,
+    subsample_a: ArrayLike | None = None,
+    subsample_b: ArrayLike | None = None,
+):
     """Compute ELPD difference using the difference-of-estimators approach."""
     shared = np.asarray(shared_indices, dtype=int)
     ordered_shared = next(
@@ -525,7 +532,7 @@ def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subs
     }
 
 
-def _compute_naive_diff(elpd_a, elpd_b):
+def _compute_naive_diff(elpd_a: ELPDData, elpd_b: ELPDData):
     """Compute naive ELPD difference using paired observations."""
     elpd_diff = elpd_a.elpd - elpd_b.elpd
     se_a = getattr(elpd_a, "se", 0.0)
@@ -542,7 +549,7 @@ def _compute_naive_diff(elpd_a, elpd_b):
     return result
 
 
-def _ic_matrix(ics):
+def _ic_matrix(ics: pd.DataFrame):
     """Store the previously computed pointwise predictive accuracy values (ics) in a 2D matrix."""
     cols, _ = ics.shape
     rows = len(ics["elpd_i"].iloc[0])
@@ -645,7 +652,7 @@ def _calculate_ics(
     return new_compare_dict
 
 
-def _order_stat_check(ics_dict, model_order, has_subsampling):
+def _order_stat_check(ics_dict: dict, model_order: list, has_subsampling: bool):
     """Perform order statistics-based checks on models."""
     if has_subsampling or len(ics_dict) <= 11:
         return

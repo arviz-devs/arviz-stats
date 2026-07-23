@@ -2,7 +2,7 @@
 
 import warnings
 from collections import namedtuple
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 
 import numpy as np
@@ -45,16 +45,16 @@ __all__ = [
     "_validate_log_lik_fn_result",
 ]
 
-LooInputs = namedtuple(
+LooInputs: type = namedtuple(
     "LooInputs",
     ["log_likelihood", "var_name", "sample_dims", "obs_dims", "n_samples", "n_data_points"],
 )
 
-SubsampleData = namedtuple(
+SubsampleData: type = namedtuple(
     "SubsampleData",
     ["log_likelihood_sample", "lpd_approx_sample", "lpd_approx_all", "indices", "subsample_size"],
 )
-UpdateSubsampleData = namedtuple(
+UpdateSubsampleData: type = namedtuple(
     "UpdateSubsampleData",
     [
         "log_likelihood_new",
@@ -68,24 +68,24 @@ UpdateSubsampleData = namedtuple(
     ],
 )
 
-ShiftResult = namedtuple("ShiftResult", ["upars", "shift"])
-ShiftAndScaleResult = namedtuple("ShiftAndScaleResult", ["upars", "shift", "scaling"])
-ShiftAndCovResult = namedtuple("ShiftAndCovResult", ["upars", "shift", "mapping"])
+ShiftResult: type = namedtuple("ShiftResult", ["upars", "shift"])
+ShiftAndScaleResult: type = namedtuple("ShiftAndScaleResult", ["upars", "shift", "scaling"])
+ShiftAndCovResult: type = namedtuple("ShiftAndCovResult", ["upars", "shift", "mapping"])
 
 
 def _compute_loo_results(
-    log_likelihood,
-    var_name,
-    sample_dims,
-    n_samples,
-    n_data_points,
-    pointwise=None,
-    log_weights=None,
-    pareto_k=None,
-    reff=None,
-    approx_posterior=False,
-    return_pointwise=False,
-    log_jacobian=None,
+    log_likelihood: xr.DataArray | xr.Dataset,
+    var_name: str | None,
+    sample_dims: list,
+    n_samples: int,
+    n_data_points: int,
+    pointwise: bool | None = None,
+    log_weights: xr.DataArray | xr.Dataset | None = None,
+    pareto_k: xr.DataArray | xr.Dataset | None = None,
+    reff: float | None = None,
+    approx_posterior: bool = False,
+    return_pointwise: bool = False,
+    log_jacobian: xr.DataArray | None = None,
 ):
     """Compute PSIS-LOO-CV results."""
     if isinstance(log_likelihood, xr.Dataset):
@@ -164,7 +164,12 @@ def _compute_loo_results(
     )
 
 
-def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
+def _prepare_loo_inputs(
+    data: xr.DataTree,
+    var_name: str | None,
+    thin_factor: int | None = None,
+    log_lik_fn: Callable | None = None,
+):
     """Prepare inputs for PSIS-LOO-CV."""
     if thin_factor is not None and log_lik_fn is not None:
         raise ValueError("`thin_factor` and `log_lik_fn` cannot be used together.")
@@ -224,7 +229,7 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
     )
 
 
-def _log_lik_i(i, data, var_name, log_lik_fn):
+def _log_lik_i(i: int, data: xr.DataTree, var_name: str | None, log_lik_fn: Callable | None):
     """Construct single-observation log-likelihood from a user function."""
     data = convert_to_datatree(data)
 
@@ -303,7 +308,7 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
     return log_lik_i, sample_dims, obs_dims, n_samples
 
 
-def _extract_loo_data(loo_orig):
+def _extract_loo_data(loo_orig: ELPDData):
     """Extract pointwise DataArrays from original PSIS-LOO-CV object."""
     elpd_values = loo_orig.elpd_i
     pareto_values = loo_orig.pareto_k
@@ -342,7 +347,7 @@ def _extract_loo_data(loo_orig):
     return extracted_elpd, extracted_pareto
 
 
-def _shift(upars, lwi):
+def _shift(upars: xr.DataArray, lwi: xr.DataArray):
     """Shift a DataArray of parameters to their weighted mean."""
     sample_dims = ["chain", "draw"]
     param_dim = [dim for dim in upars.dims if dim not in sample_dims][0]
@@ -366,7 +371,7 @@ def _shift(upars, lwi):
     return ShiftResult(upars=upars_new_da, shift=shift_vec)
 
 
-def _shift_and_scale(upars, lwi):
+def _shift_and_scale(upars: xr.DataArray, lwi: xr.DataArray):
     """Shift parameters to weighted mean and scale marginal variances."""
     sample_dims = ["chain", "draw"]
     param_dim = [dim for dim in upars.dims if dim not in sample_dims][0]
@@ -404,7 +409,7 @@ def _shift_and_scale(upars, lwi):
     return ShiftAndScaleResult(upars=upars_new_da, shift=shift_vec, scaling=scaling_vec)
 
 
-def _shift_and_cov(upars, lwi):
+def _shift_and_cov(upars: xr.DataArray, lwi: xr.DataArray):
     """Shift parameters and scale covariance to match weighted covariance."""
     sample_dims = ["chain", "draw"]
     param_dim = [dim for dim in upars.dims if dim not in sample_dims][0]
@@ -459,7 +464,7 @@ def _shift_and_cov(upars, lwi):
     return ShiftAndCovResult(upars=upars_new_da, shift=shift_vec, mapping=mapping_mat)
 
 
-def _get_log_likelihood_i(log_likelihood, i, obs_dims):
+def _get_log_likelihood_i(log_likelihood: xr.DataArray, i, obs_dims: list):
     """Extract the log-likelihood for one observation `i`."""
     if not obs_dims:
         raise ValueError("log_likelihood must have observation dimensions.")
@@ -506,7 +511,16 @@ def _get_log_likelihood_i(log_likelihood, i, obs_dims):
 
 
 def _get_weights_and_k_i(
-    log_weights, pareto_k, i, obs_dims, sample_dims, data, n_samples, reff, log_lik_i, var_name
+    log_weights: xr.DataArray | xr.Dataset | None,
+    pareto_k: xr.DataArray | xr.Dataset | None,
+    i,
+    obs_dims: list,
+    sample_dims: list,
+    data: xr.DataTree,
+    n_samples: int,
+    reff: float | None,
+    log_lik_i: xr.DataArray,
+    var_name: str | None,
 ):
     """Get log weights and Pareto k for a specific observation."""
     if (log_weights is None) != (pareto_k is None):
@@ -554,20 +568,20 @@ def _get_weights_and_k_i(
 
 
 def _prepare_subsample(
-    data,
-    log_likelihood_da,
-    var_name,
-    observations,
-    seed,
-    method,
-    log_lik_fn,
-    param_names,
-    log,
-    obs_dims,
-    sample_dims,
-    n_data_points,
-    n_samples,
-    thin_factor=None,
+    data: xr.DataTree,
+    log_likelihood_da: xr.DataArray,
+    var_name: str | None,
+    observations: int | np.ndarray,
+    seed: int | None,
+    method: str,
+    log_lik_fn: Callable | None,
+    param_names: list | None,
+    log: bool,
+    obs_dims: list,
+    sample_dims: list,
+    n_data_points: int,
+    n_samples: int,
+    thin_factor: int | None = None,
 ):
     """Prepare inputs for PSIS-LOO-CV with sub-sampling."""
     indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
@@ -615,16 +629,16 @@ def _prepare_subsample(
 
 
 def _prepare_update_subsample(
-    loo_orig,
-    data,
-    observations,
-    var_name,
-    seed,
-    method,
-    log_lik_fn,
-    param_names,
-    log,
-    thin_factor=None,
+    loo_orig: ELPDData,
+    data: xr.DataTree,
+    observations: int | np.ndarray,
+    var_name: str | None,
+    seed: int | None,
+    method: str,
+    log_lik_fn: Callable | None,
+    param_names: list | None,
+    log: bool,
+    thin_factor: int | None = None,
 ):
     """Prepare inputs for updating PSIS-LOO-CV with additional observations."""
     loo_inputs = _prepare_loo_inputs(data, var_name, thin_factor)
@@ -705,12 +719,12 @@ def _prepare_update_subsample(
 
 
 def _compute_loo_approximation(
-    data,
-    var_name,
-    log_lik_fn=None,
-    param_names=None,
-    method="lpd",
-    log=True,
+    data: xr.DataTree,
+    var_name: str,
+    log_lik_fn: Callable | None = None,
+    param_names: list | None = None,
+    method: str = "lpd",
+    log: bool = True,
 ):
     """Compute LOO approximation with LPD or PLPD method."""
     if not hasattr(data, "observed_data"):
@@ -966,7 +980,7 @@ def _srs_estimator(
     return y_hat, var_y_hat, hat_var_y
 
 
-def _align_group(group, observed, primary_obs_dim):
+def _align_group(group: xr.Dataset, observed: xr.DataArray, primary_obs_dim: str):
     """Align all variables in a data group."""
     if primary_obs_dim not in observed.coords:
         return group.copy()
@@ -982,7 +996,7 @@ def _align_group(group, observed, primary_obs_dim):
     return xr.Dataset(aligned_vars)
 
 
-def _align_data_to_obs(data, observed):
+def _align_data_to_obs(data: xr.DataTree, observed: xr.DataArray):
     """Align auxiliary data groups to match the subset of observations."""
     obs_dims = [dim for dim in observed.dims if dim not in ["chain", "draw"]]
     if not obs_dims:
@@ -1000,7 +1014,9 @@ def _align_data_to_obs(data, observed):
     return aligned_data
 
 
-def _generate_subsample_indices(n_data_points, observations, seed):
+def _generate_subsample_indices(
+    n_data_points: int, observations: int | np.ndarray, seed: int | None
+):
     """Generate subsample indices."""
     if isinstance(observations, int):
         if not 1 <= observations <= n_data_points:
@@ -1028,7 +1044,7 @@ def _generate_subsample_indices(n_data_points, observations, seed):
     return indices, subsample_size
 
 
-def _get_r_eff(data, n_samples):
+def _get_r_eff(data: xr.DataTree, n_samples: int):
     if not hasattr(data, "posterior"):
         raise TypeError("Must be able to extract a posterior group from data.")
     posterior = data.posterior
@@ -1042,7 +1058,7 @@ def _get_r_eff(data, n_samples):
     return reff
 
 
-def _get_r_eff_i(r_eff, i, obs_dims):
+def _get_r_eff_i(r_eff: xr.DataArray, i, obs_dims: list):
     """Return scalar r_eff for observation i."""
     if not isinstance(r_eff, xr.DataArray):
         raise TypeError("r_eff must be an xarray.DataArray")
@@ -1064,12 +1080,12 @@ def _get_r_eff_i(r_eff, i, obs_dims):
 
 
 def _prepare_full_arrays(
-    pointwise_values,
-    pareto_k_values,
-    ref_array,
-    indices,
-    obs_dims,
-    elpd_loo_hat=None,
+    pointwise_values: xr.DataArray,
+    pareto_k_values: xr.DataArray,
+    ref_array: xr.DataArray,
+    indices: np.ndarray,
+    obs_dims: list,
+    elpd_loo_hat: float | None = None,
 ):
     """Prepare full arrays for pointwise ELPD and Pareto k values."""
     if not obs_dims:
@@ -1099,7 +1115,9 @@ def _prepare_full_arrays(
     return elpd_i_full, pareto_k_full
 
 
-def _select_obs_by_indices(data_array, indices, dims, dim_name):
+def _select_obs_by_indices(
+    data_array: xr.DataArray, indices: np.ndarray, dims: list, dim_name: str
+):
     """Select a sub-sample from a DataArray based on indices."""
     if not dims:
         return data_array
@@ -1128,7 +1146,9 @@ def _select_obs_by_indices(data_array, indices, dims, dim_name):
     return data_array.isel(indexers)
 
 
-def _select_obs_by_coords(data_array, coord_array, dims, dim_name):
+def _select_obs_by_coords(
+    data_array: xr.DataArray, coord_array: xr.DataArray, dims: list, dim_name: str
+):
     """Select a sub-sample from a DataArray based on coordinate values."""
     if len(dims) > 1:
         stacked_data = data_array.stack({dim_name: dims})
@@ -1136,7 +1156,7 @@ def _select_obs_by_coords(data_array, coord_array, dims, dim_name):
     return data_array.sel({dims[0]: coord_array[dims[0]]})
 
 
-def _warn_pareto_k(pareto_k_values, n_samples, suppress=False):
+def _warn_pareto_k(pareto_k_values: xr.DataArray, n_samples: int, suppress: bool = False):
     """Check Pareto k values and issue warnings if necessary."""
     good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
     warn_mg = False
@@ -1154,7 +1174,7 @@ def _warn_pareto_k(pareto_k_values, n_samples, suppress=False):
     return warn_mg, good_k
 
 
-def _warn_pointwise_loo(elpd, elpd_i_values):
+def _warn_pointwise_loo(elpd: float, elpd_i_values: np.ndarray):
     """Check if pointwise LOO values sum to the same as total LOO."""
     if np.equal(elpd, elpd_i_values).all():
         warnings.warn(
@@ -1163,7 +1183,13 @@ def _warn_pointwise_loo(elpd, elpd_i_values):
         )
 
 
-def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
+def _check_log_density(
+    log_dens: np.ndarray | xr.DataArray,
+    name: str,
+    log_likelihood: xr.DataArray,
+    n_samples: int,
+    sample_dims: list,
+):
     """Validate log_p or log_q input for loo_approximate_posterior."""
     if isinstance(log_dens, np.ndarray):
         if log_dens.size != n_samples:
@@ -1200,7 +1226,7 @@ def _check_log_density(log_dens, name, log_likelihood, n_samples, sample_dims):
     return validated_log_dens
 
 
-def _check_log_jacobian(log_jacobian, obs_dims):
+def _check_log_jacobian(log_jacobian: xr.DataArray | None, obs_dims: list):
     """Validate Jacobian adjustment input."""
     if log_jacobian is None:
         return None
@@ -1251,7 +1277,7 @@ def _check_log_jacobian(log_jacobian, obs_dims):
     return log_jacobian
 
 
-def _get_upars_info(upars, param_dim):
+def _get_upars_info(upars: xr.DataArray, param_dim: str):
     """Get original properties from upars DataArray."""
     props = {
         "dims": upars.dims,
@@ -1266,7 +1292,7 @@ def _get_upars_info(upars, param_dim):
     return props
 
 
-def _reconstruct_upars(upars_new_values, props):
+def _reconstruct_upars(upars_new_values: np.ndarray, props: dict):
     """Reconstruct upars DataArray from new values."""
     upars_new_values_reshaped = upars_new_values.reshape(props["shape"])
     return xr.DataArray(
@@ -1276,13 +1302,20 @@ def _reconstruct_upars(upars_new_values, props):
     )
 
 
-def _has_nan_slice(da, dim):
+def _has_nan_slice(da: xr.DataArray, dim: str):
     """Check if DataArray has NaN slices along a dimension."""
     other = tuple(dd for dd in da.dims if dd != dim)
     return bool(da.isnull().all(dim=other).any()) if other else bool(da.isnull().any())
 
 
-def _validate_crps_input(y_pred, y_obs, log_likelihood, *, sample_dims, obs_dims):
+def _validate_crps_input(
+    y_pred: xr.DataArray,
+    y_obs: xr.DataArray,
+    log_likelihood: xr.DataArray,
+    *,
+    sample_dims: list,
+    obs_dims: list,
+):
     """Shape and dimension checks."""
     missing_sample = [d for d in sample_dims if d not in y_pred.dims]
     if missing_sample:
@@ -1333,11 +1366,11 @@ def _validate_crps_input(y_pred, y_obs, log_likelihood, *, sample_dims, obs_dims
 
 
 def _validate_sample_dims(
-    data,
+    data: xr.DataArray,
     *,
-    sample_dims=None,
+    sample_dims: list | None = None,
     ref_sizes=None,
-    obs_dims=None,
+    obs_dims: list | None = None,
 ):
     """Validate sample dimensions."""
     if sample_dims is None:
@@ -1372,7 +1405,7 @@ def _validate_sample_dims(
     return data
 
 
-def _get_sample_coords(sample_dims, data_for_fn):
+def _get_sample_coords(sample_dims: list, data_for_fn: xr.DataTree):
     """Collect sample dimension coordinates from the posterior."""
     coords = {}
     posterior = getattr(data_for_fn, "posterior", None)
@@ -1403,7 +1436,9 @@ def _get_sample_coords(sample_dims, data_for_fn):
     return coords
 
 
-def _validate_log_lik_fn_result(log_likelihood, sample_dims, obs_dims, observed):
+def _validate_log_lik_fn_result(
+    log_likelihood: xr.DataArray, sample_dims: list, obs_dims: list, observed: xr.DataArray
+):
     """Validate dimensions and shapes of a custom log-likelihood result."""
     expected_dims = set(sample_dims) | set(obs_dims)
     if set(log_likelihood.dims) != expected_dims:
@@ -1422,7 +1457,7 @@ def _validate_log_lik_fn_result(log_likelihood, sample_dims, obs_dims, observed)
     return log_likelihood
 
 
-def _var_name_custom_ll(data, var_name):
+def _var_name_custom_ll(data: xr.DataTree, var_name: str | None):
     """Get variable name from observed data for custom log-likelihood."""
     if not hasattr(data, "observed_data"):
         raise ValueError(

@@ -6,7 +6,6 @@ from typing import NamedTuple
 import numpy as np
 import xarray
 import xarray as xr
-from _typeshed import Incomplete
 from arviz_base import convert_to_datatree, extract, rcParams
 from numpy.typing import NDArray
 from xarray import DataArray, Dataset, apply_ufunc
@@ -32,7 +31,7 @@ def loo_metrics(
     kind: str = ...,
     var_name: str | None = ...,
     round_to: int | str | None | None = ...,
-) -> Incomplete: ...
+) -> NamedTuple: ...
 def loo_r2(
     data: xarray.DataTree | xarray.DataTree,
     var_name: str,
