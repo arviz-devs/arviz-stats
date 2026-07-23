@@ -5,7 +5,7 @@ from arviz_base import rcParams
 from numpy.typing import NDArray
 from xarray import DataArray
 
-from arviz_stats.loo.helper_loo import (
+from arviz_stats.loo.loo_helper import (
     _check_log_density,
     _check_log_jacobian,
     _prepare_loo_inputs,

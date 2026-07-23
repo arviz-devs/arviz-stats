@@ -44,7 +44,7 @@ This is mostly aimed at advanced users or libraries that want to use ArviZ to co
 The latest development version can be installed from the main branch using pip:
 
 ```
-pip install git+git://github.com/arviz-devs/arviz-stats.git
+pip install git+https://github.com/arviz-devs/arviz-stats.git
 ```
 
 Another option is to clone the repository and install using git and setuptools:

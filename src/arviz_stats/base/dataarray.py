@@ -484,6 +484,7 @@ class BaseDataArray:
         **kwargs
         """
         dims = validate_dims(dim)
+        ecdf_dim = "ecdf_dim" if da.name is None else f"ecdf_dim_{da.name}"
         x, y = apply_ufunc(
             self.array_class.ecdf,
             da,
@@ -494,7 +495,7 @@ class BaseDataArray:
                 **kwargs,
             },
             input_core_dims=[dims],
-            output_core_dims=[["ecdf_dim"], ["ecdf_dim"]],
+            output_core_dims=[[ecdf_dim], [ecdf_dim]],
         )
         plot_axis = DataArray(["x", "y"], dims="plot_axis")
         return concat((x, y), dim=plot_axis)
@@ -510,6 +511,7 @@ class BaseDataArray:
         **kwargs
         """
         dims = validate_dims(dim)
+        pit_dim = "pit_dim" if da.name is None else f"pit_dim_{da.name}"
         n_points = 1
         for d in dims:
             n_points *= da.sizes[d]
@@ -522,7 +524,7 @@ class BaseDataArray:
                 **kwargs,
             },
             input_core_dims=[dims],
-            output_core_dims=[[], ["pit_dim"], ["pit_dim"]],
+            output_core_dims=[[], [pit_dim], [pit_dim]],
         )
         return p_value, shapley, shapley_unsorted
 

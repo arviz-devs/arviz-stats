@@ -6,7 +6,7 @@ from arviz_base import rcParams
 from numpy.typing import NDArray
 from xarray import DataArray
 
-from arviz_stats.loo.helper_loo_kfold import (
+from arviz_stats.loo.loo_kfold_helper import (
     _combine_fold_elpds,
     _compute_kfold_results,
     _prepare_kfold_inputs,
@@ -25,4 +25,5 @@ def loo_kfold(
     stratify_by: NDArray | DataArray | None = ...,
     group_by: NDArray | DataArray | None = ...,
     save_fits: bool = ...,
+    seed: int = ...,
 ) -> ELPDData: ...

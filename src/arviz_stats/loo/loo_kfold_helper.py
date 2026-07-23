@@ -52,6 +52,7 @@ def _prepare_kfold_inputs(
     folds: ArrayLike | None,
     stratify_by: ArrayLike | None,
     group_by: ArrayLike | None,
+    seed: int | None = None,
 ):
     """Prepare inputs for k-fold cross-validation."""
     data = convert_to_datatree(data)
@@ -88,14 +89,16 @@ def _prepare_kfold_inputs(
         _, folds = np.unique(folds, return_inverse=True)
         folds = np.reshape(folds, -1) + 1
         k = _validate_k_value(len(np.unique(folds)), n_data_points)
-    elif stratify_by is not None:
-        stratify_by = _validate_array_length(stratify_by, n_data_points, "stratify_by")
-        folds = _kfold_split_stratified(k=k, x=stratify_by)
-    elif group_by is not None:
-        group_by = _validate_array_length(group_by, n_data_points, "group_by")
-        folds = _kfold_split_grouped(k=k, x=group_by)
     else:
-        folds = _kfold_split_random(k=k, n=n_data_points)
+        rng = np.random.default_rng(seed)
+        if stratify_by is not None:
+            stratify_by = _validate_array_length(stratify_by, n_data_points, "stratify_by")
+            folds = _kfold_split_stratified(k=k, x=stratify_by, rng=rng)
+        elif group_by is not None:
+            group_by = _validate_array_length(group_by, n_data_points, "group_by")
+            folds = _kfold_split_grouped(k=k, x=group_by, rng=rng)
+        else:
+            folds = _kfold_split_random(k=k, n=n_data_points, rng=rng)
 
     return KfoldInputs(
         log_likelihood=log_likelihood,
@@ -126,20 +129,30 @@ def _compute_kfold_results(kfold_inputs: KfoldInputs, wrapper: SamplingWrapper, 
         idata_k = wrapper.get_inference_data(fitted_model)
         log_lik_k = wrapper.log_likelihood__i(test_data, idata_k)
 
-        if "chain" in log_lik_k.dims and "draw" in log_lik_k.dims:
-            sample_dims_k = ["chain", "draw"]
-        else:
-            sample_dims_k = [dim for dim in log_lik_k.dims if dim not in kfold_inputs.obs_dims]
+        n_test = len(test_idx)
+        obs_dim_k = next(
+            (
+                dim
+                for dim in reversed(log_lik_k.dims)
+                if dim not in kfold_inputs.sample_dims and log_lik_k.sizes[dim] == n_test
+            ),
+            None,
+        )
 
+        if obs_dim_k is None and n_test > 1:
+            raise ValueError(
+                f"The log likelihood returned by log_likelihood__i for fold {fold_num} has "
+                f"sizes {dict(log_lik_k.sizes)}. Expected a dimension other than "
+                f"{kfold_inputs.sample_dims} with size {n_test} "
+                "(one entry per test observation)."
+            )
+
+        sample_dims_k = [dim for dim in log_lik_k.dims if dim != obs_dim_k]
         n_samples_k = int(np.prod([log_lik_k.sizes[dim] for dim in sample_dims_k]))
         elpd_k = logsumexp(log_lik_k, dims=sample_dims_k, b=1 / n_samples_k)
-        elpd_values = elpd_k.values if hasattr(elpd_k, "values") else elpd_k
 
-        if np.isscalar(elpd_values):
-            elpd_unordered.append((test_idx[0], float(elpd_values)))
-        else:
-            for i, idx in enumerate(test_idx):
-                elpd_unordered.append((idx, float(elpd_values[i])))
+        for idx, value in zip(test_idx, np.atleast_1d(elpd_k.values), strict=True):
+            elpd_unordered.append((idx, float(value)))
 
         if save_fits:
             fold_results[fold_num] = {"fit": idata_k, "test_indices": test_idx}
@@ -169,7 +182,7 @@ def _compute_kfold_results(kfold_inputs: KfoldInputs, wrapper: SamplingWrapper, 
     )
 
 
-def _kfold_split_random(k: int = 10, n: int | None = None):
+def _kfold_split_random(k: int = 10, n: int | None = None, rng: np.random.Generator | None = None):
     """Split the data into K groups of equal size (or roughly equal size)."""
     if n is None:
         raise ValueError("n must be provided")
@@ -188,12 +201,14 @@ def _kfold_split_random(k: int = 10, n: int | None = None):
         folds[start:end] = i + 1
         start = end
 
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(rng)
     perm = rng.permutation(n)
     return folds[perm]
 
 
-def _kfold_split_stratified(k: int = 10, x: ArrayLike | None = None):
+def _kfold_split_stratified(
+    k: int = 10, x: ArrayLike | None = None, rng: np.random.Generator | None = None
+):
     """Split observations into k groups ensuring relative category frequencies are preserved."""
     if x is None:
         raise ValueError("x must be provided")
@@ -209,7 +224,7 @@ def _kfold_split_stratified(k: int = 10, x: ArrayLike | None = None):
     n = len(x)
     xids = []
 
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(rng)
     for level in range(n_lev):
         idx = np.where(x_int == level)[0]
         if len(idx) > 1:
@@ -224,7 +239,9 @@ def _kfold_split_stratified(k: int = 10, x: ArrayLike | None = None):
     return bins
 
 
-def _kfold_split_grouped(k: int = 10, x: ArrayLike | None = None):
+def _kfold_split_grouped(
+    k: int = 10, x: ArrayLike | None = None, rng: np.random.Generator | None = None
+):
     """Split observations ensuring all observations from the same group stay together."""
     if x is None:
         raise ValueError("x must be provided")
@@ -242,7 +259,7 @@ def _kfold_split_grouped(k: int = 10, x: ArrayLike | None = None):
     if n_levels == k:
         return level_of_obs
 
-    fold_of_level = _kfold_split_random(k=k, n=n_levels)
+    fold_of_level = _kfold_split_random(k=k, n=n_levels, rng=rng)
     return fold_of_level[level_of_obs - 1]
 
 

@@ -10,7 +10,8 @@ from numpy.typing import NDArray
 from xarray import DataArray
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.loo.helper_loo import (
+from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
+from arviz_stats.loo.loo_helper import (
     _check_log_jacobian,
     _compute_loo_results,
     _get_r_eff,
@@ -22,7 +23,6 @@ from arviz_stats.loo.helper_loo import (
     _select_obs_by_indices,
     _warn_pareto_k,
 )
-from arviz_stats.loo.loo_approximate_posterior import loo_approximate_posterior
 from arviz_stats.utils import ELPDData
 
 def loo_subsample(

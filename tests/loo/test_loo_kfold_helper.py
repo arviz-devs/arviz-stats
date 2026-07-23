@@ -9,7 +9,7 @@ from ..helpers import importorskip
 azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
-from arviz_stats.loo.helper_loo_kfold import (
+from arviz_stats.loo.loo_kfold_helper import (
     _combine_fold_elpds,
     _extract_fold_data,
     _get_fold_indices,
@@ -526,3 +526,17 @@ def test_kfold_split_grouped_balanced_fold_sizes(n_levels, k):
     group_folds = folds[unique_indices]
     _, fold_counts = np.unique(group_folds, return_counts=True)
     assert fold_counts.max() - fold_counts.min() <= 1
+
+
+@pytest.mark.parametrize(
+    "split_func,kwargs",
+    [
+        (_kfold_split_random, {"n": 20}),
+        (_kfold_split_stratified, {"x": np.tile([0, 1], 10)}),
+        (_kfold_split_grouped, {"x": np.repeat(np.arange(10), 2)}),
+    ],
+)
+def test_kfold_split_rng_reproducible(split_func, kwargs):
+    folds_1 = split_func(k=4, rng=np.random.default_rng(3), **kwargs)
+    folds_2 = split_func(k=4, rng=np.random.default_rng(3), **kwargs)
+    np.testing.assert_array_equal(folds_1, folds_2)

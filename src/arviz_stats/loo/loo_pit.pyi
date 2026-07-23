@@ -8,7 +8,7 @@ from arviz_base import convert_to_datatree, extract
 from numpy.typing import NDArray
 from xarray import DataArray, Dataset
 
-from arviz_stats.loo.helper_loo import _get_r_eff
+from arviz_stats.loo.loo_helper import _get_r_eff
 from arviz_stats.utils import get_log_likelihood_dataset
 
 def loo_pit(

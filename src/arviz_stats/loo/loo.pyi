@@ -9,7 +9,7 @@ from arviz_base import rcParams
 from xarray import DataArray
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.loo.helper_loo import (
+from arviz_stats.loo.loo_helper import (
     _check_log_jacobian,
     _compute_loo_results,
     _get_log_likelihood_i,
