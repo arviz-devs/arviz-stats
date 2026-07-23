@@ -11,7 +11,7 @@ azb = importorskip("arviz_base")
 pm = importorskip("pymc")
 xr = importorskip("xarray")
 
-from arviz_stats.loo import mm_from_pymc
+from arviz_stats.loo import loo, loo_moment_match, mm_from_pymc
 
 
 def _build_poisson_outlier_idata(*, n_chains=2, n_draws=80, seed=0):
@@ -260,3 +260,20 @@ class TestMomentMatchFunctions:
             mm_from_pymc(idata, model=model, var_name=None)
         _, _, up = mm_from_pymc(idata, model=model, var_name="y1")
         assert up.sizes["unconstrained_parameter"] == 1
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_loo_moment_match_flag_with_model(poisson_setup):
+    idata, model, _ = poisson_setup
+    loo_orig = loo(idata, pointwise=True)
+    loo_manual = loo_moment_match(idata, loo_orig, model=model, pointwise=True)
+    loo_flag = loo(idata, pointwise=True, moment_match=True, model=model)
+
+    assert loo_flag.method == "loo_moment_match"
+    np.testing.assert_allclose(loo_flag.elpd, loo_manual.elpd)
+    np.testing.assert_allclose(loo_flag.se, loo_manual.se)
+    np.testing.assert_allclose(loo_flag.p, loo_manual.p)
+    xr.testing.assert_allclose(loo_flag.elpd_i, loo_manual.elpd_i)
+    xr.testing.assert_allclose(loo_flag.pareto_k, loo_manual.pareto_k)
+    xr.testing.assert_allclose(loo_flag.influence_pareto_k, loo_manual.influence_pareto_k)
