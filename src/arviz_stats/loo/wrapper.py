@@ -14,9 +14,9 @@ class SamplingWrapper:
 
     Parameters
     ----------
-    model
+    model : object
         The model object used for sampling.
-    idata_orig : optional
+    idata_orig : DataTree or InferenceData, optional
         Original inference data object (InferenceData or datatree).
     log_lik_fun : callable, optional
         For simple cases where the pointwise log likelihood is a Python function, this
@@ -85,14 +85,14 @@ class SamplingWrapper:
 
         Parameters
         ----------
-        idx
+        idx : int or array-like
             Indexes to separate from the rest of the observed data.
 
         Returns
         -------
-        modified_observed_data
+        modified_observed_data : object
             Observed data whose index is *not* ``idx``
-        excluded_observed_data
+        excluded_observed_data : object
             Observed data whose index is ``idx``
         """
         raise NotImplementedError("sel_observations method must be implemented for each subclass")
@@ -105,12 +105,12 @@ class SamplingWrapper:
 
         Parameters
         ----------
-        modified_observed_data
+        modified_observed_data : object
             Data to fit the model on.
 
         Returns
         -------
-        fitted_model
+        fitted_model : object
             Result of the fit.
         """
         raise NotImplementedError("sample method must be implemented for each subclass")
@@ -123,12 +123,12 @@ class SamplingWrapper:
 
         Parameters
         ----------
-        fitted_model
+        fitted_model : object
             Result of the current fit.
 
         Returns
         -------
-        idata_current: datatree or InferenceData
+        idata_current : DataTree or InferenceData
             Inference data object containing the samples in ``fitted_model``
         """
         raise NotImplementedError("get_inference_data method must be implemented for each subclass")
@@ -141,16 +141,16 @@ class SamplingWrapper:
 
         Parameters
         ----------
-        excluded_obs
+        excluded_obs : object
             Observations for which to calculate their log likelihood. The second item from
             the tuple returned by `sel_observations` is passed as this argument.
-        idata__i: datatree or InferenceData
+        idata__i : datatree or InferenceData
             Inference results of refitting the data excluding some observations. The
             result of `get_inference_data` is used as this argument.
 
         Returns
         -------
-        log_likelihood: xr.Dataarray
+        log_likelihood : DataArray
             Log likelihood of ``excluded_obs`` evaluated at each of the posterior samples
             stored in ``idata__i``. When more than one observation is excluded, the returned
             array must keep a dimension with one entry per excluded observation, in the same
@@ -185,11 +185,12 @@ class SamplingWrapper:
 
         Parameters
         ----------
-        methods: list
+        methods : list
             Check all elements in methods are implemented.
 
         Returns
         -------
+        list
             List with all non implemented methods
         """
         supported_methods = (

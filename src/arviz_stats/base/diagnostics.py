@@ -5,6 +5,7 @@ import warnings
 from collections.abc import Sequence
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy import stats
 from scipy.special import logsumexp
 
@@ -56,7 +57,7 @@ class _DiagnosticsBase(_CoreBase):
         z = z.reshape(ary.shape)
         return z
 
-    def _split_chains(self, ary):  # pylint: disable=no-self-use
+    def _split_chains(self, ary: ArrayLike):  # pylint: disable=no-self-use
         """Split and stack chains."""
         ary = np.asarray(ary)
         if len(ary.shape) <= 1:
@@ -65,14 +66,14 @@ class _DiagnosticsBase(_CoreBase):
         half = n_draw // 2
         return np.vstack((ary[:, :half], ary[:, -half:]))
 
-    def _z_fold(self, ary):
+    def _z_fold(self, ary: ArrayLike):
         """Fold and z-scale values."""
         ary = np.asarray(ary)
         ary = abs(ary - np.median(ary))
         ary = self._z_scale(ary)
         return ary
 
-    def _rhat(self, ary):  # pylint: disable=no-self-use
+    def _rhat(self, ary: ArrayLike):  # pylint: disable=no-self-use
         """Compute the rhat for a 2d array."""
         ary = np.asarray(ary, dtype=float)
         _, num_samples = ary.shape
@@ -91,7 +92,7 @@ class _DiagnosticsBase(_CoreBase):
         )
         return rhat_value
 
-    def _rhat_rank(self, ary):
+    def _rhat_rank(self, ary: ArrayLike):
         """Compute the rank normalized rhat for 2d array.
 
         Computation follows https://arxiv.org/abs/1903.08008
@@ -108,7 +109,7 @@ class _DiagnosticsBase(_CoreBase):
         rhat_rank = max(rhat_bulk, rhat_tail)
         return rhat_rank
 
-    def _rhat_folded(self, ary):
+    def _rhat_folded(self, ary: ArrayLike):
         """Calculate split-Rhat for folded z-values."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
@@ -116,25 +117,25 @@ class _DiagnosticsBase(_CoreBase):
         ary = self._z_fold(self._split_chains(ary))
         return self._rhat(ary)
 
-    def _rhat_z_scale(self, ary):
+    def _rhat_z_scale(self, ary: ArrayLike):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
         return self._rhat(self._z_scale(self._split_chains(ary)))
 
-    def _rhat_split(self, ary):
+    def _rhat_split(self, ary: ArrayLike):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
         return self._rhat(self._split_chains(ary))
 
-    def _rhat_identity(self, ary):
+    def _rhat_identity(self, ary: ArrayLike):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
         return self._rhat(ary)
 
-    def _ess(self, ary, relative=False):
+    def _ess(self, ary: ArrayLike, relative: bool = False):
         """Compute the effective sample size for a 2D array."""
         ary = np.asarray(ary, dtype=float)
         if (np.max(ary) - np.min(ary)) < np.finfo(float).resolution:  # pylint: disable=no-member
@@ -185,7 +186,7 @@ class _DiagnosticsBase(_CoreBase):
             ess = np.nan
         return ess
 
-    def _ess_bulk(self, ary, relative=False):
+    def _ess_bulk(self, ary: ArrayLike, relative: bool = False):
         """Compute the effective sample size for the bulk."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -194,7 +195,7 @@ class _DiagnosticsBase(_CoreBase):
         ess_bulk = self._ess(z_scaled, relative=relative)
         return ess_bulk
 
-    def _ess_tail(self, ary, prob, relative=False):
+    def _ess_tail(self, ary: ArrayLike, prob: float, relative: bool = False):
         """Compute the effective sample size for the tail.
 
         If `prob` defined, ess = min(qess(prob), qess(1-prob))
@@ -211,14 +212,14 @@ class _DiagnosticsBase(_CoreBase):
         quantile_high_ess = self._ess_quantile(ary, prob_high, relative=relative)
         return min(quantile_low_ess, quantile_high_ess)
 
-    def _ess_mean(self, ary, relative=False):
+    def _ess_mean(self, ary: ArrayLike, relative: bool = False):
         """Compute the effective sample size for the mean."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
         return self._ess(self._split_chains(ary), relative=relative)
 
-    def _ess_sd(self, ary, relative=False):
+    def _ess_sd(self, ary: ArrayLike, relative: bool = False):
         """Compute the effective sample size for the sd."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -226,7 +227,7 @@ class _DiagnosticsBase(_CoreBase):
         ary = (ary - ary.mean()) ** 2
         return self._ess(self._split_chains(ary), relative=relative)
 
-    def _ess_quantile(self, ary, prob, relative=False):
+    def _ess_quantile(self, ary: ArrayLike, prob: float, relative: bool = False):
         """Compute the effective sample size for the specific residual."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -237,7 +238,7 @@ class _DiagnosticsBase(_CoreBase):
         iquantile = ary <= quantile
         return self._ess(self._split_chains(iquantile), relative=relative)
 
-    def _ess_local(self, ary, prob, relative=False):
+    def _ess_local(self, ary: ArrayLike, prob: float, relative: bool = False):
         """Compute the effective sample size for the specific residual."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -250,28 +251,28 @@ class _DiagnosticsBase(_CoreBase):
         iquantile = (quantile[0] <= ary) & (ary <= quantile[1])
         return self._ess(self._split_chains(iquantile), relative=relative)
 
-    def _ess_z_scale(self, ary, relative=False):
+    def _ess_z_scale(self, ary: ArrayLike, relative: bool = False):
         """Calculate ess for z-scaLe."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
         return self._ess(self._z_scale(self._split_chains(ary)), relative=relative)
 
-    def _ess_folded(self, ary, relative=False):
+    def _ess_folded(self, ary: ArrayLike, relative: bool = False):
         """Calculate split-ess for folded data."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
         return self._ess(self._z_fold(self._split_chains(ary)), relative=relative)
 
-    def _ess_median(self, ary, relative=False):
+    def _ess_median(self, ary: ArrayLike, relative: bool = False):
         """Calculate split-ess for median."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
         return self._ess_quantile(ary, 0.5, relative=relative)
 
-    def _ess_mad(self, ary, relative=False):
+    def _ess_mad(self, ary: ArrayLike, relative: bool = False):
         """Calculate split-ess for mean absolute deviance."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -281,14 +282,14 @@ class _DiagnosticsBase(_CoreBase):
         ary = self._z_scale(self._split_chains(ary))
         return self._ess(ary, relative=relative)
 
-    def _ess_identity(self, ary, relative=False):
+    def _ess_identity(self, ary: ArrayLike, relative: bool = False):
         """Calculate ess."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
         return self._ess(ary, relative=relative)
 
-    def _mcse_mean(self, ary, circular=False):
+    def _mcse_mean(self, ary: ArrayLike, circular: bool = False):
         """Compute the Markov Chain mean error."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -301,7 +302,7 @@ class _DiagnosticsBase(_CoreBase):
         mcse_mean_value = sd / np.sqrt(ess)
         return mcse_mean_value
 
-    def _mcse_sd(self, ary):
+    def _mcse_sd(self, ary: ArrayLike):
         """Compute the Markov Chain sd error."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -314,11 +315,11 @@ class _DiagnosticsBase(_CoreBase):
         mcse_sd_value = np.sqrt(varsd)
         return mcse_sd_value
 
-    def _mcse_median(self, ary, circular=False):
+    def _mcse_median(self, ary: ArrayLike, circular: bool = False):
         """Compute the Markov Chain median error."""
         return self._mcse_quantile(ary, 0.5, circular=circular)
 
-    def _mcse_quantile(self, ary, prob, circular=False):
+    def _mcse_quantile(self, ary: ArrayLike, prob: float, circular: bool = False):
         """Compute the Markov Chain quantile error at quantile=prob."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -337,7 +338,7 @@ class _DiagnosticsBase(_CoreBase):
         th2 = sorted_ary[int(np.ceil(np.nanmin((ppf_size[1], size - 1))))]
         return (th2 - th1) / 2
 
-    def _pareto_min_ss(self, ary):
+    def _pareto_min_ss(self, ary: ArrayLike):
         """Compute the minimum effective sample size."""
         ary = np.asarray(ary)
         if _not_valid(ary, check_nan=False, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -362,7 +363,7 @@ class _DiagnosticsBase(_CoreBase):
 
         return np.inf
 
-    def _psislw(self, ary, r_eff):
+    def _psislw(self, ary: ArrayLike, r_eff: float):
         """Compute Pareto smoothed importance sampling (PSIS) log weights."""
         ary_shape = ary.shape
         ary = ary.flatten()
@@ -374,7 +375,7 @@ class _DiagnosticsBase(_CoreBase):
 
         return ary.reshape(ary_shape), khat
 
-    def _bfmi(self, ary):  # pylint: disable=no-self-use
+    def _bfmi(self, ary: ArrayLike):  # pylint: disable=no-self-use
         """Calculate the estimated Bayesian fraction of missing information."""
         ary_mat = np.atleast_2d(ary)
         num = np.square(np.diff(ary_mat, axis=1)).mean(axis=1)
@@ -731,7 +732,7 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        y_sample : 1D array
+        y_sample : array-like
             Values of the statistic (e.g., p_loo) for the subsample, shape (m,).
         n_data_points : int
             Total number of data points (N).
@@ -777,11 +778,11 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        elpd_loo_i_sample : 1D array
+        elpd_loo_i_sample : array-like
             Pointwise ELPD values for the subsample, shape (m,).
-        lpd_approx_sample : 1D array
+        lpd_approx_sample : array-like
             LPD approximation values for the subsample, shape (m,).
-        lpd_approx_all : 1D array
+        lpd_approx_all : array-like
             LPD approximation values for the full dataset, shape (N,).
         n_data_points : int
             Total number of data points (N).
@@ -944,11 +945,11 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        draws_matrix : np.ndarray of shape (n_obs, n_draws)
+        draws_matrix : array-like
             2D array of posterior predictive draws with shape (n_obs, n_draws).
-        y_obs_array : np.ndarray of shape (n_obs,)
+        y_obs_array : array-like
             1D array of observed values with shape (n_obs,).
-        log_weights : np.ndarray of shape (n_obs, n_draws) and dtype float, optional
+        log_weights : array-like, optional
             1D array of normalized log weights matching ary.
             If None, uniform weights are used.
         rng : np.random.Generator, optional
@@ -987,7 +988,16 @@ class _DiagnosticsBase(_CoreBase):
         )
         return np.clip(results, min_tail_prob, 1.0 - min_tail_prob)
 
-    def _pareto_pit_single(self, draws, y_val, lw, rng, gpd_ok, tail_ids, ndraws_tail):
+    def _pareto_pit_single(
+        self,
+        draws: ArrayLike,
+        y_val: float,
+        lw: ArrayLike,
+        rng: np.random.Generator,
+        gpd_ok: bool,
+        tail_ids: ArrayLike,
+        ndraws_tail: int,
+    ):
         """Compute Pareto-smoothed PIT for a single observation."""
         draws = np.asarray(draws, dtype=float).ravel()
         y_val = float(y_val)
@@ -1079,10 +1089,10 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        ary : Array
+        ary : array-like
         r_eff : float, optional
             Relative efficiency. Effective sample size divided the number of samples.
-        tail : srt, optional
+        tail : str, optional
             Which tail to fit. Can be 'right', 'left', or 'both'.
         log_weights : bool, optional
             Whether dt represents log-weights.
@@ -1114,7 +1124,7 @@ class _DiagnosticsBase(_CoreBase):
         return ary, khat
 
     @staticmethod
-    def _get_ps_tails(n_draws, r_eff, tail):
+    def _get_ps_tails(n_draws: int, r_eff: float, tail: str):
         if n_draws * r_eff > 225:
             n_draws_tail = np.floor(3 * (n_draws / r_eff) ** 0.5)
         else:
@@ -1144,7 +1154,7 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        x : array
+        ary : array
             1D array.
         n_draws : int
             Number of draws.
@@ -1234,17 +1244,17 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        ary: array
+        ary : array
             sorted 1D data array
-        weights: array, optional
+        weights : array, optional
             observation weights. If provided, a weighted fit is performed.
             Weights are normalized internally to sum to ``len(ary)``.
 
         Returns
         -------
-        kappa: float
+        kappa : float
             estimated shape parameter
-        sigma: float
+        sigma : float
             estimated scale parameter
         """
         prior_bs = 3
@@ -1300,7 +1310,7 @@ class _DiagnosticsBase(_CoreBase):
         return kappa, sigma
 
     @staticmethod
-    def _gpinv(probs, kappa, sigma, mu):
+    def _gpinv(probs: ArrayLike, kappa: float, sigma: float, mu: float):
         """Quantile function for generalized pareto distribution."""
         if sigma <= 0:
             return np.full_like(probs, np.nan)
@@ -1314,6 +1324,17 @@ class _DiagnosticsBase(_CoreBase):
 
     @staticmethod
     def pgeneralized_pareto(q, mu=0, sigma=1, k=0, lower_tail=True, log_p=False):
+        """Compute the generalized Pareto distribution CDF.
+
+        Parameters
+        ----------
+        q : array-like
+        mu : float, default 0
+        sigma : float, default 1
+        k : float, default 0
+        lower_tail : bool, default True
+        log_p : bool, default False
+        """
         q = np.asarray(q, dtype=float)
 
         if np.isnan(sigma) or sigma <= 0:
@@ -1337,7 +1358,14 @@ class _DiagnosticsBase(_CoreBase):
 
         return p
 
-    def _power_scale_sense(self, ary, lower_w, upper_w, lower_alpha, upper_alpha):
+    def _power_scale_sense(
+        self,
+        ary: ArrayLike,
+        lower_w: ArrayLike,
+        upper_w: ArrayLike,
+        lower_alpha: float,
+        upper_alpha: float,
+    ):
         """Compute power-scaling sensitivity by finite difference second derivative of CJS."""
         ary = np.ravel(ary)
         lower_w = np.ravel(lower_w)
@@ -1348,7 +1376,7 @@ class _DiagnosticsBase(_CoreBase):
         upper_grad = upper_cjs / np.log2(upper_alpha)
         return (lower_grad + upper_grad) / 2
 
-    def _power_scale_lw(self, ary, alpha):
+    def _power_scale_lw(self, ary: ArrayLike, alpha: float):
         """Compute log weights for power-scaling component by alpha."""
         shape = ary.shape
         ary = np.ravel(ary)
@@ -1367,7 +1395,7 @@ class _DiagnosticsBase(_CoreBase):
         return log_weights.reshape(shape)
 
     @staticmethod
-    def _cjs_dist(ary, weights):
+    def _cjs_dist(ary: ArrayLike, weights: ArrayLike):
         """Calculate the cumulative Jensen-Shannon distance between original and weighted draws."""
         # sort draws and weights
         order = np.argsort(ary)
@@ -1406,7 +1434,7 @@ class _DiagnosticsBase(_CoreBase):
 
         return np.sqrt((cjs_pq + cjs_qp) / bound)
 
-    def _rhat_nested_rank(self, ary, superchain_ids):
+    def _rhat_nested_rank(self, ary: ArrayLike, superchain_ids: ArrayLike):
         """Compute the rank normalized rhat for 2d array.
 
         Computation follows https://arxiv.org/abs/1903.08008
@@ -1427,7 +1455,7 @@ class _DiagnosticsBase(_CoreBase):
         rhat_rank = max(rhat_bulk, rhat_tail)
         return rhat_rank
 
-    def _rhat_nested_folded(self, ary, superchain_ids):
+    def _rhat_nested_folded(self, ary: ArrayLike, superchain_ids: ArrayLike):
         """Calculate split-Rhat for folded z-values."""
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
@@ -1436,7 +1464,7 @@ class _DiagnosticsBase(_CoreBase):
         superchain_ids = np.hstack((superchain_ids, superchain_ids))
         return self._rhat_nested(ary, superchain_ids)
 
-    def _rhat_nested_z_scale(self, ary, superchain_ids):
+    def _rhat_nested_z_scale(self, ary: ArrayLike, superchain_ids: ArrayLike):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
@@ -1444,21 +1472,21 @@ class _DiagnosticsBase(_CoreBase):
         superchain_ids = np.hstack((superchain_ids, superchain_ids))
         return self._rhat_nested(ary, superchain_ids)
 
-    def _rhat_nested_split(self, ary, superchain_ids):
+    def _rhat_nested_split(self, ary: ArrayLike, superchain_ids: ArrayLike):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
         superchain_ids = np.hstack((superchain_ids, superchain_ids))
         return self._rhat_nested(self._split_chains(ary), superchain_ids)
 
-    def _rhat_nested_identity(self, ary, superchain_ids):
+    def _rhat_nested_identity(self, ary: ArrayLike, superchain_ids: ArrayLike):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
             return np.nan
         return self._rhat_nested(ary, superchain_ids)
 
     @staticmethod
-    def _rhat_nested(ary, superchain_ids):
+    def _rhat_nested(ary: ArrayLike, superchain_ids: ArrayLike):
         ary = np.asarray(ary)
         nchains, niterations = ary.shape
 
@@ -1514,9 +1542,9 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        mu_pred: array-like of shape = (n_posterior_samples, n_outputs)
+        mu_pred : array-like
             Estimated mean for the response variable.
-        var : array-like of shape (n_posterior_samples,), optional
+        scale : array-like, optional
             Posterior draws of the variance or pseudo-variance.
             - If provided: treated as the model-implied residual variance.
             - If None: assumes Bernoulli-like model and computes pseudo-variance
@@ -1524,13 +1552,13 @@ class _DiagnosticsBase(_CoreBase):
         scale_kind : str, optional
             Kind of scale for the variance. Options are 'sd' (standard deviation) or
             'var' (variance). Default is 'sd'.
-        circular: bool, optional
+        circular : bool, optional
             Whether the response variable is circular. For circular response,
             the scale should be the circular variance and scale_kind should be 'var'.
 
         Returns
         -------
-        array-like  (sample, dims)
+        array-like
 
         """
         if scale is None:
@@ -1579,16 +1607,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        y_obs: array-like of shape = (n_outputs,)
+        y_obs : array-like
             Observed values for the response variable.
-        mu_pred: array-like of shape = (n_posterior_samples, n_outputs)
+        mu_pred : array-like
             Estimated mean for the response variable.
-        circular: bool, optional
+        circular : bool, optional
             Whether the response variable is circular.
 
         Returns
         -------
-        array-like  (sample, dims)
+        array-like
         """
         if circular:
             return 1 - circular_var(circular_diff(y_obs, mu_pred))
@@ -1605,16 +1633,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Mean absolute error.
-        std_error: float
+        std_error : float
             Standard error of the mean absolute error.
         """
         n_obs = len(observed)
@@ -1629,16 +1657,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Mean squared error.
-        std_error: float
+        std_error : float
             Standard error of the mean squared error.
         """
         n_obs = len(observed)
@@ -1653,16 +1681,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Root mean squared error.
-        std_error: float
+        std_error : float
             Standard error of the root mean squared error.
         """
         n_obs = len(observed)
@@ -1681,16 +1709,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Accuracy.
-        std_error: float
+        std_error : float
             Standard error of the accuracy.
         """
         n_obs = len(observed)
@@ -1706,16 +1734,16 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        observed: array-like of shape = (n_outputs,)
+        observed : array-like
             Ground truth (correct) target values.
-        predicted: array-like of shape = (n_outputs)
+        predicted : array-like
             Estimated target values.
 
         Returns
         -------
-        mean: float
+        mean : float
             Balanced accuracy.
-        std_error: float
+        std_error : float
             Standard error of the balanced accuracy.
         """
         n_obs = len(observed)

@@ -87,6 +87,7 @@ numpydoc_xref_aliases = {
     "DataArray": ":class:`xarray.DataArray`",
     "Dataset": ":class:`xarray.Dataset`",
     "DataTree": ":class:`xarray.DataTree`",
+    "namedtuple": ":term:`named tuple`",
     **{f"{singular}s": f":any:`{singular}s <{singular}>`" for singular in singulars},
 }
 

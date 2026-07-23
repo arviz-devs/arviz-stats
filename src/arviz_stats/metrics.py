@@ -98,7 +98,7 @@ def bayesian_r2(
 
     Returns
     -------
-    Namedtuple or array
+    namedtuple or array
 
     See Also
     --------
@@ -242,7 +242,7 @@ def residual_r2(
 
     Returns
     -------
-    Namedtuple or array
+    namedtuple or array
 
 
     See Also

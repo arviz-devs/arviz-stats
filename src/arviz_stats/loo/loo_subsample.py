@@ -62,13 +62,13 @@ def loo_subsample(
         - An integer specifying the number of observations to randomly sub-sample without
           replacement.
         - An array of integer indices specifying the exact observations to use.
-    pointwise: bool, optional
+    pointwise : bool, optional
         If True the pointwise predictive accuracy will be returned. Defaults to
         ``rcParams["stats.ic_pointwise"]``.
     var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation.
-    reff: float, optional
+    reff : float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
     log_weights : DataArray or ELPDData, optional
@@ -84,14 +84,14 @@ def loo_subsample(
     log_q : ndarray or DataArray, optional
         The (proposal) log-density evaluated at samples from the proposal distribution (q).
         If provided along with ``log_p``, approximate posterior correction will be applied.
-    seed: int, optional
+    seed : int, optional
         Seed for random sampling.
-    method: str, optional
+    method : str, optional
         Method used for approximating the pointwise log predictive density:
 
         - ``lpd``: Use standard log predictive density approximation (default)
         - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
-    thin: int or str, optional
+    thin : int or str, optional
         Thinning factor for posterior draws. Can be an integer to thin by that factor,
         "auto" to automatically determine thinning based on bulk and tail ESS, or None
         (default) to use all posterior draws. This value is stored in the returned
@@ -109,7 +109,7 @@ def loo_subsample(
         List of parameter names to extract from the posterior. If None, all parameters are used.
         Recommended to pass the required parameter names from the posterior group that are
         necessary for the log-likelihood function.
-    log: bool, optional
+    log : bool, optional
         Whether the ``log_lik_fn`` returns log-likelihood (True) or likelihood (False).
         Default is True.
     log_jacobian : DataArray, optional
@@ -412,7 +412,7 @@ def update_subsample(
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     seed : int, optional
         Seed for random sampling.
-    method: str, optional
+    method : str, optional
         Method used for approximating the pointwise log predictive density:
 
         - ``lpd``: Use standard log predictive density approximation (default)
@@ -427,9 +427,9 @@ def update_subsample(
         the observation dimensions ``obs_dims`` and provide the pointwise log predictive density.
         Posterior draws (full or mean-reduced) are provided in the ``posterior`` group depending
         on the chosen method, while auxiliary groups remain aligned for direct access.
-    param_names: list, optional
+    param_names : list, optional
         List of parameter names to extract from the posterior. If None, all parameters are used.
-    log: bool, optional
+    log : bool, optional
         Whether the ``log_lik_fn`` returns log-likelihood (True) or likelihood (False).
         Default is True.
 

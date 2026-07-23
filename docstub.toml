@@ -1,0 +1,37 @@
+[tool.docstub.type_prefixes]
+numbers = "numbers"
+xarray = "xarray"
+pandas = "pandas"
+types = "types"
+pymc = "pymc"
+pytensor = "pytensor"
+
+# Specify human-friendly aliases that can be used instead of Python-parsable
+# annotations.
+[tool.docstub.type_nicknames]
+sequence = "Sequence"
+iterable = "Iterable"
+mapping = "Mapping"
+hashable = "Hashable"
+hashable_key = "Any"
+iterator = "Iterator"
+module = "types.ModuleType"
+callable = "Callable"
+labeller = "arviz_base.labels.Labeller"
+Dataset = "xarray.Dataset"
+DataTree = "xarray.DataTree"
+# TODO: define a meta/pseudo type for DataTree-like
+DataTree-like = "xarray.DataTree"
+DataArray = "xarray.DataArray"
+scalar = "numbers.Number"
+any = "Any"
+
+# arviz-stats specific
+InferenceData = "xarray.DataTree"
+idata-like = "xarray.DataTree"
+datatree = "xarray.DataTree"
+DataFrame = "pandas.DataFrame"
+namedtuple = "typing.NamedTuple"
+boolean = "bool"
+SamplingWrapper = "arviz_stats.loo.SamplingWrapper"
+SplitMomentMatch = "arviz_stats.loo.loo_moment_match.SplitMomentMatch"

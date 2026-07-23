@@ -3,8 +3,10 @@
 
 import math
 import warnings
+from collections.abc import Callable
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy.optimize import brentq
 from scipy.signal import convolve, convolve2d
 from scipy.signal.windows import gaussian
@@ -18,20 +20,21 @@ from arviz_stats.base.core import _CoreBase
 class _DensityBase(_CoreBase):
     """Class with numpy+scipy only density related functions."""
 
-    bw_methods_linear = ("scott", "silverman", "isj", "experimental")
+    bw_methods_linear: tuple[str, ...] = ("scott", "silverman", "isj", "experimental")
 
     def dct1d(self, x):
         """Discrete Cosine Transform in 1 Dimension.
 
         Parameters
         ----------
-        x : numpy array
+        x : array-like
             1 dimensional array of values for which the
             DCT is desired
 
         Returns
         -------
-        output : DTC transformed values
+        output : array-like
+            DCT transformed values.
         """
         x_len = len(x)
 
@@ -45,7 +48,7 @@ class _DensityBase(_CoreBase):
 
         return output
 
-    def _fixed_point(self, t, n, k_sq, a_sq):  # pylint: disable=no-self-use
+    def _fixed_point(self, t: float, n: int, k_sq: ArrayLike, a_sq: ArrayLike):  # pylint: disable=no-self-use
         """Calculate t-zeta*gamma^[l](t).
 
         Implementation of the function t-zeta*gamma^[l](t) derived from equation (30) in [1].
@@ -74,7 +77,7 @@ class _DensityBase(_CoreBase):
         out = t - (2 * n * np.pi**0.5 * f) ** (-0.4)
         return out
 
-    def _root(self, function, n, args, x, grid_range):
+    def _root(self, function: Callable, n: int, args: tuple, x: ArrayLike, grid_range: float):
         # The right bound is at most 0.01
         found = False
         n = max(min(1050, n), 50)
@@ -94,14 +97,28 @@ class _DensityBase(_CoreBase):
         return bw
 
     def bw_scott(self, x, x_std=None, **kwargs):  # pylint: disable=unused-argument, no-self-use
-        """Scott's Rule."""
+        """Scott's Rule.
+
+        Parameters
+        ----------
+        x : array-like
+        x_std : float, optional
+        **kwargs : dict, optional
+        """
         if x_std is None:
             x_std = np.std(x)
         bw = 1.06 * x_std * len(x) ** (-0.2)
         return bw
 
     def bw_silverman(self, x, x_std=None, **kwargs):  # pylint: disable=unused-argument
-        """Silverman's Rule."""
+        """Silverman's Rule.
+
+        Parameters
+        ----------
+        x : array-like
+        x_std : float, optional
+        **kwargs : dict, optional
+        """
         if x_std is None:
             x_std = np.std(x)
         q25, q75 = self.quantile(x, [0.25, 0.75])
@@ -112,6 +129,13 @@ class _DensityBase(_CoreBase):
 
     def bw_isj(self, x, grid_counts=None, x_std=None, grid_range=None):
         """Improved Sheather-Jones bandwidth estimation.
+
+        Parameters
+        ----------
+        x : array-like
+        grid_counts : array-like, optional
+        x_std : float, optional
+        grid_range : float, optional
 
         Notes
         -----
@@ -157,7 +181,15 @@ class _DensityBase(_CoreBase):
         return h
 
     def bw_experimental(self, x, grid_counts=None, x_std=None, grid_range=None):
-        """Experimental bandwidth estimator."""
+        """Experimental bandwidth estimator.
+
+        Parameters
+        ----------
+        x : array-like
+        grid_counts : array-like, optional
+        x_std : float, optional
+        grid_range : float, optional
+        """
         bw_silverman = self.bw_silverman(x, x_std=x_std)
         bw_isj = self.bw_isj(x, grid_counts=grid_counts, grid_range=grid_range)
         return 0.5 * (bw_silverman + bw_isj)
@@ -169,16 +201,19 @@ class _DensityBase(_CoreBase):
 
         Parameters
         ----------
-        x : 1-D numpy array
+        x : array-like
             1 dimensional array of sample data from the
             variable for which a density estimate is desired.
-        bw: int, float or str
+        bw : int, float or str
             If numeric, indicates the bandwidth and must be positive.
             If str, indicates the method to estimate the bandwidth.
+        grid_counts : array-like, optional
+        x_std : float, optional
+        grid_range : float, optional
 
         Returns
         -------
-        bw: float
+        bw : float
             Bandwidth
         """
         if isinstance(bw, bool):
@@ -210,7 +245,7 @@ class _DensityBase(_CoreBase):
             )
         return bw
 
-    def _normalize_angle(self, x, zero_centered=True):  # pylint: disable=no-self-use
+    def _normalize_angle(self, x: ArrayLike, zero_centered: bool = True):  # pylint: disable=no-self-use
         """Normalize angles.
 
         Normalize angles in radians to [-pi, pi) or [0, 2 * pi) according to `zero_centered`.
@@ -219,14 +254,14 @@ class _DensityBase(_CoreBase):
             return (x + np.pi) % (2 * np.pi) - np.pi
         return x % (2 * np.pi)
 
-    def _vonmises_pdf(self, x, mu, kappa):  # pylint: disable=no-self-use
+    def _vonmises_pdf(self, x: ArrayLike, mu: float, kappa: float):  # pylint: disable=no-self-use
         """Calculate vonmises_pdf."""
         if kappa <= 0:
             raise ValueError("Argument 'kappa' must be positive.")
         pdf = 1 / (2 * np.pi * ive(0, kappa)) * np.exp(np.cos(x - mu) - 1) ** kappa
         return pdf
 
-    def _a1inv(self, x):  # pylint: disable=no-self-use
+    def _a1inv(self, x: float):  # pylint: disable=no-self-use
         """Compute inverse function.
 
         Inverse function of the ratio of the first and
@@ -240,13 +275,17 @@ class _DensityBase(_CoreBase):
             return -0.4 + 1.39 * x + 0.43 / (1 - x)
         return 1 / (x**3 - 4 * x**2 + 3 * x)
 
-    def _kappa_mle(self, x):
+    def _kappa_mle(self, x: ArrayLike):
         mean = self.circular_mean(x)
         kappa = self._a1inv(np.mean(np.cos(x - mean)))
         return kappa
 
     def bw_taylor(self, x):
         """Taylor's rule for circular bandwidth estimation.
+
+        Parameters
+        ----------
+        x : array-like
 
         Notes
         -----
@@ -277,11 +316,14 @@ class _DensityBase(_CoreBase):
 
         Parameters
         ----------
-        custom_lims : Object whose type is checked.
+        custom_lims : list or tuple
+            Numeric list or tuple of length 2.
+        x_min : float
+        x_max : float
 
         Returns
         -------
-        None: Object of type None
+        None
         """
         if not isinstance(custom_lims, list | tuple):
             raise TypeError(
@@ -334,22 +376,22 @@ class _DensityBase(_CoreBase):
         ----------
         x_min : float
             Minimum value of the data
-        x_max: float
+        x_max : float
             Maximum value of the data.
-        x_std: float
+        x_std : float
             Standard deviation of the data.
-        extend_fct: bool
+        extend_fct : bool
             Indicates the factor by which `x_std` is multiplied
             to extend the range of the data.
-        grid_len: int
+        grid_len : int
             Number of bins
-        custom_lims: tuple or list
+        custom_lims : tuple or list
             Custom limits for the domain of the density estimation.
             Must be numeric of length 2. Overrides `extend`.
-        extend: bool, optional
+        extend : bool, optional
             Whether to extend the range of the data or not.
             Default is True.
-        bound_correction: bool, optional
+        bound_correction : bool, optional
             Whether the density estimations performs boundary correction or not.
             This does not impacts directly in the output, but is used
             to override `extend`. Overrides `extend`.
@@ -357,11 +399,11 @@ class _DensityBase(_CoreBase):
 
         Returns
         -------
-        grid_len: int
+        grid_len : int
             Number of bins
-        grid_min: float
+        grid_min : float
             Minimum value of the grid
-        grid_max: float
+        grid_max : float
             Maximum value of the grid
         """
         # Set up number of bins.
@@ -401,44 +443,47 @@ class _DensityBase(_CoreBase):
 
         Parameters
         ----------
-        x : 1D numpy array
+        x : array-like
             Data used to calculate the density estimation.
-        bw: int, float or str, optional
+        bw : int, float or str, optional
             If numeric, indicates the bandwidth and must be positive.
             If str, indicates the method to estimate the bandwidth and must be one of "scott",
             "silverman", "isj" or "experimental". Defaults to "experimental".
-        adaptive: boolean, optional
+        adaptive : boolean, optional
             Indicates if the bandwidth is adaptive or not.
             It is the recommended approach when there are multiple modes with different spread.
             It is not compatible with convolution. Defaults to False.
-        extend: boolean, default False
+        extend : boolean, default False
             Whether to extend the observed range for `x` in the estimation.
             It extends each bound by a multiple of the standard deviation of `x`
             given by `extend_fct`. Defaults to False.
-        bound_correction: boolean, optional
+        bound_correction : boolean, optional
             Whether to perform boundary correction on the bounds of `x` or not.
             Defaults to True.
-        extend_fct: float, optional
+        extend_fct : float, optional
             Number of standard deviations used to widen the lower and upper bounds of `x`.
             Defaults to 0.5.
-        bw_fct: float, optional
+        bw_fct : float, optional
             A value that multiplies `bw` which enables tuning smoothness by hand.
             Must be positive. Values below 1 decrease smoothness while values above 1 decrease it.
             Defaults to 1 (no modification).
-        custom_lims: list or tuple, optional
+        custom_lims : list or tuple, optional
             A list or tuple of length 2 indicating custom bounds for the range of `x`.
             Defaults to None which disables custom bounds.
-        cumulative: bool, optional
+        cumulative : bool, optional
             Whether return the PDF or the cumulative PDF. Defaults to False.
-        grid_len: int, optional
+        grid_len : int, optional
             The number of intervals used to bin the data points i.e. the length of the grid used in
             the estimation. Defaults to 512.
 
         Returns
         -------
-        grid : Gridded numpy array for the x values.
-        pdf : Numpy array for the density estimates.
-        bw: optional, the estimated bandwidth.
+        grid : array-like
+            Gridded array for the x values.
+        pdf : array-like
+            Array for the density estimates.
+        bw : float, optional
+            The estimated bandwidth.
         """
         # Check `bw_fct` is numeric and positive
         if not isinstance(bw_fct, int | float | np.integer | np.floating):
@@ -489,6 +534,15 @@ class _DensityBase(_CoreBase):
 
         One dimensional Gaussian kernel density estimation via convolution of the binned relative
         frequencies and a Gaussian filter. This is an internal function used by `kde()`.
+
+        Parameters
+        ----------
+        x : array-like
+        bw : float
+        grid_edges : array-like
+        grid_counts : array-like
+        grid_len : int
+        bound_correction : bool
         """
         # Calculate relative frequencies per bin
         bin_width = grid_edges[1] - grid_edges[0]
@@ -517,6 +571,15 @@ class _DensityBase(_CoreBase):
 
     def kde_adaptive(self, x, bw, grid_edges, grid_counts, grid_len, bound_correction):
         """Compute Adaptive Kernel Density Estimation.
+
+        Parameters
+        ----------
+        x : array-like
+        bw : float
+        grid_edges : array-like
+        grid_counts : array-like
+        grid_len : int
+        bound_correction : bool
 
         Notes
         -----
@@ -598,22 +661,22 @@ class _DensityBase(_CoreBase):
 
         Parameters
         ----------
-        x : 1D numpy array
+        x : array-like
             Data used to calculate the density estimation.
-        bw: int, float or str, optional
+        bw : int, float or str, optional
             If numeric, indicates the bandwidth and must be positive.
             If str, indicates the method to estimate the bandwidth and must be "taylor"
             since it is the only option supported so far. Defaults to "taylor".
-        bw_fct: float, optional
+        bw_fct : float, optional
             A value that multiplies `bw` which enables tuning smoothness by hand. Must be positive.
             Values above 1 decrease smoothness while values below 1 decrease it.
             Defaults to 1 (no modification).
-        custom_lims: list or tuple, optional
+        custom_lims : list or tuple, optional
             A list or tuple of length 2 indicating custom bounds for the range of `x`.
             Defaults to None which means the estimation limits are [-pi, pi].
-        cumulative: bool, optional
+        cumulative : bool, optional
             Whether return the PDF or the cumulative PDF. Defaults to False.
-        grid_len: int, optional
+        grid_len : int, optional
             The number of intervals used to bin the data points
             i.e. the length of the grid used in the estimation. Defaults to 512.
         """
@@ -665,7 +728,7 @@ class _DensityBase(_CoreBase):
 
         return grid, pdf, bw
 
-    def _kde(self, x, circular=False, grid_len=512, **kwargs):
+    def _kde(self, x: ArrayLike, circular: bool = False, grid_len: int = 512, **kwargs):
         x = x.flatten()
         x = x[np.isfinite(x)]
         if x.size == 0 or np.all(x == x[0]):
@@ -690,20 +753,25 @@ class _DensityBase(_CoreBase):
 
         Parameters
         ----------
-        x : Numpy array or list
-        y : Numpy array or list
+        x : array-like
+        y : array-like
         gridsize : tuple
             Number of points used to discretize data. Use powers of 2 for fft optimization
-        circular: bool
+        circular : bool
             If True use circular boundaries. Defaults to False
 
         Returns
         -------
-        grid: A gridded 2D KDE of the input points (x, y)
-        xmin: minimum value of x
-        xmax: maximum value of x
-        ymin: minimum value of y
-        ymax: maximum value of y
+        grid : array-like
+            A gridded 2D KDE of the input points (x, y).
+        xmin : float
+            Minimum value of x.
+        xmax : float
+            Maximum value of x.
+        ymin : float
+            Minimum value of y.
+        ymax : float
+            Maximum value of y.
         """
         x = np.asarray(x, dtype=float)
         x = x[np.isfinite(x)]
@@ -783,7 +851,15 @@ class _DensityBase(_CoreBase):
 
         return contours
 
-    def _qds(self, x, nquantiles, binwidth, dotsize, stackratio, top_only):
+    def _qds(
+        self,
+        x: ArrayLike,
+        nquantiles: int,
+        binwidth: float | None,
+        dotsize: float,
+        stackratio: float,
+        top_only: bool,
+    ):
         """Compute quantile dot stacking for 1D data."""
         x = x.flatten()
         x = x[np.isfinite(x)]
@@ -806,7 +882,7 @@ class _DensityBase(_CoreBase):
         )
         return x, y, radius
 
-    def _ecdf(self, ary, npoints, pit):
+    def _ecdf(self, ary: ArrayLike, npoints: int, pit: bool):
         """Compute empirical cumulative distribution function (ECDF)."""
         ary = ary[np.isfinite(ary)]
         total_points = len(ary)
@@ -829,7 +905,7 @@ class _DensityBase(_CoreBase):
         return eval_points, ecdf
 
     @staticmethod
-    def _shapley_mean(values):
+    def _shapley_mean(values: ArrayLike):
         """Compute closed-form Shapley contributions for mean-aggregation."""
         n = len(values)
         if n == 0:
@@ -843,7 +919,7 @@ class _DensityBase(_CoreBase):
 
         return (values / n) + ((harmonic_n - 1) / n) * (values - mean_others)
 
-    def _pot_c(self, ary):
+    def _pot_c(self, ary: ArrayLike):
         """Pointwise Order-based Test with Cauchy combination (Beta-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
@@ -868,7 +944,7 @@ class _DensityBase(_CoreBase):
 
         return p_value, shapley_vals, shapley_unsorted
 
-    def _prit_c(self, ary):
+    def _prit_c(self, ary: ArrayLike):
         """Pointwise Rank-based Individual Test with Cauchy combination (Binomial-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
@@ -895,7 +971,7 @@ class _DensityBase(_CoreBase):
 
         return p_value, shapley_vals, shapley_unsorted
 
-    def _piet_c(self, ary):
+    def _piet_c(self, ary: ArrayLike):
         """Pointwise Inverse-CDF Evaluation Tests Combination (Exp(1)-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
@@ -984,7 +1060,7 @@ class _DensityBase(_CoreBase):
 
         return p_value, b_shapley_vals, w_shapley_vals
 
-    def _cauchy_combination(self, ps, cauchy_vals, truncate):
+    def _cauchy_combination(self, ps: ArrayLike, cauchy_vals: ArrayLike, truncate: bool):
         """Combine p-values using the Cauchy combination method."""
         if truncate:
             idx = ps < 0.5

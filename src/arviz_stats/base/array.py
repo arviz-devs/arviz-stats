@@ -15,7 +15,14 @@ from arviz_stats.base.stats_utils import make_ufunc
 
 
 def process_chain_none(ary, chain_axis, draw_axis):
-    """Process array with chain and draw axis to cover the case ``chain_axis=None``."""
+    """Process array with chain and draw axis to cover the case ``chain_axis=None``.
+
+    Parameters
+    ----------
+    ary : array-like
+    chain_axis : int or None
+    draw_axis : int
+    """
     if chain_axis is None:
         ary = np.expand_dims(ary, axis=0)
         chain_axis = 0
@@ -24,7 +31,14 @@ def process_chain_none(ary, chain_axis, draw_axis):
 
 
 def process_chain_none_multi(*arys, chain_axis, draw_axis):
-    """Process multiple arrays with chain and draw axis to cover the case ``chain_axis=None``."""
+    """Process multiple arrays with chain and draw axis to cover the case ``chain_axis=None``.
+
+    Parameters
+    ----------
+    *arys : array-like
+    chain_axis : int or None
+    draw_axis : int
+    """
     if chain_axis is None:
         arys = tuple(np.expand_dims(ary, axis=0) for ary in arys)
         chain_axis = 0
@@ -155,7 +169,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         draw_axis : int, default -1
         method : str, default "bulk"
         relative : bool, default False
-        prob : float or (float, float), default None
+        prob : float or tuple of (float, float), default None
             When using the array interface, `prob` is a required argument for
             the "tail", "quantile" (as float) and "local" (as tuple) methods.
         """
@@ -239,6 +253,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         prob : float, default None
             When using the array interface, `prob` is a required argument for
             "quantile" method.
+        circular : bool, default False
         """
         method = method.lower()
         valid_methods = {"mean", "sd", "median", "quantile"}
@@ -299,7 +314,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return psl_ufunc(ary, out_shape=[(ary.shape[i] for i in axes), []], r_eff=r_eff)
 
     def bfmi(self, ary, chain_axis=-2, draw_axis=-1):
-        """Calculate the estimated Bayesian fraction of missing information."""
+        """Calculate the estimated Bayesian fraction of missing information.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int, default -2
+        draw_axis : int, default -1
+        """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         bfmi_ufunc = make_ufunc(
@@ -405,7 +427,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         axis : int, sequence of int or None, default -1
-        bins : str, scalar or array-like, default "arviz"
+        bins : str or scalar or array-like, default "arviz"
         """
         ary, axes = process_ary_axes(ary, axis)
         get_bininfo_ufunc = make_ufunc(
@@ -430,8 +452,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        bins : str, scalar or array-like, optional
-        range : (float, float), optional
+        bins : str or scalar or array-like, optional
+        range : tuple of (float, float), optional
         weights : array-like, optional
         axis : int, sequence of int or None, default -1
         density : bool, default True
@@ -699,7 +721,19 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         axis=-1,
         **kwargs,
     ):
-        """Compute quantile dot."""
+        """Compute quantile dot.
+
+        Parameters
+        ----------
+        ary : array-like
+        nquantiles : int, default 100
+        binwidth : float, optional
+        dotsize : float, default 1
+        stackratio : float, default 1
+        top_only : bool, default False
+        axis : int, sequence of int or None, default -1
+        **kwargs
+        """
         ary, axes = process_ary_axes(ary, axis)
         qd_ufunc = make_ufunc(
             self._qds,
@@ -850,7 +884,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
 
     def bayesian_r2(self, mu_pred, scale=None, scale_kind="sd", circular=False):
-        """Compute Bayesian R² for regression models."""
+        """Compute Bayesian R² for regression models.
+
+        Parameters
+        ----------
+        mu_pred : array-like
+        scale : array-like, optional
+        scale_kind : str, default "sd"
+        circular : bool, default False
+        """
         r2_ufunc = make_ufunc(
             self._bayesian_r2,
             n_output=1,
@@ -861,7 +903,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return r2_ufunc(mu_pred, scale, scale_kind, circular, out_shape=(mu_pred.shape[0],))
 
     def residual_r2(self, y_obs, mu_pred, circular=False):
-        """Compute residual R² for Bayesian regression models."""
+        """Compute residual R² for Bayesian regression models.
+
+        Parameters
+        ----------
+        y_obs : array-like
+        mu_pred : array-like
+        circular : bool, default False
+        """
         r2_ufunc = make_ufunc(
             self._residual_r2,
             n_output=1,
@@ -873,7 +922,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return r2_ufunc(y_obs, mu_pred, circular, out_shape=(mu_pred.shape[0],))
 
     def metrics(self, observed, predicted, kind):
-        """Compute metrics for Bayesian regression models."""
+        """Compute metrics for Bayesian regression models.
+
+        Parameters
+        ----------
+        observed : array-like
+        predicted : array-like
+        kind : str
+        """
         func = getattr(self, f"_{kind}", None)
 
         metrics_ufunc = make_ufunc(
@@ -974,7 +1030,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1005,7 +1061,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1036,7 +1092,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1067,7 +1123,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1098,7 +1154,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1129,7 +1185,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1160,7 +1216,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         quantiles : tuple of float, default (0.25, 0.75)
             Quantiles to compute the interquartile range.
@@ -1614,4 +1670,4 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
 
 
-array_stats = BaseArray()
+array_stats: BaseArray = BaseArray()

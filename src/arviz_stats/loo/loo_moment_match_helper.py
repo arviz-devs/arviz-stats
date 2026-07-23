@@ -26,7 +26,7 @@ def mm_from_pymc(
     idata : DataTree
         InferenceData with `posterior` and `log_likelihood` groups. The posterior
         group must contain the free random variables of the model.
-    model : Model
+    model : pymc.Model
         The PyMC model that produced the `idata`.
     var_name : str, optional
         Name of the observed variable whose log-likelihood is used for LOO. Can be omitted
@@ -122,7 +122,7 @@ def _validate_model(model):
 
     Parameters
     ----------
-    model : Model
+    model : pymc.Model
         The PyMC model to check.
 
     Raises
@@ -148,7 +148,7 @@ def _get_observed_rv(model, idata, var_name):
 
     Parameters
     ----------
-    model : Model
+    model : pymc.Model
         The PyMC model to check.
     idata : DataTree
         The DataTree object. If it contains an ``observed_data`` group,
@@ -159,7 +159,7 @@ def _get_observed_rv(model, idata, var_name):
 
     Returns
     -------
-    observed_rv : RandomVariable
+    observed_rv : pytensor.tensor.TensorVariable
         The observed random variable to use for moment matching.
     var_name : str
         The name of the observed variable.
@@ -201,7 +201,7 @@ def _get_upars_da(idata, model, initial_point, value_vars):
     ----------
     idata : DataTree
         The DataTree object containing the posterior samples.
-    model : Model
+    model : pymc.Model
         The PyMC model.
     initial_point : dict
         The initial point of the model.
@@ -307,12 +307,16 @@ def _get_batched_func(inputs, outputs, initial_point, *, dtype="float64", on_unu
 
     Parameters
     ----------
-    inputs : list of PyTensor variables
+    inputs : list of pytensor.tensor.TensorVariable
         Model value variables (unconstrained parameters), in column order.
-    outputs : list of PyTensor expressions
+    outputs : list of pytensor.tensor.TensorVariable
         Expressions to evaluate (e.g. log posterior, elementwise log likelihood).
     initial_point : dict
         Model initial point; used to determine the shape of each value variable.
+    dtype : str, default "float64"
+        Data type used for the compiled function output.
+    on_unused_input : str, default "ignore"
+        How PyTensor handles unused inputs when compiling the function.
 
     Returns
     -------

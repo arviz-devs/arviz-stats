@@ -1,0 +1,53 @@
+# File generated with docstub
+
+import numba
+import numpy as np
+import scipy
+import xarray
+import xarray as xr
+from _typeshed import Incomplete
+from scipy.fftpack import next_fast_len
+from xarray import DataArray
+from xarray_einstats import stats
+from xarray_einstats.einops import rearrange
+
+__all__ = ["rhat", "ess"]
+
+def _backtransform_ranks(da: DataArray, c: float = ...) -> DataArray: ...
+def _z_scale(da: DataArray, **kwargs: Incomplete) -> DataArray: ...
+def _split_chains(da: DataArray, **kwargs: Incomplete) -> None: ...
+def _z_fold(da: DataArray, **kwargs: Incomplete) -> None: ...
+def _rhat(da: DataArray) -> None: ...
+def _rhat_rank(da: DataArray, **kwargs: Incomplete) -> None: ...
+def rhat(
+    ds: xarray.Dataset | xarray.DataTree | DataArray,
+    group: str = ...,
+    method: str = ...,
+    **kwargs: Incomplete,
+) -> None: ...
+def rfft(
+    da: DataArray,
+    dim: str | None = ...,
+    n: int | None = ...,
+    prefix: str = ...,
+    **kwargs: Incomplete,
+) -> None: ...
+def irfft(
+    da: DataArray,
+    dim: str | None = ...,
+    n: int | None = ...,
+    prefix: str = ...,
+    **kwargs: Incomplete,
+) -> None: ...
+def autocov(da: DataArray, dim: str = ..., **kwargs: Incomplete) -> DataArray: ...
+def autocorr(da: DataArray, dim: str = ..., **kwargs: Incomplete) -> None: ...
+def geyer(acov: Incomplete, chain_mean_term: Incomplete, tau_hat: Incomplete) -> None: ...
+def _ess(da: DataArray, relative: bool = ..., **kwargs: Incomplete) -> None: ...
+def _ess_mean(da: DataArray, relative: bool = ..., **kwargs: Incomplete) -> None: ...
+def _ess_bulk(da: DataArray, relative: bool = ..., **kwargs: Incomplete) -> None: ...
+def ess(
+    ds: xarray.Dataset | xarray.DataTree | DataArray,
+    group: str = ...,
+    method: str = ...,
+    **kwargs: Incomplete,
+) -> None: ...

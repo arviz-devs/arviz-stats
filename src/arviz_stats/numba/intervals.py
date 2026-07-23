@@ -22,7 +22,15 @@ def _quantile(ary, q, result):  # pylint: disable=unused-argument
 
 
 def quantile(da, q, dim):
-    """Numbified and xarray aware quantile function."""
+    """Numbified and xarray aware quantile function.
+
+    Parameters
+    ----------
+    da : DataArray
+    q : array-like
+        Quantile(s) to compute, between 0 and 1.
+    dim : str or sequence of hashable
+    """
     if not isinstance(dim, str):
         aux_dim = f"__aux_dim__:{','.join(dim)}"
         da = _remove_indexes_to_reduce(da, dim).stack({aux_dim: dim}, create_index=False)
@@ -34,7 +42,16 @@ def quantile(da, q, dim):
 
 
 def eti(da, prob=None, dims=None, method=None, skipna=None):
-    """Compute the equal tail credible interval."""
+    """Compute the equal tail credible interval.
+
+    Parameters
+    ----------
+    da : DataArray
+    prob : float, optional
+    dims : str or sequence of hashable, optional
+    method : str, optional
+    skipna : bool, optional
+    """
     if prob is None:
         prob = rcParams["stats.ci_prob"]
     elif not 1 >= prob > 0:
