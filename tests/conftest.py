@@ -609,3 +609,181 @@ def mock_wrapper_2d(mock_2d_data):
             )
 
     return MockSamplingWrapper2D(model=None, idata_orig=mock_2d_data)
+
+
+# LFO-CV fixtures
+@pytest.fixture(scope="session")
+def lfo_constant_data():
+    """Time series data whose pointwise log likelihood is a constant."""
+    azb = importorskip("arviz_base")
+    n_chains, n_draws, n_time = 2, 50, 12
+    return azb.from_dict(
+        {
+            "posterior": {"mu": np.zeros((n_chains, n_draws))},
+            "log_likelihood": {"obs": np.full((n_chains, n_draws, n_time), -1.0)},
+            "observed_data": {"obs": np.arange(n_time, dtype=float)},
+        },
+        dims={"obs": ["time"]},
+        coords={"time": np.arange(n_time)},
+    )
+
+
+@pytest.fixture
+def constant_lfo_wrapper(lfo_constant_data):
+    """Wrapper with constant refit log likelihood."""
+    xr = importorskip("xarray")
+    azb = importorskip("arviz_base")
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    class ConstantLFOWrapper(SamplingWrapper):
+        const = -1.0
+
+        def __init__(self, idata):
+            super().__init__(model=None, idata_orig=idata)
+            self.obs = idata.observed_data["obs"].values
+            self.n_time = len(self.obs)
+            self.fit_count = 0
+            self.cutoffs = []
+
+        def sel_observations(self, idx):
+            idx = np.atleast_1d(idx)
+            self.cutoffs.append(int(idx.min()))
+            train_idx = np.setdiff1d(np.arange(self.n_time), idx)
+            train = xr.DataArray(self.obs[train_idx], dims=["time"], coords={"time": train_idx})
+            test = xr.DataArray(self.obs[idx], dims=["time"], coords={"time": idx})
+            return train, test
+
+        def sample(self, modified_observed_data):
+            self.fit_count += 1
+            return {"n": len(modified_observed_data)}
+
+        def get_inference_data(self, fitted_model):
+            return azb.from_dict({"posterior": {"mu": np.zeros((1, 100))}})
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            n_obs = excluded_obs.sizes["time"]
+            n_draws = idata__i.posterior.sizes["draw"]
+            values = np.full((1, n_obs, n_draws), self.const)
+            return xr.DataArray(
+                values,
+                dims=["chain", "time", "draw"],
+                coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
+            )
+
+    return ConstantLFOWrapper(lfo_constant_data)
+
+
+@pytest.fixture(scope="session")
+def lfo_varying_data():
+    """Time series data for a normal-mean model with varying posterior."""
+    azb = importorskip("arviz_base")
+    rng = np.random.default_rng(0)
+    n_chains, n_draws, n_time = 2, 200, 25
+    return azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(0, 0.2, (n_chains, n_draws))},
+            "log_likelihood": {"obs": rng.normal(-1.4, 0.1, (n_chains, n_draws, n_time))},
+            "observed_data": {"obs": rng.normal(0, 1, n_time)},
+        },
+        dims={"obs": ["time"]},
+        coords={"time": np.arange(n_time)},
+    )
+
+
+@pytest.fixture
+def varying_lfo_wrapper(lfo_varying_data):
+    """Wrapper with varying refit log likelihood."""
+    xr = importorskip("xarray")
+    azb = importorskip("arviz_base")
+    sp = importorskip("scipy")
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    class VaryingLFOWrapper(SamplingWrapper):
+        def __init__(self, idata):
+            super().__init__(model=None, idata_orig=idata)
+            self.y = idata.observed_data["obs"].values
+            self.n_time = len(self.y)
+            self.fit_count = 0
+
+        def sel_observations(self, idx):
+            idx = np.atleast_1d(idx)
+            train_idx = np.setdiff1d(np.arange(self.n_time), idx)
+            train = xr.DataArray(self.y[train_idx], dims=["time"], coords={"time": train_idx})
+            test = xr.DataArray(self.y[idx], dims=["time"], coords={"time": idx})
+            return train, test
+
+        def sample(self, modified_observed_data):
+            self.fit_count += 1
+            n = len(modified_observed_data)
+            mean = float(modified_observed_data.values.mean())
+            local = np.random.default_rng(12345)
+            return {"mu": local.normal(mean, 1.0 / np.sqrt(n), 400)}
+
+        def get_inference_data(self, fitted_model):
+            return azb.from_dict({"posterior": {"mu": fitted_model["mu"].reshape(1, -1)}})
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            mu = idata__i.posterior["mu"].values.flatten()
+            obs = np.atleast_1d(excluded_obs.values)
+            log_lik = sp.stats.norm.logpdf(obs, loc=mu[:, None], scale=1.0)
+            return xr.DataArray(
+                log_lik.T[np.newaxis, :, :],
+                dims=["chain", "time", "draw"],
+                coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
+            )
+
+    return VaryingLFOWrapper(lfo_varying_data)
+
+
+@pytest.fixture(scope="session")
+def lfo_custom_dim_data():
+    """Constant-log-likelihood data using a non-default time dimension name."""
+    azb = importorskip("arviz_base")
+    n_chains, n_draws, n_time = 2, 40, 12
+    return azb.from_dict(
+        {
+            "posterior": {"mu": np.zeros((n_chains, n_draws))},
+            "log_likelihood": {"obs": np.full((n_chains, n_draws, n_time), -1.0)},
+            "observed_data": {"obs": np.arange(n_time, dtype=float)},
+        },
+        dims={"obs": ["week"]},
+        coords={"week": np.arange(n_time)},
+    )
+
+
+@pytest.fixture
+def custom_dim_lfo_wrapper(lfo_custom_dim_data):
+    """Constant wrapper operating on a non-default 'week' time dimension."""
+    xr = importorskip("xarray")
+    azb = importorskip("arviz_base")
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    class WeekWrapper(SamplingWrapper):
+        def __init__(self, idata):
+            super().__init__(model=None, idata_orig=idata)
+            self.obs = idata.observed_data["obs"].values
+            self.n_time = len(self.obs)
+
+        def sel_observations(self, idx):
+            idx = np.atleast_1d(idx)
+            train_idx = np.setdiff1d(np.arange(self.n_time), idx)
+            train = xr.DataArray(self.obs[train_idx], dims=["week"], coords={"week": train_idx})
+            test = xr.DataArray(self.obs[idx], dims=["week"], coords={"week": idx})
+            return train, test
+
+        def sample(self, modified_observed_data):
+            return {"n": len(modified_observed_data)}
+
+        def get_inference_data(self, fitted_model):
+            return azb.from_dict({"posterior": {"mu": np.zeros((1, 50))}})
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            n_obs = excluded_obs.sizes["week"]
+            n_draws = idata__i.posterior.sizes["draw"]
+            return xr.DataArray(
+                np.full((1, n_obs, n_draws), -1.0),
+                dims=["chain", "week", "draw"],
+                coords={"week": np.atleast_1d(excluded_obs.coords["week"].values)},
+            )
+
+    return WeekWrapper(lfo_custom_dim_data)

@@ -613,7 +613,16 @@ def _calculate_ics(
         if len(methods_used) > 1:
             has_loo = "loo" in methods_used
             has_kfold = "loo_kfold" in methods_used
+            has_lfo = "lfo_cv" in methods_used
 
+            # LFO-CV should only be compared with other LFO-CV results
+            if has_lfo:
+                method_list = sorted(methods_used.keys())
+                raise ValueError(
+                    f"Cannot compare LFO-CV results with other cross-validation methods: "
+                    f"{method_list}. LFO-CV evaluates time series predictive accuracy and "
+                    f"should only be compared with other LFO-CV results."
+                )
             if has_loo and has_kfold and len(methods_used) == 2:
                 warnings.warn(
                     "Comparing LOO-CV to K-fold-CV. "
@@ -625,7 +634,7 @@ def _calculate_ics(
                 method_list = sorted(methods_used.keys())
                 raise ValueError(
                     f"Cannot compare models with incompatible cross-validation methods: "
-                    f"{method_list}. Only comparisons between 'loo' and 'loo_kfold' methods "
+                    f"{method_list}. Only 'loo', 'loo_kfold', and 'lfo_cv' methods "
                     f"are supported currently."
                 )
 
