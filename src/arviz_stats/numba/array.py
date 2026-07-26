@@ -139,7 +139,7 @@ class NumbaArray(BaseArray):
         ----------
         ary : array-like
             Input array.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
             Axis or axes along which the KDE is computed.
         circular : bool, default False
             Whether the data is circular (e.g., angles).

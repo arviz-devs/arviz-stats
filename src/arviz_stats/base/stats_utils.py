@@ -255,9 +255,9 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
         For 1D arrays (shape = (n,)) assumes chain equals 1.
     nan_kwargs : dict
         Valid kwargs are:
-            axis : int,
+            axis : int
                 Defaults to None.
-            how : str, {"all", "any"}
+            how : {"all", "any"}
                 Default to "any".
     shape_kwargs : dict
         Valid kwargs are:
@@ -366,7 +366,7 @@ def round_num(value, precision):
 
     Parameters
     ----------
-    value : float, numpy array or DataArray
+    value : float or numpy.ndarray or DataArray
         The value to round. If array assumes it contains a single value.
         If the value is not finite, it is returned unmodified.
     precision : int or str

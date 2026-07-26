@@ -22,7 +22,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         self,
         ary: ArrayLike,
         prob: float,
-        axis: int = ...,
+        axis: int | Sequence[int] | None = ...,
         method: str = ...,
         circular: bool = ...,
         max_modes: int = ...,
@@ -66,7 +66,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         self, ary: ArrayLike, chain_axis: int = ..., draw_axis: int = ...
     ) -> None: ...
     def psislw(
-        self, ary: ArrayLike, r_eff: float = ..., axis: int = ...
+        self, ary: ArrayLike, r_eff: float = ..., axis: int | Sequence[int] | None = ...
     ) -> tuple[ArrayLike, ArrayLike]: ...
     def bfmi(self, ary: ArrayLike, chain_axis: int = ..., draw_axis: int = ...) -> None: ...
     def pareto_khat(
@@ -78,7 +78,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         tail: str = ...,
         log_weights: bool = ...,
     ) -> None: ...
-    def power_scale_lw(self, ary: ArrayLike, alpha: float = ..., axis: int = ...) -> None: ...
+    def power_scale_lw(
+        self, ary: ArrayLike, alpha: float = ..., axis: int | Sequence[int] | None = ...
+    ) -> None: ...
     def power_scale_sense(
         self,
         ary: ArrayLike,
@@ -89,11 +91,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         chain_axis: int = ...,
         draw_axis: int = ...,
     ) -> None: ...
-    def compute_ranks(self, ary: ArrayLike, axis: int = ..., relative: bool = ...) -> None: ...
+    def compute_ranks(
+        self,
+        ary: ArrayLike,
+        axis: int | Sequence[int] | None = ...,
+        relative: bool = ...,
+    ) -> None: ...
     def get_bins(
         self,
         ary: ArrayLike,
-        axis: int = ...,
+        axis: int | Sequence[int] | None = ...,
         bins: str | numbers.Number | ArrayLike = ...,
     ) -> None: ...
     def histogram(
@@ -102,13 +109,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         bins: str | numbers.Number | ArrayLike | None = ...,
         range: tuple[float, float] | None = ...,
         weights: ArrayLike | None = ...,
-        axis: int = ...,
+        axis: int | Sequence[int] | None = ...,
         density: bool = ...,
     ) -> tuple[ArrayLike, ArrayLike]: ...
     def kde(
         self,
         ary: ArrayLike,
-        axis: int = ...,
+        axis: int | Sequence[int] | None = ...,
         circular: bool = ...,
         grid_len: int = ...,
         **kwargs: Incomplete,
@@ -130,7 +137,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         dotsize: float = ...,
         stackratio: float = ...,
         top_only: bool = ...,
-        axis: int = ...,
+        axis: int | Sequence[int] | None = ...,
         **kwargs: Incomplete,
     ) -> None: ...
     def ecdf(
@@ -138,11 +145,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary: ArrayLike,
         npoints: int = ...,
         pit: bool = ...,
-        axis: int = ...,
+        axis: int | Sequence[int] | None = ...,
         **kwargs: Incomplete,
     ) -> tuple[ArrayLike, ArrayLike]: ...
     def uniformity_test(
-        self, ary: ArrayLike, axis: int = ..., method: str = ..., **kwargs: Incomplete
+        self,
+        ary: ArrayLike,
+        axis: int | Sequence[int] | None = ...,
+        method: str = ...,
+        **kwargs: Incomplete,
     ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
     def mchain_uniformity_test(
         self,
@@ -180,42 +191,42 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None = ...,
     ) -> ArrayLike: ...
     def median(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None = ...,
     ) -> ArrayLike: ...
     def mode(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None = ...,
     ) -> ArrayLike: ...
     def std(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None = ...,
     ) -> ArrayLike: ...
     def var(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None = ...,
     ) -> ArrayLike: ...
     def mad(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None = ...,
     ) -> ArrayLike: ...
     def iqr(
         self,
@@ -223,7 +234,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         quantiles: tuple[float] = ...,
         round_to: int | str | None = ...,
         skipna: bool = ...,
-        axis: int | None = ...,
+        axis: int | Sequence[int] | None = ...,
     ) -> ArrayLike: ...
     def loo(
         self,

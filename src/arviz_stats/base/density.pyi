@@ -43,7 +43,7 @@ class _DensityBase(_CoreBase):
     def get_bw(
         self,
         x: ArrayLike,
-        bw: int,
+        bw: int | float | str,
         grid_counts: ArrayLike | None = ...,
         x_std: float | None = ...,
         grid_range: float | None = ...,
@@ -68,7 +68,7 @@ class _DensityBase(_CoreBase):
     def kde_linear(
         self,
         x: ArrayLike,
-        bw: int = ...,
+        bw: int | float | str = ...,
         adaptive: bool = ...,
         extend: bool = ...,
         bound_correction: bool = ...,
@@ -99,7 +99,7 @@ class _DensityBase(_CoreBase):
     def kde_circular(
         self,
         x: ArrayLike,
-        bw: int = ...,
+        bw: int | float | str = ...,
         bw_fct: float = ...,
         custom_lims: list | tuple | None = ...,
         cumulative: bool = ...,

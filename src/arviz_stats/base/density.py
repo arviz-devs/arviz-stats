@@ -204,7 +204,7 @@ class _DensityBase(_CoreBase):
         x : array-like
             1 dimensional array of sample data from the
             variable for which a density estimate is desired.
-        bw : int, float or str
+        bw : int or float or str
             If numeric, indicates the bandwidth and must be positive.
             If str, indicates the method to estimate the bandwidth.
         grid_counts : array-like, optional
@@ -445,7 +445,7 @@ class _DensityBase(_CoreBase):
         ----------
         x : array-like
             Data used to calculate the density estimation.
-        bw : int, float or str, optional
+        bw : int or float or str, optional
             If numeric, indicates the bandwidth and must be positive.
             If str, indicates the method to estimate the bandwidth and must be one of "scott",
             "silverman", "isj" or "experimental". Defaults to "experimental".
@@ -663,7 +663,7 @@ class _DensityBase(_CoreBase):
         ----------
         x : array-like
             Data used to calculate the density estimation.
-        bw : int, float or str, optional
+        bw : int or float or str, optional
             If numeric, indicates the bandwidth and must be positive.
             If str, indicates the method to estimate the bandwidth and must be "taylor"
             since it is the only option supported so far. Defaults to "taylor".

@@ -93,7 +93,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         prob : float
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         method : str, default "nearest"
             Valid options are "nearest", "multimodal" or "multimodal_sample"
         circular : bool, default False
@@ -294,7 +294,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         r_eff : float, default 1
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
 
         Returns
         -------
@@ -365,7 +365,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         alpha : float, default 0
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         """
         ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
@@ -407,7 +407,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         relative : bool, default False
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -426,7 +426,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         bins : str or scalar or array-like, default "arviz"
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -455,7 +455,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         bins : str or scalar or array-like, optional
         range : tuple of (float, float), optional
         weights : array-like, optional
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         density : bool, default True
 
         Returns
@@ -592,7 +592,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         circular : bool, default False
         grid_len : int, default 512
         **kwargs
@@ -731,7 +731,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         dotsize : float, default 1
         stackratio : float, default 1
         top_only : bool, default False
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         **kwargs
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -766,7 +766,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         pit : bool
             If True compute the difference between the ecdf and the uniform ecdf
             and the x values will be normalized to the [0, 1] range.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         **kwargs
 
         Returns
@@ -799,7 +799,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
             PIT values in [0, 1].
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
             Dimensions to reduce.
         method : str, optional
             Method to use for the uniformity test.
@@ -1038,7 +1038,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the mean.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the mean.
 
         Returns
@@ -1069,7 +1069,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the median.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the median.
 
         Returns
@@ -1100,7 +1100,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the mode.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the mode.
 
         Returns
@@ -1131,7 +1131,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the standard deviation.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the standard deviation.
 
         Returns
@@ -1162,7 +1162,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the variance.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the variance.
 
         Returns
@@ -1193,7 +1193,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the mean absolute deviation.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the mean absolute deviation.
 
         Returns
@@ -1226,7 +1226,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the interquantile range.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the interquantile range.
 
         Returns

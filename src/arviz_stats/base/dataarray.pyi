@@ -74,13 +74,13 @@ class BaseDataArray:
         self,
         da: DataArray,
         dim: Hashable | Sequence[Hashable] | None = ...,
-        bins: str = ...,
+        bins: str | numbers.Number | ArrayLike = ...,
     ) -> None: ...
     def histogram(
         self,
         da: DataArray,
         dim: Hashable | Sequence[Hashable] | None = ...,
-        bins: str | None = ...,
+        bins: str | numbers.Number | ArrayLike | None = ...,
         range: tuple[float, float] | None = ...,
         weights: ArrayLike | None = ...,
         density: bool = ...,

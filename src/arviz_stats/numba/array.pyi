@@ -38,7 +38,7 @@ class NumbaArray(BaseArray):
     def kde(
         self,
         ary: ArrayLike,
-        axis: int = ...,
+        axis: int | Sequence[int] | None = ...,
         circular: bool = ...,
         grid_len: int = ...,
         **kwargs: Any,

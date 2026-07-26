@@ -212,7 +212,7 @@ class BaseDataArray:
         ----------
         da : DataArray
         dim : hashable or sequence of hashable, optional
-        bins : str, scalar or array-like, optional
+        bins : str or scalar or array-like, optional
         """
         dims = validate_dims(dim)
         return apply_ufunc(
@@ -234,7 +234,7 @@ class BaseDataArray:
         ----------
         da : DataArray
         dim : hashable or sequence of hashable, optional
-        bins : str, scalar or array-like, optional
+        bins : str or scalar or array-like, optional
         range : tuple of (float, float), optional
         weights : array-like, optional
         density : bool, default True
