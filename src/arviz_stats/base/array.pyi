@@ -165,7 +165,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
     def bayesian_r2(
         self,
         mu_pred: ArrayLike,
-        scale: ArrayLike | None = ...,
+        scale: ArrayLike,
         scale_kind: str = ...,
         circular: bool = ...,
     ) -> None: ...

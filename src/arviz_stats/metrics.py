@@ -13,8 +13,8 @@ from arviz_stats.base.stats_utils import round_num
 
 def bayesian_r2(
     data,
-    pred_mean=None,
-    scale=None,
+    pred_mean,
+    scale,
     scale_kind="sd",
     summary=True,
     group="posterior",
@@ -57,10 +57,10 @@ def bayesian_r2(
         Input data. It should contain the posterior and posterior_predictive groups.
     pred_mean : str
         Name of the variable representing the predicted mean.
-    scale : str, optional
+    scale : str or None
         Name of the variable representing the modeled variance (or pseudo-variance).
-        It can be omitted for binary classification problems, in which case the pseudo-variance
-        is computed internally.
+        Pass ``None`` explicitly for binary classification problems, in which case the
+        Bernoulli pseudo-variance is computed internally. This argument is required.
     scale_kind : str
         Whether the variable referenced by `scale` is a standard deviation ("sd")
         or variance ("var"). Defaults to "sd".
@@ -107,16 +107,15 @@ def bayesian_r2(
 
     Examples
     --------
-    Calculate Bayesian :math:`R^2` for logistic regression. ``scale`` is omitted, so the
-    Bernoulli pseudo-variance is used and a warning is emitted (expected here):
+    Calculate Bayesian :math:`R^2` for logistic regression. Pass ``scale=None`` to use the
+    Bernoulli pseudo-variance:
 
     .. ipython::
-        :okwarning:
 
         In [1]: from arviz_stats import bayesian_r2
            ...: from arviz_base import load_arviz_data
            ...: data = load_arviz_data('anes')
-           ...: bayesian_r2(data, pred_mean="p")
+           ...: bayesian_r2(data, pred_mean="p", scale=None)
 
     Calculate Bayesian :math:`R^2` for circular regression. The posterior has
     the concentration parameter ``kappa`` (from the VonMises distribution).

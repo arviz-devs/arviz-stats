@@ -18,8 +18,8 @@ from arviz_stats.base.stats_utils import round_num
 
 def bayesian_r2(
     data: xarray.DataTree | xarray.DataTree,
-    pred_mean: str | None = ...,
-    scale: str | None = ...,
+    pred_mean: str,
+    scale: str | None,
     scale_kind: str = ...,
     summary: bool = ...,
     group: str = ...,

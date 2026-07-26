@@ -883,13 +883,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
-    def bayesian_r2(self, mu_pred, scale=None, scale_kind="sd", circular=False):
+    def bayesian_r2(self, mu_pred, scale, scale_kind="sd", circular=False):
         """Compute Bayesian R² for regression models.
 
         Parameters
         ----------
         mu_pred : array-like
-        scale : array-like, optional
+        scale : array-like
         scale_kind : str, default "sd"
         circular : bool, default False
         """
