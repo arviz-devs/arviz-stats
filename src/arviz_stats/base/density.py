@@ -10,7 +10,7 @@ from numpy.typing import ArrayLike
 from scipy.optimize import brentq
 from scipy.signal import convolve, convolve2d
 from scipy.signal.windows import gaussian
-from scipy.sparse import coo_matrix
+from scipy.sparse import coo_array
 from scipy.special import betainc, ive  # pylint: disable=no-name-in-module
 from scipy.stats import binom, hypergeom
 
@@ -811,7 +811,7 @@ class _DensityBase(_CoreBase):
 
         boundary = "wrap" if circular else "symm"
 
-        grid = coo_matrix((weights, xyi), shape=(n_x, n_y)).toarray()
+        grid = coo_array((weights, xyi), shape=(n_x, n_y)).toarray()
         grid = convolve2d(grid, kernel, mode="same", boundary=boundary)
 
         norm_factor = np.linalg.det(2 * np.pi * cov * scotts_factor**2)
