@@ -144,7 +144,7 @@ class SamplingWrapper:
         excluded_obs : object
             Observations for which to calculate their log likelihood. The second item from
             the tuple returned by `sel_observations` is passed as this argument.
-        idata__i : datatree or InferenceData
+        idata__i : DataTree or InferenceData
             Inference results of refitting the data excluding some observations. The
             result of `get_inference_data` is used as this argument.
 

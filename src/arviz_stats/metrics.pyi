@@ -8,7 +8,7 @@ import numpy as np
 import xarray
 from _typeshed import Incomplete
 from arviz_base import convert_to_datatree, dataset_to_dataarray, extract, rcParams
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 from scipy.spatial import cKDTree
 from scipy.stats import wasserstein_distance, wasserstein_distance_nd
 from xarray import DataArray
@@ -47,7 +47,7 @@ def metrics(
     var_name: str | None = ...,
     sample_dims: Iterable[Hashable] | None = ...,
     round_to: int | str | None | None = ...,
-) -> Incomplete: ...
+) -> NamedTuple: ...
 def kl_divergence(
     data1: DataArray,
     data2: DataArray,
@@ -86,10 +86,10 @@ def _extract_and_reindex(
     num_samples: Incomplete,
     random_seed: Incomplete,
 ) -> None: ...
-def _kld(ary0: Incomplete, ary1: Incomplete) -> float: ...
+def _kld(ary0: ArrayLike, ary1: ArrayLike) -> float: ...
 def _metrics(
     observed: DataArray, predicted: DataArray, kind: str, round_to: int | str | None
-) -> Incomplete: ...
+) -> NamedTuple: ...
 def _summary_r2(
     name: Incomplete,
     r_squared: Incomplete,

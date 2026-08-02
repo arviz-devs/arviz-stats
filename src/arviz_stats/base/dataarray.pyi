@@ -129,7 +129,10 @@ class BaseDataArray:
         **kwargs: Incomplete,
     ) -> None: ...
     def mchain_uniformity_test(
-        self, da: DataArray, dim: Sequence[Hashable] | None = ..., **kwargs: Incomplete
+        self,
+        da: DataArray,
+        dim: Hashable | Sequence[Hashable] | None = ...,
+        **kwargs: Incomplete,
     ) -> tuple[DataArray, DataArray, DataArray]: ...
     def thin_factor(
         self,
@@ -143,7 +146,9 @@ class BaseDataArray:
         factor: int | str = ...,
         sample_dims: list[str] | None = ...,
     ) -> None: ...
-    def pareto_min_ss(self, da: DataArray, sample_dims: list[str] | None = ...) -> None: ...
+    def pareto_min_ss(
+        self, da: DataArray, sample_dims: list[str] | None = ...
+    ) -> None: ...
     def psislw(
         self,
         da: DataArray,
@@ -251,7 +256,9 @@ class BaseDataArray:
         upper_alpha: float,
         sample_dims: list[str] | None = ...,
     ) -> None: ...
-    def autocorr(self, da: DataArray, dim: Hashable | Sequence[Hashable] | None = ...) -> None: ...
+    def autocorr(
+        self, da: DataArray, dim: Hashable | Sequence[Hashable] | None = ...
+    ) -> None: ...
     def mean(
         self,
         da: DataArray,
@@ -302,7 +309,9 @@ class BaseDataArray:
         skipna: bool = ...,
         dim: Hashable | Sequence[Hashable] | None = ...,
     ) -> None: ...
-    def srs_estimator(self, da: DataArray, n_data_points: int) -> tuple[float, float, float]: ...
+    def srs_estimator(
+        self, da: DataArray, n_data_points: int
+    ) -> tuple[float, float, float]: ...
     def diff_srs_estimator(
         self,
         elpd_loo_i_da: DataArray,

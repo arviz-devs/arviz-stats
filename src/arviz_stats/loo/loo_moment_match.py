@@ -4,6 +4,7 @@ import warnings
 from collections import namedtuple
 from collections.abc import Callable
 from copy import deepcopy
+from typing import NamedTuple
 
 import arviz_base as azb
 import numpy as np
@@ -25,7 +26,16 @@ from arviz_stats.loo.loo_helper import (
 from arviz_stats.sampling_diagnostics import ess
 from arviz_stats.utils import ELPDData
 
-SplitMomentMatch = namedtuple("SplitMomentMatch", ["lwi", "lwfi", "log_liki", "reff"])
+
+class SplitMomentMatch(NamedTuple):
+    """Class with split moment match information."""
+
+    lwi: xr.DataArray
+    lwfi: xr.DataArray
+    log_liki: xr.DataArray
+    reff: float
+
+
 UpdateQuantities = namedtuple("UpdateQuantities", ["lwi", "lwfi", "ki", "kfi", "log_liki"])
 LooMomentMatchResult = namedtuple(
     "LooMomentMatchResult",

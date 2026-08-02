@@ -6,7 +6,6 @@ from typing import Literal
 import numpy as np
 import xarray
 import xarray as xr
-from _typeshed import Incomplete
 from arviz_base import convert_to_dataset, convert_to_datatree, extract, rcParams
 from numpy.typing import ArrayLike, NDArray
 
@@ -30,4 +29,4 @@ def weight_predictions(
     group: str = ...,
     sample_dims: Iterable[Hashable] | None = ...,
     random_seed: int | None = ...,
-) -> Incomplete: ...
+) -> xarray.DataTree: ...

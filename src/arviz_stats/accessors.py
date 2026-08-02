@@ -1,7 +1,7 @@
 """ArviZ stats accessors."""
 
 import warnings
-from collections.abc import Hashable
+from collections.abc import Callable, Hashable
 
 import numpy as np
 import xarray as xr
@@ -17,7 +17,7 @@ class UnsetDefault:
     pass
 
 
-def update_dims(dims, da):
+def update_dims(dims, da: xr.DataArray):
     """Update dims to contain only those present in da."""
     if dims is None:
         return None
@@ -26,7 +26,7 @@ def update_dims(dims, da):
     return [dim for dim in dims if dim in da.dims]
 
 
-def update_kwargs_with_dims(da, kwargs):
+def update_kwargs_with_dims(da: xr.DataArray, kwargs: dict):
     """Update kwargs dict which may have a `dim` keyword."""
     kwargs = kwargs.copy()
     if "dim" in kwargs:
@@ -37,7 +37,7 @@ def update_kwargs_with_dims(da, kwargs):
     return kwargs
 
 
-def check_var_name_subset(obj, var_name):
+def check_var_name_subset(obj: xr.Dataset | xr.DataTree | xr.DataArray, var_name: Hashable):
     if isinstance(obj, xr.Dataset):
         return obj[var_name]
     if isinstance(obj, xr.DataTree):
@@ -45,7 +45,7 @@ def check_var_name_subset(obj, var_name):
     return obj
 
 
-def apply_function_to_dataset(func, ds, kwargs):
+def apply_function_to_dataset(func: Callable, ds: xr.Dataset, kwargs: dict):
     result_dicts = None
 
     for var_name, da in ds.items():
@@ -75,10 +75,10 @@ unset = UnsetDefault()
 class _BaseAccessor:
     """Base accessor class."""
 
-    def __init__(self, xarray_obj):
+    def __init__(self, xarray_obj: xr.DataArray | xr.Dataset | xr.DataTree):
         self._obj = xarray_obj
 
-    def _apply(self, func, **kwargs):
+    def _apply(self, func: str | Callable, **kwargs):
         raise NotImplementedError("_apply private method needs to be implemented in subclasses")
 
     def eti(self, prob=None, dim=None, **kwargs):
@@ -391,7 +391,7 @@ class _BaseAccessor:
 class AzStatsDaAccessor(_BaseAccessor):
     """ArviZ stats accessor class for DataArrays."""
 
-    def _apply(self, func, **kwargs):
+    def _apply(self, func: str | Callable, **kwargs):
         """Apply function to DataArray input."""
         if isinstance(func, str):
             func = get_function(func)
@@ -435,7 +435,7 @@ class AzStatsDsAccessor(_BaseAccessor):
 
         Returns
         -------
-        accessor
+        accessor : AzStatsDsAccessor
             This method returns the accessor after filtering its underlying xarray object.
             To get the filtered dataset, use ``.ds``.
         """
@@ -444,7 +444,7 @@ class AzStatsDsAccessor(_BaseAccessor):
             self._obj = self._obj[var_names]
         return self
 
-    def _apply(self, func, **kwargs):
+    def _apply(self, func: str | Callable, **kwargs):
         """Apply a function to all variables subsetting dims to existing dimensions."""
         if isinstance(func, str):
             func = get_function(func)
@@ -479,7 +479,7 @@ class AzStatsDtAccessor(_BaseAccessor):
         """Return the underlying Dataset."""
         return self._obj
 
-    def _process_input(self, group, method, allow_non_matching=True):
+    def _process_input(self, group: str, method: str, allow_non_matching: bool = True):
         if self._obj.name == group:
             return self._obj
         if self._obj.children and group in self._obj.children:
@@ -495,7 +495,7 @@ class AzStatsDtAccessor(_BaseAccessor):
             f"and the DataTree itself is named {self._obj.name}"
         )
 
-    def _apply(self, func, **kwargs):
+    def _apply(self, func: str | Callable, **kwargs):
         group = kwargs.pop("group", "posterior")
         hashable_group = False
         if isinstance(group, Hashable):

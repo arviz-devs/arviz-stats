@@ -31,14 +31,14 @@ __all__ = [
 ]
 
 def summary(
-    data: xarray.DataTree,
+    data: xarray.DataTree | Dataset | xarray.DataTree,
     var_names: list[str] | None = ...,
-    filter_vars: Incomplete | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
     group: str = ...,
     coords: dict | None = ...,
     sample_dims: str | Sequence[Hashable] | None = ...,
-    kind: Incomplete = ...,
-    fmt: Incomplete = ...,
+    kind: str = ...,
+    fmt: Literal["wide", "long", "xarray"] = ...,
     ci_prob: float | None = ...,
     ci_kind: Literal["hdi", "eti"] | None = ...,
     round_to: int | Literal["auto", "none"] = ...,
@@ -49,6 +49,7 @@ def _build_fmt_map(
 ) -> dict[str, dict[Any, str]]: ...
 
 class SummaryDataFrame(pd.DataFrame):
+
     _metadata: Incomplete
 
     def __init__(
@@ -69,10 +70,10 @@ class SummaryDataFrame(pd.DataFrame):
     def to_string(self, *args: Incomplete, **kwargs: Incomplete) -> None: ...
 
 def ci_in_rope(
-    data: xarray.DataTree,
-    rope: Incomplete,
+    data: xarray.DataTree | Dataset | xarray.DataTree,
+    rope: tuple[float, float] | dict[Hashable, tuple[float, float]] | Dataset,
     var_names: list[str] | None = ...,
-    filter_vars: Incomplete | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
     group: str = ...,
     dim: str | Sequence[Hashable] | None = ...,
     ci_prob: float | None = ...,

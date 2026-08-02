@@ -37,7 +37,7 @@ def psense(
         Input data. It should contain the posterior and the log_likelihood and/or log_prior groups.
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
-    filter_vars: {None, "like", "regex"}, default None
+    filter_vars : {None, "like", "regex"}, default None
         Used for `var_names` only.
         If ``None`` (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
@@ -132,7 +132,7 @@ def psense_summary(
         Input data. It should contain the posterior and the log_likelihood and/or log_prior groups.
     var_names : list of str, optional
         Names of posterior variables to include in the power scaling sensitivity diagnostic
-    filter_vars: {None, "like", "regex"}, default None
+    filter_vars : {None, "like", "regex"}, default None
         Used for `var_names` only.
         If ``None`` (default), interpret var_names as the real variables names.
         If "like", interpret var_names as substrings of the real variables names.
@@ -261,7 +261,8 @@ def power_scale_dataset(data, group, alphas, sample_dims, group_var_names, group
 
     Returns
     -------
-    DataSet with resampled data.
+    Dataset
+        Dataset with resampled data.
     """
     dt = convert_to_datatree(data)
 

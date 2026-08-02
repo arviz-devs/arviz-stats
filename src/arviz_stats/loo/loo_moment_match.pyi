@@ -4,6 +4,7 @@ import warnings
 from collections import namedtuple
 from collections.abc import Callable
 from copy import deepcopy
+from typing import NamedTuple
 
 import arviz_base as azb
 import numpy as np
@@ -11,7 +12,6 @@ import pymc
 import xarray
 import xarray as xr
 from _typeshed import Incomplete
-from _typeshed import Incomplete as SplitMomentMatch
 from arviz_base import dataset_to_dataarray, rcParams
 from numpy.typing import NDArray
 from xarray import DataArray
@@ -31,7 +31,13 @@ from arviz_stats.loo.loo_helper import (
 from arviz_stats.sampling_diagnostics import ess
 from arviz_stats.utils import ELPDData
 
-SplitMomentMatch: Incomplete
+class SplitMomentMatch(NamedTuple):
+
+    lwi: xr.DataArray
+    lwfi: xr.DataArray
+    log_liki: xr.DataArray
+    reff: float
+
 UpdateQuantities: Incomplete
 LooMomentMatchResult: Incomplete
 
@@ -106,4 +112,6 @@ def _update_quantities_i(
     reff_i: float,
     sample_dims: list,
 ) -> None: ...
-def _wrap__psislw(log_weights: xr.DataArray, sample_dims: list, r_eff: float) -> None: ...
+def _wrap__psislw(
+    log_weights: xr.DataArray, sample_dims: list, r_eff: float
+) -> None: ...

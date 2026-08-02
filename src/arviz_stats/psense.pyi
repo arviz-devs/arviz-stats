@@ -11,6 +11,7 @@ import xarray as xr
 from _typeshed import Incomplete
 from arviz_base import convert_to_datatree, dataset_to_dataframe, extract
 from arviz_base.labels import BaseLabeller
+from xarray import Dataset
 
 from arviz_stats.utils import get_log_likelihood_dataset, get_log_prior
 from arviz_stats.validate import validate_dims
@@ -24,7 +25,7 @@ __all__ = ["psense", "psense_summary"]
 def psense(
     data: xarray.DataTree | xarray.DataTree,
     var_names: list[str] | None = ...,
-    filter_vars: Incomplete | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
     group: Literal["prior", "likelihood"] = ...,
     coords: dict | None = ...,
     sample_dims: str | Sequence[Hashable] | None = ...,
@@ -35,7 +36,7 @@ def psense(
 def psense_summary(
     data: xarray.DataTree | xarray.DataTree,
     var_names: list[str] | None = ...,
-    filter_vars: Incomplete | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
     coords: dict | None = ...,
     sample_dims: str | Sequence[Hashable] | None = ...,
     threshold: float = ...,
@@ -53,7 +54,7 @@ def power_scale_dataset(
     sample_dims: str | Sequence[Hashable],
     group_var_names: str,
     group_coords: dict,
-) -> Incomplete: ...
+) -> Dataset: ...
 def _get_power_scale_weights(
     dt: Incomplete,
     alphas: Incomplete = ...,

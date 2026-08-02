@@ -165,7 +165,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "bulk"
         relative : bool, default False
@@ -200,7 +200,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "rank"
         """
@@ -224,7 +224,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         superchain_ids : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "rank"
         """
@@ -247,7 +247,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "mean"
         prob : float, default None
@@ -279,7 +279,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
@@ -319,7 +319,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
@@ -341,7 +341,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         r_eff : float
         tail : str
@@ -387,7 +387,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, lower_w, upper_w : array-like
             All 3 input arrays should have the same shape
         lower_alpha, upper_alpha : float
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
@@ -849,7 +849,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
             Array of fractional ranks in [0, 1]. The two core dimensions are
             ``chain_axis`` and ``draw_axis``.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis corresponding to the chain dimension.
         draw_axis : int, default -1
             Axis corresponding to the draw dimension.
@@ -889,9 +889,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         mu_pred : array-like
-        scale : array-like
+            Posterior draws of the predicted mean, shape (n_draws, n_observations).
+        scale : array-like or None
+            Posterior draws of the variance or pseudo-variance, shape (n_draws,).
+            Pass ``None`` for Bernoulli-like models to compute the pseudo-variance internally.
         scale_kind : str, default "sd"
+            Whether `scale` is a standard deviation ("sd") or variance ("var").
         circular : bool, default False
+            Whether the response variable is circular.
         """
         r2_ufunc = make_ufunc(
             self._bayesian_r2,
@@ -952,7 +957,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             If an integer value is passed, it must be lower than the average ESS of the input
             samples.
         reduce_func : {"mean", "min"}, default "mean"
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
 
         Returns
@@ -1000,7 +1005,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         factor : str or int, default "auto"
             The thinning factor. If "auto", the thinning factor is computed based on bulk and tail
             effective sample size. If an integer, the thinning factor is set to that value.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
 
         Returns
@@ -1260,7 +1265,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
             Log-likelihood values.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1314,7 +1319,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Target log-density values.
         log_q : array-like
             Proposal log-density values.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1359,7 +1364,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Full log-likelihood array.
         obs_axes : tuple of int
             Axes corresponding to observation dimensions.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1407,7 +1412,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Pre-computed PSIS log weights.
         kind : str, default "crps"
             Score type, either "crps" or "scrps".
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1446,7 +1451,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Observed values.
         log_weights : array-like
             Pre-computed PSIS log weights.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1497,7 +1502,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         kind : str, default "mean"
             Type of expectation: "mean", "median", "var", "sd",
             "circular_mean", "circular_var", "circular_sd".
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1536,7 +1541,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Pre-computed PSIS log weights.
         prob : float
             Quantile probability in [0, 1].
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.

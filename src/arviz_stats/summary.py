@@ -32,22 +32,21 @@ def summary(
 
     Parameters
     ----------
-    data : DataTree, DataSet or InferenceData
+    data : DataTree or Dataset or InferenceData
     var_names : list of str, optional
         Names of variables to include in summary. If None all variables are included.
-    filter_vars: {None, "like", "regex"}, default None
+    filter_vars : {None, "like", "regex"}, default None
         Used for `var_names` only.
         If ``None`` (default), interpret var_names as the real variables names.
-        If "like", interpret var_names as substrings of the real variables names.
-        If "regex", interpret var_names as regular expressions on the real variables names.
-    group: str
+        If “like”, interpret var_names as substrings of the real variables names.
+        If “regex”, interpret var_names as regular expressions on the real variables names.
+    group : str
         Select a group for summary. Defaults to “posterior”.
     coords : dict, optional
         Coordinates defining a subset over the selected group.
     sample_dims : str or sequence of hashable, optional
         Defaults to ``rcParams["data.sample_dims"]``
-    kind: {'all', 'stats', 'diagnostics', 'all_median', 'stats_median',
-    'diagnostics_median', 'mc_diagnostics'}, default 'all'
+    kind : str, default 'all'
         * ``all``: `mean`, `sd`, `ci`, `ess_bulk`, `ess_tail`, `r_hat`, `mcse_mean`, `mcse_sd`.
         * ``stats``: `mean`, `sd`, and `ci`.
         * ``diagnostics``: `ess_bulk`, `ess_tail`, `r_hat`, `mcse_mean`, `mcse_sd`.
@@ -55,7 +54,7 @@ def summary(
         * ``stats_median``: `median`, `mad`, and `ci`.
         * ``diagnostics_median``: `ess_median`, `ess_tail`, `r_hat`, `mcse_median`.
         * ``mc_diagnostics``: `mcse_mean`, `ess_mean`, and `min_ss`.
-    fmt: {'wide', 'long', 'xarray'}
+    fmt : {'wide', 'long', 'xarray'}
         Return format is either pandas.DataFrame {'wide', 'long'} or xarray.Dataset {'xarray'}.
     ci_prob : float, optional
         Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``.
@@ -77,7 +76,7 @@ def summary(
         * For all floating point numbers except R-hat, trailing zeros are removed and values are
           converted to string for consistent display.
 
-    skipna: bool
+    skipna : bool
         If true ignores nan values when computing the summary statistics. Defaults to false.
 
     Returns
@@ -463,20 +462,20 @@ def ci_in_rope(
 
     Parameters
     ----------
-    data : DataTree, DataSet or InferenceData
-    rope : (2,) array-like or dict of {hashable : (2,) array-like} or Dataset
+    data : DataTree or Dataset or InferenceData
+    rope : tuple of (float, float) or dict of {hashable : tuple of (float, float)} or Dataset
         If tuple, the lower and upper bounds of the ROPE are the same for all variables.
         If dict, the keys are the variable names and the values are tuples with the lower
         and upper bounds of the ROPE. The keys must be in `var_names`.
     var_names : list of str, optional
         Names of variables for which the ROPE should be computed.
         If None all variables are included.
-    filter_vars: {None, "like", "regex"}, default None
+    filter_vars : {None, "like", "regex"}, default None
         Used for `var_names` only.
         If ``None`` (default), interpret var_names as the real variables names.
-        If "like", interpret var_names as substrings of the real variables names.
-        If "regex", interpret var_names as regular expressions on the real variables names.
-    group: str
+        If “like”, interpret var_names as substrings of the real variables names.
+        If “regex”, interpret var_names as regular expressions on the real variables names.
+    group : str
         Select a group to compute the ROPE. Defaults to “posterior”.
     coords : dict, optional
         Coordinates defining a subset over the selected group.
@@ -617,12 +616,12 @@ def mean(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
         If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
-    skipna: bool, default False
+    skipna : bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
@@ -722,12 +721,12 @@ def median(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
         If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
-    skipna: bool, default False
+    skipna : bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
@@ -829,12 +828,12 @@ def mode(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
         If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
-    skipna: bool, default False
+    skipna : bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
@@ -939,12 +938,12 @@ def std(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
         If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
-    skipna: bool, default False
+    skipna : bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
@@ -1044,12 +1043,12 @@ def var(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
         If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
-    skipna: bool, default False
+    skipna : bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
@@ -1148,12 +1147,12 @@ def mad(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
         If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
-    skipna: bool, default False
+    skipna : bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.
@@ -1256,12 +1255,12 @@ def iqr(
         of the data for which to perform the computation.
     quantiles : tuple of float, default (0.25, 0.75)
         Quantiles to use for the interquantile range calculation. Must be between 0 and 1.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
         If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
         return raw numbers.
-    skipna: bool, default False
+    skipna : bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
         Forwarded to the array or dataarray interface for mode.

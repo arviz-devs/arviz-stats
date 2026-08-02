@@ -150,7 +150,7 @@ def weight_predictions(
 
     Returns
     -------
-    dt: DataTree
+    dt : DataTree
         DataTree object with the groups `posterior_predictive` and `observed_data`.
 
     See Also

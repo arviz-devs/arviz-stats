@@ -10,22 +10,29 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import brentq
 from scipy.signal import convolve, convolve2d
 from scipy.signal.windows import gaussian
-from scipy.sparse import coo_matrix
+from scipy.sparse import coo_array
 from scipy.special import betainc, ive
 from scipy.stats import binom, hypergeom
 
 from arviz_stats.base.core import _CoreBase
 
 class _DensityBase(_CoreBase):
+
     bw_methods_linear: tuple[str, ...]
 
     def dct1d(self, x: ArrayLike) -> ArrayLike: ...
-    def _fixed_point(self, t: float, n: int, k_sq: ArrayLike, a_sq: ArrayLike) -> None: ...
+    def _fixed_point(
+        self, t: float, n: int, k_sq: ArrayLike, a_sq: ArrayLike
+    ) -> None: ...
     def _root(
         self, function: Callable, n: int, args: tuple, x: ArrayLike, grid_range: float
     ) -> None: ...
-    def bw_scott(self, x: ArrayLike, x_std: float | None = ..., **kwargs: dict) -> None: ...
-    def bw_silverman(self, x: ArrayLike, x_std: float | None = ..., **kwargs: dict) -> None: ...
+    def bw_scott(
+        self, x: ArrayLike, x_std: float | None = ..., **kwargs: dict
+    ) -> None: ...
+    def bw_silverman(
+        self, x: ArrayLike, x_std: float | None = ..., **kwargs: dict
+    ) -> None: ...
     def bw_isj(
         self,
         x: ArrayLike,
@@ -53,7 +60,9 @@ class _DensityBase(_CoreBase):
     def _a1inv(self, x: float) -> None: ...
     def _kappa_mle(self, x: ArrayLike) -> None: ...
     def bw_taylor(self, x: ArrayLike) -> None: ...
-    def check_custom_lims(self, custom_lims: list | tuple, x_min: float, x_max: float) -> None: ...
+    def check_custom_lims(
+        self, custom_lims: list | tuple, x_min: float, x_max: float
+    ) -> None: ...
     def get_grid(
         self,
         x_min: float,
@@ -106,12 +115,18 @@ class _DensityBase(_CoreBase):
         grid_len: int = ...,
     ) -> None: ...
     def _kde(
-        self, x: ArrayLike, circular: bool = ..., grid_len: int = ..., **kwargs: Incomplete
+        self,
+        x: ArrayLike,
+        circular: bool = ...,
+        grid_len: int = ...,
+        **kwargs: Incomplete
     ) -> None: ...
     def _fast_kde_2d(
         self, x: ArrayLike, y: ArrayLike, gridsize: tuple = ..., circular: bool = ...
     ) -> tuple[ArrayLike, float, float, float, float]: ...
-    def _find_hdi_contours(self, density: ArrayLike, hdi_probs: ArrayLike) -> NDArray: ...
+    def _find_hdi_contours(
+        self, density: ArrayLike, hdi_probs: ArrayLike
+    ) -> NDArray: ...
     def _qds(
         self,
         x: ArrayLike,

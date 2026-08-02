@@ -13,8 +13,12 @@ from arviz_stats.base.density import _DensityBase
 from arviz_stats.base.diagnostics import _DiagnosticsBase
 from arviz_stats.base.stats_utils import make_ufunc
 
-def process_chain_none(ary: ArrayLike, chain_axis: int | None, draw_axis: int) -> None: ...
-def process_chain_none_multi(*arys: ArrayLike, chain_axis: int | None, draw_axis: int) -> None: ...
+def process_chain_none(
+    ary: ArrayLike, chain_axis: int | None, draw_axis: int
+) -> None: ...
+def process_chain_none_multi(
+    *arys: ArrayLike, chain_axis: int | None, draw_axis: int
+) -> None: ...
 def process_ary_axes(ary: ArrayLike, axes: int | Sequence[int]) -> None: ...
 
 class BaseArray(_DensityBase, _DiagnosticsBase):
@@ -32,7 +36,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
     def ess(
         self,
         ary: ArrayLike,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
         method: str = ...,
         relative: bool = ...,
@@ -41,7 +45,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
     def rhat(
         self,
         ary: ArrayLike,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
         method: str = ...,
     ) -> None: ...
@@ -50,29 +54,31 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary: ArrayLike,
         superchain_ids: ArrayLike,
         method: str = ...,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
     ) -> None: ...
     def mcse(
         self,
         ary: ArrayLike,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
         method: str = ...,
         prob: float | None = ...,
         circular: bool = ...,
     ) -> None: ...
     def pareto_min_ss(
-        self, ary: ArrayLike, chain_axis: int = ..., draw_axis: int = ...
+        self, ary: ArrayLike, chain_axis: int | None = ..., draw_axis: int = ...
     ) -> None: ...
     def psislw(
         self, ary: ArrayLike, r_eff: float = ..., axis: int | Sequence[int] | None = ...
     ) -> tuple[ArrayLike, ArrayLike]: ...
-    def bfmi(self, ary: ArrayLike, chain_axis: int = ..., draw_axis: int = ...) -> None: ...
+    def bfmi(
+        self, ary: ArrayLike, chain_axis: int | None = ..., draw_axis: int = ...
+    ) -> None: ...
     def pareto_khat(
         self,
         ary: ArrayLike,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
         r_eff: float | None = ...,
         tail: str = ...,
@@ -88,7 +94,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         upper_w: ArrayLike,
         lower_alpha: float,
         upper_alpha: float,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
     ) -> None: ...
     def compute_ranks(
@@ -158,32 +164,34 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
     def mchain_uniformity_test(
         self,
         ary: ArrayLike,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
         **kwargs: Incomplete,
     ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
     def bayesian_r2(
         self,
         mu_pred: ArrayLike,
-        scale: ArrayLike,
+        scale: ArrayLike | None,
         scale_kind: str = ...,
         circular: bool = ...,
     ) -> None: ...
-    def residual_r2(self, y_obs: ArrayLike, mu_pred: ArrayLike, circular: bool = ...) -> None: ...
+    def residual_r2(
+        self, y_obs: ArrayLike, mu_pred: ArrayLike, circular: bool = ...
+    ) -> None: ...
     def metrics(self, observed: ArrayLike, predicted: ArrayLike, kind: str) -> None: ...
     def thin_factor(
         self,
         ary: ArrayLike,
         target_ess: int | None = ...,
         reduce_func: Literal["mean", "min"] = ...,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
     ) -> int: ...
     def thin(
         self,
         ary: ArrayLike,
         factor: str | int = ...,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
     ) -> ArrayLike: ...
     def mean(
@@ -239,7 +247,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
     def loo(
         self,
         ary: ArrayLike,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
         r_eff: float = ...,
         log_weights: ArrayLike | None = ...,
@@ -251,7 +259,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary: ArrayLike,
         log_p: ArrayLike,
         log_q: ArrayLike,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
         log_jacobian: float | None = ...,
     ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
@@ -259,7 +267,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         self,
         ary: ArrayLike,
         obs_axes: tuple[int],
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
         log_jacobian: ArrayLike | None = ...,
     ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
@@ -269,7 +277,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         y_obs: ArrayLike,
         log_weights: ArrayLike,
         kind: str = ...,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
     ) -> ArrayLike: ...
     def loo_pit(
@@ -277,7 +285,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary: ArrayLike,
         y_obs: ArrayLike,
         log_weights: ArrayLike,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
         random_state: int | Generator | None = ...,
         pareto_pit: bool = ...,
@@ -287,7 +295,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary: ArrayLike,
         log_weights: ArrayLike,
         kind: str = ...,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
     ) -> ArrayLike: ...
     def loo_quantile(
@@ -295,7 +303,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary: ArrayLike,
         log_weights: ArrayLike,
         prob: float,
-        chain_axis: int = ...,
+        chain_axis: int | None = ...,
         draw_axis: int = ...,
     ) -> ArrayLike: ...
     def loo_summary(

@@ -59,13 +59,18 @@ def _pit_for_hist(
     histogram: Incomplete,
     *,
     eps: Incomplete,
-    rng: Incomplete,
+    rng: Incomplete
 ) -> None: ...
 def compute_pit_for_histogram(
     dt_group: Incomplete, hist_dt: Incomplete, sample_dims: Incomplete
 ) -> None: ...
 def _interp_cdf(
-    value: Incomplete, grid: Incomplete, cdf: Incomplete, *, eps: Incomplete, rng: Incomplete
+    value: Incomplete,
+    grid: Incomplete,
+    cdf: Incomplete,
+    *,
+    eps: Incomplete,
+    rng: Incomplete
 ) -> None: ...
 def compute_pit_for_kde(
     dt_group: Incomplete, kde_dt: Incomplete, sample_dims: Incomplete
@@ -76,7 +81,7 @@ def _pit_f_for_qds(
     radius: Incomplete,
     nqds: Incomplete,
     *,
-    rng: Incomplete,
+    rng: Incomplete
 ) -> None: ...
 def compute_pit_for_qds(
     dt_group: Incomplete, qds_dt: Incomplete, sample_dims: Incomplete

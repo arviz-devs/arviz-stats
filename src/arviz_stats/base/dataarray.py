@@ -535,7 +535,7 @@ class BaseDataArray:
         ----------
         da : DataArray
             Array of fractional ranks in [0, 1].
-        dim : sequence of hashable
+        dim : hashable or sequence of hashable
             Two dimensions, the chain dimension followed by the draw dimension.
         **kwargs
             Additional keyword arguments.
