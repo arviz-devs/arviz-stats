@@ -20,7 +20,7 @@ def reloo(
     loo_orig=None,
     var_name=None,
     log_weights=None,
-    k_threshold=-np.inf,
+    k_threshold=None,
     pointwise=None,
 ):
     r"""Recalculate exact Leave-One-Out cross validation refitting where the approximation fails.
