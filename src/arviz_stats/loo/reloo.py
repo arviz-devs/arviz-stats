@@ -98,8 +98,8 @@ def reloo(
     confirm that the number of values above the threshold is small enough. Otherwise,
     prohibitive computation time may be needed to perform all required refits.
 
-    As an extreme case, artificially assigning all ``pareto_k`` values to something
-    larger than the threshold would make ``reloo`` perform the whole exact LOO-CV.
+    As an extreme case, setting ``k_threshold=-np.inf`` will flag every observation and
+    make ``reloo`` perform the whole exact LOO-CV, requiring one refit per observation.
     This is not generally recommended nor intended, however, if needed, this function can
     be used to achieve the result.
 
