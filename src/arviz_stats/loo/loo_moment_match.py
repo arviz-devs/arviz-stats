@@ -1,7 +1,6 @@
 """Compute moment matching for problematic observations in PSIS-LOO-CV."""
 
 import warnings
-from collections import namedtuple
 from collections.abc import Callable
 from copy import deepcopy
 from typing import NamedTuple
@@ -36,11 +35,27 @@ class SplitMomentMatch(NamedTuple):
     reff: float
 
 
-UpdateQuantities = namedtuple("UpdateQuantities", ["lwi", "lwfi", "ki", "kfi", "log_liki"])
-LooMomentMatchResult = namedtuple(
-    "LooMomentMatchResult",
-    ["final_log_liki", "final_lwi", "final_ki", "kfs_i", "reff_i", "n_eff_i", "original_ki", "i"],
-)
+class UpdateQuantities(NamedTuple):
+    """Quantities produced by a single moment-matching update step."""
+
+    lwi: xr.DataArray
+    lwfi: xr.DataArray
+    ki: float
+    kfi: float
+    log_liki: xr.DataArray
+
+
+class LooMomentMatchResult(NamedTuple):
+    """Result of moment matching for a single observation."""
+
+    final_log_liki: xr.DataArray
+    final_lwi: xr.DataArray
+    final_ki: float
+    kfs_i: float
+    reff_i: float
+    n_eff_i: float
+    original_ki: float
+    i: int
 
 
 def loo_moment_match(

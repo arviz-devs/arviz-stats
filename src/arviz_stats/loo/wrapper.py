@@ -16,8 +16,8 @@ class SamplingWrapper:
     ----------
     model : object
         The model object used for sampling.
-    idata_orig : DataTree or InferenceData, optional
-        Original inference data object (InferenceData or datatree).
+    idata_orig : DataTree, optional
+        Original inference data object.
     log_lik_fun : callable, optional
         For simple cases where the pointwise log likelihood is a Python function, this
         function will be used to calculate the log likelihood. Otherwise,
@@ -128,7 +128,7 @@ class SamplingWrapper:
 
         Returns
         -------
-        idata_current : DataTree or InferenceData
+        idata_current : DataTree
             Inference data object containing the samples in ``fitted_model``
         """
         raise NotImplementedError("get_inference_data method must be implemented for each subclass")
@@ -144,7 +144,7 @@ class SamplingWrapper:
         excluded_obs : object
             Observations for which to calculate their log likelihood. The second item from
             the tuple returned by `sel_observations` is passed as this argument.
-        idata__i : DataTree or InferenceData
+        idata__i : DataTree
             Inference results of refitting the data excluding some observations. The
             result of `get_inference_data` is used as this argument.
 

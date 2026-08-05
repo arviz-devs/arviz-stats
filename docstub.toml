@@ -5,6 +5,7 @@ pandas = "pandas"
 types = "types"
 pymc = "pymc"
 pytensor = "pytensor"
+arviz_stats = "arviz_stats"
 
 # Specify human-friendly aliases that can be used instead of Python-parsable
 # annotations.
@@ -32,4 +33,3 @@ idata-like = "xarray.DataTree"
 DataFrame = "pandas.DataFrame"
 namedtuple = "typing.NamedTuple"
 boolean = "bool"
-SamplingWrapper = "arviz_stats.loo.SamplingWrapper"

@@ -31,7 +31,7 @@ __all__ = [
 ]
 
 def summary(
-    data: xarray.DataTree | Dataset | xarray.DataTree,
+    data: xarray.DataTree | Dataset,
     var_names: list[str] | None = ...,
     filter_vars: Literal[None, "like", "regex"] | None = ...,
     group: str = ...,
@@ -70,8 +70,8 @@ class SummaryDataFrame(pd.DataFrame):
     def to_string(self, *args: Incomplete, **kwargs: Incomplete) -> None: ...
 
 def ci_in_rope(
-    data: xarray.DataTree | Dataset | xarray.DataTree,
-    rope: tuple[float, float] | dict[Hashable, tuple[float, float]] | Dataset,
+    data: xarray.DataTree | Dataset,
+    rope: tuple[float, float] | dict[str, tuple[float, float]] | Dataset,
     var_names: list[str] | None = ...,
     filter_vars: Literal[None, "like", "regex"] | None = ...,
     group: str = ...,

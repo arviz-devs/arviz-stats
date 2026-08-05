@@ -1,7 +1,6 @@
 # File generated with docstub
 
 import warnings
-from collections import namedtuple
 from collections.abc import Callable
 from copy import deepcopy
 from typing import NamedTuple
@@ -11,7 +10,6 @@ import numpy as np
 import pymc
 import xarray
 import xarray as xr
-from _typeshed import Incomplete
 from arviz_base import dataset_to_dataarray, rcParams
 from numpy.typing import NDArray
 from xarray import DataArray
@@ -38,8 +36,24 @@ class SplitMomentMatch(NamedTuple):
     log_liki: xr.DataArray
     reff: float
 
-UpdateQuantities: Incomplete
-LooMomentMatchResult: Incomplete
+class UpdateQuantities(NamedTuple):
+
+    lwi: xr.DataArray
+    lwfi: xr.DataArray
+    ki: float
+    kfi: float
+    log_liki: xr.DataArray
+
+class LooMomentMatchResult(NamedTuple):
+
+    final_log_liki: xr.DataArray
+    final_lwi: xr.DataArray
+    final_ki: float
+    kfs_i: float
+    reff_i: float
+    n_eff_i: float
+    original_ki: float
+    i: int
 
 def loo_moment_match(
     data: xarray.DataTree | xarray.DataTree,

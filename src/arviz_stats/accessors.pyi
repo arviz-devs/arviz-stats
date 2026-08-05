@@ -17,7 +17,9 @@ __all__ = ["AzStatsDsAccessor", "AzStatsDaAccessor", "AzStatsDtAccessor"]
 class UnsetDefault:
     pass
 
-def update_dims(dims: Incomplete, da: xr.DataArray) -> None: ...
+def update_dims(
+    dims: str | Sequence[Hashable] | None, da: xr.DataArray
+) -> list[Hashable] | None: ...
 def update_kwargs_with_dims(da: xr.DataArray, kwargs: dict) -> None: ...
 def check_var_name_subset(
     obj: xr.Dataset | xr.DataTree | xr.DataArray, var_name: Hashable

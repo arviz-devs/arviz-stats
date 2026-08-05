@@ -1,7 +1,7 @@
 """ArviZ stats accessors."""
 
 import warnings
-from collections.abc import Callable, Hashable
+from collections.abc import Callable, Hashable, Sequence
 
 import numpy as np
 import xarray as xr
@@ -17,7 +17,7 @@ class UnsetDefault:
     pass
 
 
-def update_dims(dims, da: xr.DataArray):
+def update_dims(dims: str | Sequence[Hashable] | None, da: xr.DataArray) -> list[Hashable] | None:
     """Update dims to contain only those present in da."""
     if dims is None:
         return None

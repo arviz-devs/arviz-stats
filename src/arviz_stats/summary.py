@@ -32,7 +32,7 @@ def summary(
 
     Parameters
     ----------
-    data : DataTree or Dataset or InferenceData
+    data : DataTree or Dataset
     var_names : list of str, optional
         Names of variables to include in summary. If None all variables are included.
     filter_vars : {None, "like", "regex"}, default None
@@ -462,8 +462,8 @@ def ci_in_rope(
 
     Parameters
     ----------
-    data : DataTree or Dataset or InferenceData
-    rope : tuple of (float, float) or dict of {hashable : tuple of (float, float)} or Dataset
+    data : DataTree or Dataset
+    rope : tuple of (float, float) or dict of {str : tuple of (float, float)} or Dataset
         If tuple, the lower and upper bounds of the ROPE are the same for all variables.
         If dict, the keys are the variable names and the values are tuples with the lower
         and upper bounds of the ROPE. The keys must be in `var_names`.

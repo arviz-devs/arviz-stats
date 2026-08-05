@@ -129,10 +129,7 @@ class BaseDataArray:
         **kwargs: Incomplete,
     ) -> None: ...
     def mchain_uniformity_test(
-        self,
-        da: DataArray,
-        dim: Hashable | Sequence[Hashable] | None = ...,
-        **kwargs: Incomplete,
+        self, da: DataArray, dim: Sequence[Hashable] | None = ..., **kwargs: Incomplete
     ) -> tuple[DataArray, DataArray, DataArray]: ...
     def thin_factor(
         self,

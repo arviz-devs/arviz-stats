@@ -617,7 +617,7 @@ def _kld(ary0, ary1):
 
     Parameters
     ----------
-    ary0, ary1 : array-like
+    ary0, ary1 : array-like of shape (N, M)
         Samples of the input distributions. ``N`` represents the number of samples (e.g. posterior
         samples) and ``M`` the number of outputs (e.g. number of variables in the posterior)
 
