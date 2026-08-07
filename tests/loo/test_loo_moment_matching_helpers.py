@@ -142,6 +142,9 @@ class TestMomentMatchFunctions:
             draws=50,
             tune=50,
             chains=2,
+            # sample sequentially, forking workers triggers a RuntimeWarning
+            # from JAX's at-fork handler that our filterwarnings turns into an error
+            cores=1,
             random_seed=3,
             progressbar=False,
         )
