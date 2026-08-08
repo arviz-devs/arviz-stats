@@ -31,13 +31,6 @@ def loo(
     log_jacobian=None,
     mixture=False,
     moment_match=False,
-    log_prob_upars_fn=None,
-    log_lik_i_upars_fn=None,
-    upars=None,
-    max_iters=30,
-    k_threshold=None,
-    split=True,
-    cov=True,
     model=None,
 ):
     r"""Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
@@ -85,52 +78,16 @@ def loo(
         This is appropriate when the log-likelihood was generated from a mixture distribution.
         The method is described in [2]_. Defaults to False.
     moment_match : bool, default False
-        If True, apply the moment matching algorithm described in [1]_ to observations with
-        Pareto k values above ``k_threshold``. This is equivalent to computing LOO with
-        ``pointwise=True`` and passing the result to :func:`loo_moment_match`. Requires
-        either ``model`` or both ``log_prob_upars_fn`` and ``log_lik_i_upars_fn``. Cannot
-        be combined with ``mixture=True``, ``log_lik_fn`` or ``log_jacobian``.
-    log_prob_upars_fn : callable, optional
-        Only used when ``moment_match=True``. Function that computes the log probability
-        density of the full posterior distribution evaluated at unconstrained parameter
-        draws. The function signature is ``log_prob_upars_fn(upars)`` where ``upars``
-        is a :class:`~xarray.DataArray` of unconstrained parameter draws with dimensions
-        ``chain``, ``draw``, and a parameter dimension. It should return a
-        :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
-        If not provided, must be auto-built from ``model``.
-    log_lik_i_upars_fn : callable, optional
-        Only used when ``moment_match=True``. Function that computes the log-likelihood
-        of a single left-out observation evaluated at unconstrained parameter draws.
-        The function signature is ``log_lik_i_upars_fn(upars, i)`` where ``upars``
-        is a :class:`~xarray.DataArray` of unconstrained parameter draws and ``i``
-        is the integer index of the left-out observation. It should return a
-        :class:`~xarray.DataArray` with dimensions ``chain``, ``draw``.
-        If not provided, must be auto-built from ``model``.
-    upars : DataArray, optional
-        Only used when ``moment_match=True``. Posterior draws transformed to the
-        unconstrained parameter space. Must have ``chain`` and ``draw`` dimensions, plus
-        one additional dimension containing all parameters. Parameter names can be
-        provided as coordinate values on this dimension. If not provided, will attempt
-        to use the ``unconstrained_posterior`` group from the input data if available,
-        or auto-build from ``model``.
-    max_iters : int, default 30
-        Only used when ``moment_match=True``. Maximum number of moment matching
-        iterations for each problematic observation.
-    k_threshold : float, optional
-        Only used when ``moment_match=True``. Threshold value for Pareto k values above
-        which moment matching is applied. Defaults to
-        :math:`\min(1 - 1/\log_{10}(S), 0.7)`, where S is the number of samples.
-    split : bool, default True
-        Only used when ``moment_match=True``. If True, only transform half of the draws
-        and use multiple importance sampling to combine them with untransformed draws.
-    cov : bool, default True
-        Only used when ``moment_match=True``. If True, match the covariance structure
-        during the transformation, in addition to the mean and marginal variances.
+        If True, apply the moment matching algorithm described in [1]_ to observations
+        with high Pareto k values. Requires ``model``. This is equivalent to computing
+        LOO with ``pointwise=True`` and passing the result to :func:`loo_moment_match`.
+        Cannot be combined with ``mixture=True``, ``log_lik_fn`` or ``log_jacobian``.
+        For other models, or for fine-grained control over the moment matching algorithm,
+        use :func:`loo_moment_match` directly.
     model : Model, optional
-        Only used when ``moment_match=True``. A model object. Currently supported models
-        are PyMC and Bambi. If provided, it will be used to auto-build
-        ``log_prob_upars_fn``, ``log_lik_i_upars_fn``, and ``upars`` if any of them are
-        not provided.
+        Required when ``moment_match=True``. A model object used to automatically build
+        the quantities needed for moment matching. Currently supported models are PyMC
+        and Bambi.
 
     Returns
     -------
@@ -244,14 +201,12 @@ def loo(
             )
         if log_jacobian is not None:
             raise ValueError("moment_match=True cannot be combined with log_jacobian.")
-        if model is None and (log_prob_upars_fn is None or log_lik_i_upars_fn is None):
+        if model is None:
             raise ValueError(
-                "Both log_prob_upars_fn and log_lik_i_upars_fn are required for moment "
-                "matching. Pass them explicitly or provide model to build them automatically."
-            )
-        if model is None and upars is None and not hasattr(data, "unconstrained_posterior"):
-            raise ValueError(
-                "upars must be provided or data must contain an 'unconstrained_posterior' group."
+                "moment_match=True requires model. Automatic moment matching is only "
+                "supported for PyMC and Bambi models. For other models, use "
+                "loo_moment_match directly with custom log_prob_upars_fn and "
+                "log_lik_i_upars_fn."
             )
 
     loo_inputs = _prepare_loo_inputs(data, var_name, log_lik_fn=log_lik_fn)
@@ -330,15 +285,8 @@ def loo(
         return loo_moment_match(
             data,
             loo_orig,
-            log_prob_upars_fn=log_prob_upars_fn,
-            log_lik_i_upars_fn=log_lik_i_upars_fn,
-            upars=upars,
             var_name=var_name,
             reff=reff,
-            max_iters=max_iters,
-            k_threshold=k_threshold,
-            split=split,
-            cov=cov,
             pointwise=pointwise,
             model=model,
         )
