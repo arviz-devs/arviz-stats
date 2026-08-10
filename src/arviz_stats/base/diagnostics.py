@@ -1164,6 +1164,9 @@ class _DiagnosticsBase(_CoreBase):
         k : float
             Estimated shape parameter.
         """
+        # JAX arrays are immutable; copy to a plain numpy array so in-place assignments work.
+        ary = np.asarray(ary).copy()
+
         if log_weights:
             ary = ary - np.max(ary)
 
