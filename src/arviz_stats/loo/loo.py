@@ -86,8 +86,8 @@ def loo(
         use :func:`loo_moment_match` directly.
     model : Model, optional
         Required when ``moment_match=True``. A model object used to automatically build
-        the quantities needed for moment matching. Currently supported models are PyMC
-        and Bambi.
+        the quantities needed for moment matching. Currently only models from PyMC
+        and Bambi are supported.
 
     Returns
     -------
