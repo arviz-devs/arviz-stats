@@ -1,3 +1,48 @@
+<a id="v1.3.0"></a>
+# [v1.3.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.3.0) - 2026-08-11
+
+## What's Changed
+
+### New Features
+* Summary: Preserve raw data and auto behaviour by [@aloctavodia](https://github.com/aloctavodia) in [#379](https://github.com/arviz-devs/arviz-stats/pull/379)
+* Enhance k-fold cross-validation with random seed and pointwise handling by [@jordandeklerk](https://github.com/jordandeklerk) in [#382](https://github.com/arviz-devs/arviz-stats/pull/382)
+* Add moment matching arg to main `loo()` function by [@jordandeklerk](https://github.com/jordandeklerk) in [#386](https://github.com/arviz-devs/arviz-stats/pull/386)
+
+### Documentation
+* Update Code of Conduct by [@OriolAbril](https://github.com/OriolAbril) in [#369](https://github.com/arviz-devs/arviz-stats/pull/369)
+* Fix typos, grammar, and deprecated links in README and diagnostics by [@b25cs1051-KUSH](https://github.com/b25cs1051-KUSH) in [#387](https://github.com/arviz-devs/arviz-stats/pull/387)
+
+### Maintenance and bug fixes
+* Update expected values in test_metrics_acc by [@sethaxen](https://github.com/sethaxen) in [#377](https://github.com/arviz-devs/arviz-stats/pull/377)
+* Standardize loo_influence for std/var by dividing by the statistic itself ([#337](https://github.com/arviz-devs/arviz-stats/issues/337)) by [@laishettikarthik-tech](https://github.com/laishettikarthik-tech) in [#371](https://github.com/arviz-devs/arviz-stats/pull/371)
+* Refactor `loo_kfold` to fix group assignment by [@jordandeklerk](https://github.com/jordandeklerk) in [#375](https://github.com/arviz-devs/arviz-stats/pull/375)
+* Add multi-chain uniformity test by [@aloctavodia](https://github.com/aloctavodia) in [#378](https://github.com/arviz-devs/arviz-stats/pull/378)
+* Replace absolufy-imports with ruff TID and rename ruff hook to ruff-check by [@PiyushPanwarFST](https://github.com/PiyushPanwarFST) in [#376](https://github.com/arviz-devs/arviz-stats/pull/376)
+* Better handling of custom folds and multi-dim likelihoods in `loo_kfold()` by [@jordandeklerk](https://github.com/jordandeklerk) in [#380](https://github.com/arviz-devs/arviz-stats/pull/380)
+* Add helper functions for moment matching with PyMC and Bambi by [@aloctavodia](https://github.com/aloctavodia) in [#373](https://github.com/arviz-devs/arviz-stats/pull/373)
+* heterogeneous computation fixes by [@OriolAbril](https://github.com/OriolAbril) in [#366](https://github.com/arviz-devs/arviz-stats/pull/366)
+* Rename LOO helper function files for consistency  by [@jordandeklerk](https://github.com/jordandeklerk) in [#385](https://github.com/arviz-devs/arviz-stats/pull/385)
+* Fix `bayesian_r2` silently using Bernoulli pseudo-variance when scale is omitted. by [@CamSalda](https://github.com/CamSalda) in [#389](https://github.com/arviz-devs/arviz-stats/pull/389)
+* Make pred_mean and scale required in bayesian_r2 by [@CamSalda](https://github.com/CamSalda) in [#391](https://github.com/arviz-devs/arviz-stats/pull/391)
+* Fix upcoming deprecation in scipy.sparse by [@OriolAbril](https://github.com/OriolAbril) in [#394](https://github.com/arviz-devs/arviz-stats/pull/394)
+* Fix reloo k threshold by [@sheikhayaan](https://github.com/sheikhayaan) in [#399](https://github.com/arviz-devs/arviz-stats/pull/399)
+* Convert ary to mutable numpy array in _ps_tail to support JAX arrays by [@TheSkyentist](https://github.com/TheSkyentist) in [#368](https://github.com/arviz-devs/arviz-stats/pull/368)
+* Use ESS azstats method in moment matching by [@jordandeklerk](https://github.com/jordandeklerk) in [#401](https://github.com/arviz-devs/arviz-stats/pull/401)
+* Add helpful error message when hdi_prob is passed instead of prob by [@sheikhayaan](https://github.com/sheikhayaan) in [#392](https://github.com/arviz-devs/arviz-stats/pull/392)
+
+
+## New Contributors
+* [@laishettikarthik-tech](https://github.com/laishettikarthik-tech) made their first contribution in [#371](https://github.com/arviz-devs/arviz-stats/pull/371)
+* [@b25cs1051-KUSH](https://github.com/b25cs1051-KUSH) made their first contribution in [#387](https://github.com/arviz-devs/arviz-stats/pull/387)
+* [@CamSalda](https://github.com/CamSalda) made their first contribution in [#389](https://github.com/arviz-devs/arviz-stats/pull/389)
+* [@sheikhayaan](https://github.com/sheikhayaan) made their first contribution in [#399](https://github.com/arviz-devs/arviz-stats/pull/399)
+* [@TheSkyentist](https://github.com/TheSkyentist) made their first contribution in [#368](https://github.com/arviz-devs/arviz-stats/pull/368)
+
+**Full Changelog**: https://github.com/arviz-devs/arviz-stats/compare/v1.2.0...v1.3.0
+
+[Changes][v1.3.0]
+
+
 <a id="v1.2.0"></a>
 # [v1.2.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.2.0) - 2026-06-12
 
@@ -353,6 +398,7 @@
 [Changes][v.0.4.0]
 
 
+[v1.3.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.2.0...v1.3.0
 [v1.2.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.1.0...v1.2.0
 [v1.1.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.0.0...v1.1.0
 [v1.0.0]: https://github.com/arviz-devs/arviz-stats/compare/v0.8.0...v1.0.0
