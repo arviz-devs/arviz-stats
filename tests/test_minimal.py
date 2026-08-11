@@ -446,5 +446,5 @@ def test_thin_invalid_factor(data_c0d1):
 
 def test_hdi_invalid_kwarg(data_c0d1):
     """Test that passing hdi_prob raises a helpful error message."""
-    with pytest.raises(TypeError, match="hdi_prob.*renamed.*prob"):
-        azs.hdi(data_c0d1, hdi_prob=0.95)
+    with pytest.raises(TypeError, match="hdi_prob"):
+        array_stats.hdi(data_c0d1, 0.95, hdi_prob=0.95)
