@@ -21,7 +21,6 @@ from arviz_stats.loo.loo_helper import (
     _shift_and_scale,
     _warn_pareto_k,
 )
-from arviz_stats.sampling_diagnostics import ess
 from arviz_stats.utils import ELPDData
 
 SplitMomentMatch = namedtuple("SplitMomentMatch", ["lwi", "lwfi", "log_liki", "reff"])
@@ -666,9 +665,6 @@ def _loo_moment_match_i(
     var_name,
 ):
     """Compute moment matching for a single observation."""
-    n_chains = upars.sizes["chain"]
-    n_draws = upars.sizes["draw"]
-
     log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims).squeeze(drop=True)
 
     if isinstance(r_eff, xr.DataArray):
@@ -676,9 +672,7 @@ def _loo_moment_match_i(
     elif r_eff is not None:
         reff_i = r_eff
     else:
-        liki = np.exp(log_liki)
-        liki_reshaped = liki.values.reshape(n_chains, n_draws).T
-        ess_val = ess(liki_reshaped, method="mean").item()
+        ess_val = np.exp(log_liki).azstats.ess(method="mean")
         reff_i = ess_val / n_samples if n_samples > 0 else 1.0
 
     original_ki = ks[i]
@@ -863,9 +857,7 @@ def _loo_moment_match_i(
         final_lwfi = lwfi
         final_ki = ki
 
-        liki_final = np.exp(final_log_liki)
-        liki_final_reshaped = liki_final.values.reshape(n_chains, n_draws).T
-        ess_val_final = ess(liki_final_reshaped, method="mean").item()
+        ess_val_final = np.exp(final_log_liki).azstats.ess(method="mean")
         reff_i = ess_val_final / n_samples if n_samples > 0 else 1.0
 
     lwi_vals = final_lwi.values.flatten()
