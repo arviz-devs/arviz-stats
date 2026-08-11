@@ -18,7 +18,8 @@ shutil = importorskip("shutil")
 tempfile = importorskip("tempfile")
 
 from arviz_stats.loo import loo, loo_moment_match
-from arviz_stats.loo.loo_moment_match import _split_moment_match
+from arviz_stats.loo.loo_helper import _prepare_loo_inputs
+from arviz_stats.loo.loo_moment_match import _loo_moment_match_i, _split_moment_match
 
 
 @ft.lru_cache(maxsize=1)
@@ -450,6 +451,54 @@ def test_n_eff_i(roaches_r_example, pointwise):
         assert loo_mm.n_eff_i is None
         assert loo_mm.elpd_i is None
         assert loo_mm.pareto_k is None
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_moment_match_reff_i_at_most_one(roaches_r_example):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+    loo_inputs = _prepare_loo_inputs(example["data_tree"], "log_lik")
+
+    upars = example["upars"].transpose(*loo_inputs.sample_dims, "uparam")
+    orig_log_prob = example["log_prob_fn"](upars)
+
+    ks = (
+        loo_orig.pareto_k.stack(__pareto_obs_stacked__=loo_inputs.obs_dims)
+        .transpose("__pareto_obs_stacked__")
+        .values
+    )
+    k_threshold = min(1 - 1 / np.log10(loo_inputs.n_samples), 0.7)
+    bad_obs_indices = np.where(ks > k_threshold)[0]
+    assert len(bad_obs_indices) > 0
+
+    reff_values = [
+        _loo_moment_match_i(
+            i=i,
+            upars=upars,
+            log_likelihood=loo_inputs.log_likelihood,
+            log_prob_upars_fn=example["log_prob_fn"],
+            log_lik_i_upars_fn=example["log_lik_i_fn"],
+            max_iters=30,
+            k_threshold=k_threshold,
+            split=False,
+            cov=True,
+            orig_log_prob=orig_log_prob,
+            ks=ks,
+            log_weights=loo_orig.log_weights,
+            pareto_k=loo_orig.pareto_k,
+            r_eff=1.0,
+            sample_dims=loo_inputs.sample_dims,
+            obs_dims=loo_inputs.obs_dims,
+            n_samples=loo_inputs.n_samples,
+            n_params=upars.sizes["uparam"],
+            param_dim_name="uparam",
+            var_name="log_lik",
+        ).reff_i
+        for i in bad_obs_indices
+    ]
+
+    assert all(0 < reff <= 1 for reff in reff_values)
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
