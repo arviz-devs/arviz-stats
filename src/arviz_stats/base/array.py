@@ -133,8 +133,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                     "hdi got an unexpected keyword argument: 'hdi_prob'. "
                     "The 'hdi_prob' argument was renamed to 'prob' in arviz-stats 1.0. "
                     "Use 'prob' instead (e.g. prob=0.95). "
-                    "See the migration guide: "
-                    "https://python.arviz.org/en/stable/user_guide/migration_guide.html"
+                    "See the HDI Function Changes section in the migration guide: "
+                    "https://python.arviz.org/en/stable/user_guide/migration_guide.html#hdi-function-changes"
                 )
             if len(extra_kwargs) == 1:
                 raise TypeError(f"hdi got an unexpected keyword argument: '{extra_kwargs[0]}'")
