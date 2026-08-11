@@ -38,9 +38,6 @@ def _get_roaches_data_path():
     return path
 
 
-ROACHES_DATA_PATH = _get_roaches_data_path()
-
-
 def _safe_exp(da):
     with np.errstate(over="ignore"):
         data = np.exp(da.data)
@@ -98,11 +95,12 @@ def log_lik_i_upars(
 
 
 def load_roaches_r_example():
-    root_ds = xr.load_dataset(ROACHES_DATA_PATH)
-    posterior_ds = xr.load_dataset(ROACHES_DATA_PATH, group="posterior")
-    log_likelihood_ds = xr.load_dataset(ROACHES_DATA_PATH, group="log_likelihood")
-    observed_ds = xr.load_dataset(ROACHES_DATA_PATH, group="observed_data")
-    upars_store = xr.load_dataset(ROACHES_DATA_PATH, group="upars")
+    data_path = _get_roaches_data_path()
+    root_ds = xr.load_dataset(data_path)
+    posterior_ds = xr.load_dataset(data_path, group="posterior")
+    log_likelihood_ds = xr.load_dataset(data_path, group="log_likelihood")
+    observed_ds = xr.load_dataset(data_path, group="observed_data")
+    upars_store = xr.load_dataset(data_path, group="upars")
 
     coef_names = posterior_ds["beta"].coords["coef"].values.tolist()
     beta_param_names = [f"beta_{name}" for name in coef_names]
@@ -203,7 +201,7 @@ def transform_inverse_upars(upars_matrix, total_shift, total_scaling, total_mapp
 
 
 def load_r_parity():
-    parity_ds = xr.load_dataset(ROACHES_DATA_PATH, group="parity")
+    parity_ds = xr.load_dataset(_get_roaches_data_path(), group="parity")
     try:
         log_lik = parity_ds["log_lik"].load().rename("log_lik")
         log_weights = parity_ds["log_weights"].load().rename("log_weights")
@@ -331,8 +329,9 @@ def test_moment_match_matches_r_reference(roaches_r_example):
 
 
 def test_split_moment_match_matches_r_snapshot(roaches_r_example):
-    split_case_ds = xr.load_dataset(ROACHES_DATA_PATH, group="split_case")
-    split_snapshot_ds = xr.load_dataset(ROACHES_DATA_PATH, group="split_snapshot")
+    data_path = _get_roaches_data_path()
+    split_case_ds = xr.load_dataset(data_path, group="split_case")
+    split_snapshot_ds = xr.load_dataset(data_path, group="split_snapshot")
 
     upars_matrix = split_case_ds["upars"].values.astype(np.float64, copy=False)
     total_shift = split_case_ds["total_shift"].values.astype(np.float64, copy=False)
@@ -492,3 +491,31 @@ def test_missing_upars_functions_raises(roaches_r_example, provided):
             var_name="log_lik",
             **kwargs,
         )
+
+
+def test_loo_moment_match_flag_errors(roaches_r_example):
+    example = roaches_r_example
+    n_obs = example["data_tree"]["log_likelihood"]["log_lik"].sizes["obs"]
+    log_jacobian = xr.DataArray(np.zeros(n_obs), dims=["obs"])
+
+    with pytest.raises(ValueError, match="mixture=True"):
+        loo(example["data_tree"], var_name="log_lik", moment_match=True, mixture=True)
+
+    with pytest.raises(ValueError, match="log_lik_fn"):
+        loo(
+            example["data_tree"],
+            var_name="log_lik",
+            moment_match=True,
+            log_lik_fn=lambda observed, data: None,
+        )
+
+    with pytest.raises(ValueError, match="log_jacobian"):
+        loo(
+            example["data_tree"],
+            var_name="log_lik",
+            moment_match=True,
+            log_jacobian=log_jacobian,
+        )
+
+    with pytest.raises(ValueError, match="requires model"):
+        loo(example["data_tree"], var_name="log_lik", moment_match=True)
