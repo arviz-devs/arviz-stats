@@ -442,3 +442,9 @@ def test_hdi_invalid_prob(data_c0d1):
 def test_thin_invalid_factor(data_c0d1):
     with pytest.raises(ValueError, match="must be greater than 1"):
         array_stats.thin(data_c0d1, factor=0, chain_axis=0, draw_axis=1)
+
+
+def test_hdi_invalid_kwarg(data_c0d1):
+    """Test that passing hdi_prob raises a helpful error message."""
+    with pytest.raises(TypeError, match="hdi_prob"):
+        array_stats.hdi(data_c0d1, 0.95, hdi_prob=0.95)
