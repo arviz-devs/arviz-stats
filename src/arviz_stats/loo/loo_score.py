@@ -26,31 +26,10 @@ def loo_score(
     r"""Compute CRPS or SCRPS with PSIS-LOO-CV weights.
 
     Computes the continuous ranked probability score (CRPS) or its scale-invariant variant
-    (SCRPS) using Pareto-smoothed importance sampling leave-one-out (PSIS-LOO-CV) weights, and
-    returns its negative as a maximization score (larger is better). This assumes that the
-    PSIS-LOO-CV approximation is working well.
-
-    Writing :math:`E_{\text{loo}}` for the PSIS-LOO-CV weighted expectation over
-    posterior-predictive draws :math:`X` (with :math:`X'` an independent copy), the CRPS is
-
-    .. math::
-
-        \operatorname{CRPS}_{\text{loo}}(F, y)
-        = E_{\text{loo}}\left[|X - y|\right]
-        - \frac{1}{2}\, E_{\text{loo}}\left[|X - X'|\right],
-
-    and the SCRPS is
-
-    .. math::
-
-        S_{\text{SCRPS}}(F, y)
-        = -\frac{E_{\text{loo}}\left[|X - y|\right]}{E_{\text{loo}}\left[|X - X'|\right]}
-        - \frac{1}{2}\log E_{\text{loo}}\left[|X - X'|\right].
-
-    Both are evaluated with the probability-weighted-moment (PWM) estimator of [3]_, which
-    computes them exactly in :math:`\mathcal{O}(S \log S)` from a single set of draws.
-    Traditional CRPS and SCRPS are described in [1]_ and [2]_, and the PSIS-LOO-CV method in
-    [4]_ and [5]_.
+    (SCRPS) using Pareto-smoothed importance sampling leave-one-out (PSIS-LOO-CV) weights.
+    Both are returned as maximization scores where larger is better. The CRPS is negated
+    to match this convention, which the SCRPS already satisfies by definition. This assumes
+    that the PSIS-LOO-CV approximation is working well.
 
     Parameters
     ----------

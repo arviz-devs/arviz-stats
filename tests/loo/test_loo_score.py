@@ -234,6 +234,15 @@ def test_loo_score_kernel_small_samples():
     expected = _brute_force_score(values, log_weights, 2.0, "crps")
     assert_almost_equal(result, expected, decimal=14)
 
+    result = array_stats._loo_score(values, 2.0, log_weights, "scrps")
+    assert_almost_equal(result, -1.0, decimal=14)
+
+    values = np.array([1.0, 5.0])
+    result = array_stats._loo_score(values, 2.0, log_weights, "crps")
+    assert_almost_equal(result, -1.0, decimal=14)
+    result = array_stats._loo_score(values, 2.0, log_weights, "scrps")
+    assert_almost_equal(result, -1.0 - 0.5 * np.log(2.0), decimal=14)
+
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.parametrize("kind", ["crps", "scrps"])
@@ -324,6 +333,19 @@ def test_loo_score_precomputed_weights_used(centered_eight, kind):
     )
 
     assert not np.allclose(result_uniform.pointwise.values, result_auto.pointwise.values)
+
+    y_pred = centered_eight.posterior_predictive["obs"].stack(sample=("chain", "draw"))
+    y_obs = centered_eight.observed_data["obs"]
+    expected = [
+        _brute_force_score(
+            y_pred.sel(school=school).values,
+            np.zeros(y_pred.sizes["sample"]),
+            y_obs.sel(school=school).item(),
+            kind,
+        )
+        for school in y_obs["school"].values
+    ]
+    np.testing.assert_allclose(result_uniform.pointwise.values, expected, rtol=1e-10)
 
 
 @pytest.mark.parametrize("kind", ["crps", "scrps"])
