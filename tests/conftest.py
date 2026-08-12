@@ -787,3 +787,111 @@ def custom_dim_lfo_wrapper(lfo_custom_dim_data):
             )
 
     return WeekWrapper(lfo_custom_dim_data)
+
+
+@pytest.fixture
+def multichain_lfo_wrapper(lfo_varying_data):
+    """Wrapper whose refits return a four-chain posterior."""
+    xr = importorskip("xarray")
+    azb = importorskip("arviz_base")
+    sp = importorskip("scipy")
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    class MultiChainLFOWrapper(SamplingWrapper):
+        def __init__(self, idata):
+            super().__init__(model=None, idata_orig=idata)
+            self.y = idata.observed_data["obs"].values
+            self.n_time = len(self.y)
+
+        def sel_observations(self, idx):
+            idx = np.atleast_1d(idx)
+            train_idx = np.setdiff1d(np.arange(self.n_time), idx)
+            train = xr.DataArray(self.y[train_idx], dims=["time"], coords={"time": train_idx})
+            test = xr.DataArray(self.y[idx], dims=["time"], coords={"time": idx})
+            return train, test
+
+        def sample(self, modified_observed_data):
+            n = len(modified_observed_data)
+            mean = float(modified_observed_data.values.mean())
+            local = np.random.default_rng(12345)
+            return {"mu": local.normal(mean, 1.0 / np.sqrt(n), 400)}
+
+        def get_inference_data(self, fitted_model):
+            return azb.from_dict({"posterior": {"mu": fitted_model["mu"].reshape(4, -1)}})
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            mu = idata__i.posterior["mu"].values.flatten()
+            obs = np.atleast_1d(excluded_obs.values)
+            log_lik = sp.stats.norm.logpdf(obs, loc=mu[:, None], scale=1.0)
+            return xr.DataArray(
+                log_lik.reshape(4, -1, len(obs)),
+                dims=["chain", "draw", "time"],
+                coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
+            )
+
+    return MultiChainLFOWrapper(lfo_varying_data)
+
+
+@pytest.fixture
+def lfo_result_factory():
+    """Build exact-method LFO-CV results from a small normal-mean model."""
+    xr = importorskip("xarray")
+    azb = importorskip("arviz_base")
+    sp = importorskip("scipy")
+    from arviz_stats import lfo_cv
+    from arviz_stats.loo.wrapper import SamplingWrapper
+
+    n_time = 20
+
+    class NormalMeanWrapper(SamplingWrapper):
+        def __init__(self, idata):
+            super().__init__(model=None, idata_orig=idata)
+            self.y = idata.observed_data["obs"].values
+
+        def sel_observations(self, idx):
+            idx = np.atleast_1d(idx)
+            train_idx = np.setdiff1d(np.arange(n_time), idx)
+            train = xr.DataArray(self.y[train_idx], dims=["time"], coords={"time": train_idx})
+            test = xr.DataArray(self.y[idx], dims=["time"], coords={"time": idx})
+            return train, test
+
+        def sample(self, modified_observed_data):
+            n = len(modified_observed_data)
+            mean = float(modified_observed_data.values.mean())
+            local = np.random.default_rng(12345)
+            return {"mu": local.normal(mean, 1.0 / np.sqrt(n), 400)}
+
+        def get_inference_data(self, fitted_model):
+            return azb.from_dict({"posterior": {"mu": fitted_model["mu"].reshape(1, -1)}})
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            mu = idata__i.posterior["mu"].values.flatten()
+            obs = np.atleast_1d(excluded_obs.values)
+            log_lik = sp.stats.norm.logpdf(obs, loc=mu[:, None], scale=1.0)
+            return xr.DataArray(
+                log_lik.T[np.newaxis, :, :],
+                dims=["chain", "time", "draw"],
+                coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
+            )
+
+    def make_lfo_result(seed, min_observations=8, forecast_horizon=1):
+        rng = np.random.default_rng(seed)
+        data = azb.from_dict(
+            {
+                "posterior": {"mu": rng.normal(0, 0.2, (2, 100))},
+                "log_likelihood": {"obs": rng.normal(-1.4, 0.1, (2, 100, n_time))},
+                "observed_data": {"obs": rng.normal(0, 1, n_time)},
+            },
+            dims={"obs": ["time"]},
+            coords={"time": np.arange(n_time)},
+        )
+        return lfo_cv(
+            data,
+            NormalMeanWrapper(data),
+            min_observations=min_observations,
+            forecast_horizon=forecast_horizon,
+            method="exact",
+            pointwise=True,
+        )
+
+    return make_lfo_result

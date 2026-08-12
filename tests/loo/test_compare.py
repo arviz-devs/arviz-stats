@@ -151,6 +151,33 @@ def test_compare_unsupported_mixed_methods(centered_eight):
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_lfo(lfo_result_factory):
+    result = compare({"m1": lfo_result_factory(seed=10), "m2": lfo_result_factory(seed=20)})
+
+    assert len(result) == 2
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_lfo_mixed_settings(lfo_result_factory):
+    result_h1 = lfo_result_factory(seed=10, min_observations=8, forecast_horizon=1)
+    result_h2 = lfo_result_factory(seed=10, min_observations=7, forecast_horizon=2)
+    assert result_h1.n_data_points == result_h2.n_data_points
+
+    with pytest.raises(ValueError, match="different settings"):
+        compare({"m1": result_h1, "m2": result_h2})
+
+
+def test_compare_lfo_with_other_methods(centered_eight, lfo_result_factory):
+    compare_dict = {
+        "loo_model": loo(centered_eight, pointwise=True),
+        "lfo_model": lfo_result_factory(seed=10),
+    }
+
+    with pytest.raises(ValueError, match="Cannot compare LFO-CV results"):
+        compare(compare_dict)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
     loo_sub1 = loo_subsample(
         centered_eight_with_sigma,

@@ -333,11 +333,12 @@ def compare(
                 diag_diff = "|elpd_diff| < 4" if abs(d_ic) > 0 and abs(d_ic) < 4 else ""
 
             diag_elpd = ""
-            k_vals = current_elpd_data.pareto_k.values
-            khat_threshold = current_elpd_data.good_k
-            n_k_exceed = np.sum(k_vals > khat_threshold)
-            if n_k_exceed > 0:
-                diag_elpd = f"{n_k_exceed} k̂ > {khat_threshold:.2f}"
+            if current_elpd_data.pareto_k is not None and current_elpd_data.good_k is not None:
+                k_vals = current_elpd_data.pareto_k.values
+                khat_threshold = current_elpd_data.good_k
+                n_k_exceed = np.sum(k_vals > khat_threshold)
+                if n_k_exceed > 0:
+                    diag_elpd = f"{n_k_exceed} k̂ > {khat_threshold:.2f}"
 
             row_data = {
                 "rank": idx,
@@ -636,6 +637,22 @@ def _calculate_ics(
                     f"Cannot compare models with incompatible cross-validation methods: "
                     f"{method_list}. Only 'loo', 'loo_kfold', and 'lfo_cv' methods "
                     f"are supported currently."
+                )
+
+        lfo_names = methods_used.get("lfo_cv", [])
+        if len(lfo_names) > 1:
+            lfo_settings = {
+                name: (
+                    getattr(precomputed_elpds[name], "forecast_horizon", None),
+                    getattr(precomputed_elpds[name], "min_observations", None),
+                )
+                for name in lfo_names
+            }
+            if len(set(lfo_settings.values())) > 1:
+                raise ValueError(
+                    f"Cannot compare LFO-CV results computed with different settings: "
+                    f"{lfo_settings}. All models must use the same forecast_horizon "
+                    f"and min_observations."
                 )
 
     new_compare_dict = deepcopy(compare_dict)

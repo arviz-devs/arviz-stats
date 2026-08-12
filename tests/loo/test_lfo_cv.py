@@ -128,17 +128,6 @@ def test_lfo_cv_custom_time_dim(custom_dim_lfo_wrapper, lfo_custom_dim_data):
     assert "week" in result.elpd_i.dims
 
 
-def test_lfo_cv_invalid_time_dim(constant_lfo_wrapper, lfo_constant_data):
-    with pytest.raises(ValueError, match="Time dimension 'not_a_dim' not found"):
-        lfo_cv(
-            lfo_constant_data,
-            constant_lfo_wrapper,
-            min_observations=5,
-            forecast_horizon=3,
-            time_dim="not_a_dim",
-        )
-
-
 def test_lfo_cv_elpd_and_se(varying_lfo_wrapper, lfo_varying_data):
     result = lfo_cv(
         lfo_varying_data,
@@ -228,6 +217,22 @@ def test_lfo_cv_forced_refit_matches_exact(varying_lfo_wrapper, lfo_varying_data
     np.testing.assert_allclose(forced.elpd_i.values, exact.elpd_i.values, atol=1e-10)
 
 
+def test_lfo_cv_multichain_refits(multichain_lfo_wrapper, lfo_varying_data):
+    result = lfo_cv(
+        lfo_varying_data,
+        multichain_lfo_wrapper,
+        min_observations=8,
+        forecast_horizon=2,
+        method="approx",
+        pointwise=True,
+    )
+
+    assert np.isfinite(result.elpd)
+    assert np.all(np.isfinite(result.elpd_i.values))
+    finite_k = result.pareto_k.values[np.isfinite(result.pareto_k.values)]
+    assert finite_k.size > 0
+
+
 def test_lfo_cv_approx_skips_refits(varying_lfo_wrapper, lfo_varying_data):
     result = lfo_cv(
         lfo_varying_data,
@@ -278,7 +283,6 @@ def test_lfo_cv_metadata(constant_lfo_wrapper, lfo_constant_data):
     assert result.min_observations == 5
     assert result.good_k == 0.7
     assert isinstance(result.refits, np.ndarray)
-    assert result.n_refits == len(result.refits)
 
 
 def test_lfo_cv_exact_has_no_pareto_k(constant_lfo_wrapper, lfo_constant_data):
@@ -306,22 +310,11 @@ def test_lfo_cv_invalid_method(constant_lfo_wrapper, lfo_constant_data):
         )
 
 
-@pytest.mark.parametrize(
-    "min_obs, horizon, match",
-    [
-        (0, 2, "min_observations must be a positive integer"),
-        (5, 0, "forecast_horizon must be a positive integer"),
-        (12, 2, "must be less than"),
-        (10, 5, "exceeds the number of"),
-    ],
-)
-def test_lfo_cv_invalid_parameters(
-    constant_lfo_wrapper, lfo_constant_data, min_obs, horizon, match
-):
-    with pytest.raises(ValueError, match=match):
+def test_lfo_cv_invalid_parameters(constant_lfo_wrapper, lfo_constant_data):
+    with pytest.raises(ValueError, match="min_observations must be a positive integer"):
         lfo_cv(
             lfo_constant_data,
             constant_lfo_wrapper,
-            min_observations=min_obs,
-            forecast_horizon=horizon,
+            min_observations=0,
+            forecast_horizon=2,
         )

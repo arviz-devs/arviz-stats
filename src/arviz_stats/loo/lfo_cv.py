@@ -38,7 +38,7 @@ def lfo_cv(
         Input data containing the posterior and log_likelihood groups from the
         full model fit. Must have a time dimension. Will be converted to DataTree.
     wrapper : SamplingWrapper
-        An instance of :class:`~arviz_stats.loo.SamplingWrapper` (or subclass) handling
+        An instance of :class:`~arviz_stats.SamplingWrapper` (or subclass) handling
         model refitting. Must implement ``sel_observations``, ``sample``,
         ``get_inference_data``, and ``log_likelihood__i``. Following the same pattern as
         :func:`loo_kfold`, ``sel_observations`` receives an array of integer indices to
@@ -77,14 +77,16 @@ def lfo_cv(
         - **n_samples**: number of posterior samples
         - **n_data_points**: number of forecast origins evaluated
         - **scale**: "log"
-        - **warning**: bool - True if many refits were needed or high k values remain
-          (only if ``method="approx"``, otherwise False)
+        - **warning**: bool - True if more than half of the forecast origins required a
+          refit (only if ``method="approx"``, otherwise False)
         - **good_k**: float - The k-threshold value used for refit decisions
           (only if ``method="approx"``, otherwise None)
         - **elpd_i**: :class:`~xarray.DataArray` with pointwise predictive accuracy,
           only if ``pointwise=True``
         - **pareto_k**: :class:`~xarray.DataArray` with Pareto k diagnostics,
           only if ``method="approx"`` and ``pointwise=True``
+        - **p_lfo_i**: :class:`~xarray.DataArray` with pointwise effective number of
+          parameters, only if ``pointwise=True``
         - **forecast_horizon**: forecast horizon
         - **min_observations**: minimum observations
         - **refits**: array of time indices where refits occurred
@@ -93,7 +95,7 @@ def lfo_cv(
     Examples
     --------
     LFO-CV refits the model as the training window expands, so we describe how to refit
-    with a :class:`~arviz_stats.loo.SamplingWrapper`. First we simulate a short series and
+    with a :class:`~arviz_stats.SamplingWrapper`. First we simulate a short series and
     assemble the inference data from the full-data fit:
 
     .. ipython::

@@ -14,6 +14,7 @@ from arviz_stats.loo.lfo_cv_helper import (
     _prepare_lfo_inputs,
     _validate_lfo_parameters,
 )
+from arviz_stats.loo.wrapper import SamplingWrapper
 
 
 @pytest.mark.parametrize(
@@ -78,8 +79,6 @@ def test_prepare_lfo_inputs_requires_wrapper(lfo_constant_data):
 
 
 def test_prepare_lfo_inputs_incomplete_wrapper(lfo_constant_data):
-    from arviz_stats.loo.wrapper import SamplingWrapper
-
     bare_wrapper = SamplingWrapper(model=None, idata_orig=lfo_constant_data)
     with pytest.raises(ValueError, match="must be implemented"):
         _prepare_lfo_inputs(lfo_constant_data, None, bare_wrapper, 5, 3, "time")
