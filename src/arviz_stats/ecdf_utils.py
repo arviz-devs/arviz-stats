@@ -25,6 +25,12 @@ def difference_ecdf_pit(predictive_dist, observed_dist, ci_prob, coverage, n_sim
         The probability for the credible interval.
     n_simulations : int
         The number of simulations to use with method `simulation`.
+
+    Returns
+    -------
+    xarray.Dataset
+        Per-variable difference PIT ECDF and its simultaneous confidence bands, with the
+        ECDF and band values given relative to the evaluation points.
     """
     rng = np.random.default_rng(214)
 
@@ -110,13 +116,25 @@ def ecdf_pit(vals, ci_prob, n_simulations, n_chains=1, rng=None):
 
 
 def compute_ecdf(sample, eval_points):
-    """Compute the empirical CDF at the evaluation points."""
+    """Compute the empirical CDF at the evaluation points.
+
+    Returns
+    -------
+    array-like
+        Empirical CDF evaluated at `eval_points`.
+    """
     sample = np.sort(sample)
     return np.searchsorted(sample, eval_points, side="right") / len(sample)
 
 
 def get_pointwise_confidence_band(prob, ndraws, eval_points):
-    """Compute the `prob`-level pointwise confidence band."""
+    """Compute the `prob`-level pointwise confidence band.
+
+    Returns
+    -------
+    prob_lower, prob_upper : array-like
+        Lower and upper pointwise confidence band probabilities.
+    """
     lower_ci = (1 - prob) / 2
     upper_ci = 1 - lower_ci
     # We use the bdtrik function instead of instantiating a binomial distribution
@@ -149,6 +167,11 @@ def simulate_confidence_bands(n_draws, n_chains, eval_points, prob, n_simulation
         The number of trials to use.
     rng : Generator
         The random number generator to use.
+
+    Returns
+    -------
+    float
+        The pointwise coverage probability that yields simultaneous coverage at `prob`.
     """
     if n_chains > 1:
         total_draws = n_draws * n_chains
@@ -214,7 +237,13 @@ def _hypergeometric_cdf_lookup(x_val, population, draws, successes):
 
 
 def hypergeom_cdf(x_values, draws, successes, population):
-    """Compute the hypergeometric CDF for given x values."""
+    """Compute the hypergeometric CDF for given x values.
+
+    Returns
+    -------
+    array-like
+        Hypergeometric CDF evaluated at `x_values`.
+    """
     k_min = max(0, draws - (population - successes))
     k_max = min(draws, successes)
 
@@ -266,7 +295,13 @@ def _pit_for_hist(value, left_edges, right_edges, histogram, *, eps, rng):
 
 
 def compute_pit_for_histogram(dt_group, hist_dt, sample_dims):
-    """Compute the PIT values for histogram distributions."""
+    """Compute the PIT values for histogram distributions.
+
+    Returns
+    -------
+    xarray.Dataset
+        PIT values for each variable in `dt_group`.
+    """
     rng = np.random.default_rng(3146)
     pit_results = {}
     for var_name in dt_group.data_vars:
@@ -316,7 +351,13 @@ def _interp_cdf(value, grid, cdf, *, eps, rng):
 
 
 def compute_pit_for_kde(dt_group, kde_dt, sample_dims):
-    """Compute the PIT values for KDE distributions."""
+    """Compute the PIT values for KDE distributions.
+
+    Returns
+    -------
+    xarray.Dataset
+        PIT values for each variable in `dt_group`.
+    """
     rng = np.random.default_rng(3146)
     pit_results = {}
     for var_name in dt_group.data_vars:
@@ -379,7 +420,13 @@ def _pit_f_for_qds(values, quantile_positions, radius, nqds, *, rng):
 
 
 def compute_pit_for_qds(dt_group, qds_dt, sample_dims):
-    """Compute the PIT values for quantile dot plot distributions."""
+    """Compute the PIT values for quantile dot plot distributions.
+
+    Returns
+    -------
+    xarray.Dataset
+        PIT values for each variable in `dt_group`.
+    """
     rng = np.random.default_rng(3146)
     pit_results = {}
     for var_name in dt_group.data_vars:

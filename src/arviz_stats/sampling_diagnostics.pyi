@@ -10,6 +10,7 @@ import xarray
 import xarray as xr
 from arviz_base import convert_to_dataset, convert_to_datatree, rcParams
 from numpy.typing import ArrayLike, NDArray
+from xarray import DataArray, Dataset
 
 from arviz_stats.utils import _apply_multi_input_function, get_array_function
 from arviz_stats.validate import validate_dims
@@ -26,7 +27,7 @@ def ess(
     prob: float | None = ...,
     chain_axis: int = ...,
     draw_axis: int = ...,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def rhat(
     data: ArrayLike,
     sample_dims: Iterable[Hashable] | None = ...,
@@ -37,7 +38,7 @@ def rhat(
     method: Literal["rank", "identity", "split", "z_scale", "folded"] = ...,
     chain_axis: int = ...,
     draw_axis: int = ...,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def rhat_nested(
     data: ArrayLike,
     sample_dims: Iterable[Hashable] | None = ...,
@@ -49,7 +50,7 @@ def rhat_nested(
     superchain_ids: list | None = ...,
     chain_axis: int = ...,
     draw_axis: int = ...,
-) -> None: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def mcse(
     data: ArrayLike,
     sample_dims: Iterable[Hashable] | None = ...,
@@ -62,7 +63,7 @@ def mcse(
     circular: bool = ...,
     chain_axis: int = ...,
     draw_axis: int = ...,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def bfmi(
     data: ArrayLike,
     sample_dims: Iterable[Hashable] | None = ...,
@@ -71,7 +72,7 @@ def bfmi(
     filter_vars: Literal[None, "like", "regex"] | None = ...,
     coords: dict | None = ...,
     **kwargs: Any,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def diagnose(
     data: xarray.DataTree,
     *,

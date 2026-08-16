@@ -81,7 +81,7 @@ def summary(
 
     Returns
     -------
-    SummaryDataFrame, pandas.DataFrame or xarray.Dataset
+    SummaryDataFrame or pandas.DataFrame or xarray.Dataset
         Return type determined by `fmt` argument.
 
     See Also
@@ -371,7 +371,7 @@ def _build_fmt_map(summary_result, round_val):
     return fmt_map
 
 
-class SummaryDataFrame(pd.DataFrame):
+class SummaryDataFrame(pd.DataFrame):  # type: ignore[misc]
     """A pandas DataFrame subclass displaying sensible default digits."""
 
     _metadata = ["_fmt_map"]
@@ -386,9 +386,23 @@ class SummaryDataFrame(pd.DataFrame):
 
     @property
     def T(self):  # pylint: disable=invalid-name
+        """Transpose the summary DataFrame.
+
+        Returns
+        -------
+        SummaryDataFrame
+            The transposed summary, preserving the formatting map.
+        """
         return self.transpose()
 
     def transpose(self, *args, **kwargs):
+        """Transpose the summary DataFrame.
+
+        Returns
+        -------
+        SummaryDataFrame
+            The transposed summary, preserving the formatting map.
+        """
         transposed_df = super().transpose(*args, **kwargs)
 
         if self._fmt_map:
@@ -418,25 +432,46 @@ class SummaryDataFrame(pd.DataFrame):
         return self.to_latex(escape=True)
 
     def to_html(self, *args, **kwargs):
+        """Render the summary as an HTML table.
+
+        Returns
+        -------
+        str or None
+            The HTML representation, or None if written to a buffer.
+        """
         if self._fmt_map is None:
             return super().to_html(*args, **kwargs)
         return pd.DataFrame.to_html(self._display_df(), *args, **kwargs)
 
     def to_latex(self, *args, **kwargs):
+        """Render the summary as a LaTeX table.
+
+        Returns
+        -------
+        str or None
+            The LaTeX representation, or None if written to a buffer.
+        """
         if self._fmt_map is None:
             return super().to_latex(*args, **kwargs)
         kwargs.setdefault("escape", True)
         return pd.DataFrame.to_latex(self._display_df(), *args, **kwargs)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self._fmt_map is None:
             return super().__repr__()
         return pd.DataFrame.to_string(self._display_df())
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.__repr__()
 
     def to_string(self, *args, **kwargs):
+        """Render the summary as a string table.
+
+        Returns
+        -------
+        str or None
+            The string representation, or None if written to a buffer.
+        """
         if self._fmt_map is None:
             return super().to_string(*args, **kwargs)
         return pd.DataFrame.to_string(self._display_df(), *args, **kwargs)
@@ -628,7 +663,7 @@ def mean(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested mean of the provided input.
 
     See Also
@@ -733,7 +768,7 @@ def median(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested median of the provided input.
 
     See Also
@@ -840,7 +875,7 @@ def mode(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested mode of the provided input.
 
     See Also
@@ -950,7 +985,7 @@ def std(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested standard deviation of the provided input.
 
     See Also
@@ -1055,7 +1090,7 @@ def var(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested variance of the provided input.
 
     See Also
@@ -1159,7 +1194,7 @@ def mad(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested mode of the provided input.
 
     See Also
@@ -1267,7 +1302,7 @@ def iqr(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested mode of the provided input.
 
     See Also

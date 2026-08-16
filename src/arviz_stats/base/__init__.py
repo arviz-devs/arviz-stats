@@ -10,3 +10,5 @@ try:
     from arviz_stats.base.dataarray import dataarray_stats
 except ModuleNotFoundError:
     pass
+
+__all__ = ["array_stats", "dataarray_stats"]

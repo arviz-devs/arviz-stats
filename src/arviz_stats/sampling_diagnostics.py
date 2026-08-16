@@ -71,7 +71,7 @@ def ess(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested ESS summary of the provided input
 
     See Also
@@ -204,7 +204,7 @@ def rhat(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested Rhat summary of the provided input
 
 
@@ -363,6 +363,11 @@ def rhat_nested(
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
 
+    Returns
+    -------
+    ndarray or DataArray or Dataset or DataTree
+        Requested nested Rhat summary of the provided input
+
     See Also
     --------
     rhat : Compute split R-hat convergence diagnostic
@@ -481,7 +486,7 @@ def mcse(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested mcse summary of the provided input
 
     See Also
@@ -601,7 +606,7 @@ def bfmi(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested BFMI summary of the provided input
 
     Examples

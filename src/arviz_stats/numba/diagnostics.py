@@ -121,6 +121,12 @@ def rhat(ds, group="posterior", method="rank", **kwargs):
     group : str, default "posterior"
     method : str, default "rank"
     **kwargs
+
+    Returns
+    -------
+    Dataset or DataArray
+        The rhat diagnostic, matching the input type (a Dataset for Dataset or DataTree
+        inputs, a DataArray for DataArray input).
     """
     func_map = {"identity": _rhat, "rank": _rhat_rank}
     if method not in func_map:
@@ -149,6 +155,11 @@ def rfft(da, dim=None, n=None, prefix="freq_", **kwargs):
     dim : str, optional
     n : int, optional
     prefix : str, default "freq_"
+
+    Returns
+    -------
+    DataArray
+        Result of the real FFT, with `dim` replaced by ``{prefix}{dim}``.
     """
     return xr.apply_ufunc(
         np.fft.rfft,
@@ -169,6 +180,11 @@ def irfft(da, dim=None, n=None, prefix="freq_", **kwargs):
     dim : str, optional
     n : int, optional
     prefix : str, default "freq_"
+
+    Returns
+    -------
+    DataArray
+        Result of the inverse real FFT, with `dim` replaced by the de-prefixed dimension.
     """
     out_dim = dim.replace(prefix, "")
     return xr.apply_ufunc(
@@ -216,6 +232,11 @@ def autocorr(da, dim="draw", **kwargs):
     da : DataArray
         A DataArray containing MCMC samples. It must have the ``draw`` dimension.
     dim : str, default "draw"
+
+    Returns
+    -------
+    DataArray
+        Same size as the input array.
     """
     da = autocov(da, dim=dim, **kwargs)
     return da / da.isel({dim: 0})
@@ -322,6 +343,12 @@ def ess(ds, group="posterior", method="bulk", **kwargs):
     group : str, default "posterior"
     method : str, default "bulk"
     **kwargs
+
+    Returns
+    -------
+    Dataset or DataArray
+        The ess diagnostic, matching the input type (a Dataset for Dataset or DataTree
+        inputs, a DataArray for DataArray input).
     """
     func_map = {"mean": _ess_mean, "bulk": _ess_bulk}
     if method not in func_map:

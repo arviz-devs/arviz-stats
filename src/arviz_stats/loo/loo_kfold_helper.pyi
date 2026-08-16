@@ -1,6 +1,8 @@
 # File generated with docstub
 
 from collections import namedtuple
+from collections.abc import Hashable
+from typing import NamedTuple
 
 import numpy as np
 import xarray as xr
@@ -30,7 +32,16 @@ FoldData: type
 
 KfoldResults: type
 
-KfoldInputs: type
+class KfoldInputs(NamedTuple):
+
+    log_likelihood: xr.DataArray
+    var_name: Hashable
+    sample_dims: list[str]
+    obs_dims: list[Hashable]
+    n_data_points: int
+    n_samples: int
+    folds: ArrayLike
+    k: int
 
 def _prepare_kfold_inputs(
     data: Incomplete,

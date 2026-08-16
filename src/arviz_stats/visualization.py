@@ -67,7 +67,7 @@ def hdi(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested HDI of the provided input. It will have a ``ci_bound`` dimension
         with coordinate values "lower" and "upper" indicating the two extremes of
         the credible interval. In addition when using a multimodal `method` a
@@ -176,7 +176,7 @@ def eti(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested ETI of the provided input. It will have a ``ci_bound`` dimension
         with coordinate values "lower" and "upper" indicating the two extremes of
         the credible interval.
@@ -274,7 +274,7 @@ def ecdf(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested ECDF of the provided input.
         It will have a ``quantile`` dimension and a ``plot_axis`` dimension with coordinate
         values "x" and "y".
@@ -367,16 +367,14 @@ def histogram(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    bind : array-like, optional
+    bins : array-like, optional
     range : array-like, optional
     weights : array-like, optional
     density : bool, default True
-    **kwargs : any, optional
-        Forwarded to the array or dataarray interface for histogram.
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested histogram of the provided input.
         It will have a ``hist_dim_{var_name}`` dimension and a ``plot_axis`` dimension
         with coordinates "histogram", "left_edges" and "right_edges"
@@ -476,7 +474,7 @@ def kde(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested KDE of the provided input.
         The xarray objects will have a ``kde_dim`` dimension and a ``plot_axis`` dimension
         with coordinates "x", and "y".
@@ -588,7 +586,7 @@ def qds(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested QDs of the provided input.
         The xarray objects will have a ``qds_dim`` dimension and a ``plot_axis`` dimension
         with coordinates "x", and "y".

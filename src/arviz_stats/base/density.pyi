@@ -29,24 +29,24 @@ class _DensityBase(_CoreBase):
     ) -> None: ...
     def bw_scott(
         self, x: ArrayLike, x_std: float | None = ..., **kwargs: dict
-    ) -> None: ...
+    ) -> float: ...
     def bw_silverman(
         self, x: ArrayLike, x_std: float | None = ..., **kwargs: dict
-    ) -> None: ...
+    ) -> float: ...
     def bw_isj(
         self,
         x: ArrayLike,
         grid_counts: ArrayLike | None = ...,
         x_std: float | None = ...,
         grid_range: float | None = ...,
-    ) -> None: ...
+    ) -> float: ...
     def bw_experimental(
         self,
         x: ArrayLike,
         grid_counts: ArrayLike | None = ...,
         x_std: float | None = ...,
         grid_range: float | None = ...,
-    ) -> None: ...
+    ) -> float: ...
     def get_bw(
         self,
         x: ArrayLike,
@@ -59,7 +59,7 @@ class _DensityBase(_CoreBase):
     def _vonmises_pdf(self, x: ArrayLike, mu: float, kappa: float) -> None: ...
     def _a1inv(self, x: float) -> None: ...
     def _kappa_mle(self, x: ArrayLike) -> None: ...
-    def bw_taylor(self, x: ArrayLike) -> None: ...
+    def bw_taylor(self, x: ArrayLike) -> float: ...
     def check_custom_lims(
         self, custom_lims: list | tuple, x_min: float, x_max: float
     ) -> None: ...
@@ -95,7 +95,7 @@ class _DensityBase(_CoreBase):
         grid_counts: ArrayLike,
         grid_len: int,
         bound_correction: bool,
-    ) -> None: ...
+    ) -> tuple[ArrayLike, ArrayLike]: ...
     def kde_adaptive(
         self,
         x: ArrayLike,
@@ -104,7 +104,7 @@ class _DensityBase(_CoreBase):
         grid_counts: ArrayLike,
         grid_len: int,
         bound_correction: bool,
-    ) -> None: ...
+    ) -> tuple[ArrayLike, ArrayLike]: ...
     def kde_circular(
         self,
         x: ArrayLike,
@@ -113,7 +113,7 @@ class _DensityBase(_CoreBase):
         custom_lims: list | tuple | None = ...,
         cumulative: bool = ...,
         grid_len: int = ...,
-    ) -> None: ...
+    ) -> tuple[ArrayLike, ArrayLike, float]: ...
     def _kde(
         self,
         x: ArrayLike,
@@ -155,7 +155,7 @@ class _DensityBase(_CoreBase):
     def _layout_stacks(
         self,
         stack_locs: ArrayLike,
-        stack_counts: ArrayLike[int],
+        stack_counts: ArrayLike,
         nquantiles: int,
         dotheight: float,
         top_only: bool,

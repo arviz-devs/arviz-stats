@@ -1,6 +1,8 @@
 """Helper functions for K-fold cross-validation."""
 
 from collections import namedtuple
+from collections.abc import Hashable
+from typing import NamedTuple
 
 import numpy as np
 import xarray as xr
@@ -29,19 +31,18 @@ FoldData: type = namedtuple("FoldData", ["train_indices", "test_indices", "fold_
 
 KfoldResults: type = namedtuple("KfoldResults", ["elpds", "ps", "fold_fits", "elpd_i", "p_kfold_i"])
 
-KfoldInputs: type = namedtuple(
-    "KfoldInputs",
-    [
-        "log_likelihood",
-        "var_name",
-        "sample_dims",
-        "obs_dims",
-        "n_data_points",
-        "n_samples",
-        "folds",
-        "k",
-    ],
-)
+
+class KfoldInputs(NamedTuple):
+    """Container for prepared k-fold cross-validation inputs."""
+
+    log_likelihood: xr.DataArray
+    var_name: Hashable
+    sample_dims: list[str]
+    obs_dims: list[Hashable]
+    n_data_points: int
+    n_samples: int
+    folds: ArrayLike
+    k: int
 
 
 def _prepare_kfold_inputs(

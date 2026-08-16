@@ -6,7 +6,6 @@ from typing import Any, Literal
 import numpy as np
 import xarray
 import xarray as xr
-from _typeshed import Incomplete
 from arviz_base import convert_to_dataset
 from numpy.typing import ArrayLike, NDArray
 from xarray import DataArray, Dataset
@@ -27,7 +26,7 @@ def hdi(
     max_modes: int = ...,
     skipna: bool = ...,
     **kwargs: Any,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def eti(
     data: ArrayLike,
     prob: float | None = ...,
@@ -39,7 +38,7 @@ def eti(
     method: str = ...,
     skipna: bool = ...,
     **kwargs: Any,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def ecdf(
     data: ArrayLike,
     dim: Sequence[Hashable] | None = ...,
@@ -49,7 +48,7 @@ def ecdf(
     coords: dict | None = ...,
     pit: bool = ...,
     **kwargs: Any,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def histogram(
     data: ArrayLike,
     dim: Sequence[Hashable] | None = ...,
@@ -57,11 +56,11 @@ def histogram(
     var_names: str | list[str] | None = ...,
     filter_vars: Literal[None, "like", "regex"] | None = ...,
     coords: dict | None = ...,
-    bins: Incomplete = ...,
+    bins: ArrayLike | None = ...,
     range: ArrayLike | None = ...,
     weights: ArrayLike | None = ...,
     density: bool = ...,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def kde(
     data: ArrayLike,
     dim: Sequence[Hashable] | None = ...,
@@ -71,7 +70,7 @@ def kde(
     coords: dict | None = ...,
     circular: bool = ...,
     **kwargs: Any,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def qds(
     data: ArrayLike,
     dim: Sequence[Hashable] | None = ...,
@@ -85,7 +84,7 @@ def qds(
     stackratio: float = ...,
     top_only: bool = ...,
     **kwargs: Any,
-) -> NDArray: ...
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def kde2d(
     da_x: ArrayLike | DataArray | xarray.DataTree | xarray.DataTree,
     da_y: ArrayLike | DataArray | xarray.DataTree | xarray.DataTree,

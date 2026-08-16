@@ -1334,6 +1334,10 @@ class _DiagnosticsBase(_CoreBase):
         k : float, default 0
         lower_tail : bool, default True
         log_p : bool, default False
+
+        Returns
+        -------
+        array-like
         """
         q = np.asarray(q, dtype=float)
 

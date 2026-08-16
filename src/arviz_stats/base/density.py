@@ -104,6 +104,11 @@ class _DensityBase(_CoreBase):
         x : array-like
         x_std : float, optional
         **kwargs : dict, optional
+
+        Returns
+        -------
+        float
+            Estimated bandwidth.
         """
         if x_std is None:
             x_std = np.std(x)
@@ -118,6 +123,11 @@ class _DensityBase(_CoreBase):
         x : array-like
         x_std : float, optional
         **kwargs : dict, optional
+
+        Returns
+        -------
+        float
+            Estimated bandwidth.
         """
         if x_std is None:
             x_std = np.std(x)
@@ -136,6 +146,11 @@ class _DensityBase(_CoreBase):
         grid_counts : array-like, optional
         x_std : float, optional
         grid_range : float, optional
+
+        Returns
+        -------
+        float
+            Estimated bandwidth.
 
         Notes
         -----
@@ -189,6 +204,11 @@ class _DensityBase(_CoreBase):
         grid_counts : array-like, optional
         x_std : float, optional
         grid_range : float, optional
+
+        Returns
+        -------
+        float
+            Estimated bandwidth.
         """
         bw_silverman = self.bw_silverman(x, x_std=x_std)
         bw_isj = self.bw_isj(x, grid_counts=grid_counts, grid_range=grid_range)
@@ -286,6 +306,11 @@ class _DensityBase(_CoreBase):
         Parameters
         ----------
         x : array-like
+
+        Returns
+        -------
+        float
+            Estimated bandwidth.
 
         Notes
         -----
@@ -543,6 +568,11 @@ class _DensityBase(_CoreBase):
         grid_counts : array-like
         grid_len : int
         bound_correction : bool
+
+        Returns
+        -------
+        grid : array-like
+        pdf : array-like
         """
         # Calculate relative frequencies per bin
         bin_width = grid_edges[1] - grid_edges[0]
@@ -580,6 +610,11 @@ class _DensityBase(_CoreBase):
         grid_counts : array-like
         grid_len : int
         bound_correction : bool
+
+        Returns
+        -------
+        grid : array-like
+        pdf : array-like
 
         Notes
         -----
@@ -679,6 +714,12 @@ class _DensityBase(_CoreBase):
         grid_len : int, optional
             The number of intervals used to bin the data points
             i.e. the length of the grid used in the estimation. Defaults to 512.
+
+        Returns
+        -------
+        grid : array-like
+        pdf : array-like
+        bw : float
         """
         # All values between -pi and pi
         x = self._normalize_angle(x)
@@ -1165,7 +1206,7 @@ class _DensityBase(_CoreBase):
         ----------
         stack_locs : array-like
             Central x (or y) position of each stack.
-        stack_counts : array-like of int
+        stack_counts : array-like
             Number of dots in each stack.
         nquantiles : int
             Total number of quantiles (dots).

@@ -23,6 +23,10 @@ class _CoreBase:
         Parameters
         ----------
         x : array-like
+
+        Returns
+        -------
+        array-like
         """
         return np.fft.fft(x)
 
@@ -34,6 +38,10 @@ class _CoreBase:
         ary : array-like
         n : int
         axis : int, default -1
+
+        Returns
+        -------
+        array-like
         """
         return np.fft.rfft(ary, n=n, axis=axis)
 
@@ -45,6 +53,10 @@ class _CoreBase:
         ary : array-like
         n : int
         axis : int, default -1
+
+        Returns
+        -------
+        array-like
         """
         return np.fft.irfft(ary, n=n, axis=axis)
 
@@ -55,6 +67,10 @@ class _CoreBase:
         ----------
         ary : array-like
         axis : int, default -1
+
+        Returns
+        -------
+        array-like
         """
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocov.")
@@ -89,6 +105,10 @@ class _CoreBase:
         ----------
         ary : array-like
         axis : int, default -1
+
+        Returns
+        -------
+        array-like
         """
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocorr.")
@@ -109,6 +129,10 @@ class _CoreBase:
         Parameters
         ----------
         ary : array-like
+
+        Returns
+        -------
+        float
         """
         return circmean(ary, high=np.pi, low=-np.pi)
 
@@ -133,6 +157,10 @@ class _CoreBase:
         skipna : bool, default False
         weights : array-like, optional
             Array with the same shape as `a` with the weights associated to the values of `a`.
+
+        Returns
+        -------
+        array-like
 
         Notes
         -----
@@ -165,6 +193,10 @@ class _CoreBase:
         method : str, optional
         skipna : bool, default False
         weights : array-like, optional
+
+        Returns
+        -------
+        array-like
         """
         edge_prob = (1 - prob) / 2
         return self.quantile(

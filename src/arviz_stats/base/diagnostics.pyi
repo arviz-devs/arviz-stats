@@ -165,7 +165,7 @@ class _DiagnosticsBase(_CoreBase):
         k: float = ...,
         lower_tail: bool = ...,
         log_p: bool = ...,
-    ) -> None: ...
+    ) -> ArrayLike: ...
     def _power_scale_sense(
         self,
         ary: ArrayLike,

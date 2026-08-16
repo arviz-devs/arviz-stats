@@ -1,6 +1,6 @@
 # File generated with docstub
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
@@ -10,7 +10,7 @@ from numpy.typing import ArrayLike
 
 from arviz_stats.base.array import BaseArray
 
-def process_ary_axes(ary: ArrayLike, axes: int | Sequence[int]) -> None: ...
+def process_ary_axes(ary: ArrayLike, axes: int | Sequence[int]) -> ArrayLike: ...
 def _quantile_ufunc(a: Incomplete, q: Incomplete, out: Incomplete) -> None: ...
 def _histogram_jit(
     ary: Incomplete, bins: Incomplete, range: Incomplete = ...
@@ -26,7 +26,7 @@ class NumbaArray(BaseArray):
         method: Incomplete = ...,
         skipna: Incomplete = ...,
         weights: Incomplete = ...,
-    ) -> None: ...
+    ) -> ArrayLike: ...
     def _histogram(
         self,
         ary: Incomplete,
@@ -36,7 +36,7 @@ class NumbaArray(BaseArray):
         density: Incomplete = ...,
     ) -> None: ...
     @property
-    def kde_ufunc(self) -> None: ...
+    def kde_ufunc(self) -> Callable: ...
     def kde(
         self,
         ary: ArrayLike,
@@ -44,10 +44,8 @@ class NumbaArray(BaseArray):
         circular: bool = ...,
         grid_len: int = ...,
         **kwargs: Any
-    ) -> None: ...
+    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
 
-NumbaArray: Incomplete
-histogram: Incomplete
-__doc__: Incomplete
+def _extend_histogram_docstring() -> None: ...
 
 array_stats: NumbaArray

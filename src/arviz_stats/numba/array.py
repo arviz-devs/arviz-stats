@@ -13,6 +13,11 @@ def process_ary_axes(ary, axes):
     ----------
     ary : array_like
     axes : int or sequence of int
+
+    Returns
+    -------
+    array-like
+        Input array with the core dimensions in `axes` flattened into the last axis.
     """
     if isinstance(axes, int):
         axes = [axes]
@@ -53,6 +58,12 @@ class NumbaArray(BaseArray):
 
     def quantile(self, ary, quantile, axis=-1, method="linear", skipna=False, weights=None):
         """Compute the quantile.
+
+        Returns
+        -------
+        array-like
+            Quantile(s) of the input computed along `axis`. If `quantile` is a scalar the
+            quantile dimension is dropped, otherwise it is added as the last axis.
 
         Notes
         -----
@@ -97,6 +108,11 @@ class NumbaArray(BaseArray):
     @property
     def kde_ufunc(self):
         """Property to cache the guvectorized kde function.
+
+        Returns
+        -------
+        callable
+            The guvectorized KDE function, generated and cached on first access.
 
         Notes
         -----
@@ -155,6 +171,13 @@ class NumbaArray(BaseArray):
         ``histogram`` computation. Numba is only used for ufunc generation.
         The ufunc is cached the first time to avoid unnecessary compilation while
         ensuring the proper method of the initialized class is the one being guvectorized.
+
+        Returns
+        -------
+        grid, pdf, bw : array-like
+            `grid` and `pdf` will have the same shape: the same as `ary` minus the dimensions
+            in `axis` plus an extra dimension of length `grid_len`. Same for `bw`
+            except it will not have the extra dimension.
         """
         if axis is not None:
             ary = process_ary_axes(ary, axis)
@@ -168,9 +191,11 @@ class NumbaArray(BaseArray):
         return self.kde_ufunc(ary, np.empty(grid_len), circular, bw, adaptive)
 
 
-NumbaArray.histogram.__doc__ = (
-    NumbaArray.histogram.__doc__
-    + """
+def _extend_histogram_docstring():
+    """Append numba-specific notes to the inherited ``histogram`` docstring."""
+    NumbaArray.histogram.__doc__ = (
+        NumbaArray.histogram.__doc__
+        + """
 
 Notes
 -----
@@ -180,6 +205,9 @@ It uses the jit compiled histogram function to accelerate computations.
 (like the ``kde`` function for instance),
 so this function alone accelerates slightly a significant part of the codebase.
 """
-)
+    )
+
+
+_extend_histogram_docstring()
 
 array_stats: NumbaArray = NumbaArray()

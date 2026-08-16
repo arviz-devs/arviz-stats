@@ -31,6 +31,12 @@ def isotonic_fit(dt, var_names, group, ci_prob, data_type="binary", residuals=Fa
         Defaults to False.
     x_var : array-like, optional
         Variable to use for x-axis when computing residuals
+
+    Returns
+    -------
+    Dataset
+        Isotonic regression results per variable (forecasted values, conditional event
+        probabilities and credible interval bounds, or residuals when ``residuals=True``).
     """
     pp = extract(dt, group=group, keep_dataset=True)
     dictio = {}

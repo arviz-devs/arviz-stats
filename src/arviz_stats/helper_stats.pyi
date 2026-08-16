@@ -18,7 +18,7 @@ def isotonic_fit(
     data_type: str = ...,
     residuals: bool = ...,
     x_var: ArrayLike | None = ...,
-) -> None: ...
+) -> Dataset: ...
 def _isotonic_fit(
     pred: ArrayLike,
     obs: ArrayLike,

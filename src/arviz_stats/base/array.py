@@ -22,6 +22,12 @@ def process_chain_none(ary, chain_axis, draw_axis):
     ary : array-like
     chain_axis : int or None
     draw_axis : int
+
+    Returns
+    -------
+    ary : array-like
+    chain_axis : int
+    draw_axis : int
     """
     if chain_axis is None:
         ary = np.expand_dims(ary, axis=0)
@@ -38,6 +44,11 @@ def process_chain_none_multi(*arys, chain_axis, draw_axis):
     *arys : array-like
     chain_axis : int or None
     draw_axis : int
+
+    Returns
+    -------
+    tuple
+        The processed arrays followed by the resolved `chain_axis` and `draw_axis`.
     """
     if chain_axis is None:
         arys = tuple(np.expand_dims(ary, axis=0) for ary in arys)
@@ -53,6 +64,11 @@ def process_ary_axes(ary, axes):
     ----------
     ary : array_like
     axes : int or sequence of int
+
+    Returns
+    -------
+    ary : array-like
+    axes : ndarray
     """
     if axes is None:
         axes = list(range(ary.ndim))
@@ -103,6 +119,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Only used for multimodal methods with continuous data.
             Passed to kde computation with a ``bw`` default of "taylor" for
             circular data, "isj" otherwise.
+
+        Returns
+        -------
+        array-like
         """
         if not 1 >= prob > 0:
             raise ValueError("The value of `prob` must be in the (0, 1] interval.")
@@ -172,6 +192,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         prob : float or tuple of (float, float), default None
             When using the array interface, `prob` is a required argument for
             the "tail", "quantile" (as float) and "local" (as tuple) methods.
+
+        Returns
+        -------
+        array-like
         """
         method = method.lower()
         # fmt: off
@@ -203,6 +227,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "rank"
+
+        Returns
+        -------
+        array-like
         """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
@@ -227,6 +255,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "rank"
+
+        Returns
+        -------
+        array-like
         """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
@@ -254,6 +286,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             When using the array interface, `prob` is a required argument for
             "quantile" method.
         circular : bool, default False
+
+        Returns
+        -------
+        array-like
         """
         method = method.lower()
         valid_methods = {"mean", "sd", "median", "quantile"}
@@ -281,6 +317,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         chain_axis : int or None, default -2
         draw_axis : int, default -1
+
+        Returns
+        -------
+        array-like
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -321,6 +361,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         chain_axis : int or None, default -2
         draw_axis : int, default -1
+
+        Returns
+        -------
+        array-like
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -346,6 +390,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         r_eff : float
         tail : str
         log_weights : bool
+
+        Returns
+        -------
+        array-like
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -366,6 +414,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         alpha : float, default 0
         axis : int or sequence of int or None, default -1
+
+        Returns
+        -------
+        array-like
         """
         ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
@@ -389,6 +441,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         lower_alpha, upper_alpha : float
         chain_axis : int or None, default -2
         draw_axis : int, default -1
+
+        Returns
+        -------
+        array-like
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         lower_w, _, _ = process_chain_none(lower_w, chain_axis, draw_axis)
@@ -409,6 +465,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         axis : int or sequence of int or None, default -1
         relative : bool, default False
+
+        Returns
+        -------
+        array-like
         """
         ary, axes = process_ary_axes(ary, axis)
         compute_ranks_ufunc = make_ufunc(
@@ -428,6 +488,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         axis : int or sequence of int or None, default -1
         bins : str or scalar or array-like, default "arviz"
+
+        Returns
+        -------
+        array-like
         """
         ary, axes = process_ary_axes(ary, axis)
         get_bininfo_ufunc = make_ufunc(
@@ -733,6 +797,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         top_only : bool, default False
         axis : int or sequence of int or None, default -1
         **kwargs
+
+        Returns
+        -------
+        x, y, radius : array-like
         """
         ary, axes = process_ary_axes(ary, axis)
         qd_ufunc = make_ufunc(
@@ -897,6 +965,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Whether `scale` is a standard deviation ("sd") or variance ("var").
         circular : bool, default False
             Whether the response variable is circular.
+
+        Returns
+        -------
+        array-like
         """
         r2_ufunc = make_ufunc(
             self._bayesian_r2,
@@ -915,6 +987,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         y_obs : array-like
         mu_pred : array-like
         circular : bool, default False
+
+        Returns
+        -------
+        array-like
         """
         r2_ufunc = make_ufunc(
             self._residual_r2,
@@ -934,6 +1010,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         observed : array-like
         predicted : array-like
         kind : str
+
+        Returns
+        -------
+        estimate, std_error : array-like
         """
         func = getattr(self, f"_{kind}", None)
 

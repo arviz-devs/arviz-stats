@@ -30,6 +30,11 @@ def quantile(da, q, dim):
     q : array-like
         Quantile(s) to compute, between 0 and 1.
     dim : str or sequence of hashable
+
+    Returns
+    -------
+    DataArray
+        Requested quantiles along a new ``quantile`` dimension, with `dim` reduced.
     """
     if not isinstance(dim, str):
         aux_dim = f"__aux_dim__:{','.join(dim)}"
@@ -51,6 +56,11 @@ def eti(da, prob=None, dims=None, method=None, skipna=None):
     dims : str or sequence of hashable, optional
     method : str, optional
     skipna : bool, optional
+
+    Returns
+    -------
+    DataArray
+        Lower and upper equal-tailed interval bounds along a new ``quantile`` dimension.
     """
     if prob is None:
         prob = rcParams["stats.ci_prob"]

@@ -41,7 +41,7 @@ def compare(
 
     Parameters
     ----------
-    compare_dict : dict of {str: DataTree or ELPDData}
+    compare_dict : dict of {str : DataTree or ELPDData}
         A dictionary of model names and :class:`xr.DataTree` or ``ELPDData``.
     method : str, optional
         Method used to estimate the weights for each model. Available options are:
@@ -595,7 +595,7 @@ def _calculate_ics(
 
     Returns
     -------
-    compare_dict : dict of ELPDData
+    compare_dict : dict of {str : ELPDData}
     """
     precomputed_elpds = {
         name: elpd_data

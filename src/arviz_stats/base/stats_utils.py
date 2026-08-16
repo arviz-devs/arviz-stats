@@ -182,6 +182,11 @@ def logsumexp(ary, *, b=None, b_inv=None, axis=None, keepdims=False, out=None, c
     keepdims : bool, default False
     out : array-like, optional
     copy : bool, default True
+
+    Returns
+    -------
+    ndarray or float
+        The result of the stable logsumexp computation.
     """
     # check dimensions for result arrays
     ary = np.asarray(ary)
@@ -373,6 +378,11 @@ def round_num(value, precision):
         If an integer, specifies decimal places. If a string ending in 'g',
         specifies significant digits. Integers can be negative.
         Use "None" or "none" for no rounding.
+
+    Returns
+    -------
+    float or numpy.ndarray or DataArray
+        The rounded value, or the input unchanged when `precision` disables rounding.
     """
     try:
         value = value.item()
@@ -403,6 +413,11 @@ def get_decimal_places_from_se(se_val):
     Parameters
     ----------
     se_val : float
+
+    Returns
+    -------
+    int
+        Number of decimal places.
     """
     two_se = 2 * se_val
     se_magnitude = np.floor(np.log10(np.abs(two_se))) if two_se != 0 else 0

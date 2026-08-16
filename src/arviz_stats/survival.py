@@ -18,6 +18,12 @@ def kaplan_meier(
         DataTree with "posterior_predictive" and "observed_data" groups
     var_names : str or list of str
         The variables to compute the unique values.
+
+    Returns
+    -------
+    Dataset
+        Kaplan-Meier survival curve per variable, with ``x`` the event times and
+        ``y`` the corresponding survival probabilities.
     """
     if isinstance(var_names, str):
         var_names = [var_names]
@@ -100,6 +106,12 @@ def generate_survival_curves(
     extrapolation_factor : float, default 1.2
         Factor by which to limit the survival curves beyond the maximum observed time.
         Set to None to show the unaffected posterior predictive draws.
+
+    Returns
+    -------
+    Dataset
+        Survival curves computed from the predictive samples for each variable,
+        with ``x`` the event times and ``y`` the corresponding survival probabilities.
     """
     if isinstance(var_names, str):
         var_names = [var_names]
