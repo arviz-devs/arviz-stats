@@ -16,6 +16,7 @@ from arviz_stats.loo.loo_helper import (
     _warn_pareto_k,
     _warn_pointwise_loo,
 )
+from arviz_stats.loo.loo_moment_match import loo_moment_match
 from arviz_stats.utils import ELPDData
 
 
@@ -29,13 +30,15 @@ def loo(
     pareto_k=None,
     log_jacobian=None,
     mixture=False,
+    moment_match=False,
+    model=None,
 ):
     r"""Compute Pareto-smoothed importance sampling leave-one-out cross-validation (PSIS-LOO-CV).
 
     Estimates the expected log pointwise predictive density (elpd) using Pareto-smoothed
     importance sampling leave-one-out cross-validation (PSIS-LOO-CV). Also calculates LOO's
-    standard error and the effective number of parameters. The method is described in [2]_
-    and [3]_.
+    standard error and the effective number of parameters. The method is described in [3]_
+    and [4]_.
 
     Parameters
     ----------
@@ -73,7 +76,18 @@ def loo(
     mixture : bool, optional
         If True, use mixture importance sampling LOO (Mix-IS-LOO) instead of PSIS-LOO.
         This is appropriate when the log-likelihood was generated from a mixture distribution.
-        The method is described in [1]_. Defaults to False.
+        The method is described in [2]_. Defaults to False.
+    moment_match : bool, default False
+        If True, apply the moment matching algorithm described in [1]_ to observations
+        with high Pareto k values. Requires ``model``. This is equivalent to computing
+        LOO with ``pointwise=True`` and passing the result to :func:`loo_moment_match`.
+        Cannot be combined with ``mixture=True``, ``log_lik_fn`` or ``log_jacobian``.
+        For other models, or for fine-grained control over the moment matching algorithm,
+        use :func:`loo_moment_match` directly.
+    model : Model, optional
+        Required when ``moment_match=True``. A model object used to automatically build
+        the quantities needed for moment matching. Currently only models from PyMC
+        and Bambi are supported.
 
     Returns
     -------
@@ -98,6 +112,13 @@ def loo(
         - **approx_posterior**: False (not used for standard LOO)
         - **log_weights**: Smoothed log weights.
         - **log_jacobian**: Log-Jacobian adjustment for variable transformations.
+        - **influence_pareto_k**: :class:`~xarray.DataArray` with the original
+          (pre-moment-matching) Pareto shape values, only if ``moment_match=True``
+          and ``pointwise=True``
+        - **n_eff_i**: :class:`~xarray.DataArray` with effective sample size per
+          observation, only if ``moment_match=True`` and ``pointwise=True`` and at least
+          one observation was successfully moment matched (NaN for observations that
+          were not adjusted)
 
     Examples
     --------
@@ -146,24 +167,48 @@ def loo(
     See Also
     --------
     :func:`compare` : Compare models based on their ELPD.
+    :func:`loo_moment_match` : Moment matching for problematic observations in PSIS-LOO-CV.
     :func:`arviz_plots.plot_compare` : Summary plot for model comparison.
 
     References
     ----------
 
-    .. [1] Silva and Zanella. *Robust Leave-One-Out Cross-Validation for High-Dimensional
+    .. [1] Paananen, T., Piironen, J., Buerkner, P.-C., Vehtari, A. (2021). Implicitly Adaptive
+       Importance Sampling. Statistics and Computing. 31(2) (2021)
+       https://doi.org/10.1007/s11222-020-09982-2
+       arXiv preprint https://arxiv.org/abs/1906.08850.
+
+    .. [2] Silva and Zanella. *Robust Leave-One-Out Cross-Validation for High-Dimensional
        Bayesian Models*. Journal of the American Statistical Association. 119(547) (2023)
        2369-2381. https://doi.org/10.1080/01621459.2023.2257893
        arXiv preprint https://arxiv.org/abs/2209.09190
 
-    .. [2] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
+    .. [3] Vehtari et al. *Practical Bayesian model evaluation using leave-one-out cross-validation
        and WAIC*. Statistics and Computing. 27(5) (2017) https://doi.org/10.1007/s11222-016-9696-4
        arXiv preprint https://arxiv.org/abs/1507.04544.
 
-    .. [3] Vehtari et al. *Pareto Smoothed Importance Sampling*.
+    .. [4] Vehtari et al. *Pareto Smoothed Importance Sampling*.
        Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
        arXiv preprint https://arxiv.org/abs/1507.02646
     """
+    if moment_match:
+        if mixture:
+            raise ValueError("moment_match=True cannot be combined with mixture=True.")
+        if log_lik_fn is not None:
+            raise ValueError(
+                "moment_match=True cannot be combined with log_lik_fn. Moment matching "
+                "requires the log_likelihood group in data."
+            )
+        if log_jacobian is not None:
+            raise ValueError("moment_match=True cannot be combined with log_jacobian.")
+        if model is None:
+            raise ValueError(
+                "moment_match=True requires model. Automatic moment matching is only "
+                "supported for PyMC and Bambi models. For other models, use "
+                "loo_moment_match directly with custom log_prob_upars_fn and "
+                "log_lik_i_upars_fn."
+            )
+
     loo_inputs = _prepare_loo_inputs(data, var_name, log_lik_fn=log_lik_fn)
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
@@ -223,6 +268,27 @@ def loo(
             pareto_k=mix_pareto_k if pointwise else None,
             approx_posterior=False,
             log_weights=mix_log_weights,
+        )
+
+    if moment_match:
+        loo_orig = _compute_loo_results(
+            log_likelihood=loo_inputs.log_likelihood,
+            var_name=loo_inputs.var_name,
+            pointwise=True,
+            sample_dims=loo_inputs.sample_dims,
+            n_samples=loo_inputs.n_samples,
+            n_data_points=loo_inputs.n_data_points,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+            approx_posterior=False,
+        )
+        return loo_moment_match(
+            data,
+            loo_orig,
+            var_name=var_name,
+            reff=reff,
+            pointwise=pointwise,
+            model=model,
         )
 
     return _compute_loo_results(

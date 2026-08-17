@@ -18,7 +18,8 @@ shutil = importorskip("shutil")
 tempfile = importorskip("tempfile")
 
 from arviz_stats.loo import loo, loo_moment_match
-from arviz_stats.loo.loo_moment_match import _split_moment_match
+from arviz_stats.loo.loo_helper import _prepare_loo_inputs
+from arviz_stats.loo.loo_moment_match import _loo_moment_match_i, _split_moment_match
 
 
 @ft.lru_cache(maxsize=1)
@@ -36,9 +37,6 @@ def _get_roaches_data_path():
 
     atexit.register(lambda target=path: target.unlink(missing_ok=True))
     return path
-
-
-ROACHES_DATA_PATH = _get_roaches_data_path()
 
 
 def _safe_exp(da):
@@ -98,11 +96,12 @@ def log_lik_i_upars(
 
 
 def load_roaches_r_example():
-    root_ds = xr.load_dataset(ROACHES_DATA_PATH)
-    posterior_ds = xr.load_dataset(ROACHES_DATA_PATH, group="posterior")
-    log_likelihood_ds = xr.load_dataset(ROACHES_DATA_PATH, group="log_likelihood")
-    observed_ds = xr.load_dataset(ROACHES_DATA_PATH, group="observed_data")
-    upars_store = xr.load_dataset(ROACHES_DATA_PATH, group="upars")
+    data_path = _get_roaches_data_path()
+    root_ds = xr.load_dataset(data_path)
+    posterior_ds = xr.load_dataset(data_path, group="posterior")
+    log_likelihood_ds = xr.load_dataset(data_path, group="log_likelihood")
+    observed_ds = xr.load_dataset(data_path, group="observed_data")
+    upars_store = xr.load_dataset(data_path, group="upars")
 
     coef_names = posterior_ds["beta"].coords["coef"].values.tolist()
     beta_param_names = [f"beta_{name}" for name in coef_names]
@@ -203,7 +202,7 @@ def transform_inverse_upars(upars_matrix, total_shift, total_scaling, total_mapp
 
 
 def load_r_parity():
-    parity_ds = xr.load_dataset(ROACHES_DATA_PATH, group="parity")
+    parity_ds = xr.load_dataset(_get_roaches_data_path(), group="parity")
     try:
         log_lik = parity_ds["log_lik"].load().rename("log_lik")
         log_weights = parity_ds["log_weights"].load().rename("log_weights")
@@ -331,8 +330,9 @@ def test_moment_match_matches_r_reference(roaches_r_example):
 
 
 def test_split_moment_match_matches_r_snapshot(roaches_r_example):
-    split_case_ds = xr.load_dataset(ROACHES_DATA_PATH, group="split_case")
-    split_snapshot_ds = xr.load_dataset(ROACHES_DATA_PATH, group="split_snapshot")
+    data_path = _get_roaches_data_path()
+    split_case_ds = xr.load_dataset(data_path, group="split_case")
+    split_snapshot_ds = xr.load_dataset(data_path, group="split_snapshot")
 
     upars_matrix = split_case_ds["upars"].values.astype(np.float64, copy=False)
     total_shift = split_case_ds["total_shift"].values.astype(np.float64, copy=False)
@@ -455,6 +455,54 @@ def test_n_eff_i(roaches_r_example, pointwise):
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_moment_match_reff_i_at_most_one(roaches_r_example):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+    loo_inputs = _prepare_loo_inputs(example["data_tree"], "log_lik")
+
+    upars = example["upars"].transpose(*loo_inputs.sample_dims, "uparam")
+    orig_log_prob = example["log_prob_fn"](upars)
+
+    ks = (
+        loo_orig.pareto_k.stack(__pareto_obs_stacked__=loo_inputs.obs_dims)
+        .transpose("__pareto_obs_stacked__")
+        .values
+    )
+    k_threshold = min(1 - 1 / np.log10(loo_inputs.n_samples), 0.7)
+    bad_obs_indices = np.where(ks > k_threshold)[0]
+    assert len(bad_obs_indices) > 0
+
+    reff_values = [
+        _loo_moment_match_i(
+            i=i,
+            upars=upars,
+            log_likelihood=loo_inputs.log_likelihood,
+            log_prob_upars_fn=example["log_prob_fn"],
+            log_lik_i_upars_fn=example["log_lik_i_fn"],
+            max_iters=30,
+            k_threshold=k_threshold,
+            split=False,
+            cov=True,
+            orig_log_prob=orig_log_prob,
+            ks=ks,
+            log_weights=loo_orig.log_weights,
+            pareto_k=loo_orig.pareto_k,
+            r_eff=1.0,
+            sample_dims=loo_inputs.sample_dims,
+            obs_dims=loo_inputs.obs_dims,
+            n_samples=loo_inputs.n_samples,
+            n_params=upars.sizes["uparam"],
+            param_dim_name="uparam",
+            var_name="log_lik",
+        ).reff_i
+        for i in bad_obs_indices
+    ]
+
+    assert all(0 < reff <= 1 for reff in reff_values)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_influence_pareto_k(roaches_r_example):
     example = roaches_r_example
     loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
@@ -492,3 +540,31 @@ def test_missing_upars_functions_raises(roaches_r_example, provided):
             var_name="log_lik",
             **kwargs,
         )
+
+
+def test_loo_moment_match_flag_errors(roaches_r_example):
+    example = roaches_r_example
+    n_obs = example["data_tree"]["log_likelihood"]["log_lik"].sizes["obs"]
+    log_jacobian = xr.DataArray(np.zeros(n_obs), dims=["obs"])
+
+    with pytest.raises(ValueError, match="mixture=True"):
+        loo(example["data_tree"], var_name="log_lik", moment_match=True, mixture=True)
+
+    with pytest.raises(ValueError, match="log_lik_fn"):
+        loo(
+            example["data_tree"],
+            var_name="log_lik",
+            moment_match=True,
+            log_lik_fn=lambda observed, data: None,
+        )
+
+    with pytest.raises(ValueError, match="log_jacobian"):
+        loo(
+            example["data_tree"],
+            var_name="log_lik",
+            moment_match=True,
+            log_jacobian=log_jacobian,
+        )
+
+    with pytest.raises(ValueError, match="requires model"):
+        loo(example["data_tree"], var_name="log_lik", moment_match=True)

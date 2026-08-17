@@ -162,11 +162,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             func_kwargs.update(kwargs)
         else:
             extra_kwargs = list(kwargs.keys())
+            if "hdi_prob" in kwargs:
+                raise TypeError(
+                    "hdi got an unexpected keyword argument: 'hdi_prob'. "
+                    "The 'hdi_prob' argument was renamed to 'prob' in arviz-stats 1.0. "
+                    "Use 'prob' instead (e.g. prob=0.95). "
+                    "See the HDI Function Changes section in the migration guide: "
+                    "https://python.arviz.org/en/stable/user_guide/migration_guide.html#hdi-function-changes"
+                )
             if len(extra_kwargs) == 1:
                 raise TypeError(f"hdi got an unexpected keyword argument: '{extra_kwargs[0]}'")
             if len(extra_kwargs) > 1:
                 raise TypeError(f"hdi got unexpected keyword arguments: {extra_kwargs}")
-
         if method == "multimodal_sample":
             func_kwargs["from_sample"] = True
 

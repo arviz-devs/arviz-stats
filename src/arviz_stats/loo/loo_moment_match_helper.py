@@ -258,23 +258,23 @@ def _get_upars_da(idata, model, initial_point, value_vars):
         unc_shapes.append(unc_shape)
 
     # Compile a single batched function
-    joined = pt.matrix("upars_input", dtype="float64")
+    block_inputs = []
     replace = {}
-    last = 0
-    for cvar, in_shape in zip(inputs_for_func, in_shapes):
-        alen = int(np.prod(in_shape, dtype=int)) if in_shape else 1
-        replace[cvar] = joined[:, last : last + alen].reshape((joined.shape[0], *in_shape))
-        last += alen
+    for i, (cvar, in_shape) in enumerate(zip(inputs_for_func, in_shapes)):
+        block = pt.matrix(f"upars_input_{i}", dtype="float64")
+        block_inputs.append(block)
+        replace[cvar] = block.reshape((block.shape[0], *in_shape))
     new_outputs = pytensor.graph.vectorize_graph(outputs_for_func, replace)
     joined_unc = pt.concatenate([pt.reshape(b, (pt.shape(b)[0], -1)) for b in new_outputs], axis=1)
-    transform_func = pytensor.function([joined], joined_unc, on_unused_input="ignore")
+    transform_func = pytensor.function(block_inputs, joined_unc, on_unused_input="ignore")
 
-    # Assemble the input matrix from posterior draws and apply the transform
+    # Assemble the input blocks from posterior draws and apply the transform
     flat_blocks = []
     for post_name, in_shape in zip(posterior_names, in_shapes):
         alen = int(np.prod(in_shape, dtype=int)) if in_shape else 1
-        flat_blocks.append(np.asarray(posterior[post_name].values).reshape(chain * draw, alen))
-    upars_flat = transform_func(np.concatenate(flat_blocks, axis=1)).reshape(chain, draw, -1)
+        block = np.asarray(posterior[post_name].values).reshape(chain * draw, alen)
+        flat_blocks.append(np.ascontiguousarray(block))
+    upars_flat = transform_func(*flat_blocks).reshape(chain, draw, -1)
     n_params = upars_flat.shape[2]
 
     # Parameter labels: value_var name for scalars, name[i,j,...] for multi-element vars
@@ -321,19 +321,27 @@ def _get_batched_func(inputs, outputs, initial_point, *, dtype="float64", on_unu
     Returns
     -------
     func : callable
-        Compiled PyTensor function ``func(q) -> list`` where ``q`` has shape ``(N, n_params)``.
+        Function ``func(q) -> list`` where ``q`` has shape ``(N, n_params)``.
     """
     import pytensor
     import pytensor.tensor as pt
 
-    joined = pt.matrix("upars_joined", dtype=dtype)
-    batch_size_var = joined.shape[0]
+    block_inputs = []
+    block_slices = []
     replace = {}
     last = 0
     for v in inputs:
         shape = initial_point[v.name].shape
         v_length = int(np.prod(shape, dtype=int)) if shape else 1
-        replace[v] = joined[:, last : last + v_length].reshape((batch_size_var, *tuple(shape)))
+        block = pt.matrix(f"upars_{v.name}", dtype=dtype)
+        block_inputs.append(block)
+        block_slices.append(slice(last, last + v_length))
+        replace[v] = block.reshape((block.shape[0], *tuple(shape)))
         last += v_length
     new_outputs = pytensor.graph.vectorize_graph(outputs, replace)
-    return pytensor.function([joined], new_outputs, on_unused_input=on_unused_input)
+    compiled = pytensor.function(block_inputs, new_outputs, on_unused_input=on_unused_input)
+
+    def func(q):
+        return compiled(*(np.ascontiguousarray(q[:, s]) for s in block_slices))
+
+    return func
