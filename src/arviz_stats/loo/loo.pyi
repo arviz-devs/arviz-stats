@@ -4,6 +4,7 @@ import numbers
 import warnings
 from collections.abc import Callable
 
+import pymc
 import xarray
 from arviz_base import rcParams
 from xarray import DataArray
@@ -20,6 +21,7 @@ from arviz_stats.loo.loo_helper import (
     _warn_pareto_k,
     _warn_pointwise_loo,
 )
+from arviz_stats.loo.loo_moment_match import loo_moment_match
 from arviz_stats.utils import ELPDData
 
 def loo(
@@ -32,6 +34,8 @@ def loo(
     pareto_k: DataArray | None = ...,
     log_jacobian: DataArray | None = ...,
     mixture: bool = ...,
+    moment_match: bool = ...,
+    model: pymc.Model | None = ...,
 ) -> ELPDData: ...
 def loo_i(
     i: int | dict | numbers.Number,

@@ -20,6 +20,6 @@ def reloo(
     loo_orig: ELPDData | None = ...,
     var_name: str | None = ...,
     log_weights: DataArray | ELPDData | None = ...,
-    k_threshold: float = ...,
+    k_threshold: float | None = ...,
     pointwise: bool | None = ...,
 ) -> ELPDData: ...

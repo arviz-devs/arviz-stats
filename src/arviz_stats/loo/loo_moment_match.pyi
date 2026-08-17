@@ -26,7 +26,6 @@ from arviz_stats.loo.loo_helper import (
     _shift_and_scale,
     _warn_pareto_k,
 )
-from arviz_stats.sampling_diagnostics import ess
 from arviz_stats.utils import ELPDData
 
 class SplitMomentMatch(NamedTuple):
