@@ -1,10 +1,13 @@
 """Helper functions for K-fold cross-validation."""
 
 from collections import namedtuple
+from collections.abc import Hashable
+from typing import NamedTuple
 
 import numpy as np
 import xarray as xr
 from arviz_base import convert_to_datatree
+from numpy.typing import ArrayLike
 from xarray_einstats.stats import logsumexp
 
 from arviz_stats.loo.wrapper import SamplingWrapper
@@ -24,26 +27,34 @@ __all__ = [
     "_validate_fold_parameters",
 ]
 
-FoldData = namedtuple("FoldData", ["train_indices", "test_indices", "fold_id"])
+FoldData: type = namedtuple("FoldData", ["train_indices", "test_indices", "fold_id"])
 
-KfoldResults = namedtuple("KfoldResults", ["elpds", "ps", "fold_fits", "elpd_i", "p_kfold_i"])
-
-KfoldInputs = namedtuple(
-    "KfoldInputs",
-    [
-        "log_likelihood",
-        "var_name",
-        "sample_dims",
-        "obs_dims",
-        "n_data_points",
-        "n_samples",
-        "folds",
-        "k",
-    ],
-)
+KfoldResults: type = namedtuple("KfoldResults", ["elpds", "ps", "fold_fits", "elpd_i", "p_kfold_i"])
 
 
-def _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_by, seed=None):
+class KfoldInputs(NamedTuple):
+    """Container for prepared k-fold cross-validation inputs."""
+
+    log_likelihood: xr.DataArray
+    var_name: Hashable
+    sample_dims: list[str]
+    obs_dims: list[Hashable]
+    n_data_points: int
+    n_samples: int
+    folds: ArrayLike
+    k: int
+
+
+def _prepare_kfold_inputs(
+    data,
+    var_name: str | None,
+    wrapper: SamplingWrapper,
+    k: int,
+    folds: ArrayLike | None,
+    stratify_by: ArrayLike | None,
+    group_by: ArrayLike | None,
+    seed: int | None = None,
+):
     """Prepare inputs for k-fold cross-validation."""
     data = convert_to_datatree(data)
 
@@ -102,7 +113,7 @@ def _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_
     )
 
 
-def _compute_kfold_results(kfold_inputs, wrapper, save_fits):
+def _compute_kfold_results(kfold_inputs: KfoldInputs, wrapper: SamplingWrapper, save_fits: bool):
     """Compute k-fold cross-validation results."""
     ll_full = kfold_inputs.log_likelihood
     lpds_full = logsumexp(ll_full, dims=kfold_inputs.sample_dims, b=1 / kfold_inputs.n_samples)
@@ -172,7 +183,7 @@ def _compute_kfold_results(kfold_inputs, wrapper, save_fits):
     )
 
 
-def _kfold_split_random(k=10, n=None, rng=None):
+def _kfold_split_random(k: int = 10, n: int | None = None, rng: np.random.Generator | None = None):
     """Split the data into K groups of equal size (or roughly equal size)."""
     if n is None:
         raise ValueError("n must be provided")
@@ -196,7 +207,9 @@ def _kfold_split_random(k=10, n=None, rng=None):
     return folds[perm]
 
 
-def _kfold_split_stratified(k=10, x=None, rng=None):
+def _kfold_split_stratified(
+    k: int = 10, x: ArrayLike | None = None, rng: np.random.Generator | None = None
+):
     """Split observations into k groups ensuring relative category frequencies are preserved."""
     if x is None:
         raise ValueError("x must be provided")
@@ -227,7 +240,9 @@ def _kfold_split_stratified(k=10, x=None, rng=None):
     return bins
 
 
-def _kfold_split_grouped(k=10, x=None, rng=None):
+def _kfold_split_grouped(
+    k: int = 10, x: ArrayLike | None = None, rng: np.random.Generator | None = None
+):
     """Split observations ensuring all observations from the same group stay together."""
     if x is None:
         raise ValueError("x must be provided")
@@ -249,7 +264,7 @@ def _kfold_split_grouped(k=10, x=None, rng=None):
     return fold_of_level[level_of_obs - 1]
 
 
-def _extract_fold_data(data, fold_indices, train=True):
+def _extract_fold_data(data: xr.DataArray, fold_indices: ArrayLike, train: bool = True):
     """Extract data for a specific fold."""
     if train:
         mask = np.ones(data.shape[-1], dtype=bool)
@@ -258,7 +273,7 @@ def _extract_fold_data(data, fold_indices, train=True):
     return data.isel({data.dims[-1]: fold_indices})
 
 
-def _get_fold_indices(fold_assignments, k):
+def _get_fold_indices(fold_assignments: ArrayLike, k: int):
     """Get test indices for each fold."""
     results = {}
 
@@ -269,7 +284,7 @@ def _get_fold_indices(fold_assignments, k):
     return results
 
 
-def _combine_fold_elpds(fold_elpds, n_data_points):
+def _combine_fold_elpds(fold_elpds: list, n_data_points: int):
     """Combine ELPD values from all folds into final estimates."""
     elpds = np.concatenate(fold_elpds)
     elpd_kfold = np.sum(elpds)
@@ -278,7 +293,7 @@ def _combine_fold_elpds(fold_elpds, n_data_points):
     return {"elpd_kfold": elpd_kfold, "se_elpd_kfold": se_elpd_kfold, "pointwise": elpds}
 
 
-def _validate_k_value(k, n, param_name="k"):
+def _validate_k_value(k: int, n: int, param_name: str = "k"):
     """Validate k parameter for k-fold splitting."""
     if not isinstance(k, int | np.integer) or np.isnan(k):
         raise ValueError(f"{param_name} must be an integer")
@@ -290,7 +305,7 @@ def _validate_k_value(k, n, param_name="k"):
     return k
 
 
-def _validate_array_length(array, expected_length, param_name):
+def _validate_array_length(array: ArrayLike, expected_length: int, param_name: str):
     """Validate array length matches expected number of observations."""
     if array is None:
         raise ValueError(f"{param_name} must be provided")
@@ -311,7 +326,9 @@ def _validate_array_length(array, expected_length, param_name):
     return array_values
 
 
-def _validate_fold_parameters(folds, stratify_by, group_by):
+def _validate_fold_parameters(
+    folds: ArrayLike | None, stratify_by: ArrayLike | None, group_by: ArrayLike | None
+):
     """Validate fold parameter combinations."""
     if folds is not None:
         if stratify_by is not None or group_by is not None:

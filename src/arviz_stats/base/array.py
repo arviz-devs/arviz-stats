@@ -15,7 +15,20 @@ from arviz_stats.base.stats_utils import make_ufunc
 
 
 def process_chain_none(ary, chain_axis, draw_axis):
-    """Process array with chain and draw axis to cover the case ``chain_axis=None``."""
+    """Process array with chain and draw axis to cover the case ``chain_axis=None``.
+
+    Parameters
+    ----------
+    ary : array-like
+    chain_axis : int or None
+    draw_axis : int
+
+    Returns
+    -------
+    ary : array-like
+    chain_axis : int
+    draw_axis : int
+    """
     if chain_axis is None:
         ary = np.expand_dims(ary, axis=0)
         chain_axis = 0
@@ -24,7 +37,19 @@ def process_chain_none(ary, chain_axis, draw_axis):
 
 
 def process_chain_none_multi(*arys, chain_axis, draw_axis):
-    """Process multiple arrays with chain and draw axis to cover the case ``chain_axis=None``."""
+    """Process multiple arrays with chain and draw axis to cover the case ``chain_axis=None``.
+
+    Parameters
+    ----------
+    *arys : array-like
+    chain_axis : int or None
+    draw_axis : int
+
+    Returns
+    -------
+    tuple
+        The processed arrays followed by the resolved `chain_axis` and `draw_axis`.
+    """
     if chain_axis is None:
         arys = tuple(np.expand_dims(ary, axis=0) for ary in arys)
         chain_axis = 0
@@ -39,6 +64,12 @@ def process_ary_axes(ary, axes):
     ----------
     ary : array_like
     axes : int or sequence of int
+
+    Returns
+    -------
+    ary : array-like
+    axes : ndarray
+        Integer dtype and shape ``(N,)``.
     """
     if axes is None:
         axes = list(range(ary.ndim))
@@ -79,7 +110,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         prob : float
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         method : str, default "nearest"
             Valid options are "nearest", "multimodal" or "multimodal_sample"
         circular : bool, default False
@@ -89,6 +120,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Only used for multimodal methods with continuous data.
             Passed to kde computation with a ``bw`` default of "taylor" for
             circular data, "isj" otherwise.
+
+        Returns
+        -------
+        ndarray
         """
         if not 1 >= prob > 0:
             raise ValueError("The value of `prob` must be in the (0, 1] interval.")
@@ -158,13 +193,17 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "bulk"
         relative : bool, default False
-        prob : float or (float, float), default None
+        prob : float or tuple of (float, float), default None
             When using the array interface, `prob` is a required argument for
             the "tail", "quantile" (as float) and "local" (as tuple) methods.
+
+        Returns
+        -------
+        ndarray
         """
         method = method.lower()
         # fmt: off
@@ -193,9 +232,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "rank"
+
+        Returns
+        -------
+        ndarray
         """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
@@ -217,9 +260,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         superchain_ids : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "rank"
+
+        Returns
+        -------
+        ndarray
         """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
@@ -240,12 +287,17 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         method : str, default "mean"
         prob : float, default None
             When using the array interface, `prob` is a required argument for
             "quantile" method.
+        circular : bool, default False
+
+        Returns
+        -------
+        ndarray
         """
         method = method.lower()
         valid_methods = {"mean", "sd", "median", "quantile"}
@@ -271,8 +323,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
+
+        Returns
+        -------
+        ndarray
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -286,13 +342,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         r_eff : float, default 1
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
 
         Returns
         -------
-        log_weights : array-like
+        log_weights : ndarray
             Same shape as `ary` but `axis` dimensions moved to the end
-        khat : array-like
+        khat : ndarray
             Shape of `ary` minus dimensions indicated in `axis`
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -306,7 +362,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return psl_ufunc(ary, out_shape=[(ary.shape[i] for i in axes), []], r_eff=r_eff)
 
     def bfmi(self, ary, chain_axis=-2, draw_axis=-1):
-        """Calculate the estimated Bayesian fraction of missing information."""
+        """Calculate the estimated Bayesian fraction of missing information.
+
+        Parameters
+        ----------
+        ary : array-like
+        chain_axis : int or None, default -2
+        draw_axis : int, default -1
+
+        Returns
+        -------
+        ndarray
+        """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         bfmi_ufunc = make_ufunc(
@@ -326,11 +393,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
         r_eff : float
         tail : str
         log_weights : bool
+
+        Returns
+        -------
+        ndarray
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -350,7 +421,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
         alpha : float, default 0
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
+
+        Returns
+        -------
+        ndarray
         """
         ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
@@ -372,8 +447,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, lower_w, upper_w : array-like
             All 3 input arrays should have the same shape
         lower_alpha, upper_alpha : float
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
+
+        Returns
+        -------
+        ndarray
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         lower_w, _, _ = process_chain_none(lower_w, chain_axis, draw_axis)
@@ -392,8 +471,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         relative : bool, default False
+
+        Returns
+        -------
+        ndarray
         """
         ary, axes = process_ary_axes(ary, axis)
         compute_ranks_ufunc = make_ufunc(
@@ -411,8 +494,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        axis : int, sequence of int or None, default -1
-        bins : str, scalar or array-like, default "arviz"
+        axis : int or sequence of int or None, default -1
+        bins : str or scalar or array-like, default "arviz"
+
+        Returns
+        -------
+        ndarray
         """
         ary, axes = process_ary_axes(ary, axis)
         get_bininfo_ufunc = make_ufunc(
@@ -437,15 +524,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        bins : str, scalar or array-like, optional
-        range : (float, float), optional
+        bins : str or scalar or array-like, optional
+        range : tuple of (float, float), optional
         weights : array-like, optional
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         density : bool, default True
 
         Returns
         -------
-        hist, bin_edges : array_like
+        hist, bin_edges : ndarray
             The shape of `hist` will be that of `ary` minus the dimensions in `axis`
             plus an extra dimension of length ``nbins``, same for `bin_edges` with
             the difference the extra dimension has length ``nbins+1``.
@@ -577,7 +664,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         Parameters
         ----------
         ary : array-like
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         circular : bool, default False
         grid_len : int, default 512
         **kwargs
@@ -607,7 +694,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        grid, pdf, bw : array-like
+        grid, pdf, bw : ndarray
             `grid` and `pdf` will have the same shape: the same as `ary` minus the dimensions
             in `axis` plus an extra dimension of length `grid_len`. Same for `bw`
             except it will not have the extra dimension.
@@ -648,13 +735,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        grid : array-like
+        grid : ndarray
             2D density array of shape ``(*batch, n_x, n_y)``.
-        x_coords : array-like
+        x_coords : ndarray
             Grid coordinates along the x axis, shape ``(*batch, n_x)``.
-        y_coords : array-like
+        y_coords : ndarray
             Grid coordinates along the y axis, shape ``(*batch, n_y)``.
-        contours : array-like, optional
+        contours : ndarray, optional
             Returned only when hdi_probs is not ``None``.
             Density contour levels of shape ``(*batch, len(hdi_probs))``.
         """
@@ -706,7 +793,23 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         axis=-1,
         **kwargs,
     ):
-        """Compute quantile dot."""
+        """Compute quantile dot.
+
+        Parameters
+        ----------
+        ary : array-like
+        nquantiles : int, default 100
+        binwidth : float, optional
+        dotsize : scalar, default 1
+        stackratio : scalar, default 1
+        top_only : bool, default False
+        axis : int or sequence of int or None, default -1
+        **kwargs
+
+        Returns
+        -------
+        x, y, radius : ndarray
+        """
         ary, axes = process_ary_axes(ary, axis)
         qd_ufunc = make_ufunc(
             self._qds,
@@ -739,12 +842,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         pit : bool
             If True compute the difference between the ecdf and the uniform ecdf
             and the x values will be normalized to the [0, 1] range.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
         **kwargs
 
         Returns
         -------
-        x, y : array-like
+        x, y : ndarray
             Both `x` and `y` will have the same shape: the same as `ary` minus the dimensions
             in `axis` plus an extra dimension of lenght `npoints`.
         """
@@ -772,7 +875,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
             PIT values in [0, 1].
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int or None, default -1
             Dimensions to reduce.
         method : str, optional
             Method to use for the uniformity test.
@@ -782,7 +885,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        p_value, shapley_vals, shapley_unsorted : array-like
+        p_value, shapley_vals, shapley_unsorted : ndarray
             ``p_value`` has the batch shape (input shape minus reduced axes).
             ``shapley_vals`` has the batch shape plus the reduced dimension length.
             ``shapley_unsorted`` has the same shape as ``shapley_vals``.
@@ -822,7 +925,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
             Array of fractional ranks in [0, 1]. The two core dimensions are
             ``chain_axis`` and ``draw_axis``.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis corresponding to the chain dimension.
         draw_axis : int, default -1
             Axis corresponding to the draw dimension.
@@ -831,11 +934,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        p_value : array-like
+        p_value : ndarray
             Global p-value from the multi-chain test.
-        b_shapley_vals : array-like
+        b_shapley_vals : ndarray
             Between-chain Shapley contributions for each chain per draw, shape (n_draws, n_chains).
-        w_shapley_vals : array-like
+        w_shapley_vals : ndarray
             Draw-wise Shapley contributions to the global p-value, shape (n_draws,).
         """
         ary = np.asarray(ary)
@@ -857,7 +960,24 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
 
     def bayesian_r2(self, mu_pred, scale, scale_kind="sd", circular=False):
-        """Compute Bayesian R² for regression models."""
+        """Compute Bayesian R² for regression models.
+
+        Parameters
+        ----------
+        mu_pred : array-like
+            Posterior draws of the predicted mean, shape (n_draws, n_observations).
+        scale : array-like or None
+            Posterior draws of the variance or pseudo-variance, shape (n_draws,).
+            Pass ``None`` for Bernoulli-like models to compute the pseudo-variance internally.
+        scale_kind : str, default "sd"
+            Whether `scale` is a standard deviation ("sd") or variance ("var").
+        circular : bool, default False
+            Whether the response variable is circular.
+
+        Returns
+        -------
+        ndarray
+        """
         r2_ufunc = make_ufunc(
             self._bayesian_r2,
             n_output=1,
@@ -868,7 +988,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return r2_ufunc(mu_pred, scale, scale_kind, circular, out_shape=(mu_pred.shape[0],))
 
     def residual_r2(self, y_obs, mu_pred, circular=False):
-        """Compute residual R² for Bayesian regression models."""
+        """Compute residual R² for Bayesian regression models.
+
+        Parameters
+        ----------
+        y_obs : array-like
+        mu_pred : array-like
+        circular : bool, default False
+
+        Returns
+        -------
+        ndarray
+        """
         r2_ufunc = make_ufunc(
             self._residual_r2,
             n_output=1,
@@ -880,7 +1011,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return r2_ufunc(y_obs, mu_pred, circular, out_shape=(mu_pred.shape[0],))
 
     def metrics(self, observed, predicted, kind):
-        """Compute metrics for Bayesian regression models."""
+        """Compute metrics for Bayesian regression models.
+
+        Parameters
+        ----------
+        observed : array-like
+        predicted : array-like
+        kind : str
+
+        Returns
+        -------
+        estimate, std_error : ndarray
+        """
         func = getattr(self, f"_{kind}", None)
 
         metrics_ufunc = make_ufunc(
@@ -903,7 +1045,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             If an integer value is passed, it must be lower than the average ESS of the input
             samples.
         reduce_func : {"mean", "min"}, default "mean"
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
 
         Returns
@@ -951,12 +1093,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         factor : str or int, default "auto"
             The thinning factor. If "auto", the thinning factor is computed based on bulk and tail
             effective sample size. If an integer, the thinning factor is set to that value.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
         draw_axis : int, default -1
 
         Returns
         -------
-        array-like
+        ndarray
             Thinned array
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
@@ -981,7 +1123,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -989,12 +1131,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the mean.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the mean.
 
         Returns
         -------
-        mean : array-like
+        mean : ndarray
             Mean of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1012,7 +1154,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1020,12 +1162,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the median.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the median.
 
         Returns
         -------
-        median : array-like
+        median : ndarray
             Median of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1043,7 +1185,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1051,12 +1193,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the mode.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the mode.
 
         Returns
         -------
-        mode : array-like
+        mode : ndarray
             Mode of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1074,7 +1216,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1082,12 +1224,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the standard deviation.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the standard deviation.
 
         Returns
         -------
-        std : array-like
+        std : ndarray
             Standard deviation of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1105,7 +1247,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1113,12 +1255,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the variance.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the variance.
 
         Returns
         -------
-        var : array-like
+        var : ndarray
             Variance of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1136,7 +1278,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
@@ -1144,12 +1286,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the mean absolute deviation.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the mean absolute deviation.
 
         Returns
         -------
-        mad : array-like
+        mad : ndarray
             Mean absolute deviation of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1167,7 +1309,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         quantiles : tuple of float, default (0.25, 0.75)
             Quantiles to compute the interquartile range.
@@ -1177,12 +1319,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Use None to return raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the interquantile range.
-        axis : int, sequence of int or None, default -1
+        axis : int or sequence of int, optional
             Axis or axes along which to compute the interquantile range.
 
         Returns
         -------
-        iqr : array-like
+        iqr : ndarray
             Interquantile range of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1211,7 +1353,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
             Log-likelihood values.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1226,11 +1368,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        elpd_i : array-like
+        elpd_i : ndarray
             Pointwise expected log predictive density.
-        pareto_k : array-like
+        pareto_k : ndarray
             Pareto k-hat diagnostic values.
-        p_loo_i : array-like
+        p_loo_i : ndarray
             Pointwise effective number of parameters.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
@@ -1265,7 +1407,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Target log-density values.
         log_q : array-like
             Proposal log-density values.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1274,11 +1416,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        elpd_i : array-like
+        elpd_i : ndarray
             Pointwise expected log predictive density.
-        pareto_k : array-like
+        pareto_k : ndarray
             Pareto k-hat diagnostic values.
-        p_loo_i : array-like
+        p_loo_i : ndarray
             Pointwise effective number of parameters.
         """
         ary, log_p, log_q, chain_axis, draw_axis = process_chain_none_multi(
@@ -1310,7 +1452,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Full log-likelihood array.
         obs_axes : tuple of int
             Axes corresponding to observation dimensions.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1319,11 +1461,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        elpd_i : array-like
+        elpd_i : ndarray
             Pointwise expected log predictive density.
-        p_loo_i : array-like
+        p_loo_i : ndarray
             Pointwise effective number of parameters.
-        mix_log_weights : array-like
+        mix_log_weights : ndarray
             Mixture log weights.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
@@ -1358,14 +1500,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Pre-computed PSIS log weights.
         kind : str, default "crps"
             Score type, either "crps" or "scrps".
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
 
         Returns
         -------
-        scores : array-like
+        scores : ndarray
             Score values (negative orientation for maximization).
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
@@ -1397,7 +1539,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Observed values.
         log_weights : array-like
             Pre-computed PSIS log weights.
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
@@ -1408,7 +1550,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        pit_values : array-like
+        pit_values : ndarray
             LOO-PIT values in [0, 1].
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
@@ -1448,14 +1590,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         kind : str, default "mean"
             Type of expectation: "mean", "median", "var", "sd",
             "circular_mean", "circular_var", "circular_sd".
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
 
         Returns
         -------
-        expectation : array-like
+        expectation : ndarray
             Weighted expectation values.
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
@@ -1487,14 +1629,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Pre-computed PSIS log weights.
         prob : float
             Quantile probability in [0, 1].
-        chain_axis : int, default -2
+        chain_axis : int or None, default -2
             Axis for chains.
         draw_axis : int, default -1
             Axis for draws.
 
         Returns
         -------
-        quantile : array-like
+        quantile : ndarray
             Weighted quantile values.
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
@@ -1547,7 +1689,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        loo_r_squared : array-like
+        loo_r_squared : ndarray
             R-squared samples with shape (n_simulations,).
         """
         y_obs = np.asarray(y_obs).ravel()
@@ -1621,4 +1763,4 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
 
 
-array_stats = BaseArray()
+array_stats: BaseArray = BaseArray()

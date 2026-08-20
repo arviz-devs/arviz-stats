@@ -65,24 +65,24 @@ def bayesian_r2(
         Whether the variable referenced by `scale` is a standard deviation ("sd")
         or variance ("var"). Defaults to "sd".
         If "sd", it is squared internally to obtain the variance. Omitted if `scale` is None.
-    summary: bool
+    summary : bool
         Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
     group : str, optional
         Group from which to obtain the predicted means (`pred_mean`) and scale (`scale`).
-    point_estimate: str
+    point_estimate : str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
         summary is False.
-    ci_kind: str
+    ci_kind : str
         The kind of credible interval to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.ci_kind"]. Ignored if
         summary is False.
-    ci_prob: float
+    ci_prob : float
         The probability for the credible interval. If None, the default value is used.
         Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
         summary is False.
-    circular: bool
+    circular : bool
         Whether to compute the residual :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
         :math:`R^2 = 1 - \mathrm{Var}_{\mathrm{res}}`. Thus the `scale` must represent the
@@ -90,7 +90,7 @@ def bayesian_r2(
         We avoid using the term math::`\mathrm{Var}_{\mu}`, because as the dispersion of the
         circular data increases the dispersion of the mean also increase so even for a model
         that does not explain any of the data :math:`R^2` can be much higher than 0.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
         If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
@@ -98,7 +98,7 @@ def bayesian_r2(
 
     Returns
     -------
-    Namedtuple or array
+    namedtuple or array
 
     See Also
     --------
@@ -208,24 +208,24 @@ def residual_r2(
         Name of the variable representing the predicted mean.
     obs_name : str, optional
         Name of the variable representing the observed data.
-    summary: bool
+    summary : bool
         Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
     group : str, optional
         Group from which to obtain the predicted means (`pred_name`). Defaults to "posterior".
-    point_estimate: str
+    point_estimate : str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
         summary is False.
-    ci_kind: str
+    ci_kind : str
         The kind of credible interval to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.ci_kind"]. Ignored if
         summary is False.
-    ci_prob: float
+    ci_prob : float
         The probability for the credible interval. If None, the default value is used.
         Defaults values are defined in rcParams["stats.ci_prob"]. Ignored if
         summary is False.
-    circular: bool
+    circular : bool
         Whether to compute the residual :math:`R^2` for circular data. Defaults to False.
         It's assumed that the circular data is in radians and ranges from -π to π.
         :math:`R^2 = 1 - Var_{\mathrm{res}}`. where :math:`Var_{\mathrm{res}}` is computed
@@ -233,7 +233,7 @@ def residual_r2(
         We avoid using the term math::`\mathrm{Var}_{\mu}`, because as the dispersion of the
         circular data increases the dispersion of the mean also increase so even for a model
         that does not explain any of the data :math:`R^2` can be much higher than 0.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
@@ -241,7 +241,7 @@ def residual_r2(
 
     Returns
     -------
-    Namedtuple or array
+    namedtuple or array
 
 
     See Also
@@ -307,9 +307,9 @@ def metrics(data, kind="rmse", var_name=None, sample_dims=None, round_to=None):
 
     Parameters
     ----------
-    data: DataTree or InferenceData
+    data : DataTree or InferenceData
         It should contain groups `observed_data` and `posterior_predictive`.
-    kind: str
+    kind : str
         The kind of metric to compute. Available options are:
 
         - 'mae': mean absolute error.
@@ -318,12 +318,12 @@ def metrics(data, kind="rmse", var_name=None, sample_dims=None, round_to=None):
         - 'acc': classification accuracy.
         - 'acc_balanced': balanced classification accuracy.
 
-    var_name: str, optional
+    var_name : str, optional
         The name of the observed and predicted variable.
-    sample_dims: iterable of hashable, optional
+    sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
@@ -331,7 +331,7 @@ def metrics(data, kind="rmse", var_name=None, sample_dims=None, round_to=None):
 
     Returns
     -------
-    estimate: namedtuple
+    estimate : namedtuple
         A namedtuple with the mean of the computed metric and its standard error.
 
     Examples
@@ -403,7 +403,7 @@ def kl_divergence(
         Default ``rcParams["data.sample_dims"]``.
     num_samples : int
         Number of samples to use for the distance calculation. Default is 500.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
@@ -485,7 +485,7 @@ def wasserstein(
         or over the marginals (False)
     num_samples : int
         Number of samples to use for the distance calculation. Default is 500.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
@@ -617,7 +617,7 @@ def _kld(ary0, ary1):
 
     Parameters
     ----------
-    ary0, ary1 : (N, M) array-like
+    ary0, ary1 : array-like of shape (N, M)
         Samples of the input distributions. ``N`` represents the number of samples (e.g. posterior
         samples) and ``M`` the number of outputs (e.g. number of variables in the posterior)
 
@@ -667,11 +667,11 @@ def _metrics(observed, predicted, kind, round_to):
 
     Parameters
     ----------
-    observed: DataArray
+    observed : DataArray
         Observed data.
-    predicted: DataArray
+    predicted : DataArray
         Predicted data.
-    kind: str
+    kind : str
         The kind of metric to compute. Available options are:
 
         - 'mae': mean absolute error.
@@ -679,7 +679,7 @@ def _metrics(observed, predicted, kind, round_to):
         - 'rmse': root mean squared error. Default.
         - 'acc': classification accuracy.
         - 'acc_balanced': balanced classification accuracy.
-    round_to: int or str or None, optional
+    round_to : int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
         Defaults to rcParams["stats.round_to"] if None. Use the string "None" or "none" to
@@ -687,7 +687,7 @@ def _metrics(observed, predicted, kind, round_to):
 
     Returns
     -------
-    estimate: namedtuple
+    estimate : namedtuple
         A namedtuple with the mean of the computed metric and its standard error.
     """
     if round_to is None:

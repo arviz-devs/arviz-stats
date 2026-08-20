@@ -28,7 +28,7 @@ def hdi(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -67,7 +67,7 @@ def hdi(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested HDI of the provided input. It will have a ``ci_bound`` dimension
         with coordinate values "lower" and "upper" indicating the two extremes of
         the credible interval. In addition when using a multimodal `method` a
@@ -142,7 +142,7 @@ def eti(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -176,7 +176,7 @@ def eti(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested ETI of the provided input. It will have a ``ci_bound`` dimension
         with coordinate values "lower" and "upper" indicating the two extremes of
         the credible interval.
@@ -245,7 +245,7 @@ def ecdf(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -274,7 +274,7 @@ def ecdf(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested ECDF of the provided input.
         It will have a ``quantile`` dimension and a ``plot_axis`` dimension with coordinate
         values "x" and "y".
@@ -343,7 +343,7 @@ def histogram(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -367,16 +367,14 @@ def histogram(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    bind : array-like, optional
+    bins : array-like, optional
     range : array-like, optional
     weights : array-like, optional
     density : bool, default True
-    **kwargs : any, optional
-        Forwarded to the array or dataarray interface for histogram.
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested histogram of the provided input.
         It will have a ``hist_dim_{var_name}`` dimension and a ``plot_axis`` dimension
         with coordinates "histogram", "left_edges" and "right_edges"
@@ -445,7 +443,7 @@ def kde(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -476,7 +474,7 @@ def kde(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested KDE of the provided input.
         The xarray objects will have a ``kde_dim`` dimension and a ``plot_axis`` dimension
         with coordinates "x", and "y".
@@ -547,7 +545,7 @@ def qds(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -588,7 +586,7 @@ def qds(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested QDs of the provided input.
         The xarray objects will have a ``qds_dim`` dimension and a ``plot_axis`` dimension
         with coordinates "x", and "y".
@@ -662,7 +660,7 @@ def kde2d(
 
     Parameters
     ----------
-    da_x : array-like or DataArray or DataTree or idata-like
+    da_x : array-like or DataArray or DataTree
         Samples for the first variable (x axis).
 
         - array-like: call the array layer within ``arviz-stats`` directly.
@@ -670,7 +668,7 @@ def kde2d(
         - :class:`xarray.DataTree` / InferenceData-like: the group indicated by
           *group* is used; the object must contain a single variable, or you
           should extract the DataArray beforehand.
-    da_y : array-like or DataArray or DataTree or idata-like
+    da_y : array-like or DataArray or DataTree
         Samples for the second variable (y axis).  Must be the same type as
         da_x and contain the same number of samples along the sample dimensions.
     dim : str or sequence of hashable, optional

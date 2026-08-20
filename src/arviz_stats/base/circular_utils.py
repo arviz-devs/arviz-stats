@@ -33,6 +33,11 @@ def circular_mean(angles, weights=None, dims=None):
         Weights should be non-negative and sum to 1 along axis 1.
     dims : str or list of str, optional
         Dimension(s) to sum over. If None, uses axis=1 for numpy arrays.
+
+    Returns
+    -------
+    np.ndarray
+        Circular mean of the angles in radians.
     """
     if weights is None:
         if dims is not None:
@@ -63,6 +68,11 @@ def mean_resultant_length(angles, weights=None, dims=None):
         Weights should be non-negative and sum to 1 along axis 1.
     dims : str or list of str, optional
         Dimension(s) to sum over. If None, uses axis=1 for numpy arrays.
+
+    Returns
+    -------
+    np.ndarray
+        Mean resultant length in [0, 1].
     """
     if weights is None:
         if dims is not None:
@@ -94,6 +104,10 @@ def circular_var(angles, weights=None, dims=None):
     dims : str or list of str, optional
         Dimension(s) to sum over. If None, uses axis=1 for numpy arrays.
 
+    Returns
+    -------
+    np.ndarray
+        Circular variance in [0, 1].
     """
     return 1 - mean_resultant_length(angles, weights, dims)
 
@@ -114,6 +128,11 @@ def circular_sd(angles, weights=None, dims=None):
         Weights should be non-negative and sum to 1 along axis 1.
     dims : str or list of str, optional
         Dimension(s) to sum over. If None, uses axis=1 for numpy arrays.
+
+    Returns
+    -------
+    np.ndarray
+        Circular standard deviation in radians.
     """
     with np.errstate(divide="ignore"):
         return np.sqrt(-2 * np.log(mean_resultant_length(angles, weights, dims)))

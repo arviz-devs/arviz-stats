@@ -7,7 +7,7 @@ import numpy as np
 
 __all__ = ["make_ufunc", "calculate_khat_bin_edges"]
 
-_log = logging.getLogger(__name__)
+_log: logging.Logger = logging.getLogger(__name__)
 
 
 def make_ufunc(func, n_dims=2, n_output=1, n_input=1, index=Ellipsis, ravel=True, check_shape=None):
@@ -29,7 +29,7 @@ def make_ufunc(func, n_dims=2, n_output=1, n_input=1, index=Ellipsis, ravel=True
         Slice ndarray with `index`. Defaults to `Ellipsis`.
     ravel : bool, optional
         If true, ravel the ndarray before calling `func`.
-    check_shape: bool, optional
+    check_shape : bool, optional
         If false, do not check if the shape of the output is compatible with n_dims and
         n_output. By default, True only for n_input=1. If n_input is larger than 1, the last
         input array is used to check the shape, however, shape checking with multiple inputs
@@ -124,7 +124,14 @@ def make_ufunc(func, n_dims=2, n_output=1, n_input=1, index=Ellipsis, ravel=True
 
 
 def update_docstring(ufunc, func, n_output=1):
-    """Update ArviZ generated ufunc docstring."""
+    """Update ArviZ generated ufunc docstring.
+
+    Parameters
+    ----------
+    ufunc : callable
+    func : callable
+    n_output : int, default 1
+    """
     module = ""
     name = ""
     docstring = ""
@@ -165,6 +172,21 @@ def logsumexp(ary, *, b=None, b_inv=None, axis=None, keepdims=False, out=None, c
     """Stable logsumexp when b >= 0 and b is scalar.
 
     b_inv overwrites b unless b_inv is None.
+
+    Parameters
+    ----------
+    ary : array-like
+    b : scalar, optional
+    b_inv : scalar, optional
+    axis : int or sequence of int, optional
+    keepdims : bool, default False
+    out : array-like, optional
+    copy : bool, default True
+
+    Returns
+    -------
+    ndarray or float
+        The result of the stable logsumexp computation.
     """
     # check dimensions for result arrays
     ary = np.asarray(ary)
@@ -238,9 +260,9 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
         For 1D arrays (shape = (n,)) assumes chain equals 1.
     nan_kwargs : dict
         Valid kwargs are:
-            axis : int,
+            axis : int
                 Defaults to None.
-            how : str, {"all", "any"}
+            how : {"all", "any"}
                 Default to "any".
     shape_kwargs : dict
         Valid kwargs are:
@@ -349,13 +371,18 @@ def round_num(value, precision):
 
     Parameters
     ----------
-    value : float, numpy array or DataArray
+    value : float or numpy.ndarray or DataArray
         The value to round. If array assumes it contains a single value.
         If the value is not finite, it is returned unmodified.
     precision : int or str
         If an integer, specifies decimal places. If a string ending in 'g',
         specifies significant digits. Integers can be negative.
         Use "None" or "none" for no rounding.
+
+    Returns
+    -------
+    float or numpy.ndarray or DataArray
+        The rounded value, or the input unchanged when `precision` disables rounding.
     """
     try:
         value = value.item()
@@ -381,7 +408,17 @@ def round_num(value, precision):
 
 
 def get_decimal_places_from_se(se_val):
-    """Get number of decimal places from standard error value."""
+    """Get number of decimal places from standard error value.
+
+    Parameters
+    ----------
+    se_val : float
+
+    Returns
+    -------
+    int
+        Number of decimal places.
+    """
     two_se = 2 * se_val
     se_magnitude = np.floor(np.log10(np.abs(two_se))) if two_se != 0 else 0
     return -int(se_magnitude)

@@ -61,7 +61,13 @@ def validate_ci_prob(prob):
 
 
 def validate_prob(prob, allow_0=False):
-    """Validate required `prob` argument."""
+    """Validate required `prob` argument.
+
+    Returns
+    -------
+    float
+        The validated `prob` value.
+    """
     if allow_0 and not 1 >= prob >= 0:
         raise ValueError(f"The value of prob should be in the interval [0, 1] but got {prob}")
     if not allow_0 and not 1 >= prob > 0:

@@ -1,8 +1,9 @@
 """Compute moment matching for problematic observations in PSIS-LOO-CV."""
 
 import warnings
-from collections import namedtuple
+from collections.abc import Callable
 from copy import deepcopy
+from typing import NamedTuple
 
 import arviz_base as azb
 import numpy as np
@@ -23,12 +24,37 @@ from arviz_stats.loo.loo_helper import (
 )
 from arviz_stats.utils import ELPDData
 
-SplitMomentMatch = namedtuple("SplitMomentMatch", ["lwi", "lwfi", "log_liki", "reff"])
-UpdateQuantities = namedtuple("UpdateQuantities", ["lwi", "lwfi", "ki", "kfi", "log_liki"])
-LooMomentMatchResult = namedtuple(
-    "LooMomentMatchResult",
-    ["final_log_liki", "final_lwi", "final_ki", "kfs_i", "reff_i", "n_eff_i", "original_ki", "i"],
-)
+
+class SplitMomentMatch(NamedTuple):
+    """Class with split moment match information."""
+
+    lwi: xr.DataArray
+    lwfi: xr.DataArray
+    log_liki: xr.DataArray
+    reff: float
+
+
+class UpdateQuantities(NamedTuple):
+    """Quantities produced by a single moment-matching update step."""
+
+    lwi: xr.DataArray
+    lwfi: xr.DataArray
+    ki: float
+    kfi: float
+    log_liki: xr.DataArray
+
+
+class LooMomentMatchResult(NamedTuple):
+    """Result of moment matching for a single observation."""
+
+    final_log_liki: xr.DataArray
+    final_lwi: xr.DataArray
+    final_ki: float
+    kfs_i: float
+    reff_i: float
+    n_eff_i: float
+    original_ki: float
+    i: int
 
 
 def loo_moment_match(
@@ -92,7 +118,7 @@ def loo_moment_match(
     var_name : str, optional
         The name of the variable in log_likelihood group storing the pointwise log
         likelihood data to use for loo computation.
-    reff: float, optional
+    reff : float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
     max_iters : int, default 30
@@ -106,12 +132,12 @@ def loo_moment_match(
     cov : bool, default True
         If True, match the covariance structure during the transformation, in addition
         to the mean and marginal variances. If False, only match the mean and marginal variances.
-    pointwise: bool, optional
+    pointwise : bool, optional
         If True, the pointwise predictive accuracy will be returned. Defaults to
         ``rcParams["stats.ic_pointwise"]``. Moment matching always requires
         pointwise data from ``loo_orig``. This argument controls whether the returned
         object includes pointwise data.
-    model : Model, optional
+    model : pymc.Model, optional
         A model object. Curently supported models are PyMC and Bambi.
         If provided, it will be used to auto-build ``log_prob_upars_fn``,
         ``log_lik_i_upars_fn``, and ``upars`` if any of them are not provided.
@@ -643,26 +669,26 @@ def _split_moment_match(
 
 
 def _loo_moment_match_i(
-    i,
-    upars,
-    log_likelihood,
-    log_prob_upars_fn,
-    log_lik_i_upars_fn,
-    max_iters,
-    k_threshold,
-    split,
-    cov,
-    orig_log_prob,
-    ks,
-    log_weights,
-    pareto_k,
-    r_eff,
-    sample_dims,
-    obs_dims,
-    n_samples,
-    n_params,
-    param_dim_name,
-    var_name,
+    i: int,
+    upars: xr.DataArray,
+    log_likelihood: xr.DataArray,
+    log_prob_upars_fn: Callable,
+    log_lik_i_upars_fn: Callable,
+    max_iters: int,
+    k_threshold: float,
+    split: bool,
+    cov: bool,
+    orig_log_prob: xr.DataArray,
+    ks: np.ndarray,
+    log_weights: xr.DataArray | None,
+    pareto_k: xr.DataArray,
+    r_eff: xr.DataArray | float | None,
+    sample_dims: list,
+    obs_dims: list,
+    n_samples: int,
+    n_params: int,
+    param_dim_name: str,
+    var_name: str,
 ):
     """Compute moment matching for a single observation."""
     log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims).squeeze(drop=True)
@@ -879,18 +905,18 @@ def _loo_moment_match_i(
 
 
 def _update_loo_data_i(
-    loo_data,
-    i,
-    new_elpd_i,
-    new_pareto_k,
-    log_liki,
-    sample_dims,
-    obs_dims,
-    n_samples,
-    n_eff_i=None,
-    original_log_liki=None,
-    log_weights_i=None,
-    suppress_warnings=False,
+    loo_data: ELPDData,
+    i: int,
+    new_elpd_i: float,
+    new_pareto_k: float,
+    log_liki: xr.DataArray,
+    sample_dims: list,
+    obs_dims: list,
+    n_samples: int,
+    n_eff_i: float | None = None,
+    original_log_liki: xr.DataArray | None = None,
+    log_weights_i: xr.DataArray | None = None,
+    suppress_warnings: bool = False,
 ):
     """Update the ELPDData object for a single observation."""
     if loo_data.elpd_i is None or loo_data.pareto_k is None:
@@ -933,13 +959,13 @@ def _update_loo_data_i(
 
 
 def _update_quantities_i(
-    upars,
-    i,
-    orig_log_prob,
-    log_prob_upars_fn,
-    log_lik_i_upars_fn,
-    reff_i,
-    sample_dims,
+    upars: xr.DataArray,
+    i: int,
+    orig_log_prob: xr.DataArray,
+    log_prob_upars_fn: Callable,
+    log_lik_i_upars_fn: Callable,
+    reff_i: float,
+    sample_dims: list,
 ):
     """Update the moment matching quantities for a single observation."""
     log_prob_new = log_prob_upars_fn(upars)
@@ -962,7 +988,7 @@ def _update_quantities_i(
     )
 
 
-def _wrap__psislw(log_weights, sample_dims, r_eff):
+def _wrap__psislw(log_weights: xr.DataArray, sample_dims: list, r_eff: float):
     """Apply PSIS smoothing over sample dimensions."""
     if not isinstance(log_weights, xr.DataArray):
         raise TypeError("log_weights must be an xarray.DataArray")

@@ -27,7 +27,7 @@ def thin(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -150,7 +150,7 @@ def weight_predictions(
 
     Returns
     -------
-    dt: DataTree
+    dt : DataTree
         DataTree object with the groups `posterior_predictive` and `observed_data`.
 
     See Also

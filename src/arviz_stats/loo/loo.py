@@ -84,7 +84,7 @@ def loo(
         Cannot be combined with ``mixture=True``, ``log_lik_fn`` or ``log_jacobian``.
         For other models, or for fine-grained control over the moment matching algorithm,
         use :func:`loo_moment_match` directly.
-    model : Model, optional
+    model : pymc.Model, optional
         Required when ``moment_match=True``. A model object used to automatically build
         the quantities needed for moment matching. Currently only models from PyMC
         and Bambi are supported.

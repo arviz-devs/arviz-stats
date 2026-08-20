@@ -38,7 +38,7 @@ def loo_kfold(
     ----------
     data : DataTree or InferenceData
         Input data containing the posterior and log_likelihood groups from the full model fit.
-    wrapper : SamplingWrapper
+    wrapper : arviz_stats.loo.SamplingWrapper
         An instance of SamplingWrapper class handling model refitting. The wrapper must
         implement the following methods: sel_observations, sample, get_inference_data,
         and log_likelihood__i.

@@ -1,0 +1,138 @@
+# File generated with docstub
+
+from collections.abc import Hashable, Sequence
+from typing import Any, Literal
+
+import numpy as np
+import xarray
+import xarray as xr
+from arviz_base import convert_to_dataset
+from numpy.typing import ArrayLike, NDArray
+from xarray import DataArray, Dataset
+
+from arviz_stats.utils import _apply_multi_input_function, get_function
+from arviz_stats.validate import validate_ci_prob, validate_dims
+
+def hdi(
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
+    prob: float | None = ...,
+    dim: Sequence[Hashable] | None = ...,
+    group: Hashable = ...,
+    var_names: str | list[str] | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
+    coords: dict | None = ...,
+    method: str = ...,
+    circular: bool = ...,
+    max_modes: int = ...,
+    skipna: bool = ...,
+    **kwargs: Any,
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
+def eti(
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
+    prob: float | None = ...,
+    dim: Sequence[Hashable] | None = ...,
+    group: Hashable = ...,
+    var_names: str | list[str] | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
+    coords: dict | None = ...,
+    method: str = ...,
+    skipna: bool = ...,
+    **kwargs: Any,
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
+def ecdf(
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
+    dim: Sequence[Hashable] | None = ...,
+    group: Hashable = ...,
+    var_names: str | list[str] | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
+    coords: dict | None = ...,
+    pit: bool = ...,
+    **kwargs: Any,
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
+def histogram(
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
+    dim: Sequence[Hashable] | None = ...,
+    group: Hashable = ...,
+    var_names: str | list[str] | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
+    coords: dict | None = ...,
+    bins: ArrayLike | None = ...,
+    range: ArrayLike | None = ...,
+    weights: ArrayLike | None = ...,
+    density: bool = ...,
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
+def kde(
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
+    dim: Sequence[Hashable] | None = ...,
+    group: Hashable = ...,
+    var_names: str | list[str] | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
+    coords: dict | None = ...,
+    circular: bool = ...,
+    **kwargs: Any,
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
+def qds(
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
+    dim: Sequence[Hashable] | None = ...,
+    group: Hashable = ...,
+    var_names: str | list[str] | None = ...,
+    filter_vars: Literal[None, "like", "regex"] | None = ...,
+    coords: dict | None = ...,
+    nquantiles: int = ...,
+    binwidth: float | None = ...,
+    dotsize: float = ...,
+    stackratio: float = ...,
+    top_only: bool = ...,
+    **kwargs: Any,
+) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
+def kde2d(
+    da_x: ArrayLike | DataArray | xarray.DataTree,
+    da_y: ArrayLike | DataArray | xarray.DataTree,
+    dim: str | Sequence[Hashable] | None = ...,
+    group: Hashable = ...,
+    gridsize: tuple[int] = ...,
+    circular: bool = ...,
+    hdi_probs: list[float] | None = ...,
+) -> tuple | Dataset: ...

@@ -28,7 +28,7 @@ def ess(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -71,7 +71,7 @@ def ess(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested ESS summary of the provided input
 
     See Also
@@ -175,7 +175,7 @@ def rhat(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -204,7 +204,7 @@ def rhat(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested Rhat summary of the provided input
 
 
@@ -326,7 +326,7 @@ def rhat_nested(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -362,6 +362,11 @@ def rhat_nested(
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
+
+    Returns
+    -------
+    ndarray or DataArray or Dataset or DataTree
+        Requested nested Rhat summary of the provided input
 
     See Also
     --------
@@ -445,7 +450,7 @@ def mcse(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -481,7 +486,7 @@ def mcse(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested mcse summary of the provided input
 
     See Also
@@ -578,7 +583,7 @@ def bfmi(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -601,7 +606,7 @@ def bfmi(
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
+    ndarray or DataArray or Dataset or DataTree
         Requested BFMI summary of the provided input
 
     Examples

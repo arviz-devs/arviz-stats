@@ -27,19 +27,19 @@ def loo_influence(
 
     Parameters
     ----------
-    data: DataTree or InferenceData
+    data : DataTree or InferenceData
         It should contain the selected `group` and `log_likelihood`.
-    var_names: str or list of str, optional
+    var_names : str or list of str, optional
         The name(s) of the variable(s) to compute the influence.
-    group: str
+    group : str
         Group from which to compute weighted expectations. Defaults to ``posterior_predictive``.
     sample_dims : str or sequence of hashable, optional
         Defaults to ``rcParams["data.sample_dims"]``
-    log_likelihood_var_name: str, optional
+    log_likelihood_var_name : str, optional
         The name of the variable in the log_likelihood group to use for loo computation.
         When log_likelihood contains more than one variable and group is ``posterior``,
         this must be provided.
-    kind: str, optional
+    kind : str, optional
         The kind of expectation to compute. Available options are:
 
         - 'mean'. Default.
@@ -48,11 +48,11 @@ def loo_influence(
         - 'var'.
         - 'quantile'.
         - 'octiles'.
-    standardize: bool
+    standardize : bool
         Whether to standardize the computed metric.
         It uses the standard deviation when ``kind=mean`` and MAD when ``kind=median``.
         Ignored for the other values of kind.
-    probs: float or list of float, optional
+    probs : float or list of float, optional
         The quantile(s) to compute when kind is 'quantile'.
     log_weights : DataArray, optional
         Pre-computed smoothed log weights from PSIS. Must be provided together with pareto_k.

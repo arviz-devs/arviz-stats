@@ -40,10 +40,12 @@ def loo_pit(
     random_state : int or Generator, optional
         Random seed or numpy Generator for tie-breaking randomization in discrete data.
         If None, uses seed 214 for reproducibility.
+    pareto_pit : bool, default False
+        Whether to compute Pareto-smoothed LOO-PIT values.
 
     Returns
     -------
-    loo_pit: array or DataArray
+    loo_pit : array or DataArray
         Value of the LOO-PIT at each observed data point.
 
     Examples

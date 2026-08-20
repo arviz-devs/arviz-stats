@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """Class with dataarray functions.
 
 "dataarray" functions take :class:`xarray.DataArray` as inputs.
@@ -11,7 +12,7 @@ from arviz_base import rcParams
 from xarray import DataArray, Dataset, apply_ufunc, broadcast, concat
 from xarray_einstats.stats import _apply_nonreduce_func
 
-from arviz_stats.base.array import array_stats
+from arviz_stats.base.array import BaseArray, array_stats
 from arviz_stats.validate import (
     validate_ci_prob,
     validate_dims,
@@ -23,11 +24,24 @@ from arviz_stats.validate import (
 class BaseDataArray:
     """Class with numpy+scipy only functions that take DataArray inputs."""
 
-    def __init__(self, array_class=None):
+    def __init__(self, array_class: BaseArray | None = None):
         self.array_class = array_stats if array_class is None else array_class
 
     def eti(self, da, prob=None, dim=None, method="linear", **kwargs):
-        """Compute eti on DataArray input."""
+        """Compute eti on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        prob : float, optional
+        dim : hashable or sequence of hashable, optional
+        method : str, default "linear"
+        **kwargs
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
         prob = validate_ci_prob(prob)
         eti_coord = DataArray(
@@ -44,7 +58,20 @@ class BaseDataArray:
         ).assign_coords({"ci_bound": eti_coord})
 
     def hdi(self, da, prob=None, dim=None, method="nearest", **kwargs):
-        """Compute hdi on DataArray input."""
+        """Compute hdi on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        prob : float, optional
+        dim : hashable or sequence of hashable, optional
+        method : str, default "nearest"
+        **kwargs
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
         prob = validate_ci_prob(prob)
 
@@ -68,7 +95,20 @@ class BaseDataArray:
         ).assign_coords({"ci_bound": hdi_coord})
 
     def ess(self, da, sample_dims=None, method="bulk", relative=False, prob=None):
-        """Compute ess on DataArray input."""
+        """Compute ess on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        sample_dims : list of str, optional
+        method : str, default "bulk"
+        relative : bool, default False
+        prob : float, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         if method in ("tail", "local") and isinstance(prob, Sequence):
             prob = (validate_prob(prob[0], allow_0=True), validate_prob(prob[1]))
@@ -89,7 +129,18 @@ class BaseDataArray:
         )
 
     def compute_ranks(self, da, dim=None, relative=False):
-        """Compute ranks on DataArray input."""
+        """Compute ranks on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        dim : hashable or sequence of hashable, optional
+        relative : bool, default False
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
         return _apply_nonreduce_func(
             self.array_class.compute_ranks,
@@ -100,7 +151,18 @@ class BaseDataArray:
         )
 
     def rhat(self, da, sample_dims=None, method="bulk"):
-        """Compute rhat on DataArray input."""
+        """Compute rhat on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        sample_dims : list of str, optional
+        method : str, default "bulk"
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(sample_dims)
         if len(dims) != 2:
             raise ValueError("dims must be of length 2 for rhat computation")
@@ -113,7 +175,19 @@ class BaseDataArray:
         )
 
     def rhat_nested(self, da, superchain_ids, sample_dims=None, method="rank"):
-        """Compute nested rhat on DataArray input."""
+        """Compute nested rhat on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        superchain_ids : array-like
+        sample_dims : list of str, optional
+        method : str, default "rank"
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(sample_dims)
         if len(dims) != 2:
             raise ValueError("dims must be of length 2 for rhat computation")
@@ -131,7 +205,20 @@ class BaseDataArray:
         )
 
     def mcse(self, da, sample_dims=None, method="mean", prob=None, circular=False):
-        """Compute mcse on DataArray input."""
+        """Compute mcse on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        sample_dims : list of str, optional
+        method : str, default "mean"
+        prob : float, optional
+        circular : bool, default False
+
+        Returns
+        -------
+        DataArray
+        """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.mcse,
@@ -148,7 +235,18 @@ class BaseDataArray:
         )
 
     def get_bins(self, da, dim=None, bins="arviz"):
-        """Compute bins or align provided ones with DataArray input."""
+        """Compute bins or align provided ones with DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        dim : hashable or sequence of hashable, optional
+        bins : str or scalar or array-like, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
         return apply_ufunc(
             self.array_class.get_bins,
@@ -163,7 +261,21 @@ class BaseDataArray:
 
     # pylint: disable=redefined-builtin
     def histogram(self, da, dim=None, bins=None, range=None, weights=None, density=True):
-        """Compute histogram on DataArray input."""
+        """Compute histogram on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        dim : hashable or sequence of hashable, optional
+        bins : str or scalar or array-like, optional
+        range : tuple of (float, float), optional
+        weights : array-like, optional
+        density : bool, default True
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
         edges_dim = "edges_dim" if da.name is None else f"edges_dim_{da.name}"
         hist_dim = "hist_dim" if da.name is None else f"hist_dim_{da.name}"
@@ -364,7 +476,23 @@ class BaseDataArray:
         dim=None,
         **kwargs,
     ):
-        """Compute quantile dots on DataArray input."""
+        """Compute quantile dots on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        nquantiles : int, default 100
+        binwidth : float, optional
+        dotsize : float, default 1
+        stackratio : float, default 1
+        top_only : bool, default False
+        dim : hashable or sequence of hashable, optional
+        **kwargs
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
         x, y, radius = apply_ufunc(
             self.array_class.qds,
@@ -386,7 +514,20 @@ class BaseDataArray:
         return out.assign_coords({"radius" if da.name is None else f"radius_{da.name}": radius})
 
     def ecdf(self, da, npoints=200, pit=False, dim=None, **kwargs):
-        """Compute empirical cumulative distribution function on DataArray input."""
+        """Compute empirical cumulative distribution function on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        npoints : int, default 200
+        pit : bool, default False
+        dim : hashable or sequence of hashable, optional
+        **kwargs
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
         ecdf_dim = "ecdf_dim" if da.name is None else f"ecdf_dim_{da.name}"
         x, y = apply_ufunc(
@@ -405,7 +546,21 @@ class BaseDataArray:
         return concat((x, y), dim=plot_axis)
 
     def uniformity_test(self, da, dim=None, method="pot_c", **kwargs):
-        """Pointwise uniformity test on DataArray input."""
+        """Pointwise uniformity test on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        dim : hashable or sequence of hashable, optional
+        method : str, default "pot_c"
+        **kwargs
+
+        Returns
+        -------
+        p_value : DataArray
+        shapley : DataArray
+        shapley_unsorted : DataArray
+        """
         dims = validate_dims(dim)
         pit_dim = "pit_dim" if da.name is None else f"pit_dim_{da.name}"
         n_points = 1
@@ -471,7 +626,12 @@ class BaseDataArray:
             By default, the ESS target will be preserving the ESS of all available samples.
             If an integer value is passed, it must be lower than the average ESS of the input
             samples.
-        mode : {"mean", "min"}, default "mean"
+        reduce_func : {"mean", "min"}, default "mean"
+
+        Returns
+        -------
+        int
+            Thinning factor to apply over the draw dimension.
         """
         n_samples = da.sizes["chain"] * da.sizes["draw"]
         ess = np.minimum(
@@ -505,7 +665,18 @@ class BaseDataArray:
         return max(1, factor)
 
     def thin(self, da, factor="auto", sample_dims=None):
-        """Perform thinning on DataArray input."""
+        """Perform thinning on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        factor : int or str, default "auto"
+        sample_dims : list of str, optional
+
+        Returns
+        -------
+        DataArray
+        """
         if factor == "auto" and sample_dims is not None:
             warnings.warn("dims are ignored if factor is auto")
         if factor == "auto":
@@ -530,7 +701,17 @@ class BaseDataArray:
         return da.sel({sample_dims: slice(None, None, factor)})
 
     def pareto_min_ss(self, da, sample_dims=None):
-        """Compute the minimum effective sample size for all variables in the dataset."""
+        """Compute the minimum effective sample size for all variables in the dataset.
+
+        Parameters
+        ----------
+        da : DataArray
+        sample_dims : list of str, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.pareto_min_ss,
@@ -541,7 +722,19 @@ class BaseDataArray:
         )
 
     def psislw(self, da, r_eff=1, dim=None):
-        """Compute log weights for Pareto-smoothed importance sampling (PSIS) method."""
+        """Compute log weights for Pareto-smoothed importance sampling (PSIS) method.
+
+        Parameters
+        ----------
+        da : DataArray
+        r_eff : float, default 1
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        log_weights : DataArray
+        khat : DataArray
+        """
         dims = validate_dims(dim)
         return apply_ufunc(
             self.array_class.psislw,
@@ -553,7 +746,17 @@ class BaseDataArray:
         )
 
     def bfmi(self, da, sample_dims=None):
-        """Calculate the estimated Bayesian fraction of missing information (BFMI)."""
+        """Calculate the estimated Bayesian fraction of missing information (BFMI).
+
+        Parameters
+        ----------
+        da : DataArray
+        sample_dims : list of str, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.bfmi,
@@ -567,7 +770,20 @@ class BaseDataArray:
         )
 
     def pareto_khat(self, da, sample_dims=None, r_eff=None, tail="both", log_weights=False):
-        """Compute Pareto k-hat diagnostic on DataArray input."""
+        """Compute Pareto k-hat diagnostic on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        sample_dims : list of str, optional
+        r_eff : float, optional
+        tail : str, default "both"
+        log_weights : bool, default False
+
+        Returns
+        -------
+        DataArray
+        """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.pareto_khat,
@@ -607,7 +823,7 @@ class BaseDataArray:
 
         Returns
         -------
-        tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
+        tuple of (elpd_i, pareto_k, p_loo_i) : DataArray
             Pointwise LOO values for each observation.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
@@ -680,7 +896,7 @@ class BaseDataArray:
 
         Returns
         -------
-        tuple of (elpd_i, pareto_k, p_loo_i) : DataArrays
+        tuple of (elpd_i, pareto_k, p_loo_i) : DataArray
             Pointwise LOO values for each observation.
         """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
@@ -858,6 +1074,7 @@ class BaseDataArray:
             Sample dimensions. Defaults to ["chain", "draw"].
         random_state : int or Generator, optional
             Random seed or Generator for tie-breaking. If None, uses seed 214.
+        pareto_pit : bool, default False
 
         Returns
         -------
@@ -1075,7 +1292,18 @@ class BaseDataArray:
         )
 
     def power_scale_lw(self, da, alpha=0, dim=None):
-        """Compute log weights for power-scaling component by alpha."""
+        """Compute log weights for power-scaling component by alpha.
+
+        Parameters
+        ----------
+        da : DataArray
+        alpha : float, default 0
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
         return apply_ufunc(
             self.array_class.power_scale_lw,
@@ -1087,7 +1315,21 @@ class BaseDataArray:
         )
 
     def power_scale_sense(self, da, lower_w, upper_w, lower_alpha, upper_alpha, sample_dims=None):
-        """Compute power-scaling sensitivity."""
+        """Compute power-scaling sensitivity.
+
+        Parameters
+        ----------
+        da : DataArray
+        lower_w : array-like
+        upper_w : array-like
+        lower_alpha : float
+        upper_alpha : float
+        sample_dims : list of str, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.power_scale_sense,
@@ -1100,7 +1342,17 @@ class BaseDataArray:
         )
 
     def autocorr(self, da, dim=None):
-        """Compute autocorrelation on DataArray input."""
+        """Compute autocorrelation on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
         return apply_ufunc(
             self.array_class.autocorr,
@@ -1110,7 +1362,19 @@ class BaseDataArray:
         )
 
     def mean(self, da, round_to=None, skipna=False, dim=None):
-        """Compute mean on DataArray input."""
+        """Compute mean on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        round_to : int or str, optional
+        skipna : bool, default False
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
 
         return apply_ufunc(
@@ -1122,7 +1386,19 @@ class BaseDataArray:
         )
 
     def median(self, da, round_to=None, skipna=False, dim=None):
-        """Compute median on DataArray input."""
+        """Compute median on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        round_to : int or str, optional
+        skipna : bool, default False
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
 
         return apply_ufunc(
@@ -1134,7 +1410,19 @@ class BaseDataArray:
         )
 
     def mode(self, da, round_to=None, skipna=False, dim=None):
-        """Compute mode on DataArray input."""
+        """Compute mode on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        round_to : int or str, optional
+        skipna : bool, default False
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
 
         return apply_ufunc(
@@ -1146,7 +1434,19 @@ class BaseDataArray:
         )
 
     def std(self, da, round_to=None, skipna=False, dim=None):
-        """Compute standard deviation on DataArray input."""
+        """Compute standard deviation on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        round_to : int or str, optional
+        skipna : bool, default False
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
 
         return apply_ufunc(
@@ -1158,7 +1458,19 @@ class BaseDataArray:
         )
 
     def var(self, da, round_to=None, skipna=False, dim=None):
-        """Compute variance on DataArray input."""
+        """Compute variance on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        round_to : int or str, optional
+        skipna : bool, default False
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
 
         return apply_ufunc(
@@ -1170,7 +1482,19 @@ class BaseDataArray:
         )
 
     def mad(self, da, round_to=None, skipna=False, dim=None):
-        """Compute median absolute deviation on DataArray input."""
+        """Compute median absolute deviation on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        round_to : int or str, optional
+        skipna : bool, default False
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
 
         return apply_ufunc(
@@ -1182,7 +1506,20 @@ class BaseDataArray:
         )
 
     def iqr(self, da, quantiles=(0.25, 0.75), round_to=None, skipna=False, dim=None):
-        """Compute interquartile range on DataArray input."""
+        """Compute interquartile range on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+        quantiles : tuple of (float, float), default (0.25, 0.75)
+        round_to : int or str, optional
+        skipna : bool, default False
+        dim : hashable or sequence of hashable, optional
+
+        Returns
+        -------
+        DataArray
+        """
         dims = validate_dims(dim)
 
         return apply_ufunc(
@@ -1259,4 +1596,4 @@ class BaseDataArray:
         )
 
 
-dataarray_stats = BaseDataArray(array_class=array_stats)
+dataarray_stats: BaseDataArray = BaseDataArray(array_class=array_stats)

@@ -70,7 +70,13 @@ def get_array_function(func_name):
 
 
 def get_log_likelihood(idata, var_name=None):
-    """Retrieve the log likelihood dataarray of a given variable."""
+    """Retrieve the log likelihood dataarray of a given variable.
+
+    Returns
+    -------
+    DataArray
+        The log likelihood values for the requested variable.
+    """
     if (
         not hasattr(idata, "log_likelihood")
         and hasattr(idata, "sample_stats")
@@ -99,7 +105,13 @@ def get_log_likelihood(idata, var_name=None):
 
 # get_log_likelihood and get_log_prior functions should be somewhere else
 def get_log_likelihood_dataset(idata, var_names=None):
-    """Retrieve the log likelihood dataarray of a given variable."""
+    """Retrieve the log likelihood dataarray of a given variable.
+
+    Returns
+    -------
+    Dataset
+        The log likelihood dataset, optionally subset to `var_names`.
+    """
     if (
         not hasattr(idata, "log_likelihood")
         and hasattr(idata, "sample_stats")
@@ -121,6 +133,13 @@ def get_log_likelihood_dataset(idata, var_names=None):
 
 
 def get_log_likelihood_dataarray(data, var_name=None):
+    """Retrieve the log likelihood dataarray of a given variable.
+
+    Returns
+    -------
+    DataArray
+        The log likelihood values for the requested variable.
+    """
     log_lik_ds = get_log_likelihood_dataset(data)
     if var_name is None:
         var_names = list(log_lik_ds.data_vars)
@@ -138,7 +157,13 @@ def get_log_likelihood_dataarray(data, var_name=None):
 
 
 def get_log_prior(idata, var_names=None):
-    """Retrieve the log prior dataarray of a given variable."""
+    """Retrieve the log prior dataarray of a given variable.
+
+    Returns
+    -------
+    Dataset
+        The log prior dataset, optionally subset to `var_names`.
+    """
     if not hasattr(idata, "log_prior"):
         raise TypeError("log prior not found in inference data object")
     if var_names is None:
@@ -194,7 +219,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     influence_pareto_k: DataArray = None
     n_eff_i: DataArray = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Print elpd data in a user friendly way."""
         kind = self.kind
         scale_str = SCALE_DICT[self["scale"]]
@@ -269,7 +294,7 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
 
         return base
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Alias to ``__str__``."""
         return self.__str__()
 
