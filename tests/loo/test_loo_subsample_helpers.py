@@ -1,6 +1,8 @@
 """Test sub-sampling helper functions for PyMC models."""
 
 # pylint: disable=no-self-use, redefined-outer-name
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
@@ -14,6 +16,15 @@ xr = importorskip("xarray")
 
 from arviz_stats import loo_subsample, update_subsample
 from arviz_stats.loo import ll_from_pymc
+from arviz_stats.loo.loo_helper import _get_r_eff
+
+
+def _sort_mu_recenter(data):
+    data = data.copy(deep=True)
+    post = data.posterior.dataset
+    sorted_mu = np.sort(post["mu"].values, axis=1)
+    data["posterior"] = post.assign(mu=(("chain", "draw"), sorted_mu))
+    return data
 
 
 def _build_normal_setup(*, n_chains=2, n_draws=60, n_obs=12, seed=0):
@@ -283,3 +294,80 @@ class TestSubsampleLogLikFunctions:
         log_lik_fn = ll_from_pymc(idata, model=model, var_name="y")
         with pytest.raises(ValueError, match="does not match the observed data shape"):
             log_lik_fn(idata.observed_data["y"], idata)
+
+    @pytest.mark.parametrize("update", [False, True])
+    def test_reff_uses_original_posterior(self, update):
+        idata, model, _ = _build_normal_setup(n_draws=800)
+        fake = SimpleNamespace(
+            _re_center_intercept=_sort_mu_recenter, backend=SimpleNamespace(model=model)
+        )
+        n_samples = idata.posterior.sizes["chain"] * idata.posterior.sizes["draw"]
+        reff_orig = _get_r_eff(idata, n_samples)
+        if update:
+            initial = loo_subsample(
+                idata,
+                observations=np.array([0, 2, 5]),
+                var_name="y",
+                method="plpd",
+                model=fake,
+                reff=reff_orig,
+                pointwise=True,
+            )
+            res_auto = update_subsample(
+                initial, idata, observations=np.array([1, 8]), method="plpd", model=fake
+            )
+            res_explicit = update_subsample(
+                initial,
+                idata,
+                observations=np.array([1, 8]),
+                method="plpd",
+                model=fake,
+                reff=reff_orig,
+            )
+        else:
+            kwargs = {
+                "observations": np.array([0, 3, 7, 9]),
+                "var_name": "y",
+                "method": "plpd",
+                "pointwise": True,
+            }
+            res_auto = loo_subsample(idata, model=fake, **kwargs)
+            res_explicit = loo_subsample(idata, model=fake, reff=reff_orig, **kwargs)
+        assert_allclose(res_auto.elpd, res_explicit.elpd)
+        assert_allclose(res_auto.se, res_explicit.se)
+
+    @pytest.mark.parametrize("update", [False, True])
+    @pytest.mark.parametrize("method", ["lpd", "plpd"])
+    def test_param_names_ignored_with_model(self, normal_setup, update, method):
+        idata, model, _ = normal_setup
+        if update:
+            initial = loo_subsample(
+                idata,
+                observations=np.array([0, 2, 5]),
+                var_name="y",
+                method=method,
+                model=model,
+                pointwise=True,
+            )
+            res_with = update_subsample(
+                initial,
+                idata,
+                observations=np.array([1, 8]),
+                method=method,
+                model=model,
+                param_names=["mu"],
+            )
+            res_without = update_subsample(
+                initial, idata, observations=np.array([1, 8]), method=method, model=model
+            )
+        else:
+            kwargs = {
+                "observations": np.array([0, 3, 7, 9]),
+                "var_name": "y",
+                "method": method,
+                "pointwise": True,
+            }
+            res_with = loo_subsample(idata, model=model, param_names=["mu"], **kwargs)
+            res_without = loo_subsample(idata, model=model, **kwargs)
+        assert_allclose(res_with.elpd, res_without.elpd)
+        assert_allclose(res_with.se, res_without.se)

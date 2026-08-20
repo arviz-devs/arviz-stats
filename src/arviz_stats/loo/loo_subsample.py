@@ -123,7 +123,7 @@ def loo_subsample(
     model : Model, optional
         A model object. Currently supported models are PyMC and Bambi.
         If provided and ``log_lik_fn`` is not, it will be used to auto-build ``log_lik_fn``,
-        so it does not have to be constructed manually. ``param_names`` is not needed in
+        so it does not have to be constructed manually. ``param_names`` is ignored in
         this case.
 
     Returns
@@ -202,6 +202,10 @@ def loo_subsample(
     if method not in ["lpd", "plpd"]:
         raise ValueError("Method must be either 'lpd' or 'plpd'")
 
+    log_likelihood = loo_inputs.log_likelihood
+    if reff is None:
+        reff = _get_r_eff(data, loo_inputs.n_samples)
+
     # Auto-build the log likelihood function from the model if provided
     if model is not None and log_lik_fn is None:
         if not log:
@@ -215,13 +219,10 @@ def loo_subsample(
             model = model.backend.model
 
         log_lik_fn = ll_from_pymc(data, model=model, var_name=loo_inputs.var_name)
+        param_names = None
 
     if method == "plpd" and log_lik_fn is None:
         raise ValueError("log_lik_fn or model must be provided when method='plpd'")
-
-    log_likelihood = loo_inputs.log_likelihood
-    if reff is None:
-        reff = _get_r_eff(data, loo_inputs.n_samples)
 
     jacobian_da = _check_log_jacobian(log_jacobian, loo_inputs.obs_dims)
 
@@ -459,7 +460,7 @@ def update_subsample(
     model : Model, optional
         A model object. Currently supported models are PyMC and Bambi.
         If provided and ``log_lik_fn`` is not, it will be used to auto-build ``log_lik_fn``,
-        so it does not have to be constructed manually. ``param_names`` is not needed in
+        so it does not have to be constructed manually. ``param_names`` is ignored in
         this case.
 
     Returns
@@ -531,6 +532,9 @@ def update_subsample(
     thin = getattr(loo_orig, "thin_factor", None)
     loo_inputs = _prepare_loo_inputs(data, var_name, thin)
 
+    if reff is None:
+        reff = _get_r_eff(data, loo_inputs.n_samples)
+
     # Auto-build the log likelihood function from the model if provided
     if model is not None and log_lik_fn is None:
         if not log:
@@ -544,6 +548,7 @@ def update_subsample(
             model = model.backend.model
 
         log_lik_fn = ll_from_pymc(data, model=model, var_name=loo_inputs.var_name)
+        param_names = None
 
     if method == "plpd" and log_lik_fn is None:
         raise ValueError("log_lik_fn or model must be provided when method='plpd'")
@@ -551,9 +556,6 @@ def update_subsample(
     update_data = _prepare_update_subsample(
         loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log, thin
     )
-
-    if reff is None:
-        reff = _get_r_eff(data, loo_inputs.n_samples)
 
     log_jacobian = getattr(loo_orig, "log_jacobian", None)
     jacobian_da = _check_log_jacobian(log_jacobian, loo_inputs.obs_dims)
