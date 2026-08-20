@@ -13,12 +13,7 @@ def _cauchy_combination(ps, truncate=True):
     ps = np.asarray(ps, dtype=float)
     cauchy_vals = np.tan((0.5 - ps) * np.pi)
     if truncate:
-        idx = ps < 0.5
-        if not np.any(idx):
-            raise ValueError(
-                "Cannot compute truncated Cauchy combination test. No p-values below 0.5 found."
-            )
-        cauchy_vals = cauchy_vals[idx]
+        cauchy_vals = np.where(ps < 0.5, cauchy_vals, 0.0)
     mean_val = np.mean(cauchy_vals)
     return 0.5 - np.arctan(mean_val) / np.pi
 
@@ -68,19 +63,21 @@ class TestCauchyCombination:
         assert 0 <= result <= 1
 
     def test_truncated(self):
+        """Truncation zeroes terms with p >= 0.5 but keeps the denominator at n (Eq. 24)."""
         ps = np.array([0.1, 0.2, 0.3, 0.4, 0.7, 0.8])
         cauchy_vals = np.tan((0.5 - ps) * np.pi)
         idx = ps < 0.5
-        truncated_mean = np.mean(cauchy_vals[idx])
+        truncated_mean = np.sum(cauchy_vals[idx]) / len(ps)
         expected_trunc = 0.5 - np.arctan(truncated_mean) / np.pi
         result = _cauchy_combination(ps, truncate=True)
         assert_allclose(result, expected_trunc, atol=1e-10)
         assert 0 <= result <= 1
 
-    def test_truncated_no_values_below_half_raises(self):
+    def test_truncated_no_values_below_half_returns_half(self):
+        """All terms zeroed gives a statistic of 0, i.e. p = 0.5, not an error."""
         ps = np.array([0.5, 0.7, 0.8, 0.9])
-        with pytest.raises(ValueError, match="No p-values below 0.5 found"):
-            _cauchy_combination(ps, truncate=True)
+        result = _cauchy_combination(ps, truncate=True)
+        assert_allclose(result, 0.5, atol=1e-10)
 
     def test_compute_cauchy_transform(self):
         """tan((0.5 - x) * pi) at known points."""
@@ -273,6 +270,45 @@ class TestUniformityTestGeneral:
         assert p_value.shape == (2, 3)
         assert shapley.shape == (2, 3, 80)
         assert shapley_unsorted.shape == (2, 3, 80)
+
+    @pytest.mark.parametrize("method", ["pot_c", "prit_c"])
+    def test_all_pointwise_ps_above_half(self, method):
+        """An evenly spaced grid makes every pointwise p-value >= 0.5.
+
+        The truncated statistic is then an empty sum, i.e. 0, so the
+        combined p-value is exactly 0.5 (no evidence against uniformity)
+        and the call must not raise.
+        """
+        grid = (np.arange(300) + 0.5) / 300
+        p_value, *_ = array_stats.uniformity_test(grid, method=method)
+        assert_allclose(p_value, 0.5, atol=1e-10)
+
+    @pytest.mark.parametrize("method", ["pot_c", "prit_c"])
+    def test_batched_with_grid_column(self, method):
+        """One all-ps-above-half row must not abort a batched call."""
+        rng = np.random.default_rng(0)
+        x = np.vstack([rng.uniform(size=(3, 300)), (np.arange(300) + 0.5) / 300])
+        p_value, *_ = array_stats.uniformity_test(x, axis=-1, method=method)
+        assert p_value.shape == (4,)
+        assert_allclose(p_value[-1], 0.5, atol=1e-10)
+
+    @pytest.mark.parametrize("method", ["pot_c", "prit_c"])
+    def test_attained_size_under_null(self, method):
+        """Guard against the denominator regression (see #409).
+
+        On i.i.d. uniform input the rejection rate at alpha = 0.05 is
+        ~0.05-0.07 with the Eq. 24 denominator, but ~0.08-0.10 when the
+        truncated sum is divided by the retained count instead of n. The
+        bounds deliberately allow the method-inherent inflation above
+        0.05 (see the endnote of #409) and sit ~5 Monte-Carlo standard
+        errors from both the correct and the regressed values, so the
+        test stays safe even if the numpy Generator bit-stream changes.
+        """
+        rng = np.random.default_rng(42)
+        x = rng.uniform(size=(10_000, 100))
+        p_values, *_ = array_stats.uniformity_test(x, axis=-1, method=method)
+        attained_size = np.mean(p_values < 0.05)
+        assert 0.03 < attained_size < 0.08
 
 
 class TestMchainUniformity:
