@@ -28,7 +28,7 @@ def hdi(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -142,7 +142,7 @@ def eti(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -245,7 +245,7 @@ def ecdf(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -343,7 +343,7 @@ def histogram(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -443,7 +443,7 @@ def kde(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -545,7 +545,7 @@ def qds(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -660,7 +660,7 @@ def kde2d(
 
     Parameters
     ----------
-    da_x : array-like or DataArray or DataTree or idata-like
+    da_x : array-like or DataArray or DataTree
         Samples for the first variable (x axis).
 
         - array-like: call the array layer within ``arviz-stats`` directly.
@@ -668,7 +668,7 @@ def kde2d(
         - :class:`xarray.DataTree` / InferenceData-like: the group indicated by
           *group* is used; the object must contain a single variable, or you
           should extract the DataArray beforehand.
-    da_y : array-like or DataArray or DataTree or idata-like
+    da_y : array-like or DataArray or DataTree
         Samples for the second variable (y axis).  Must be the same type as
         da_x and contain the same number of samples along the sample dimensions.
     dim : str or sequence of hashable, optional

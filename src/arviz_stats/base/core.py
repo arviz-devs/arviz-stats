@@ -8,7 +8,7 @@ should go here. e.g. fft is used for kde bandwidth estimation and for ess.
 import warnings
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from scipy.fftpack import next_fast_len
 from scipy.interpolate import CubicSpline
 from scipy.stats import circmean
@@ -26,7 +26,7 @@ class _CoreBase:
 
         Returns
         -------
-        array-like
+        ndarray
         """
         return np.fft.fft(x)
 
@@ -41,7 +41,7 @@ class _CoreBase:
 
         Returns
         -------
-        array-like
+        ndarray
         """
         return np.fft.rfft(ary, n=n, axis=axis)
 
@@ -56,7 +56,7 @@ class _CoreBase:
 
         Returns
         -------
-        array-like
+        ndarray
         """
         return np.fft.irfft(ary, n=n, axis=axis)
 
@@ -70,7 +70,7 @@ class _CoreBase:
 
         Returns
         -------
-        array-like
+        ndarray
         """
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocov.")
@@ -108,7 +108,7 @@ class _CoreBase:
 
         Returns
         -------
-        array-like
+        ndarray
         """
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocorr.")
@@ -136,7 +136,7 @@ class _CoreBase:
         """
         return circmean(ary, high=np.pi, low=-np.pi)
 
-    def _circular_standardize(self, ary: ArrayLike):
+    def _circular_standardize(self, ary: ArrayLike) -> NDArray[np.floating]:
         """Standardize circular data to the interval [-pi, pi]."""
         return np.mod(ary + np.pi, 2 * np.pi) - np.pi
 
@@ -160,7 +160,7 @@ class _CoreBase:
 
         Returns
         -------
-        array-like
+        ndarray
 
         Notes
         -----
@@ -196,7 +196,7 @@ class _CoreBase:
 
         Returns
         -------
-        array-like
+        ndarray
         """
         edge_prob = (1 - prob) / 2
         return self.quantile(
@@ -208,7 +208,7 @@ class _CoreBase:
             weights=weights,
         )
 
-    def _float_rankdata(self, ary: ArrayLike):
+    def _float_rankdata(self, ary: ArrayLike) -> NDArray[np.integer]:
         """Compute ranks on continuous data, assuming there are no ties.
 
         Notes
@@ -222,7 +222,7 @@ class _CoreBase:
         ranks[np.argsort(ary, axis=None)] = np.arange(1, ary.size + 1)
         return ranks
 
-    def _compute_ranks(self, ary: ArrayLike, relative: bool = False):
+    def _compute_ranks(self, ary: ArrayLike, relative: bool = False) -> np.ndarray:
         """Compute ranks for continuous and discrete variables."""
         ary_shape = ary.shape
         ary = ary.flatten()
@@ -236,7 +236,7 @@ class _CoreBase:
             return out / out.size
         return out
 
-    def _get_bininfo(self, values: ArrayLike, bins: int | str | ArrayLike = "arviz"):
+    def _get_bininfo(self, values: ArrayLike, bins: int | str | ArrayLike = "arviz") -> tuple:
         dtype = values.dtype.kind
 
         if isinstance(bins, str) and bins != "arviz":
@@ -331,12 +331,12 @@ class _CoreBase:
         range: tuple | None = None,
         weights: ArrayLike | None = None,
         density: bool = True,
-    ):
+    ) -> tuple[np.ndarray, np.ndarray]:
         if bins is None:
             bins = self._get_bins(ary)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
 
-    def _hdi_linear_nearest_common(self, ary: ArrayLike, prob: float):
+    def _hdi_linear_nearest_common(self, ary: ArrayLike, prob: float) -> np.ndarray:
         n = len(ary)
 
         ary = np.sort(ary)
@@ -352,7 +352,7 @@ class _CoreBase:
 
         return hdi_interval
 
-    def _hdi_nearest(self, ary: ArrayLike, prob: float, circular: bool, skipna: bool):
+    def _hdi_nearest(self, ary: ArrayLike, prob: float, circular: bool, skipna: bool) -> np.ndarray:
         """Compute HDI over the flattened array as closest samples that contain the given prob."""
         ary = ary.flatten()
         if skipna:
@@ -380,7 +380,7 @@ class _CoreBase:
         circular: bool,
         from_sample: bool = False,
         **kwargs,
-    ):
+    ) -> np.ndarray:
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
         if skipna:
@@ -404,7 +404,7 @@ class _CoreBase:
 
     def _hdi_multimodal_discrete(
         self, ary: ArrayLike, prob: float, max_modes: int, bins: int | str | ArrayLike | None = None
-    ):
+    ) -> np.ndarray:
         """Compute HDI if the distribution is multimodal."""
         ary = ary.flatten()
 
@@ -426,7 +426,7 @@ class _CoreBase:
 
     def _hdi_from_point_densities(
         self, points: ArrayLike, densities: ArrayLike, prob: float, circular: bool
-    ):
+    ) -> tuple[np.ndarray, np.ndarray]:
         if circular:
             points = self._circular_standardize(points)
 
@@ -450,7 +450,7 @@ class _CoreBase:
 
     def _hdi_from_bin_probabilities(
         self, bins: ArrayLike, bin_probs: ArrayLike, prob: float, circular: bool, dx: float
-    ):
+    ) -> tuple[np.ndarray, np.ndarray]:
         if circular:
             bins = self._circular_standardize(bins)
             sorted_idx = np.argsort(bins)
@@ -472,12 +472,12 @@ class _CoreBase:
 
     def _interval_points_to_bounds(
         self,
-        points: ArrayLike,
-        probs: ArrayLike,
+        points: np.ndarray,
+        probs: np.ndarray,
         dx: float,
         circular: bool,
         period: float = 2 * np.pi,
-    ):
+    ) -> tuple[np.ndarray, np.ndarray]:
         cum_probs = probs.cumsum()
 
         is_bound = np.diff(points) > dx * 1.01
@@ -501,8 +501,8 @@ class _CoreBase:
         return interval_bounds, interval_probs
 
     def _pad_hdi_to_maxmodes(
-        self, hdi_intervals: ArrayLike, interval_probs: ArrayLike, max_modes: int
-    ):
+        self, hdi_intervals: np.ndarray, interval_probs: ArrayLike, max_modes: int
+    ) -> np.ndarray:
         if hdi_intervals.shape[0] > max_modes:
             warnings.warn(
                 f"found more modes than {max_modes}, returning only the {max_modes} highest "
@@ -530,6 +530,10 @@ class _CoreBase:
             If True, ignore NaN values.
         axis : int or sequence of int or None, default None
             Axis or axes along which to compute the mean.
+
+        Returns
+        -------
+        float
         """
         if skipna:
             ary = ary[~np.isnan(ary)]
@@ -550,12 +554,22 @@ class _CoreBase:
             If True, ignore NaN values.
         axis : int or sequence of int or None, default None
             Axis or axes along which to compute the median.
+
+        Returns
+        -------
+        float
         """
         if skipna:
             ary = ary[~np.isnan(ary)]
         return round_num(np.median(ary, axis=axis), round_to)
 
-    def _mode(self, ary: ArrayLike, round_to: int | str | None = None, skipna: bool = False):
+    def _mode(self, ary: np.ndarray, round_to: int | str | None = None, skipna: bool = False):
+        """Compute the mode of the data.
+
+        Returns
+        -------
+        scalar
+        """
         ary = ary.flatten()
 
         if ary.size == 0:
@@ -595,6 +609,10 @@ class _CoreBase:
             If True, ignore NaN values.
         axis : int or sequence of int or None, default None
             Axis or axes along which to compute the standard deviation.
+
+        Returns
+        -------
+        float
         """
         if skipna:
             ary = ary[~np.isnan(ary)]
@@ -617,6 +635,10 @@ class _CoreBase:
             If True, ignore NaN values.
         axis : int or sequence of int or None, default None
             Axis or axes along which to compute the variance.
+
+        Returns
+        -------
+        float
         """
         if skipna:
             ary = ary[~np.isnan(ary)]
@@ -639,6 +661,10 @@ class _CoreBase:
             If True, ignore NaN values.
         axis : int or sequence of int or None, default None
             Axis or axes along which to compute the median absolute deviation.
+
+        Returns
+        -------
+        float
         """
         if skipna:
             ary = ary[~np.isnan(ary)]
@@ -666,6 +692,10 @@ class _CoreBase:
             If True, ignore NaN values.
         axis : int or sequence of int or None, default None
             Axis or axes along which to compute the interquartile range.
+
+        Returns
+        -------
+        float
         """
         if skipna:
             ary = ary[~np.isnan(ary)]

@@ -28,7 +28,7 @@ def ess(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -175,7 +175,7 @@ def rhat(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -326,7 +326,7 @@ def rhat_nested(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -450,7 +450,7 @@ def mcse(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.
@@ -583,7 +583,7 @@ def bfmi(
 
     Parameters
     ----------
-    data : array-like, DataArray, Dataset, DataTree, DataArrayGroupBy, DatasetGroupBy, or idata-like
+    data : array-like or DataArray or Dataset or DataTree or DataArrayGroupBy or DatasetGroupBy
         Input data. It will have different pre-processing applied to it depending on its type:
 
         - array-like: call array layer within ``arviz-stats``.

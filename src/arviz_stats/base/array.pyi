@@ -34,7 +34,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         max_modes: int = ...,
         skipna: bool = ...,
         **kwargs: Incomplete,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def ess(
         self,
         ary: ArrayLike,
@@ -43,14 +43,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         method: str = ...,
         relative: bool = ...,
         prob: float | tuple[float, float] | None = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def rhat(
         self,
         ary: ArrayLike,
         chain_axis: int | None = ...,
         draw_axis: int = ...,
         method: str = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def rhat_nested(
         self,
         ary: ArrayLike,
@@ -58,7 +58,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         method: str = ...,
         chain_axis: int | None = ...,
         draw_axis: int = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def mcse(
         self,
         ary: ArrayLike,
@@ -67,16 +67,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         method: str = ...,
         prob: float | None = ...,
         circular: bool = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def pareto_min_ss(
         self, ary: ArrayLike, chain_axis: int | None = ..., draw_axis: int = ...
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def psislw(
         self, ary: ArrayLike, r_eff: float = ..., axis: int | Sequence[int] | None = ...
-    ) -> tuple[ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray]: ...
     def bfmi(
         self, ary: ArrayLike, chain_axis: int | None = ..., draw_axis: int = ...
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def pareto_khat(
         self,
         ary: ArrayLike,
@@ -85,10 +85,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         r_eff: float | None = ...,
         tail: str = ...,
         log_weights: bool = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def power_scale_lw(
         self, ary: ArrayLike, alpha: float = ..., axis: int | Sequence[int] | None = ...
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def power_scale_sense(
         self,
         ary: ArrayLike,
@@ -98,19 +98,19 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         upper_alpha: float,
         chain_axis: int | None = ...,
         draw_axis: int = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def compute_ranks(
         self,
         ary: ArrayLike,
         axis: int | Sequence[int] | None = ...,
         relative: bool = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def get_bins(
         self,
         ary: ArrayLike,
         axis: int | Sequence[int] | None = ...,
         bins: str | numbers.Number | ArrayLike = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def histogram(
         self,
         ary: ArrayLike,
@@ -119,7 +119,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         weights: ArrayLike | None = ...,
         axis: int | Sequence[int] | None = ...,
         density: bool = ...,
-    ) -> tuple[ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray]: ...
     def kde(
         self,
         ary: ArrayLike,
@@ -127,7 +127,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         circular: bool = ...,
         grid_len: int = ...,
         **kwargs: Incomplete,
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray, NDArray]: ...
     def kde2d(
         self,
         x: ArrayLike,
@@ -136,18 +136,18 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         circular: bool = ...,
         hdi_probs: ArrayLike | None = ...,
         axis: int | Sequence[int] = ...,
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray, NDArray, NDArray]: ...
     def qds(
         self,
         ary: ArrayLike,
         nquantiles: int = ...,
         binwidth: float | None = ...,
-        dotsize: float = ...,
-        stackratio: float = ...,
+        dotsize: numbers.Number = ...,
+        stackratio: numbers.Number = ...,
         top_only: bool = ...,
         axis: int | Sequence[int] | None = ...,
         **kwargs: Incomplete,
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray, NDArray]: ...
     def ecdf(
         self,
         ary: ArrayLike,
@@ -155,34 +155,34 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         pit: bool = ...,
         axis: int | Sequence[int] | None = ...,
         **kwargs: Incomplete,
-    ) -> tuple[ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray]: ...
     def uniformity_test(
         self,
         ary: ArrayLike,
         axis: int | Sequence[int] | None = ...,
         method: str = ...,
         **kwargs: Incomplete,
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray, NDArray]: ...
     def mchain_uniformity_test(
         self,
         ary: ArrayLike,
         chain_axis: int | None = ...,
         draw_axis: int = ...,
         **kwargs: Incomplete,
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray, NDArray]: ...
     def bayesian_r2(
         self,
         mu_pred: ArrayLike,
         scale: ArrayLike | None,
         scale_kind: str = ...,
         circular: bool = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def residual_r2(
         self, y_obs: ArrayLike, mu_pred: ArrayLike, circular: bool = ...
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def metrics(
         self, observed: ArrayLike, predicted: ArrayLike, kind: str
-    ) -> tuple[ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray]: ...
     def thin_factor(
         self,
         ary: ArrayLike,
@@ -197,49 +197,49 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         factor: str | int = ...,
         chain_axis: int | None = ...,
         draw_axis: int = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def mean(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
         axis: int | Sequence[int] | None = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def median(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
         axis: int | Sequence[int] | None = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def mode(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
         axis: int | Sequence[int] | None = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def std(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
         axis: int | Sequence[int] | None = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def var(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
         axis: int | Sequence[int] | None = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def mad(
         self,
         ary: ArrayLike,
         round_to: int | str | None = ...,
         skipna: bool = ...,
         axis: int | Sequence[int] | None = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def iqr(
         self,
         ary: ArrayLike,
@@ -247,7 +247,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         round_to: int | str | None = ...,
         skipna: bool = ...,
         axis: int | Sequence[int] | None = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def loo(
         self,
         ary: ArrayLike,
@@ -257,7 +257,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         log_weights: ArrayLike | None = ...,
         pareto_k: ArrayLike | None = ...,
         log_jacobian: ArrayLike | None = ...,
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray, NDArray]: ...
     def loo_approximate_posterior(
         self,
         ary: ArrayLike,
@@ -266,7 +266,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         chain_axis: int | None = ...,
         draw_axis: int = ...,
         log_jacobian: float | None = ...,
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray, NDArray]: ...
     def loo_mixture(
         self,
         ary: ArrayLike,
@@ -274,7 +274,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         chain_axis: int | None = ...,
         draw_axis: int = ...,
         log_jacobian: ArrayLike | None = ...,
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray, NDArray]: ...
     def loo_score(
         self,
         ary: ArrayLike,
@@ -283,7 +283,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         kind: str = ...,
         chain_axis: int | None = ...,
         draw_axis: int = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def loo_pit(
         self,
         ary: ArrayLike,
@@ -293,7 +293,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         draw_axis: int = ...,
         random_state: int | Generator | None = ...,
         pareto_pit: bool = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def loo_expectation(
         self,
         ary: ArrayLike,
@@ -301,7 +301,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         kind: str = ...,
         chain_axis: int | None = ...,
         draw_axis: int = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def loo_quantile(
         self,
         ary: ArrayLike,
@@ -309,7 +309,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         prob: float,
         chain_axis: int | None = ...,
         draw_axis: int = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def loo_summary(
         self, elpd_i: ArrayLike, p_loo_i: ArrayLike
     ) -> tuple[float, float, float, float]: ...
@@ -320,7 +320,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         n_simulations: int = ...,
         circular: bool = ...,
         random_state: int = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def srs_estimator(
         self, y_sample: ArrayLike, n_data_points: int
     ) -> tuple[float, float, float]: ...

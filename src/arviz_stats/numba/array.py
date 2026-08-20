@@ -61,7 +61,7 @@ class NumbaArray(BaseArray):
 
         Returns
         -------
-        array-like
+        ndarray
             Quantile(s) of the input computed along `axis`. If `quantile` is a scalar the
             quantile dimension is dropped, otherwise it is added as the last axis.
 
@@ -94,7 +94,10 @@ class NumbaArray(BaseArray):
 
         return result
 
-    def _histogram(self, ary, bins=None, range=None, weights=None, density=True):  # pylint: disable=redefined-builtin
+    # pylint: disable=redefined-builtin
+    def _histogram(
+        self, ary, bins=None, range=None, weights=None, density=True
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Compute the histogram of the data."""
         if bins is None:
             bins = self._get_bins(ary)
@@ -174,7 +177,7 @@ class NumbaArray(BaseArray):
 
         Returns
         -------
-        grid, pdf, bw : array-like
+        grid, pdf, bw : ndarray
             `grid` and `pdf` will have the same shape: the same as `ary` minus the dimensions
             in `axis` plus an extra dimension of length `grid_len`. Same for `bw`
             except it will not have the extra dimension.

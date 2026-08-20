@@ -33,7 +33,7 @@ class _DensityBase(_CoreBase):
 
         Returns
         -------
-        output : array-like
+        output : ndarray
             DCT transformed values.
         """
         x_len = len(x)
@@ -52,6 +52,10 @@ class _DensityBase(_CoreBase):
         """Calculate t-zeta*gamma^[l](t).
 
         Implementation of the function t-zeta*gamma^[l](t) derived from equation (30) in [1].
+
+        Returns
+        -------
+        float
 
         References
         ----------
@@ -78,6 +82,12 @@ class _DensityBase(_CoreBase):
         return out
 
     def _root(self, function: Callable, n: int, args: tuple, x: ArrayLike, grid_range: float):
+        """Find the KDE bandwidth by root-finding.
+
+        Returns
+        -------
+        float
+        """
         # The right bound is at most 0.01
         found = False
         n = max(min(1050, n), 50)
@@ -103,7 +113,7 @@ class _DensityBase(_CoreBase):
         ----------
         x : array-like
         x_std : float, optional
-        **kwargs : dict, optional
+        **kwargs
 
         Returns
         -------
@@ -122,7 +132,7 @@ class _DensityBase(_CoreBase):
         ----------
         x : array-like
         x_std : float, optional
-        **kwargs : dict, optional
+        **kwargs
 
         Returns
         -------
@@ -221,7 +231,7 @@ class _DensityBase(_CoreBase):
 
         Parameters
         ----------
-        x : array-like
+        x : array-like of shape (n,)
             1 dimensional array of sample data from the
             variable for which a density estimate is desired.
         bw : int or float or str
@@ -269,13 +279,22 @@ class _DensityBase(_CoreBase):
         """Normalize angles.
 
         Normalize angles in radians to [-pi, pi) or [0, 2 * pi) according to `zero_centered`.
+
+        Returns
+        -------
+        ndarray
         """
         if zero_centered:
             return (x + np.pi) % (2 * np.pi) - np.pi
         return x % (2 * np.pi)
 
     def _vonmises_pdf(self, x: ArrayLike, mu: float, kappa: float):  # pylint: disable=no-self-use
-        """Calculate vonmises_pdf."""
+        """Calculate vonmises_pdf.
+
+        Returns
+        -------
+        ndarray
+        """
         if kappa <= 0:
             raise ValueError("Argument 'kappa' must be positive.")
         pdf = 1 / (2 * np.pi * ive(0, kappa)) * np.exp(np.cos(x - mu) - 1) ** kappa
@@ -288,6 +307,10 @@ class _DensityBase(_CoreBase):
         zeroth order Bessel functions of the first kind.
 
         Returns the value k, such that a1inv(x) = k, i.e. a1(k) = x.
+
+        Returns
+        -------
+        float
         """
         if 0 <= x < 0.53:
             return 2 * x + x**3 + (5 * x**5) / 6
@@ -295,7 +318,7 @@ class _DensityBase(_CoreBase):
             return -0.4 + 1.39 * x + 0.43 / (1 - x)
         return 1 / (x**3 - 4 * x**2 + 3 * x)
 
-    def _kappa_mle(self, x: ArrayLike):
+    def _kappa_mle(self, x: ArrayLike) -> float:
         mean = self.circular_mean(x)
         kappa = self._a1inv(np.mean(np.cos(x - mean)))
         return kappa
@@ -769,7 +792,9 @@ class _DensityBase(_CoreBase):
 
         return grid, pdf, bw
 
-    def _kde(self, x: ArrayLike, circular: bool = False, grid_len: int = 512, **kwargs):
+    def _kde(
+        self, x: ArrayLike, circular: bool = False, grid_len: int = 512, **kwargs
+    ) -> tuple[ArrayLike, ArrayLike, float]:
         x = x.flatten()
         x = x[np.isfinite(x)]
         if x.size == 0 or np.all(x == x[0]):
@@ -900,7 +925,7 @@ class _DensityBase(_CoreBase):
         dotsize: float,
         stackratio: float,
         top_only: bool,
-    ):
+    ) -> tuple[np.ndarray, np.ndarray, float]:
         """Compute quantile dot stacking for 1D data."""
         x = x.flatten()
         x = x[np.isfinite(x)]
@@ -923,7 +948,7 @@ class _DensityBase(_CoreBase):
         )
         return x, y, radius
 
-    def _ecdf(self, ary: ArrayLike, npoints: int, pit: bool):
+    def _ecdf(self, ary: ArrayLike, npoints: int, pit: bool) -> tuple[np.ndarray, np.ndarray]:
         """Compute empirical cumulative distribution function (ECDF)."""
         ary = ary[np.isfinite(ary)]
         total_points = len(ary)
@@ -947,7 +972,12 @@ class _DensityBase(_CoreBase):
 
     @staticmethod
     def _shapley_mean(values: ArrayLike):
-        """Compute closed-form Shapley contributions for mean-aggregation."""
+        """Compute closed-form Shapley contributions for mean-aggregation.
+
+        Returns
+        -------
+        ndarray
+        """
         n = len(values)
         if n == 0:
             return values.copy()
@@ -960,7 +990,7 @@ class _DensityBase(_CoreBase):
 
         return (values / n) + ((harmonic_n - 1) / n) * (values - mean_others)
 
-    def _pot_c(self, ary: ArrayLike):
+    def _pot_c(self, ary: ArrayLike) -> tuple[float, np.ndarray, np.ndarray]:
         """Pointwise Order-based Test with Cauchy combination (Beta-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
@@ -985,7 +1015,7 @@ class _DensityBase(_CoreBase):
 
         return p_value, shapley_vals, shapley_unsorted
 
-    def _prit_c(self, ary: ArrayLike):
+    def _prit_c(self, ary: ArrayLike) -> tuple[float, np.ndarray, np.ndarray]:
         """Pointwise Rank-based Individual Test with Cauchy combination (Binomial-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
@@ -1012,7 +1042,7 @@ class _DensityBase(_CoreBase):
 
         return p_value, shapley_vals, shapley_unsorted
 
-    def _piet_c(self, ary: ArrayLike):
+    def _piet_c(self, ary: ArrayLike) -> tuple[float, np.ndarray, np.ndarray]:
         """Pointwise Inverse-CDF Evaluation Tests Combination (Exp(1)-based tests)."""
         ary = ary[np.isfinite(ary)]
         n = len(ary)
@@ -1102,7 +1132,12 @@ class _DensityBase(_CoreBase):
         return p_value, b_shapley_vals, w_shapley_vals
 
     def _cauchy_combination(self, ps: ArrayLike, cauchy_vals: ArrayLike, truncate: bool):
-        """Combine p-values using the Cauchy combination method."""
+        """Combine p-values using the Cauchy combination method.
+
+        Returns
+        -------
+        float
+        """
         if truncate:
             idx = ps < 0.5
             if not np.any(idx):

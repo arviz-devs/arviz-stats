@@ -69,6 +69,7 @@ def process_ary_axes(ary, axes):
     -------
     ary : array-like
     axes : ndarray
+        Integer dtype and shape ``(N,)``.
     """
     if axes is None:
         axes = list(range(ary.ndim))
@@ -122,7 +123,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         if not 1 >= prob > 0:
             raise ValueError("The value of `prob` must be in the (0, 1] interval.")
@@ -202,7 +203,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         method = method.lower()
         # fmt: off
@@ -237,7 +238,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
@@ -265,7 +266,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         method = method.lower()
         valid_methods = {"rank", "folded", "z_scale", "split", "identity"}
@@ -296,7 +297,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         method = method.lower()
         valid_methods = {"mean", "sd", "median", "quantile"}
@@ -327,7 +328,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -345,9 +346,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        log_weights : array-like
+        log_weights : ndarray
             Same shape as `ary` but `axis` dimensions moved to the end
-        khat : array-like
+        khat : ndarray
             Shape of `ary` minus dimensions indicated in `axis`
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -371,7 +372,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -400,7 +401,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -424,7 +425,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
@@ -451,7 +452,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         lower_w, _, _ = process_chain_none(lower_w, chain_axis, draw_axis)
@@ -475,7 +476,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         ary, axes = process_ary_axes(ary, axis)
         compute_ranks_ufunc = make_ufunc(
@@ -498,7 +499,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         ary, axes = process_ary_axes(ary, axis)
         get_bininfo_ufunc = make_ufunc(
@@ -531,7 +532,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        hist, bin_edges : array_like
+        hist, bin_edges : ndarray
             The shape of `hist` will be that of `ary` minus the dimensions in `axis`
             plus an extra dimension of length ``nbins``, same for `bin_edges` with
             the difference the extra dimension has length ``nbins+1``.
@@ -693,7 +694,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        grid, pdf, bw : array-like
+        grid, pdf, bw : ndarray
             `grid` and `pdf` will have the same shape: the same as `ary` minus the dimensions
             in `axis` plus an extra dimension of length `grid_len`. Same for `bw`
             except it will not have the extra dimension.
@@ -734,13 +735,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        grid : array-like
+        grid : ndarray
             2D density array of shape ``(*batch, n_x, n_y)``.
-        x_coords : array-like
+        x_coords : ndarray
             Grid coordinates along the x axis, shape ``(*batch, n_x)``.
-        y_coords : array-like
+        y_coords : ndarray
             Grid coordinates along the y axis, shape ``(*batch, n_y)``.
-        contours : array-like, optional
+        contours : ndarray, optional
             Returned only when hdi_probs is not ``None``.
             Density contour levels of shape ``(*batch, len(hdi_probs))``.
         """
@@ -799,15 +800,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         nquantiles : int, default 100
         binwidth : float, optional
-        dotsize : float, default 1
-        stackratio : float, default 1
+        dotsize : scalar, default 1
+        stackratio : scalar, default 1
         top_only : bool, default False
         axis : int or sequence of int or None, default -1
         **kwargs
 
         Returns
         -------
-        x, y, radius : array-like
+        x, y, radius : ndarray
         """
         ary, axes = process_ary_axes(ary, axis)
         qd_ufunc = make_ufunc(
@@ -846,7 +847,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        x, y : array-like
+        x, y : ndarray
             Both `x` and `y` will have the same shape: the same as `ary` minus the dimensions
             in `axis` plus an extra dimension of lenght `npoints`.
         """
@@ -884,7 +885,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        p_value, shapley_vals, shapley_unsorted : array-like
+        p_value, shapley_vals, shapley_unsorted : ndarray
             ``p_value`` has the batch shape (input shape minus reduced axes).
             ``shapley_vals`` has the batch shape plus the reduced dimension length.
             ``shapley_unsorted`` has the same shape as ``shapley_vals``.
@@ -933,11 +934,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        p_value : array-like
+        p_value : ndarray
             Global p-value from the multi-chain test.
-        b_shapley_vals : array-like
+        b_shapley_vals : ndarray
             Between-chain Shapley contributions for each chain per draw, shape (n_draws, n_chains).
-        w_shapley_vals : array-like
+        w_shapley_vals : ndarray
             Draw-wise Shapley contributions to the global p-value, shape (n_draws,).
         """
         ary = np.asarray(ary)
@@ -975,7 +976,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         r2_ufunc = make_ufunc(
             self._bayesian_r2,
@@ -997,7 +998,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
         """
         r2_ufunc = make_ufunc(
             self._residual_r2,
@@ -1020,7 +1021,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        estimate, std_error : array-like
+        estimate, std_error : ndarray
         """
         func = getattr(self, f"_{kind}", None)
 
@@ -1097,7 +1098,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        array-like
+        ndarray
             Thinned array
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
@@ -1135,7 +1136,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        mean : array-like
+        mean : ndarray
             Mean of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1166,7 +1167,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        median : array-like
+        median : ndarray
             Median of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1197,7 +1198,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        mode : array-like
+        mode : ndarray
             Mode of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1228,7 +1229,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        std : array-like
+        std : ndarray
             Standard deviation of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1259,7 +1260,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        var : array-like
+        var : ndarray
             Variance of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1290,7 +1291,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        mad : array-like
+        mad : ndarray
             Mean absolute deviation of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1323,7 +1324,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        iqr : array-like
+        iqr : ndarray
             Interquantile range of the input values along the specified axis.
         """
         ary, axes = process_ary_axes(ary, axis)
@@ -1367,11 +1368,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        elpd_i : array-like
+        elpd_i : ndarray
             Pointwise expected log predictive density.
-        pareto_k : array-like
+        pareto_k : ndarray
             Pareto k-hat diagnostic values.
-        p_loo_i : array-like
+        p_loo_i : ndarray
             Pointwise effective number of parameters.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
@@ -1415,11 +1416,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        elpd_i : array-like
+        elpd_i : ndarray
             Pointwise expected log predictive density.
-        pareto_k : array-like
+        pareto_k : ndarray
             Pareto k-hat diagnostic values.
-        p_loo_i : array-like
+        p_loo_i : ndarray
             Pointwise effective number of parameters.
         """
         ary, log_p, log_q, chain_axis, draw_axis = process_chain_none_multi(
@@ -1460,11 +1461,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        elpd_i : array-like
+        elpd_i : ndarray
             Pointwise expected log predictive density.
-        p_loo_i : array-like
+        p_loo_i : ndarray
             Pointwise effective number of parameters.
-        mix_log_weights : array-like
+        mix_log_weights : ndarray
             Mixture log weights.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
@@ -1506,7 +1507,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        scores : array-like
+        scores : ndarray
             Score values (negative orientation for maximization).
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
@@ -1549,7 +1550,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        pit_values : array-like
+        pit_values : ndarray
             LOO-PIT values in [0, 1].
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
@@ -1596,7 +1597,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        expectation : array-like
+        expectation : ndarray
             Weighted expectation values.
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
@@ -1635,7 +1636,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        quantile : array-like
+        quantile : ndarray
             Weighted quantile values.
         """
         ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
@@ -1688,7 +1689,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Returns
         -------
-        loo_r_squared : array-like
+        loo_r_squared : ndarray
             R-squared samples with shape (n_simulations,).
         """
         y_obs = np.asarray(y_obs).ravel()

@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 from _typeshed import Incomplete
 from numba import guvectorize, jit
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
 from arviz_stats.base.array import BaseArray
 
@@ -26,7 +26,7 @@ class NumbaArray(BaseArray):
         method: Incomplete = ...,
         skipna: Incomplete = ...,
         weights: Incomplete = ...,
-    ) -> ArrayLike: ...
+    ) -> NDArray: ...
     def _histogram(
         self,
         ary: Incomplete,
@@ -34,7 +34,7 @@ class NumbaArray(BaseArray):
         range: Incomplete = ...,
         weights: Incomplete = ...,
         density: Incomplete = ...,
-    ) -> None: ...
+    ) -> tuple[np.ndarray, np.ndarray]: ...
     @property
     def kde_ufunc(self) -> Callable: ...
     def kde(
@@ -44,7 +44,7 @@ class NumbaArray(BaseArray):
         circular: bool = ...,
         grid_len: int = ...,
         **kwargs: Any
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]: ...
+    ) -> tuple[NDArray, NDArray, NDArray]: ...
 
 def _extend_histogram_docstring() -> None: ...
 

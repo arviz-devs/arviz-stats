@@ -14,7 +14,14 @@ from arviz_stats.utils import _apply_multi_input_function, get_function
 from arviz_stats.validate import validate_ci_prob, validate_dims
 
 def hdi(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     prob: float | None = ...,
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
@@ -28,7 +35,14 @@ def hdi(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def eti(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     prob: float | None = ...,
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
@@ -40,7 +54,14 @@ def eti(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def ecdf(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -50,7 +71,14 @@ def ecdf(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def histogram(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -62,7 +90,14 @@ def histogram(
     density: bool = ...,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def kde(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -72,7 +107,14 @@ def kde(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def qds(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -86,8 +128,8 @@ def qds(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def kde2d(
-    da_x: ArrayLike | DataArray | xarray.DataTree | xarray.DataTree,
-    da_y: ArrayLike | DataArray | xarray.DataTree | xarray.DataTree,
+    da_x: ArrayLike | DataArray | xarray.DataTree,
+    da_y: ArrayLike | DataArray | xarray.DataTree,
     dim: str | Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     gridsize: tuple[int] = ...,

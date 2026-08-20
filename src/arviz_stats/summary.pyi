@@ -83,7 +83,14 @@ def ci_in_rope(
     rope_dim: str = ...,
 ) -> Dataset: ...
 def mean(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -94,7 +101,14 @@ def mean(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def median(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -105,7 +119,14 @@ def median(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def mode(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -116,7 +137,14 @@ def mode(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def std(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -127,7 +155,14 @@ def std(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def var(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -138,7 +173,14 @@ def var(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def mad(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -149,7 +191,14 @@ def mad(
     **kwargs: Any,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def iqr(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     dim: Sequence[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,

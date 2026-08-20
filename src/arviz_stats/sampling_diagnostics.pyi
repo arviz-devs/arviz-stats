@@ -16,7 +16,14 @@ from arviz_stats.utils import _apply_multi_input_function, get_array_function
 from arviz_stats.validate import validate_dims
 
 def ess(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     sample_dims: Iterable[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -29,7 +36,14 @@ def ess(
     draw_axis: int = ...,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def rhat(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     sample_dims: Iterable[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -40,7 +54,14 @@ def rhat(
     draw_axis: int = ...,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def rhat_nested(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     sample_dims: Iterable[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -52,7 +73,14 @@ def rhat_nested(
     draw_axis: int = ...,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def mcse(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     sample_dims: Iterable[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
@@ -65,7 +93,14 @@ def mcse(
     draw_axis: int = ...,
 ) -> NDArray | DataArray | Dataset | xarray.DataTree: ...
 def bfmi(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     sample_dims: Iterable[Hashable] | None = ...,
     group: Hashable = ...,
     var_names: str | list[str] = ...,

@@ -24,6 +24,8 @@ DataTree = "xarray.DataTree"
 # TODO: define a meta/pseudo type for DataTree-like
 DataTree-like = "xarray.DataTree"
 DataArray = "xarray.DataArray"
+DataArrayGroupBy = "xarray.core.groupby.DataArrayGroupBy"
+DatasetGroupBy = "xarray.core.groupby.DatasetGroupBy"
 scalar = "numbers.Number"
 any = "Any"
 

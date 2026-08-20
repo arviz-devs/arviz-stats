@@ -8,12 +8,20 @@ import xarray
 import xarray as xr
 from arviz_base import convert_to_dataset, convert_to_datatree, extract, rcParams
 from numpy.typing import ArrayLike, NDArray
+from xarray import DataArray, Dataset
 
 from arviz_stats.utils import get_array_function
 from arviz_stats.validate import validate_dims
 
 def thin(
-    data: ArrayLike,
+    data: (
+        ArrayLike
+        | DataArray
+        | Dataset
+        | xarray.DataTree
+        | xarray.core.groupby.DataArrayGroupBy
+        | xarray.core.groupby.DatasetGroupBy
+    ),
     sample_dims: Iterable[Hashable] = ...,
     group: Hashable = ...,
     var_names: str | list[str] | None = ...,
