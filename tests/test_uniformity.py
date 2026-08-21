@@ -295,14 +295,6 @@ class TestUniformityTestGeneral:
     @pytest.mark.parametrize("method", ["pot_c", "prit_c"])
     def test_attained_size_under_null(self, method):
         """Guard against the denominator regression (see #409).
-
-        On i.i.d. uniform input the rejection rate at alpha = 0.05 is
-        ~0.05-0.07 with the Eq. 24 denominator, but ~0.08-0.10 when the
-        truncated sum is divided by the retained count instead of n. The
-        bounds deliberately allow the method-inherent inflation above
-        0.05 (see the endnote of #409) and sit ~5 Monte-Carlo standard
-        errors from both the correct and the regressed values, so the
-        test stays safe even if the numpy Generator bit-stream changes.
         """
         rng = np.random.default_rng(42)
         x = rng.uniform(size=(10_000, 100))
