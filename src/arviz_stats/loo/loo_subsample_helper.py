@@ -3,7 +3,7 @@
 import numpy as np
 from xarray import DataArray
 
-from arviz_stats.loo.loo_moment_match_helper import _get_batched_func, _get_observed_rv
+from arviz_stats.loo.pymc_helper import _get_batched_func, _get_observed_rv
 
 __all__ = ["ll_from_pymc"]
 
