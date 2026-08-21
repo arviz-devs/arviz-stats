@@ -274,10 +274,6 @@ class TestUniformityTestGeneral:
     @pytest.mark.parametrize("method", ["pot_c", "prit_c"])
     def test_all_pointwise_ps_above_half(self, method):
         """An evenly spaced grid makes every pointwise p-value >= 0.5.
-
-        The truncated statistic is then an empty sum, i.e. 0, so the
-        combined p-value is exactly 0.5 (no evidence against uniformity)
-        and the call must not raise.
         """
         grid = (np.arange(300) + 0.5) / 300
         p_value, *_ = array_stats.uniformity_test(grid, method=method)
