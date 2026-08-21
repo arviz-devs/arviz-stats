@@ -92,87 +92,6 @@ def lfo_cv(
         - **refits**: array of time indices where refits occurred
         - **n_refits**: number of refits performed
 
-    Examples
-    --------
-    LFO-CV refits the model as the training window expands, so we describe how to refit
-    with a :class:`~arviz_stats.SamplingWrapper`. First we simulate a short series and
-    assemble the inference data from the full-data fit:
-
-    .. ipython::
-
-        In [1]: import numpy as np
-           ...: import xarray as xr
-           ...: from scipy import stats
-           ...: from arviz_base import from_dict
-           ...: from arviz_stats import lfo_cv
-           ...: from arviz_stats.loo import SamplingWrapper
-           ...:
-           ...: rng = np.random.default_rng(0)
-           ...: n_time = 25
-           ...: y = rng.normal(size=n_time)
-           ...: idata = from_dict(
-           ...:     {
-           ...:         "posterior": {"mu": rng.normal(size=(2, 400))},
-           ...:         "log_likelihood": {"obs": rng.normal(-1.4, 0.1, size=(2, 400, n_time))},
-           ...:         "observed_data": {"obs": y},
-           ...:     },
-           ...:     dims={"obs": ["time"]},
-           ...:     coords={"time": np.arange(n_time)},
-           ...: )
-
-    The wrapper implements the four methods ``lfo_cv`` calls to refit on a training window
-    and score the forecast observations. Here we use a simple normal-mean model:
-
-    .. ipython::
-
-        In [2]: class TimeSeriesWrapper(SamplingWrapper):
-           ...:     def __init__(self, idata):
-           ...:         super().__init__(model=None, idata_orig=idata)
-           ...:         self.y = idata.observed_data["obs"].values
-           ...:
-           ...:     def sel_observations(self, idx):
-           ...:         train_idx = np.setdiff1d(np.arange(len(self.y)), idx)
-           ...:         train = xr.DataArray(
-           ...:             self.y[train_idx], dims=["time"], coords={"time": train_idx}
-           ...:         )
-           ...:         test = xr.DataArray(self.y[idx], dims=["time"], coords={"time": idx})
-           ...:         return train, test
-           ...:
-           ...:     def sample(self, modified_observed_data):
-           ...:         n = len(modified_observed_data)
-           ...:         mean = modified_observed_data.values.mean()
-           ...:         local = np.random.default_rng(0)
-           ...:         return {"mu": local.normal(mean, 1.0 / np.sqrt(n), 400)}
-           ...:
-           ...:     def get_inference_data(self, fitted_model):
-           ...:         post = {"mu": fitted_model["mu"].reshape(1, -1)}
-           ...:         return from_dict({"posterior": post})
-           ...:
-           ...:     def log_likelihood__i(self, excluded_obs, idata__i):
-           ...:         mu = idata__i.posterior["mu"].values.flatten()
-           ...:         obs = np.atleast_1d(excluded_obs.values)
-           ...:         log_lik = stats.norm.logpdf(obs, loc=mu[:, None], scale=1.0)
-           ...:         return xr.DataArray(
-           ...:             log_lik.T[np.newaxis, :, :],
-           ...:             dims=["chain", "time", "draw"],
-           ...:             coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
-           ...:         )
-
-    We then run one-step-ahead LFO-CV. The approximate method refits only when the PSIS
-    diagnostic degrades, so it uses far fewer fits than one per step:
-
-    .. ipython::
-
-        In [3]: wrapper = TimeSeriesWrapper(idata)
-           ...: lfo_cv(idata, wrapper, min_observations=10, forecast_horizon=1)
-
-    For multi-step-ahead prediction (M-SAP), increase ``forecast_horizon``. Each origin then
-    scores the joint predictive density of the next ``forecast_horizon`` observations:
-
-    .. ipython::
-
-        In [4]: lfo_cv(idata, wrapper, min_observations=10, forecast_horizon=4)
-
     Notes
     -----
     For ``forecast_horizon > 1``, results depend on the prediction pattern used to score
@@ -233,8 +152,8 @@ def lfo_cv(
         if n_refits > lfo_results.n_data_points / 2:
             warnings.warn(
                 f"LFO-CV triggered {n_refits} refits out of {lfo_results.n_data_points} forecast "
-                "origins. The importance sampling approximation may be unreliable; "
-                "consider method='exact'.",
+                "origins. The importance sampling approximation may be unreliable. "
+                "Consider method='exact'.",
                 UserWarning,
             )
             warning = True

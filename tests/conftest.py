@@ -842,11 +842,22 @@ def lfo_result_factory():
     from arviz_stats.loo.wrapper import SamplingWrapper
 
     n_time = 20
+    rng = np.random.default_rng(315)
+    data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(0, 0.2, (2, 100))},
+            "log_likelihood": {"obs": rng.normal(-1.4, 0.1, (2, 100, n_time))},
+            "observed_data": {"obs": rng.normal(0, 1, n_time)},
+        },
+        dims={"obs": ["time"]},
+        coords={"time": np.arange(n_time)},
+    )
 
     class NormalMeanWrapper(SamplingWrapper):
-        def __init__(self, idata):
+        def __init__(self, idata, sigma):
             super().__init__(model=None, idata_orig=idata)
             self.y = idata.observed_data["obs"].values
+            self.sigma = sigma
 
         def sel_observations(self, idx):
             idx = np.atleast_1d(idx)
@@ -867,27 +878,17 @@ def lfo_result_factory():
         def log_likelihood__i(self, excluded_obs, idata__i):
             mu = idata__i.posterior["mu"].values.flatten()
             obs = np.atleast_1d(excluded_obs.values)
-            log_lik = sp.stats.norm.logpdf(obs, loc=mu[:, None], scale=1.0)
+            log_lik = sp.stats.norm.logpdf(obs, loc=mu[:, None], scale=self.sigma)
             return xr.DataArray(
                 log_lik.T[np.newaxis, :, :],
                 dims=["chain", "time", "draw"],
                 coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
             )
 
-    def make_lfo_result(seed, min_observations=8, forecast_horizon=1):
-        rng = np.random.default_rng(seed)
-        data = azb.from_dict(
-            {
-                "posterior": {"mu": rng.normal(0, 0.2, (2, 100))},
-                "log_likelihood": {"obs": rng.normal(-1.4, 0.1, (2, 100, n_time))},
-                "observed_data": {"obs": rng.normal(0, 1, n_time)},
-            },
-            dims={"obs": ["time"]},
-            coords={"time": np.arange(n_time)},
-        )
+    def make_lfo_result(sigma=1.0, min_observations=8, forecast_horizon=1):
         return lfo_cv(
             data,
-            NormalMeanWrapper(data),
+            NormalMeanWrapper(data, sigma),
             min_observations=min_observations,
             forecast_horizon=forecast_horizon,
             method="exact",

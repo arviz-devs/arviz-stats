@@ -63,8 +63,8 @@ def _prepare_lfo_inputs(data, var_name, wrapper, min_observations, forecast_hori
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
     if obs_dims != [time_dim]:
         raise ValueError(
-            f"lfo_cv currently supports a single time dimension; found observation "
-            f"dimensions {obs_dims}. Expected only '{time_dim}'."
+            f"lfo_cv currently supports a single time dimension. Found observation "
+            f"dimensions {obs_dims}, expected only '{time_dim}'."
         )
 
     n_samples = int(np.prod([log_likelihood.sizes[dim] for dim in sample_dims]))
@@ -241,7 +241,16 @@ def _refit_loglik(lfo_inputs, wrapper, cutoff):
     idata = wrapper.get_inference_data(wrapper.sample(train_data))
 
     log_lik = wrapper.log_likelihood__i(excluded_data, idata)
-    sample_dims = [dim for dim in log_lik.dims if dim != lfo_inputs.time_dim]
+    time_dim = lfo_inputs.time_dim
+    if log_lik.sizes.get(time_dim) != len(exclude_idx):
+        raise ValueError(
+            f"log_likelihood__i must return one value per excluded observation. Expected "
+            f"size {len(exclude_idx)} along '{time_dim}', got "
+            f"{log_lik.sizes.get(time_dim)} for cutoff {cutoff}."
+        )
+    if {"chain", "draw"}.issubset(log_lik.dims):
+        log_lik = log_lik.transpose("chain", "draw", ...)
+    sample_dims = [dim for dim in log_lik.dims if dim != time_dim]
     n_samples = np.prod([log_lik.sizes[dim] for dim in sample_dims])
     return log_lik, sample_dims, n_samples, idata
 
