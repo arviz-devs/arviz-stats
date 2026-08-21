@@ -90,7 +90,9 @@ def loo_subsample(
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
-        - ``lpd``: Use standard log predictive density approximation (default)
+        - ``lpd``: Use standard log predictive density approximation (default). The stored
+          log likelihood values are used unless ``log_lik_fn`` or ``model`` is provided,
+          in which case the approximation is recomputed from it.
         - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``
           or a ``model`` from which one is built.
     thin: int or str, optional
@@ -439,7 +441,9 @@ def update_subsample(
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
-        - ``lpd``: Use standard log predictive density approximation (default)
+        - ``lpd``: Use standard log predictive density approximation (default). The stored
+          log likelihood values are used unless ``log_lik_fn`` or ``model`` is provided,
+          in which case the approximation is recomputed from it.
         - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``
           or a ``model`` from which one is built.
     log_lik_fn : callable, optional
