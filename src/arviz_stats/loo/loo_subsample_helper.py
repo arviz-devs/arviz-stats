@@ -20,7 +20,9 @@ def ll_from_pymc(
     ``log_lik_fn`` computing the pointwise log likelihood of the observed variable, which
     is required for ``method="plpd"`` and optional for ``method="lpd"``. This helper
     compiles that function directly from the PyMC model, so it does not have to be
-    constructed manually.
+    constructed manually. Bambi models are supported through the ``model`` argument of
+    those functions, which re-centers the posterior and passes the underlying PyMC
+    model to this helper automatically.
 
     Parameters
     ----------
@@ -30,8 +32,8 @@ def ll_from_pymc(
     model : Model
         The PyMC model that produced the ``idata``.
     var_name : str, optional
-        Name of the observed variable whose log-likelihood is used for LOO. Can be omitted
-        if the model has exactly one observed random variable.
+        Name of the observed variable whose log-likelihood is used for PSIS-LOO-CV.
+        Can be omitted if the model has exactly one observed random variable.
 
     Returns
     -------
