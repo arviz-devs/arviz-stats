@@ -290,8 +290,7 @@ class TestUniformityTestGeneral:
 
     @pytest.mark.parametrize("method", ["pot_c", "prit_c"])
     def test_attained_size_under_null(self, method):
-        """Guard against the denominator regression (see #409).
-        """
+        """Guard against the denominator regression (see #409)."""
         rng = np.random.default_rng(42)
         x = rng.uniform(size=(10_000, 100))
         p_values, *_ = array_stats.uniformity_test(x, axis=-1, method=method)
