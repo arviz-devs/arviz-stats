@@ -89,7 +89,8 @@ def lfo_cv(
           parameters, only if ``pointwise=True``
         - **forecast_horizon**: forecast horizon
         - **min_observations**: minimum observations
-        - **refits**: array of time indices where refits occurred
+        - **refits**: array of time indices where refits occurred. For ``method="approx"``
+          the initial fit at the first forecast origin is not counted as a refit
         - **n_refits**: number of refits performed
 
     Notes
