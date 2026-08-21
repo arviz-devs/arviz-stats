@@ -1,3 +1,18 @@
+<a id="v1.3.1"></a>
+# [v1.3.1](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.3.1) - 2026-08-21
+
+## What's Changed
+* Fix NaN in `loo_score` CRPS and simplify score calculations by [@jordandeklerk](https://github.com/jordandeklerk) in [#405](https://github.com/arviz-devs/arviz-stats/pull/405)
+* Fix truncated Cauchy combination: restore correct denominator ([#409](https://github.com/arviz-devs/arviz-stats/issues/409)) by [@jarotter](https://github.com/jarotter) in [#410](https://github.com/arviz-devs/arviz-stats/pull/410)
+
+## New Contributors
+* [@jarotter](https://github.com/jarotter) made their first contribution in [#410](https://github.com/arviz-devs/arviz-stats/pull/410)
+
+**Full Changelog**: https://github.com/arviz-devs/arviz-stats/compare/v1.3.0...v1.3.1
+
+[Changes][v1.3.1]
+
+
 <a id="v1.3.0"></a>
 # [v1.3.0](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.3.0) - 2026-08-11
 
@@ -398,6 +413,7 @@
 [Changes][v.0.4.0]
 
 
+[v1.3.1]: https://github.com/arviz-devs/arviz-stats/compare/v1.3.0...v1.3.1
 [v1.3.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.2.0...v1.3.0
 [v1.2.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.1.0...v1.2.0
 [v1.1.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.0.0...v1.1.0
