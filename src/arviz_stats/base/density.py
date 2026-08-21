@@ -985,14 +985,16 @@ class _DensityBase(_CoreBase):
         return p_value, b_shapley_vals, w_shapley_vals
 
     def _cauchy_combination(self, ps, cauchy_vals, truncate):
-        """Combine p-values using the Cauchy combination method."""
+        """Combine p-values using the Cauchy combination method.
+
+        With ``truncate=True`` this is the truncated Cauchy combination test:
+        terms with p >= 0.5 are zeroed out but the denominator remains the
+        total number of terms, following Eq. (24) of Tesso and Vehtari (2026),
+        https://arxiv.org/abs/2603.02928. An input with no p-values below 0.5
+        therefore yields a statistic of 0 and a p-value of 0.5.
+        """
         if truncate:
-            idx = ps < 0.5
-            if not np.any(idx):
-                raise ValueError(
-                    "Cannot compute truncated Cauchy combination test. No p-values below 0.5 found."
-                )
-            cauchy_mean = np.mean(cauchy_vals[idx])
+            cauchy_mean = np.mean(np.where(ps < 0.5, cauchy_vals, 0.0))
         else:
             cauchy_mean = np.mean(cauchy_vals)
         return 0.5 - np.arctan(cauchy_mean) / np.pi
