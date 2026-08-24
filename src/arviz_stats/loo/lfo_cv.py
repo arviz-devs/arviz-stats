@@ -95,16 +95,23 @@ def lfo_cv(
 
     Notes
     -----
-    For ``forecast_horizon > 1``, results depend on the prediction pattern used to score
-    the forecast block. ``lfo_cv`` follows the conditional pattern, where each block
-    observation is scored given the observed values of the ones before it, yielding the
-    chain-rule factorization of the joint predictive density.
+    When ``forecast_horizon`` is greater than 1, each forecast origin is scored with the
+    joint log predictive density of the next ``forecast_horizon`` observations. If the
+    likelihood depends on lagged values of the response, as in autoregressive models,
+    there is more than one way to evaluate this joint density.
 
-    An alternative forecasting pattern scores each block observation against simulated
-    values of its predecessors rather than the observed ones, letting predictive
-    uncertainty propagate through the block. The two patterns estimate different quantities
-    and should not be mixed when comparing models. They coincide for ``forecast_horizon=1``
-    and whenever the likelihood does not depend on lagged response values.
+    ``lfo_cv`` uses the chain rule factorization, where each observation in the block is
+    scored conditional on the observed values of the observations before it. This measures
+    how well the model predicts the block that actually occurred given the training data.
+
+    The alternative is to score each observation in the block against simulated values of
+    its predecessors drawn from the model, letting predictive uncertainty accumulate across
+    the horizon. This measures how well the model forecasts the block when the intermediate
+    observations are never revealed, and is common in software oriented toward forecast
+    evaluation. The two approaches coincide when ``forecast_horizon=1`` and whenever the
+    likelihood does not depend on lagged values of the response. Otherwise they estimate
+    different quantities, so results computed one way should not be compared with results
+    computed the other way.
 
     See Also
     --------
