@@ -26,11 +26,18 @@ def lfo_cv(
     method="approx",
     k_threshold=0.7,
 ):
-    """Compute leave-future-out cross-validation (LFO-CV).
+    """Compute leave-future-out cross-validation (LFO-CV) for time series models.
 
-    Estimates the expected log pointwise predictive density (elpd) for time series models by
-    forecasting future observations from progressively expanding training windows, scoring the
-    joint predictive density of the next few observations at each step as described in [1]_.
+    Estimates the expected log predictive density (elpd) of M-step-ahead predictions for
+    time series models, where M is set by ``forecast_horizon``. The model is trained on the
+    observations up to each forecast origin and scored on the joint log predictive density
+    of the next M observations, so predictions are never conditioned on data from the future.
+    By default, the posterior is carried between forecast origins with Pareto-smoothed
+    importance sampling (PSIS) and the model is only refit when the approximation becomes
+    unreliable (see ``method``).
+
+    The PSIS-LFO-CV method is described in [1]_ and builds on the PSIS-LOO-CV method described
+    in [2]_ and [3]_.
 
     Parameters
     ----------
