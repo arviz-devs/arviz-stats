@@ -107,8 +107,8 @@ class NumbaArray(BaseArray):
             # pylint: disable=line-too-long, unused-argument
             @guvectorize(
                 [
-                    "void(float64[:],float64[:],boolean,UnicodeCharSeq(1),boolean,float64[:],float64[:],float64)",
-                    "void(float64[:],float64[:],boolean,float64,boolean,float64[:],float64[:],float64)",
+                    "void(float64[:],float64[:],boolean,UnicodeCharSeq(1),boolean,float64[:],float64[:],float64[:])",
+                    "void(float64[:],float64[:],boolean,float64,boolean,float64[:],float64[:],float64[:])",
                 ],
                 "(n),(m),(),(),()->(m),(m),()",
                 cache=True,
@@ -119,7 +119,7 @@ class NumbaArray(BaseArray):
             def kde_gufunc(a, grid_in, circular, bw, adaptive, grid, pdf, bw_out):
                 grid[:] = 0
                 pdf[:] = 0
-                bw_out = 0
+                bw_out[0] = 0
                 bw = {"t": "scott", "e": "experimental", "i": "isj", "s": "silverman"}.get(bw, bw)
                 grid_aux, pdf_aux, bw_aux = self.kde_linear(
                     a, bw=bw, adaptive=adaptive, grid_len=len(grid_in)
@@ -127,7 +127,7 @@ class NumbaArray(BaseArray):
                 for i in np.ndindex(grid.shape):
                     grid[i] = grid_aux[i]
                     pdf[i] = pdf_aux[i]
-                bw_out = bw_aux
+                bw_out[0] = bw_aux
 
             self._kde_ufunc = kde_gufunc
         return self._kde_ufunc
