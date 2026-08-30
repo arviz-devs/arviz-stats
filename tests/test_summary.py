@@ -268,6 +268,23 @@ def test_summary_ci_kind(datatree, ci_kind):
     assert f"{ci_kind}89_ub" in summary_df.columns
 
 
+@pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
+def test_summary_ci_kind_values(datatree, ci_kind):
+    """The reported interval must be the one named in the column."""
+    summary_df = summary(datatree, ci_kind=ci_kind, ci_prob=0.89, var_names=["mu"], round_to="none")
+    posterior = datatree.posterior.ds[["mu"]]
+    expected = getattr(posterior.azstats, ci_kind)(prob=0.89, dim=["chain", "draw"])
+
+    np.testing.assert_allclose(
+        summary_df[f"{ci_kind}89_lb"].to_numpy(),
+        np.asarray(expected["mu"]).ravel()[0],
+    )
+    np.testing.assert_allclose(
+        summary_df[f"{ci_kind}89_ub"].to_numpy(),
+        np.asarray(expected["mu"]).ravel()[1],
+    )
+
+
 @pytest.mark.parametrize("round_to", [0, 2, 4, "none"])
 def test_summary_round_to(datatree, round_to):
     summary_df = summary(datatree, round_to=round_to, var_names=["mu"])
