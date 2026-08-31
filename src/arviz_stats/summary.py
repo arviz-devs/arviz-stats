@@ -183,8 +183,9 @@ def summary(
             summary=["mean"]
         )
         std_value = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
+        ci_fun = dataset.azstats.eti if ci_kind == "eti" else dataset.azstats.hdi
         ci = (
-            dataset.azstats.eti(prob=ci_prob, dim=sample_dims, skipna=skipna)
+            ci_fun(prob=ci_prob, dim=sample_dims, skipna=skipna)
             .rename({"ci_bound": "summary"})
             .assign_coords(summary=[f"{ci_kind}{ci_perc}_lb", f"{ci_kind}{ci_perc}_ub"])
         )
