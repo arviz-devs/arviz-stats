@@ -778,7 +778,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Method to use for the uniformity test.
             Valid options are pot_c (default), prit_c and piet_c.
         **kwargs
-            Additional keyword arguments.
+            Additional keyword arguments passed to the test function.
+            ``n_simulations`` (default 1000) sets how many null replications
+            are used to Monte Carlo calibrate the p-value (simulated once and
+            cached per sample size); pass 0 for the uncalibrated analytic
+            p-value, which is anti-conservative at conventional levels.
 
         Returns
         -------

@@ -14,6 +14,8 @@ from scipy.stats import binom, hypergeom
 
 from arviz_stats.base.core import _CoreBase
 
+_UNIFORMITY_NULL_CACHE = {}
+
 
 class _DensityBase(_CoreBase):
     """Class with numpy+scipy only density related functions."""
@@ -843,8 +845,47 @@ class _DensityBase(_CoreBase):
 
         return (values / n) + ((harmonic_n - 1) / n) * (values - mean_others)
 
-    def _pot_c(self, ary):
-        """Pointwise Order-based Test with Cauchy combination (Beta-based tests)."""
+    def _calibrate_uniformity_pvalue(self, test_func, p_value, n, n_simulations):
+        """Calibrate an analytic Cauchy-combination p-value against the simulated null.
+
+        The Cauchy combination treats the combined statistic as standard
+        Cauchy, which is only guaranteed in the far tail; the combined terms
+        here (order statistics of one sample) are strongly dependent, so at
+        conventional levels the analytic p-value is anti-conservative
+        (roughly twice the nominal rejection rate at alpha = 0.05). The null
+        is fully known -- n i.i.d. uniforms -- so the analytic p-value is
+        re-ranked against ``n_simulations`` null p-values simulated through
+        the identical test, cached per (test, n, n_simulations) with a fixed
+        seed. Below the Monte Carlo resolution ``1 / (n_simulations + 1)``
+        the analytic value is kept: that is the far-tail regime where the
+        Cauchy combination is valid, and it preserves the gradation of
+        extreme p-values.
+        """
+        key = (test_func.__name__, n, n_simulations)
+        null = _UNIFORMITY_NULL_CACHE.get(key)
+        if null is None:
+            rng = np.random.default_rng(214)
+            null = np.empty(n_simulations)
+            for i in range(n_simulations):
+                try:
+                    null[i] = test_func(rng.uniform(size=n), n_simulations=0)[0]
+                except ValueError:
+                    # truncated combination with no pointwise p below 0.5
+                    null[i] = 0.5
+            null.sort()
+            _UNIFORMITY_NULL_CACHE[key] = null
+        n_at_or_below = int(np.searchsorted(null, p_value, side="right"))
+        if n_at_or_below == 0:
+            return min(p_value, 1.0 / (1.0 + n_simulations))
+        return (1.0 + n_at_or_below) / (1.0 + n_simulations)
+
+    def _pot_c(self, ary, n_simulations=1000):
+        """Pointwise Order-based Test with Cauchy combination (Beta-based tests).
+
+        The analytic p-value is Monte Carlo calibrated against the simulated
+        null (see ``_calibrate_uniformity_pvalue``); pass ``n_simulations=0``
+        for the uncalibrated analytic value.
+        """
         ary = ary[np.isfinite(ary)]
         n = len(ary)
 
@@ -860,6 +901,8 @@ class _DensityBase(_CoreBase):
         ps = 2 * np.minimum(probs, 1 - probs)
         cauchy_vals = np.tan((0.5 - ps) * np.pi)
         p_value = self._cauchy_combination(ps, cauchy_vals, truncate=True)
+        if n_simulations:
+            p_value = self._calibrate_uniformity_pvalue(self._pot_c, p_value, n, n_simulations)
 
         shapley_vals = self._shapley_mean(cauchy_vals)
 
@@ -868,8 +911,13 @@ class _DensityBase(_CoreBase):
 
         return p_value, shapley_vals, shapley_unsorted
 
-    def _prit_c(self, ary):
-        """Pointwise Rank-based Individual Test with Cauchy combination (Binomial-based tests)."""
+    def _prit_c(self, ary, n_simulations=1000):
+        """Pointwise Rank-based Individual Test with Cauchy combination (Binomial-based tests).
+
+        The analytic p-value is Monte Carlo calibrated against the simulated
+        null (see ``_calibrate_uniformity_pvalue``); pass ``n_simulations=0``
+        for the uncalibrated analytic value.
+        """
         ary = ary[np.isfinite(ary)]
         n = len(ary)
 
@@ -888,6 +936,8 @@ class _DensityBase(_CoreBase):
 
         cauchy_vals = np.tan((0.5 - ps) * np.pi)
         p_value = self._cauchy_combination(ps, cauchy_vals, truncate=True)
+        if n_simulations:
+            p_value = self._calibrate_uniformity_pvalue(self._prit_c, p_value, n, n_simulations)
         shapley_vals = self._shapley_mean(cauchy_vals)
 
         shapley_unsorted = np.empty_like(shapley_vals)
@@ -895,8 +945,13 @@ class _DensityBase(_CoreBase):
 
         return p_value, shapley_vals, shapley_unsorted
 
-    def _piet_c(self, ary):
-        """Pointwise Inverse-CDF Evaluation Tests Combination (Exp(1)-based tests)."""
+    def _piet_c(self, ary, n_simulations=1000):
+        """Pointwise Inverse-CDF Evaluation Tests Combination (Exp(1)-based tests).
+
+        The analytic p-value is Monte Carlo calibrated against the simulated
+        null (see ``_calibrate_uniformity_pvalue``); pass ``n_simulations=0``
+        for the uncalibrated analytic value.
+        """
         ary = ary[np.isfinite(ary)]
         n = len(ary)
 
@@ -909,6 +964,8 @@ class _DensityBase(_CoreBase):
         ps = 2 * np.minimum(pe, 1 - pe)
         cauchy_vals = np.tan((0.5 - ps) * np.pi)
         p_value = self._cauchy_combination(ps, cauchy_vals, truncate=False)
+        if n_simulations:
+            p_value = self._calibrate_uniformity_pvalue(self._piet_c, p_value, n, n_simulations)
         shapley_vals = self._shapley_mean(cauchy_vals)
 
         shapley_unsorted = np.empty_like(shapley_vals)

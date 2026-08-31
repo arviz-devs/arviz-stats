@@ -95,7 +95,9 @@ class TestUniformityTestPotC:
         ps = 2*min(cdf, 1-cdf) = [0.38, 0.02] (both < 0.5 for truncation)
         """
         x = np.array([0.1, 0.9])
-        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, method="pot_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(
+            x, method="pot_c", n_simulations=0
+        )
 
         x_sorted = np.sort(x)
         n = len(x)
@@ -148,7 +150,9 @@ class TestUniformityTestPritC:
         Test binomial probabilities to ensure some ps < 0.5 for truncation.
         """
         x = np.array([0.1, 0.9])
-        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, method="prit_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(
+            x, method="prit_c", n_simulations=0
+        )
 
         x_sorted = np.sort(x)
         len_x = len(x_sorted)
@@ -192,7 +196,9 @@ class TestUniformityTestPietC:
     def test_basic_values(self):
         """pe = expon.cdf(-log(x)), ps = 2*min(pe, 1-pe), then Cauchy combination."""
         x = np.array([0.1, 0.25, 0.5, 0.75, 0.9])
-        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(x, method="piet_c")
+        p_value, shapley, shapley_unsorted = array_stats.uniformity_test(
+            x, method="piet_c", n_simulations=0
+        )
 
         pe = expon.cdf(-np.log(x))
         ps = 2 * np.minimum(pe, 1 - pe)
@@ -275,7 +281,7 @@ class TestUniformityTestGeneral:
     def test_all_pointwise_ps_above_half(self, method):
         """An evenly spaced grid makes every pointwise p-value >= 0.5."""
         grid = (np.arange(300) + 0.5) / 300
-        p_value, *_ = array_stats.uniformity_test(grid, method=method)
+        p_value, *_ = array_stats.uniformity_test(grid, method=method, n_simulations=0)
         assert_allclose(p_value, 0.5, atol=1e-10)
 
     @pytest.mark.parametrize("method", ["pot_c", "prit_c"])
@@ -283,7 +289,7 @@ class TestUniformityTestGeneral:
         """One all-ps-above-half row must not abort a batched call."""
         rng = np.random.default_rng(0)
         x = np.vstack([rng.uniform(size=(3, 300)), (np.arange(300) + 0.5) / 300])
-        p_value, *_ = array_stats.uniformity_test(x, axis=-1, method=method)
+        p_value, *_ = array_stats.uniformity_test(x, axis=-1, method=method, n_simulations=0)
         assert p_value.shape == (4,)
         assert_allclose(p_value[-1], 0.5, atol=1e-10)
 
@@ -295,6 +301,33 @@ class TestUniformityTestGeneral:
         p_values, *_ = array_stats.uniformity_test(x, axis=-1, method=method)
         attained_size = np.mean(p_values < 0.05)
         assert 0.03 < attained_size < 0.08
+
+
+class TestUniformityCalibration:
+    """Monte Carlo calibration of the Cauchy-combination p-values (see #419)."""
+
+    @pytest.mark.parametrize("method", ["pot_c", "prit_c", "piet_c"])
+    def test_null_rejection_rate_larger_n(self, method):
+        """Attained size stays near nominal at sample sizes where the analytic
+        p-value rejects roughly twice the nominal rate."""
+        rng = np.random.default_rng(42)
+        x = rng.uniform(size=(2_000, 400))
+        p_values, *_ = array_stats.uniformity_test(x, axis=-1, method=method)
+        attained_size = np.mean(p_values < 0.05)
+        assert 0.03 < attained_size < 0.07
+
+    def test_far_tail_gradation_kept(self):
+        """Extreme evidence keeps the analytic value below the MC resolution."""
+        rng = np.random.default_rng(0)
+        p_value, *_ = array_stats.uniformity_test(rng.beta(0.5, 0.5, size=500))
+        assert p_value < 1e-6
+
+    def test_opt_out_returns_analytic(self):
+        rng = np.random.default_rng(3)
+        x = rng.uniform(size=100)
+        p_calibrated, *_ = array_stats.uniformity_test(x)
+        p_analytic, *_ = array_stats.uniformity_test(x, n_simulations=0)
+        assert p_calibrated != p_analytic
 
 
 class TestMchainUniformity:
