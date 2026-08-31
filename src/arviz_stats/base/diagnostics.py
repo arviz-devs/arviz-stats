@@ -295,7 +295,7 @@ class _DiagnosticsBase(_CoreBase):
             return np.nan
         ess = self._ess_mean(ary)
         if circular:
-            sd = stats.circstd(ary, -np.pi, np.pi, normalize=True)
+            sd = stats.circstd(ary, high=np.pi, low=-np.pi, normalize=True)
         else:
             sd = np.std(ary, ddof=1)
         mcse_mean_value = sd / np.sqrt(ess)

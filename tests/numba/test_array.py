@@ -174,6 +174,17 @@ class TestNumbaArray:
         assert pdf.shape == (4, 256)
         assert bw.shape == (4,)
 
+    def test_kde_bw_matches_base(self, rng):
+        """The numba backend must return the same bandwidth as the base one."""
+        from arviz_stats.base.array import BaseArray
+
+        ary = rng.normal(size=(4, 100))
+        _, _, bw = NumbaArray().kde(ary, axis=-1, grid_len=256)  # pylint: disable=unpacking-non-sequence
+        _, _, expected_bw = BaseArray().kde(  # pylint: disable=unpacking-non-sequence
+            ary, axis=-1, grid_len=256
+        )
+        assert_allclose(bw, expected_bw)
+
     @pytest.mark.parametrize(
         "axis,expected_shape,expected_bw_shape",
         [
