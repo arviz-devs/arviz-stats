@@ -520,7 +520,7 @@ def test_loo_subsample_observations_exceeds_total(centered_eight_with_sigma):
 
 
 def test_loo_subsample_plpd_without_loglik(centered_eight_with_sigma):
-    with pytest.raises(ValueError, match="log_lik_fn must be provided when method='plpd'"):
+    with pytest.raises(ValueError, match="log_lik_fn or model must be provided when method='plpd'"):
         loo_subsample(
             centered_eight_with_sigma,
             observations=4,
