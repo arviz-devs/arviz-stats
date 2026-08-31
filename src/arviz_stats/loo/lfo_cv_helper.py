@@ -28,6 +28,7 @@ LFOInputs = namedtuple(
         "n_time_points",
         "min_observations",
         "forecast_horizon",
+        "origins",
     ],
 )
 
@@ -63,13 +64,16 @@ def _prepare_lfo_inputs(data, var_name, wrapper, min_observations, forecast_hori
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
     if obs_dims != [time_dim]:
         raise ValueError(
-            f"lfo_cv currently supports a single time dimension. Found observation "
-            f"dimensions {obs_dims}, expected only '{time_dim}'."
+            "lfo_cv currently requires one log-likelihood value per time point. "
+            f"Found observation dimensions {obs_dims}, expected only '{time_dim}'. "
+            "Combine a multivariate likelihood into one joint log-likelihood value per time "
+            "point before calling lfo_cv."
         )
 
     n_samples = int(np.prod([log_likelihood.sizes[dim] for dim in sample_dims]))
 
     _validate_lfo_parameters(min_observations, forecast_horizon, log_likelihood.sizes[time_dim])
+    origins = np.arange(min_observations, log_likelihood.sizes[time_dim] - forecast_horizon + 1)
 
     return LFOInputs(
         log_likelihood=log_likelihood,
@@ -79,6 +83,7 @@ def _prepare_lfo_inputs(data, var_name, wrapper, min_observations, forecast_hori
         n_time_points=log_likelihood.sizes[time_dim],
         min_observations=min_observations,
         forecast_horizon=forecast_horizon,
+        origins=origins,
     )
 
 
@@ -115,13 +120,13 @@ def _compute_lfo_exact(lfo_inputs, wrapper):
     time_dim = lfo_inputs.time_dim
     horizon = lfo_inputs.forecast_horizon
 
-    origins = np.arange(lfo_inputs.min_observations, lfo_inputs.n_time_points - horizon + 1)
+    origins = lfo_inputs.origins
     elpds = np.empty(len(origins))
     lpds = np.empty(len(origins))
     for pos, cutoff in enumerate(origins):
-        log_lik, dims, n_refit, _ = _refit_loglik(lfo_inputs, wrapper, cutoff)
+        log_lik, dims, n_refit_samples, _ = _refit_loglik(lfo_inputs, wrapper, cutoff)
         block = log_lik.isel({time_dim: slice(0, horizon)}).sum(time_dim)
-        elpds[pos] = logsumexp(block, dims=dims, b=1 / n_refit)
+        elpds[pos] = logsumexp(block, dims=dims, b=1 / n_refit_samples)
 
         ll_block = ll_full.isel({time_dim: slice(cutoff, cutoff + horizon)}).sum(time_dim)
         lpds[pos] = logsumexp(ll_block, dims=sample_dims, b=1 / n_samples)
@@ -166,7 +171,7 @@ def _compute_lfo_approx(lfo_inputs, wrapper, k_threshold):
     time_dim = lfo_inputs.time_dim
     horizon = lfo_inputs.forecast_horizon
 
-    origins = np.arange(lfo_inputs.min_observations, lfo_inputs.n_time_points - horizon + 1)
+    origins = lfo_inputs.origins
     last_refit = origins[0]
     ll_star, star_dims, n_star, idata_star = _refit_loglik(lfo_inputs, wrapper, last_refit)
     r_eff = _get_r_eff(idata_star, n_star)
@@ -182,10 +187,7 @@ def _compute_lfo_approx(lfo_inputs, wrapper, k_threshold):
             log_weights, pareto_k = None, np.nan
         else:
             log_ratios = ll_star.isel({time_dim: slice(0, offset)}).sum(time_dim)
-            try:
-                log_weights, pareto_k = (-log_ratios).azstats.psislw(dim=star_dims, r_eff=r_eff)
-            except ValueError:
-                log_weights, pareto_k = None, np.inf
+            log_weights, pareto_k = _psis_lfo_weights(log_ratios, star_dims, r_eff)
             if pareto_k > k_threshold:
                 ll_star, star_dims, n_star, idata_star = _refit_loglik(lfo_inputs, wrapper, cutoff)
                 r_eff = _get_r_eff(idata_star, n_star)
@@ -206,6 +208,41 @@ def _compute_lfo_approx(lfo_inputs, wrapper, k_threshold):
 
     refits = np.array(refits, dtype=int)
     return _assemble_results(lfo_inputs, origins, elpds, lpds, refits, pareto_ks)
+
+
+def _psis_lfo_weights(log_ratios, sample_dims, r_eff):
+    """Compute PSIS-LFO weights and flag invalid approximations for exact refitting.
+
+    It returns ``(None, np.inf)`` if the input log ratios are invalid, if PSIS raises
+    ``ValueError``, or if PSIS returns invalid weights or Pareto k. The approximate LFO loop
+    treats the infinite Pareto k as exceeding ``k_threshold`` and refits the model at the
+    current forecast origin.
+    """
+    ratio_values = np.asarray(log_ratios)
+
+    if (
+        np.any(np.isnan(ratio_values))
+        or np.any(np.isposinf(ratio_values))
+        or np.all(np.isneginf(ratio_values))
+    ):
+        return None, np.inf
+
+    try:
+        log_weights, pareto_k = (-log_ratios).azstats.psislw(dim=sample_dims, r_eff=r_eff)
+    except ValueError:
+        return None, np.inf
+
+    pareto_k = float(np.asarray(pareto_k))
+    weight_values = np.asarray(log_weights)
+    if (
+        np.isnan(pareto_k)
+        or np.isposinf(pareto_k)
+        or np.any(np.isnan(weight_values))
+        or np.any(np.isposinf(weight_values))
+    ):
+        return None, np.inf
+
+    return log_weights, pareto_k
 
 
 def _refit_loglik(lfo_inputs, wrapper, cutoff):
@@ -240,6 +277,8 @@ def _refit_loglik(lfo_inputs, wrapper, cutoff):
     train_data, excluded_data = wrapper.sel_observations(exclude_idx)
     idata = wrapper.get_inference_data(wrapper.sample(train_data))
 
+    # Approximate LFO reuses this fit at later origins, so it needs the likelihood of every
+    # remaining observation, including those used to form subsequent importance ratios.
     log_lik = wrapper.log_likelihood__i(excluded_data, idata)
     time_dim = lfo_inputs.time_dim
     if log_lik.sizes.get(time_dim) != len(exclude_idx):

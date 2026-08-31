@@ -43,7 +43,7 @@ def test_lfo_cv_exact_refits_each_origin(constant_lfo_wrapper, lfo_constant_data
     n_time = lfo_constant_data.log_likelihood["obs"].sizes["time"]
     expected_cutoffs = list(range(min_obs, n_time - horizon + 1))
 
-    lfo_cv(
+    result = lfo_cv(
         lfo_constant_data,
         constant_lfo_wrapper,
         min_observations=min_obs,
@@ -53,6 +53,8 @@ def test_lfo_cv_exact_refits_each_origin(constant_lfo_wrapper, lfo_constant_data
 
     assert constant_lfo_wrapper.fit_count == len(expected_cutoffs)
     assert constant_lfo_wrapper.cutoffs == expected_cutoffs
+    assert result.n_refits == len(expected_cutoffs)
+    np.testing.assert_array_equal(result.refits, expected_cutoffs)
 
 
 @pytest.mark.parametrize("horizon", [1, 2, 4])
@@ -267,6 +269,7 @@ def test_lfo_cv_pointwise_false(constant_lfo_wrapper, lfo_constant_data):
 
     assert result.elpd_i is None
     assert result.pareto_k is None
+    assert result.p_lfo_i is None
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")

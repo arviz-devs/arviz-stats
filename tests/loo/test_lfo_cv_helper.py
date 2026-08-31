@@ -12,6 +12,7 @@ xr = importorskip("xarray")
 from arviz_stats.loo.lfo_cv_helper import (
     LFOInputs,
     _prepare_lfo_inputs,
+    _psis_lfo_weights,
     _validate_lfo_parameters,
 )
 from arviz_stats.loo.wrapper import SamplingWrapper
@@ -45,6 +46,7 @@ def test_prepare_lfo_inputs(constant_lfo_wrapper, lfo_constant_data):
     assert inputs.n_samples == log_lik.sizes["chain"] * log_lik.sizes["draw"]
     assert inputs.time_dim == "time"
     assert inputs.sample_dims == ["chain", "draw"]
+    np.testing.assert_array_equal(inputs.origins, np.arange(5, 10))
 
 
 def test_prepare_lfo_inputs_selects_var_name(constant_lfo_wrapper):
@@ -96,5 +98,22 @@ def test_prepare_lfo_inputs_rejects_extra_obs_dims(constant_lfo_wrapper):
         coords={"time": np.arange(6), "group": [0, 1]},
     )
 
-    with pytest.raises(ValueError, match="single time dimension"):
+    with pytest.raises(ValueError, match="one log-likelihood value per time point"):
         _prepare_lfo_inputs(data, None, constant_lfo_wrapper, 3, 1, "time")
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        np.r_[np.zeros(99), np.inf],
+        np.r_[np.zeros(99), np.nan],
+        np.full(100, -np.inf),
+    ],
+)
+def test_psis_lfo_weights_rejects_undefined_ratios(values):
+    log_ratios = xr.DataArray(values, dims=["draw"])
+
+    log_weights, pareto_k = _psis_lfo_weights(log_ratios, ["draw"], r_eff=1.0)
+
+    assert log_weights is None
+    assert np.isposinf(pareto_k)

@@ -177,6 +177,16 @@ def test_compare_lfo_with_other_methods(centered_eight, lfo_result_factory):
         compare(compare_dict)
 
 
+def test_compare_lfo_with_raw_model_data(centered_eight, lfo_result_factory):
+    compare_dict = {
+        "raw_loo_model": centered_eight,
+        "lfo_model": lfo_result_factory(),
+    }
+
+    with pytest.raises(ValueError, match="Cannot compare LFO-CV results"):
+        compare(compare_dict)
+
+
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
     loo_sub1 = loo_subsample(

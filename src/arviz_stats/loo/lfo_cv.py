@@ -50,7 +50,9 @@ def lfo_cv(
         ``get_inference_data``, and ``log_likelihood__i``. Following the same pattern as
         :func:`loo_kfold`, ``sel_observations`` receives an array of integer indices to
         exclude from training and returns ``(modified_observed_data, excluded_observed_data)``.
-        The forecast window is selected from ``excluded_observed_data`` internally.
+        The forecast window is selected from ``excluded_observed_data`` internally. Each refit
+        excludes all observations from the forecast origin through the end. The approximate
+        method also uses later excluded values to compute subsequent importance ratios.
     min_observations : int
         Minimum number of observations required before making predictions.
         The first prediction is made at time min_observations.
@@ -160,10 +162,9 @@ def lfo_cv(
         lfo_results = _compute_lfo_approx(lfo_inputs, wrapper, k_threshold)
 
     warning = False
-    good_k = None
+    good_k = k_threshold if method == "approx" else None
     n_refits = len(lfo_results.refits)
     if method == "approx":
-        good_k = k_threshold
         if n_refits > lfo_results.n_data_points / 2:
             warnings.warn(
                 f"LFO-CV triggered {n_refits} refits out of {lfo_results.n_data_points} forecast "
@@ -185,14 +186,11 @@ def lfo_cv(
         good_k=good_k,
         elpd_i=lfo_results.elpd_i if pointwise else None,
         pareto_k=lfo_results.pareto_k if (pointwise and method == "approx") else None,
+        forecast_horizon=forecast_horizon,
+        min_observations=min_observations,
+        refits=np.asarray(lfo_results.refits),
+        n_refits=n_refits,
+        p_lfo_i=lfo_results.p_lfo_i if pointwise else None,
     )
-
-    elpd_data.forecast_horizon = forecast_horizon
-    elpd_data.min_observations = min_observations
-    elpd_data.refits = np.asarray(lfo_results.refits)
-    elpd_data.n_refits = n_refits
-
-    if pointwise:
-        elpd_data.p_lfo_i = lfo_results.p_lfo_i
 
     return elpd_data
