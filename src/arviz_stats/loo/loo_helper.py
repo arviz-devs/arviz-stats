@@ -568,20 +568,13 @@ def _prepare_subsample(
     n_data_points,
     n_samples,
     thin_factor=None,
+    model=None,
 ):
     """Prepare inputs for PSIS-LOO-CV with sub-sampling."""
     indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
 
-    if thin_factor is not None and log_lik_fn is not None:
-        from arviz_stats.manipulation import thin
-
-        data = data.copy(deep=True)
-        if hasattr(data, "posterior"):
-            thinned_posterior = thin(data.posterior, factor=thin_factor)
-            data["posterior"] = thinned_posterior
-
     if method == "lpd":
-        if log_lik_fn is None:
+        if log_lik_fn is None and model is None:
             lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples)
         else:
             lpd_approx_all = _compute_loo_approximation(
@@ -591,6 +584,8 @@ def _prepare_subsample(
                 param_names=param_names,
                 method="lpd",
                 log=log,
+                model=model,
+                thin_factor=thin_factor,
             )
     else:  # method == "plpd"
         lpd_approx_all = _compute_loo_approximation(
@@ -600,6 +595,8 @@ def _prepare_subsample(
             param_names=param_names,
             method="plpd",
             log=log,
+            model=model,
+            thin_factor=thin_factor,
         )
 
     log_likelihood_sample = _select_obs_by_indices(log_likelihood_da, indices, obs_dims, "__obs__")
@@ -625,6 +622,7 @@ def _prepare_update_subsample(
     param_names,
     log,
     thin_factor=None,
+    model=None,
 ):
     """Prepare inputs for updating PSIS-LOO-CV with additional observations."""
     loo_inputs = _prepare_loo_inputs(data, var_name, thin_factor)
@@ -653,16 +651,8 @@ def _prepare_update_subsample(
         if len(overlap) > 0:
             raise ValueError(f"New indices {overlap} overlap with existing indices.")
 
-    if thin_factor is not None and log_lik_fn is not None:
-        from arviz_stats.manipulation import thin
-
-        data = data.copy(deep=True)
-        if hasattr(data, "posterior"):
-            thinned_posterior = thin(data.posterior, factor=thin_factor)
-            data["posterior"] = thinned_posterior
-
     if method == "lpd":
-        if log_lik_fn is None:
+        if log_lik_fn is None and model is None:
             lpd_approx_all = logsumexp(
                 log_likelihood, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
             )
@@ -674,6 +664,8 @@ def _prepare_update_subsample(
                 param_names=param_names,
                 method="lpd",
                 log=log,
+                model=model,
+                thin_factor=thin_factor,
             )
     else:  # method == "plpd"
         lpd_approx_all = _compute_loo_approximation(
@@ -683,6 +675,8 @@ def _prepare_update_subsample(
             param_names=param_names,
             method="plpd",
             log=log,
+            model=model,
+            thin_factor=thin_factor,
         )
 
     log_likelihood_new_da = _select_obs_by_indices(
@@ -711,8 +705,38 @@ def _compute_loo_approximation(
     param_names=None,
     method="lpd",
     log=True,
+    model=None,
+    thin_factor=None,
 ):
     """Compute LOO approximation with LPD or PLPD method."""
+    if model is not None and log_lik_fn is not None:
+        warnings.warn(
+            "Both `model` and `log_lik_fn` were provided. The supplied `model` will be ignored.",
+            UserWarning,
+            stacklevel=4,
+        )
+    elif model is not None:
+        if not log:
+            raise ValueError("log must be True when log_lik_fn is auto-built from model.")
+        from arviz_stats.loo.loo_subsample_helper import ll_from_pymc
+
+        # If model is Bambi's, re-center the intercept so it matches the PyMC value variable
+        re_center_intercept = getattr(model, "_re_center_intercept", None)
+        if re_center_intercept is not None:
+            data = re_center_intercept(data)
+            model = model.backend.model
+
+        log_lik_fn = ll_from_pymc(data, model=model, var_name=var_name)
+        param_names = None
+
+    if thin_factor is not None and log_lik_fn is not None:
+        from arviz_stats.manipulation import thin
+
+        data = data.copy(deep=True)
+        if hasattr(data, "posterior"):
+            thinned_posterior = thin(data.posterior, factor=thin_factor)
+            data["posterior"] = thinned_posterior
+
     if not hasattr(data, "observed_data"):
         raise ValueError("No observed_data group found in the data")
     if var_name not in data.observed_data:
@@ -730,7 +754,7 @@ def _compute_loo_approximation(
         return logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
 
     if log_lik_fn is None:
-        raise ValueError(f"log_lik_fn required for {method} method")
+        raise ValueError("log_lik_fn or model must be provided when method='plpd'")
     if not callable(log_lik_fn):
         raise TypeError("log_lik_fn must be a callable function.")
 

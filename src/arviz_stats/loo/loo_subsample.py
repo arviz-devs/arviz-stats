@@ -126,7 +126,7 @@ def loo_subsample(
         A model object. Currently supported models are PyMC and Bambi.
         If provided and ``log_lik_fn`` is not, it will be used to auto-build ``log_lik_fn``,
         so it does not have to be constructed manually. ``param_names`` is ignored in
-        this case.
+        this case. If both are provided, ``log_lik_fn`` takes precedence and a warning is issued.
 
     Returns
     -------
@@ -208,24 +208,6 @@ def loo_subsample(
     if reff is None:
         reff = _get_r_eff(data, loo_inputs.n_samples)
 
-    # Auto-build the log likelihood function from the model if provided
-    if model is not None and log_lik_fn is None:
-        if not log:
-            raise ValueError("log must be True when log_lik_fn is auto-built from model.")
-        from arviz_stats.loo.loo_subsample_helper import ll_from_pymc
-
-        ## if model is Bambi's, re-center the intercept so it matches the PyMC value variable
-        re_center_intercept = getattr(model, "_re_center_intercept", None)
-        if re_center_intercept is not None:
-            data = re_center_intercept(data)
-            model = model.backend.model
-
-        log_lik_fn = ll_from_pymc(data, model=model, var_name=loo_inputs.var_name)
-        param_names = None
-
-    if method == "plpd" and log_lik_fn is None:
-        raise ValueError("log_lik_fn or model must be provided when method='plpd'")
-
     jacobian_da = _check_log_jacobian(log_jacobian, loo_inputs.obs_dims)
 
     subsample_data = _prepare_subsample(
@@ -243,6 +225,7 @@ def loo_subsample(
         loo_inputs.n_data_points,
         loo_inputs.n_samples,
         thin,
+        model=model,
     )
 
     lpd_approx_all = subsample_data.lpd_approx_all
@@ -465,7 +448,7 @@ def update_subsample(
         A model object. Currently supported models are PyMC and Bambi.
         If provided and ``log_lik_fn`` is not, it will be used to auto-build ``log_lik_fn``,
         so it does not have to be constructed manually. ``param_names`` is ignored in
-        this case.
+        this case. If both are provided, ``log_lik_fn`` takes precedence and a warning is issued.
 
     Returns
     -------
@@ -539,26 +522,18 @@ def update_subsample(
     if reff is None:
         reff = _get_r_eff(data, loo_inputs.n_samples)
 
-    # Auto-build the log likelihood function from the model if provided
-    if model is not None and log_lik_fn is None:
-        if not log:
-            raise ValueError("log must be True when log_lik_fn is auto-built from model.")
-        from arviz_stats.loo.loo_subsample_helper import ll_from_pymc
-
-        ## if model is Bambi's, re-center the intercept so it matches the PyMC value variable
-        re_center_intercept = getattr(model, "_re_center_intercept", None)
-        if re_center_intercept is not None:
-            data = re_center_intercept(data)
-            model = model.backend.model
-
-        log_lik_fn = ll_from_pymc(data, model=model, var_name=loo_inputs.var_name)
-        param_names = None
-
-    if method == "plpd" and log_lik_fn is None:
-        raise ValueError("log_lik_fn or model must be provided when method='plpd'")
-
     update_data = _prepare_update_subsample(
-        loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log, thin
+        loo_orig,
+        data,
+        observations,
+        var_name,
+        seed,
+        method,
+        log_lik_fn,
+        param_names,
+        log,
+        thin,
+        model=model,
     )
 
     log_jacobian = getattr(loo_orig, "log_jacobian", None)

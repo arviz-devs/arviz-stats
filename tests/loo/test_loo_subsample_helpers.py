@@ -195,6 +195,35 @@ class TestSubsampleLogLikFunctions:
                 initial, idata, observations=np.array([1, 8]), method="plpd", model=model, log=False
             )
 
+    @pytest.mark.parametrize("update", [False, True])
+    def test_log_lik_fn_takes_precedence_over_model(self, normal_setup, update):
+        idata, _, _ = normal_setup
+        kwargs = {
+            "observations": np.array([1, 8]),
+            "method": "plpd",
+            "log_lik_fn": _manual_ll_fn,
+            "model": object(),
+        }
+        if update:
+            initial = loo_subsample(
+                idata,
+                observations=np.array([0, 2, 5]),
+                var_name="y",
+                method="plpd",
+                log_lik_fn=_manual_ll_fn,
+                pointwise=True,
+            )
+        else:
+            kwargs.update({"var_name": "y", "pointwise": True})
+
+        with pytest.warns(UserWarning, match="Both `model` and `log_lik_fn` were provided"):
+            if update:
+                result = update_subsample(initial, idata, **kwargs)
+            else:
+                result = loo_subsample(idata, **kwargs)
+
+        assert np.isfinite(result.elpd)
+
     def test_update_subsample_plpd_without_loglik_or_model_raises(self, normal_setup):
         idata, model, _ = normal_setup
         initial = loo_subsample(
