@@ -246,7 +246,7 @@ def compare(
         )
 
     ics = pd.DataFrame.from_dict(ics_dict, orient="index")
-    ics.sort_values(by="elpd", inplace=True, ascending=False)
+    ics = ics.sort_values(by="elpd", ascending=False)
     ics["elpd_i"] = ics["elpd_i"].apply(lambda x: x.values.flatten())
     ses = ics["se"]
 
