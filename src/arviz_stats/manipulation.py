@@ -156,6 +156,21 @@ def weight_predictions(
     See Also
     --------
     compare :  Compare models based on PSIS-LOO-CV `loo`
+
+    Examples
+    --------
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: import arviz_stats as azs
+           ...: m0 = azb.load_arviz_data("crabs_poisson")
+           ...: m1 = azb.load_arviz_data("crabs_hurdle_nb")
+           ...: model_dict = {"m0": m0, "m1": m1}
+           ...: comp = azs.compare({"m0": m0, "m1": m1})
+           ...: azs.weight_predictions(
+           ...:     [model_dict[name] for name in comp.index],
+           ...:     weights=comp["weight"],
+           ...: )
     """
     dts = [convert_to_datatree(dt) for dt in dts]
     if len(dts) < 2:
