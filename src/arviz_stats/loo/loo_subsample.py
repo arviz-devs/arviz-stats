@@ -235,6 +235,11 @@ def loo_subsample(
     lpd_approx_sample = _select_obs_by_indices(
         lpd_approx_all, subsample_data.indices, loo_inputs.obs_dims, "__obs__"
     )
+    lpd_sample = logsumexp(
+        subsample_data.log_likelihood_sample,
+        dims=loo_inputs.sample_dims,
+        b=1 / loo_inputs.n_samples,
+    )
 
     sample_ds = xr.Dataset({loo_inputs.var_name: subsample_data.log_likelihood_sample})
 
@@ -285,6 +290,7 @@ def loo_subsample(
             jacobian_da, subsample_data.indices, loo_inputs.obs_dims, "__obs__"
         )
         elpd_loo_i = elpd_loo_i + jacobian_sample
+        lpd_sample = lpd_sample + jacobian_sample
 
     warn_mg, good_k = _warn_pareto_k(pareto_k_sample_da, loo_inputs.n_samples)
 
@@ -296,7 +302,7 @@ def loo_subsample(
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
     # from the subsample
-    p_loo_sample = lpd_approx_sample - elpd_loo_i
+    p_loo_sample = lpd_sample - elpd_loo_i
     p_loo, _, _ = p_loo_sample.azstats.srs_estimator(
         n_data_points=loo_inputs.n_data_points,
     )
@@ -607,6 +613,7 @@ def update_subsample(
     combined_pareto_k_da = xr.concat(
         [update_data.old_pareto_k, pareto_k_new_da], dim=update_data.concat_dim
     )
+    combined_indices = np.concatenate((update_data.old_indices, update_data.new_indices))
 
     good_k = loo_orig.good_k
     warn_mg, _ = _warn_pareto_k(combined_pareto_k_da, loo_inputs.n_samples)
@@ -623,12 +630,25 @@ def update_subsample(
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
     # from the subsample
-    p_loo_sample = lpd_approx_sample_da - combined_elpd_i_da
+    log_likelihood_sample_da = _select_obs_by_indices(
+        loo_inputs.log_likelihood, combined_indices, loo_inputs.obs_dims, "__obs__"
+    )
+    lpd_sample_da = logsumexp(
+        log_likelihood_sample_da,
+        dims=loo_inputs.sample_dims,
+        b=1 / loo_inputs.n_samples,
+    )
+    if jacobian_da is not None:
+        jacobian_sample_da = _select_obs_by_indices(
+            jacobian_da, combined_indices, loo_inputs.obs_dims, "__obs__"
+        )
+        lpd_sample_da = lpd_sample_da + jacobian_sample_da
+
+    p_loo_sample = lpd_sample_da - combined_elpd_i_da
     p_loo, _, _ = p_loo_sample.azstats.srs_estimator(
         n_data_points=loo_inputs.n_data_points,
     )
 
-    combined_indices = np.concatenate((update_data.old_indices, update_data.new_indices))
     elpd_i_full, pareto_k_full = _prepare_full_arrays(
         combined_elpd_i_da,
         combined_pareto_k_da,
