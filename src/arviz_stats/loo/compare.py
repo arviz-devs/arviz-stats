@@ -69,7 +69,8 @@ def compare(
 
         * ``elpd`` and ``elpd_diff`` are rounded based on ``se`` and ``dse`` respectively,
             using the same rule as ``summary`` stat/se pairs.
-        * ``se`` and ``dse`` are rounded based on ``rcParams["stats.round_to"]``.
+        * ``se``, ``dse`` and ``subsampling_dse`` are rounded based on
+          ``rcParams["stats.round_to"]``.
         * ``p`` is rounded to 1 decimal place.
         * ``weight`` uses precision based on the largest weight, showing approximately 2
           significant digits for that maximum value.
@@ -380,6 +381,8 @@ def compare(
     else:
         if round_to not in ("None", "none"):
             cols_to_round = ["elpd", "p", "elpd_diff", "weight", "se", "dse", prob_direction]
+            if "subsampling_dse" in result.columns:
+                cols_to_round.append("subsampling_dse")
             result[cols_to_round] = result[cols_to_round].map(lambda x: round_num(x, round_val))
 
     model_order = list(ics.index)
@@ -722,6 +725,11 @@ def _round_compare(result, round_val, prob_direction):
 
             decimal_places = get_decimal_places_from_se(se_val)
             result.loc[idx, stat_col] = round_num(stat_val, decimal_places)
+
+    if "subsampling_dse" in result.columns:
+        result["subsampling_dse"] = result["subsampling_dse"].apply(
+            lambda x: round_num(x, round_val)
+        )
 
     if "p" in result.columns:
         result["p"] = result["p"].apply(lambda x: round_num(x, 1))

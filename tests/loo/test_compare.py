@@ -206,9 +206,10 @@ def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
     assert np.isfinite(comparison_updated["subsampling_dse"].values).all()
 
     with pytest.warns(UserWarning, match="Different subsamples used in 'model_a' and 'model_b'"):
-        comparison_diff_subsample = compare({"model_a": loo_sub1, "model_b": loo_sub3})
+        comparison_diff_subsample = compare({"model_a": loo_sub1, "model_b": loo_sub3}, round_to=1)
     assert "subsampling_dse" in comparison_diff_subsample.columns
     assert np.isfinite(comparison_diff_subsample["subsampling_dse"].values).all()
+    assert_allclose(comparison_diff_subsample["subsampling_dse"].to_numpy(), [0.0, 0.4])
 
     comparison_regular = compare({"model1": loo_full, "model2": loo_full})
     assert "subsampling_dse" not in comparison_regular.columns
@@ -511,6 +512,7 @@ def test_round_auto():
             "rank": [0, 1, 2],
             "elpd_diff": [0.0, -0.031, -1.5],
             "dse": [0.0, 0.061, 0.0],
+            "subsampling_dse": [0.0, 0.369184, 0.072078],
             "p_worse": [0.9123, 0.9123, 0.0001],
             "diag_diff": ["", "", "N < 100"],
             "diag_elpd": ["", "", ""],
@@ -526,6 +528,7 @@ def test_round_auto():
 
     assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.0, 0.0, -2]))
     assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06, 0.0]))
+    assert_allclose(result["subsampling_dse"].to_numpy(), np.array([0.0, 0.37, 0.07]))
     assert_allclose(result["p_worse"].to_numpy(), np.array([0.91, 0.91, 0.0]))
     assert (result["diag_diff"] == ["", "", "N < 100"]).all()
     assert (result["diag_elpd"] == ["", "", ""]).all()
