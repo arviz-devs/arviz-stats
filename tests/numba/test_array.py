@@ -207,6 +207,28 @@ class TestNumbaArray:
         assert pdf.shape == expected_shape
         assert bw.shape == expected_bw_shape
 
+    def test_kde_circular_matches_base(self, rng):
+        """The numba backend must honour ``circular``, like the base one does."""
+        from arviz_stats.base.array import BaseArray
+
+        ary = rng.vonmises(0.0, 2.0, size=(4, 100))
+
+        grid, pdf, bw = NumbaArray().kde(  # pylint: disable=unpacking-non-sequence
+            ary, axis=-1, circular=True, grid_len=256
+        )
+        e_grid, e_pdf, e_bw = BaseArray().kde(  # pylint: disable=unpacking-non-sequence
+            ary, axis=-1, circular=True, grid_len=256
+        )
+        assert_allclose(grid, e_grid)
+        assert_allclose(pdf, e_pdf)
+        assert_allclose(bw, e_bw)
+
+        # and the circular estimate must not silently be the linear one
+        _, linear_pdf, _ = NumbaArray().kde(  # pylint: disable=unpacking-non-sequence
+            ary, axis=-1, circular=False, grid_len=256
+        )
+        assert not np.allclose(pdf, linear_pdf)
+
     def test_kde_ufunc_caching(self):
         array_stats = NumbaArray()
         assert array_stats._kde_ufunc is None
