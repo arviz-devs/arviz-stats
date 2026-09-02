@@ -87,6 +87,7 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.loo_subsample
    arviz_stats.reloo
    arviz_stats.update_subsample
+   arviz_stats.weight_predictions
 ```
 
 ### Other
