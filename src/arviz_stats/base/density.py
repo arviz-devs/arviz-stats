@@ -643,7 +643,7 @@ class _DensityBase(_CoreBase):
 
         # Determine grid
         if custom_lims is not None:
-            custom_lims = self._check_custom_lims(custom_lims, x.min(), x.max())
+            custom_lims = self.check_custom_lims(custom_lims, x.min(), x.max())
             grid_min = custom_lims[0]
             grid_max = custom_lims[1]
             assert grid_min >= -np.pi, "Lower limit can't be smaller than -pi"

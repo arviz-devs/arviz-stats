@@ -405,6 +405,13 @@ class TestKDECircular:
         integral = np.sum(pdf * dx)
         assert_allclose(integral, 1.0, rtol=0.01)
 
+    def test_kde_circular_custom_lims(self, density, rng):
+        x = rng.uniform(-1, 1, size=100)
+        custom_lims = [-1.5, 1.5]
+        grid, _, _ = density.kde_circular(x, custom_lims=custom_lims)
+        assert grid.min() >= custom_lims[0]
+        assert grid.max() <= custom_lims[1]
+
     def test_kde_circular_cumulative(self, density, rng):
         x = rng.vonmises(0, 2, 100)
         _, pdf, _ = density.kde_circular(x, cumulative=True)
