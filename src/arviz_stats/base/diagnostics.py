@@ -306,10 +306,10 @@ class _DiagnosticsBase(_CoreBase):
         ary = np.asarray(ary)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
-        sims_c2 = (ary - ary.mean()) ** 2
-        ess = self._ess_mean(ary)
-        evar = sims_c2.mean()
-        varvar = ((sims_c2**2).mean() - evar**2) / ess
+        sims_c = ary - ary.mean()
+        ess = self._ess_mean((sims_c) ** 2)
+        evar = (sims_c**2).mean()
+        varvar = ((sims_c**4).mean() - evar**2) / ess
         varsd = varvar / evar / 4
         mcse_sd_value = np.sqrt(varsd)
         return mcse_sd_value
