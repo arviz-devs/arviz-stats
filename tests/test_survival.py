@@ -251,6 +251,17 @@ def test_kaplan_meier_tied_events():
     assert np.all(np.diff(survival_probs) <= 0)
 
 
+def test_kaplan_meier_integer_times():
+    times = np.array([1, 1, 2, 3])
+    status = np.array([1, 0, 1, 0])
+    dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
+
+    result = kaplan_meier(dt, var_names=["times"])
+    survival_probs = result["times"].values[1]
+
+    np.testing.assert_allclose(survival_probs, [0.75, 0.375, 0.375])
+
+
 def test_kaplan_meier_string_var_name():
     rng = np.random.default_rng(42)
     times = rng.exponential(10, 20)
