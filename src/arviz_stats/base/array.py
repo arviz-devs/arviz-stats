@@ -981,16 +981,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
-            Use None to return raw numbers.
+            form '2g' number of significant digits to round the result. Defaults to
+            None, which returns raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the mean.
-        axis : int, sequence of int or None, default -1
-            Axis or axes along which to compute the mean.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the mean. If None, reduce over all axes.
 
         Returns
         -------
@@ -1012,16 +1012,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
-            Use None to return raw numbers.
+            form '2g' number of significant digits to round the result. Defaults to
+            None, which returns raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the median.
-        axis : int, sequence of int or None, default -1
-            Axis or axes along which to compute the median.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the median. If None, reduce over all axes.
 
         Returns
         -------
@@ -1043,16 +1043,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
-            Use None to return raw numbers.
+            form '2g' number of significant digits to round the result. Defaults to
+            None, which returns raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the mode.
-        axis : int, sequence of int or None, default -1
-            Axis or axes along which to compute the mode.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the mode. If None, reduce over all axes.
 
         Returns
         -------
@@ -1074,16 +1074,17 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
-            Use None to return raw numbers.
+            form '2g' number of significant digits to round the result. Defaults to
+            None, which returns raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the standard deviation.
-        axis : int, sequence of int or None, default -1
+        axis : int, sequence of int or None, default None
             Axis or axes along which to compute the standard deviation.
+            If None, reduce over all axes.
 
         Returns
         -------
@@ -1105,16 +1106,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
-            Use None to return raw numbers.
+            form '2g' number of significant digits to round the result. Defaults to
+            None, which returns raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the variance.
-        axis : int, sequence of int or None, default -1
-            Axis or axes along which to compute the variance.
+        axis : int, sequence of int or None, default None
+            Axis or axes along which to compute the variance. If None, reduce over all axes.
 
         Returns
         -------
@@ -1136,16 +1137,17 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
-            Use None to return raw numbers.
+            form '2g' number of significant digits to round the result. Defaults to
+            None, which returns raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the mean absolute deviation.
-        axis : int, sequence of int or None, default -1
+        axis : int, sequence of int or None, default None
             Axis or axes along which to compute the mean absolute deviation.
+            If None, reduce over all axes.
 
         Returns
         -------
@@ -1167,18 +1169,19 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         quantiles : tuple of float, default (0.25, 0.75)
             Quantiles to compute the interquartile range.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
-            Use None to return raw numbers.
+            form '2g' number of significant digits to round the result. Defaults to
+            None, which returns raw numbers.
         skipna : bool, default False
             Whether to ignore NaN values when computing the interquantile range.
-        axis : int, sequence of int or None, default -1
+        axis : int, sequence of int or None, default None
             Axis or axes along which to compute the interquantile range.
+            If None, reduce over all axes.
 
         Returns
         -------
