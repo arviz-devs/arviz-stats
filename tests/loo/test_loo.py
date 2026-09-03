@@ -305,7 +305,7 @@ def test_loo_jacobian(centered_eight):
     assert_almost_equal(loo_with_jacobian.elpd, expected_elpd, decimal=10)
 
     n_obs = len(y_obs)
-    elpd_se_adjusted = (n_obs * np.var(elpd_i_with_jac)) ** 0.5
+    elpd_se_adjusted = (n_obs * np.var(elpd_i_with_jac, ddof=1)) ** 0.5
 
     assert_almost_equal(loo_with_jacobian.se, elpd_se_adjusted, decimal=10)
     assert_almost_equal(loo_with_jacobian.p, loo_no_jacobian.p, decimal=10)

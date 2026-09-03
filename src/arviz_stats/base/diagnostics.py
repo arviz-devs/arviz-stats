@@ -928,7 +928,7 @@ class _DiagnosticsBase(_CoreBase):
         p_loo_i = np.asarray(p_loo_i).ravel()
         n = len(elpd_i)
         elpd = np.sum(elpd_i)
-        se = np.sqrt(n * np.var(elpd_i, ddof=1))
+        se = np.sqrt(n * np.var(elpd_i, ddof=1)) if n > 1 else 0.0
         p_loo = np.sum(p_loo_i)
         lppd = elpd + p_loo
         return elpd, se, p_loo, lppd

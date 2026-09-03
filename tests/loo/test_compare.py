@@ -547,7 +547,7 @@ def test_round_int(centered_eight, non_centered_eight):
     assert_allclose(result["p"].to_numpy(), np.array([0.86, 0.95]))
     assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.00, -0.03]))
     assert_allclose(result["weight"].to_numpy(), np.array([1.0, 0.0]))
-    assert_allclose(result["se"].to_numpy(), np.array([1.38, 1.34]))
+    assert_allclose(result["se"].to_numpy(), np.array([1.47, 1.43]))
     assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06]))
 
 
