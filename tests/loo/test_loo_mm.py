@@ -568,3 +568,83 @@ def test_loo_moment_match_flag_errors(roaches_r_example):
 
     with pytest.raises(ValueError, match="requires model"):
         loo(example["data_tree"], var_name="log_lik", moment_match=True)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_moment_match_max_iters_runs_last_iteration(roaches_r_example):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+    loo_inputs = _prepare_loo_inputs(example["data_tree"], "log_lik")
+
+    upars = example["upars"].transpose(*loo_inputs.sample_dims, "uparam")
+    orig_log_prob = example["log_prob_fn"](upars)
+    ks = (
+        loo_orig.pareto_k.stack(__pareto_obs_stacked__=loo_inputs.obs_dims)
+        .transpose("__pareto_obs_stacked__")
+        .values
+    )
+    k_threshold = min(1 - 1 / np.log10(loo_inputs.n_samples), 0.7)
+    i = int(np.argmax(ks))
+    assert ks[i] > k_threshold
+
+    log_prob_calls = []
+
+    def log_prob_fn(upars_in):
+        log_prob_calls.append(upars_in)
+        return example["log_prob_fn"](upars_in)
+
+    with pytest.warns(UserWarning, match="Maximum number of moment matching iterations"):
+        result = _loo_moment_match_i(
+            i=i,
+            upars=upars,
+            log_likelihood=loo_inputs.log_likelihood,
+            log_prob_upars_fn=log_prob_fn,
+            log_lik_i_upars_fn=example["log_lik_i_fn"],
+            max_iters=1,
+            k_threshold=k_threshold,
+            split=False,
+            cov=True,
+            orig_log_prob=orig_log_prob,
+            ks=ks,
+            log_weights=loo_orig.log_weights,
+            pareto_k=loo_orig.pareto_k,
+            r_eff=1.0,
+            sample_dims=loo_inputs.sample_dims,
+            obs_dims=loo_inputs.obs_dims,
+            n_samples=loo_inputs.n_samples,
+            n_params=upars.sizes["uparam"],
+            param_dim_name="uparam",
+            var_name="log_lik",
+        )
+
+    assert 1 <= len(log_prob_calls) <= 3
+    assert result.final_ki <= result.original_ki
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_moment_match_single_chain(roaches_r_example):
+    example = roaches_r_example
+    data_tree = xr.DataTree()
+    for group in ("posterior", "log_likelihood"):
+        group_ds = example["data_tree"][group].to_dataset().isel(chain=[0])
+        data_tree[group] = xr.DataTree(dataset=group_ds)
+    upars = example["upars"].isel(chain=[0])
+
+    loo_orig = loo(data_tree, pointwise=True, var_name="log_lik")
+    k_threshold = min(1 - 1 / np.log10(loo_orig.n_samples), 0.7)
+    assert np.any(loo_orig.pareto_k.values > k_threshold)
+
+    loo_mm = loo_moment_match(
+        data_tree,
+        loo_orig,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=upars,
+        var_name="log_lik",
+    )
+
+    assert np.isfinite(loo_mm.elpd)
+    assert loo_mm.pareto_k.sizes == loo_orig.pareto_k.sizes
+    assert np.all(loo_mm.pareto_k.values <= loo_orig.pareto_k.values + 1e-12)

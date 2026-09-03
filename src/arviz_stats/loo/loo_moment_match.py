@@ -496,7 +496,7 @@ def _split_moment_match(
 
     # Inverse Transformation
     upars_trans = upars_trans + (xr.DataArray(total_shift, dims=param_dim) + mean_original)
-    upars_trans_inv = upars_stacked - (xr.DataArray(total_shift, dims=param_dim) + mean_original)
+    upars_trans_inv = upars_stacked - mean_original
 
     if cov and dim > 0:
         try:
@@ -665,7 +665,8 @@ def _loo_moment_match_i(
     var_name,
 ):
     """Compute moment matching for a single observation."""
-    log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims).squeeze(drop=True)
+    log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
+    log_liki = log_liki.squeeze([dim for dim in obs_dims if dim in log_liki.dims], drop=True)
 
     if isinstance(r_eff, xr.DataArray):
         reff_i = _get_r_eff_i(r_eff, i, obs_dims)
@@ -690,7 +691,8 @@ def _loo_moment_match_i(
             log_lik_i=log_liki,
             var_name=var_name,
         )
-        lwi = log_weights_i.squeeze(drop=True).transpose(*sample_dims).astype(np.float64)
+        squeeze_dims = [dim for dim in obs_dims if dim in log_weights_i.dims]
+        lwi = log_weights_i.squeeze(squeeze_dims, drop=True).transpose(*sample_dims)
     else:
         log_ratio_i_init = -log_liki
         lwi, ki = _wrap__psislw(log_ratio_i_init, sample_dims, reff_i)
@@ -710,11 +712,10 @@ def _loo_moment_match_i(
         if iterind == max_iters:
             warnings.warn(
                 f"Maximum number of moment matching iterations ({max_iters}) reached "
-                f"for observation {i}. Final Pareto k is {ki:.2f}.",
+                f"for observation {i}. Increasing max_iters may improve accuracy.",
                 UserWarning,
                 stacklevel=2,
             )
-            break
 
         # Try Mean Shift
         try:

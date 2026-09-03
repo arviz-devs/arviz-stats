@@ -423,7 +423,7 @@ def _shift_and_cov(upars, lwi):
     shift_vec = mean_weighted - mean_original
 
     cov_original = np.cov(upars_values, rowvar=False, ddof=1)
-    cov_weighted = np.cov(upars_values, rowvar=False, aweights=weights, ddof=0)
+    cov_weighted = np.cov(upars_values, rowvar=False, aweights=weights, ddof=1)
 
     mapping_mat = np.eye(upars_values.shape[1])
     try:
@@ -439,7 +439,7 @@ def _shift_and_cov(upars, lwi):
         chol_weighted = np.linalg.cholesky(cov_weighted)
         chol_original = np.linalg.cholesky(cov_original)
 
-        mapping_mat = chol_weighted.T @ np.linalg.inv(chol_original.T)
+        mapping_mat = chol_weighted @ np.linalg.inv(chol_original)
 
     except np.linalg.LinAlgError as e:
         warnings.warn(
