@@ -883,3 +883,19 @@ def test_loo_subsample_jacobian_errors(centered_eight):
     )
     with pytest.raises(ValueError, match="must contain only finite values"):
         loo_subsample(centered_eight, observations=4, var_name="obs", log_jacobian=nan_jacobian)
+
+
+def test_loo_subsample_multidim_obs_pointwise():
+    rng = np.random.default_rng(0)
+    log_lik = rng.normal(-1, 0.3, size=(2, 200, 3, 4))
+    idata = azb.from_dict(
+        {"posterior": {"mu": rng.normal(size=(2, 200))}, "log_likelihood": {"y": log_lik}},
+        dims={"y": ["row", "col"]},
+    )
+
+    result = loo_subsample(idata, observations=5, pointwise=True, method="lpd", seed=42)
+
+    assert result.elpd_i.dims == ("row", "col")
+    assert np.isfinite(result.elpd_i.values).sum() == 5
+    assert np.isfinite(result.pareto_k.values).sum() == 5
+    assert np.isfinite(result.elpd_i.values.ravel()[result.loo_subsample_observations]).all()
