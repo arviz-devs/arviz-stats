@@ -201,9 +201,9 @@ def test_bayesian_r2_ci_prob(datatree_regression, ci_prob):
 @pytest.mark.parametrize(
     "kind, round_to, expected_mean, expected_se",
     [
-        ("mae", 2, 2.64, 0.38),
-        ("mse", "2g", 11.0, 2.6),
-        ("rmse", "None", 3.3379, 0.3967),
+        ("mae", 2, 2.64, 0.39),
+        ("mse", "2g", 11.0, 2.7),
+        ("rmse", "None", 3.3379, 0.4037),
     ],
 )
 def test_metrics(datatree, kind, round_to, expected_mean, expected_se):
@@ -216,7 +216,7 @@ def test_metrics(datatree, kind, round_to, expected_mean, expected_se):
     "kind, round_to, expected_mean, expected_se",
     [
         ("acc", 2, 0.43, 0.19),
-        ("acc_balanced", "2g", 0.46, 0.039),
+        ("acc_balanced", "2g", 0.46, 0.12),
     ],
 )
 def test_metrics_acc(datatree_binary, kind, round_to, expected_mean, expected_se):

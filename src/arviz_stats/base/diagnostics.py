@@ -928,7 +928,7 @@ class _DiagnosticsBase(_CoreBase):
         p_loo_i = np.asarray(p_loo_i).ravel()
         n = len(elpd_i)
         elpd = np.sum(elpd_i)
-        se = np.sqrt(n * np.var(elpd_i))
+        se = np.sqrt(n * np.var(elpd_i, ddof=1)) if n > 1 else 0.0
         p_loo = np.sum(p_loo_i)
         lppd = elpd + p_loo
         return elpd, se, p_loo, lppd
@@ -1613,7 +1613,7 @@ class _DiagnosticsBase(_CoreBase):
         n_obs = len(observed)
         abs_e = np.abs(observed - predicted)
         mean = np.mean(abs_e)
-        std_error = np.std(abs_e) / n_obs**0.5
+        std_error = np.std(abs_e, ddof=1) / n_obs**0.5
         return mean, std_error
 
     @staticmethod
@@ -1637,7 +1637,7 @@ class _DiagnosticsBase(_CoreBase):
         n_obs = len(observed)
         sq_e = (observed - predicted) ** 2
         mean = np.mean(sq_e)
-        std_error = np.std(sq_e) / n_obs**0.5
+        std_error = np.std(sq_e, ddof=1) / n_obs**0.5
         return mean, std_error
 
     @staticmethod
@@ -1661,7 +1661,7 @@ class _DiagnosticsBase(_CoreBase):
         n_obs = len(observed)
         sq_e = (observed - predicted) ** 2
         mean_mse = np.mean(sq_e)
-        var_mse = np.var(sq_e) / n_obs
+        var_mse = np.var(sq_e, ddof=1) / n_obs
         var_rmse = var_mse / mean_mse / 4  # Comes from the first order Taylor approx.
         mean = mean_mse**0.5
         std_error = var_rmse**0.5
@@ -1719,5 +1719,6 @@ class _DiagnosticsBase(_CoreBase):
         mean = (true_pos + true_neg) / 2
         # This approximation has quite large bias for small samples
         bls_acc_var = (true_pos * (1 - true_pos) + true_neg * (1 - true_neg)) / 4
-        std_error = bls_acc_var / n_obs**0.5
+        std_error = (bls_acc_var / n_obs) ** 0.5
+
         return mean, std_error
