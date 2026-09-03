@@ -1112,8 +1112,8 @@ def _prepare_full_arrays(
         indexers = {
             dim: xr.DataArray(idx, dims="__obs__") for dim, idx in zip(obs_dims, multi_indices)
         }
-        elpd_i_full.isel(indexers).values[:] = pointwise_values.values
-        pareto_k_full.isel(indexers).values[:] = pareto_k_values.values
+        elpd_i_full[indexers] = xr.DataArray(pointwise_values.values.ravel(), dims="__obs__")
+        pareto_k_full[indexers] = xr.DataArray(pareto_k_values.values.ravel(), dims="__obs__")
     else:
         elpd_i_full[{obs_dims[0]: indices}] = pointwise_values.values
         pareto_k_full[{obs_dims[0]: indices}] = pareto_k_values.values
