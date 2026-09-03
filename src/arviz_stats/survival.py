@@ -61,7 +61,7 @@ def kaplan_meier(
 
         current_prob = 1.0
         unique_times = np.unique(sorted_times)
-        survival_probs = np.empty_like(unique_times)
+        survival_probs = np.empty_like(unique_times, dtype=float)
         for i, t in enumerate(unique_times):
             n_events = np.sum((sorted_times == t) & (sorted_status == 1))
             n_at_risk_t = np.sum(sorted_times >= t)
