@@ -179,6 +179,15 @@ def test_generate_survival_curves_output_shape(survival_datatree_predictive):
     assert times_data.shape[1] <= num_samples
 
 
+def test_generate_survival_curves_default_num_samples(survival_datatree_predictive):
+    result = generate_survival_curves(
+        survival_datatree_predictive,
+        var_names=["times"],
+        extrapolation_factor=None,
+    )
+    assert result.sizes["sample"] == 200
+
+
 def test_generate_survival_curves_unique_sorted(survival_datatree_predictive):
     result = generate_survival_curves(
         survival_datatree_predictive,

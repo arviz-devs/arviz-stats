@@ -97,6 +97,7 @@ def generate_survival_curves(
         Group containing the predictive samples.
     num_samples : int, optional
         Number of samples to draw from the predictive distribution.
+        If None, all available samples are used.
     extrapolation_factor : float, default 1.2
         Factor by which to limit the survival curves beyond the maximum observed time.
         Set to None to show the unaffected posterior predictive draws.
@@ -122,7 +123,7 @@ def generate_survival_curves(
         max_points = 0
         sample_data_list = []
 
-        for i in range(num_samples):
+        for i in range(pp.sizes["sample"]):
             times = pp[var_name].isel(sample=i)
 
             # Filter times based on extrapolation factor
