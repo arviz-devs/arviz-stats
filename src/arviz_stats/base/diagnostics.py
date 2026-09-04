@@ -418,10 +418,12 @@ class _DiagnosticsBase(_CoreBase):
         log_weights_sum = log_weights + ary
         elpd_i = logsumexp(log_weights_sum)
         lppd_i = logsumexp(ary, b=1 / n_samples)
-        p_loo_i = lppd_i - elpd_i
 
         if log_jacobian is not None:
             elpd_i = elpd_i + log_jacobian
+            lppd_i = lppd_i + log_jacobian
+
+        p_loo_i = lppd_i - elpd_i
 
         return elpd_i, pareto_k, p_loo_i
 
