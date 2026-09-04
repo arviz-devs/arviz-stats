@@ -90,7 +90,10 @@ def reloo(
         - **pareto_k**: :class:`~xarray.DataArray` with Pareto shape values,
           only if ``pointwise=True``
         - **approx_posterior**: False (not used for standard LOO)
-        - **log_weights**: Smoothed log weights.
+        - **log_weights**: Smoothed log weights. Set to NaN for refitted observations
+          when ``pointwise=True``.
+        - **p_loo_i**: :class:`~xarray.DataArray` with the pointwise effective number of
+          parameters, only if ``pointwise=True``.
 
     Notes
     -----
@@ -146,6 +149,12 @@ def reloo(
             "implemented and were not found."
         )
 
+    if wrapper.idata_orig is None:
+        raise ValueError(
+            "wrapper.idata_orig must contain the original inference data. "
+            "Pass idata_orig when creating the SamplingWrapper."
+        )
+
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     if loo_orig is None:
@@ -189,6 +198,15 @@ def reloo(
     n_samples = loo_inputs.n_samples
     log_likelihood = loo_inputs.log_likelihood
 
+    obs_sizes = {dim: log_likelihood.sizes[dim] for dim in obs_dims}
+    loo_obs_sizes = {dim: loo_orig.pareto_k.sizes.get(dim) for dim in obs_dims}
+
+    if loo_obs_sizes != obs_sizes:
+        raise ValueError(
+            "Observation dimensions in loo_orig do not match the log likelihood in "
+            f"wrapper.idata_orig. loo_orig has {loo_obs_sizes}, idata_orig has {obs_sizes}."
+        )
+
     if k_threshold is None:
         k_threshold = min(1 - 1 / np.log10(n_samples), 0.7)
 
@@ -214,6 +232,7 @@ def reloo(
         obs_shape = [loo_orig.pareto_k.sizes[dim] for dim in obs_dims]
         bad_obs_indices = np.array(np.unravel_index(bad_obs_flat_indices, obs_shape)).T
 
+    refitted_obs = []
     for i, _ in enumerate(bad_obs_flat_indices):
         if len(obs_dims) == 1:
             obs_idx = bad_obs_indices[i]
@@ -235,14 +254,29 @@ def reloo(
         fit = wrapper.sample(new_obs)
         idata_idx = wrapper.get_inference_data(fit)
         log_lik_idx = wrapper.log_likelihood__i(excluded_obs, idata_idx)
+
+        if not all(dim in log_lik_idx.dims for dim in sample_dims):
+            raise ValueError(
+                f"log_likelihood__i must return a DataArray with dimensions {sample_dims}, "
+                f"found {log_lik_idx.dims}."
+            )
+        other_dims = [dim for dim in log_lik_idx.dims if dim not in sample_dims]
+
+        if any(log_lik_idx.sizes[dim] != 1 for dim in other_dims):
+            raise ValueError(
+                "log_likelihood__i must return a single observation per call, found "
+                f"dimensions {other_dims} with sizes "
+                f"{[log_lik_idx.sizes[dim] for dim in other_dims]}."
+            )
         elpd_loo_i = logsumexp(log_lik_idx, dims=sample_dims, b=1 / log_lik_idx.size).item()
 
         loo_refitted.elpd_i.loc[obs_idx_dict] = elpd_loo_i
         loo_refitted.pareto_k.loc[obs_idx_dict] = 0.0
         loo_refitted.p_loo_i.loc[obs_idx_dict] = hat_lpd_i - elpd_loo_i
+        refitted_obs.append(obs_idx_dict)
 
     loo_refitted.elpd = np.sum(loo_refitted.elpd_i.values)
-    loo_refitted.se = np.sqrt(n_data_points * np.var(loo_refitted.elpd_i.values))
+    loo_refitted.se = np.sqrt(n_data_points * np.var(loo_refitted.elpd_i.values, ddof=1))
     loo_refitted.p = np.sum(loo_refitted.p_loo_i.values)
 
     loo_refitted.warning = np.any(loo_refitted.pareto_k.values > loo_refitted.good_k)
@@ -255,12 +289,12 @@ def reloo(
             loo_refitted.log_weights = loo_orig.log_weights
     else:
         if hasattr(loo_orig, "log_weights") and loo_orig.log_weights is not None:
-            loo_refitted.log_weights = loo_orig.log_weights.copy()
-            for i, obs_idx in enumerate(bad_obs_flat_indices):
-                if len(obs_dims) == 1:
-                    loo_refitted.log_weights[bad_obs_indices[i]] = np.nan
-                else:
-                    obs_idx_tuple = tuple(bad_obs_indices[i])
-                    loo_refitted.log_weights[obs_idx_tuple] = np.nan
+            log_weights_refitted = loo_orig.log_weights
+            if isinstance(log_weights_refitted, xr.Dataset):
+                log_weights_refitted = log_weights_refitted[loo_inputs.var_name]
+            log_weights_refitted = log_weights_refitted.copy()
+            for obs_idx_dict in refitted_obs:
+                log_weights_refitted.loc[obs_idx_dict] = np.nan
+            loo_refitted.log_weights = log_weights_refitted
 
     return loo_refitted
