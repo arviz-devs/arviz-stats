@@ -5,7 +5,7 @@ from copy import deepcopy
 
 import numpy as np
 import pytest
-from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_allclose, assert_array_almost_equal
 
 from ..helpers import importorskip
 
@@ -286,7 +286,7 @@ def test_reloo_dataset_log_weights(mock_2d_data, mock_wrapper_2d):
 def test_reloo_se_uses_sample_variance(mock_wrapper_reloo, high_k_loo_data):
     result = reloo(mock_wrapper_reloo, loo_orig=high_k_loo_data, k_threshold=0.7, pointwise=True)
     expected_se = np.sqrt(result.n_data_points * np.var(result.elpd_i.values, ddof=1))
-    assert result.se == pytest.approx(expected_se)
+    assert_allclose(result.se, expected_se)
 
 
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
