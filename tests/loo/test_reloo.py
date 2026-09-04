@@ -280,3 +280,65 @@ def test_reloo_dataset_log_weights(mock_2d_data, mock_wrapper_2d):
     loo_modified.pareto_k.loc[{"school": "school_0", "measurement": "meas_0"}] = 0.85
     result = reloo(mock_wrapper_2d, loo_orig=loo_modified, k_threshold=0.7)
     assert result.pareto_k.loc[{"school": "school_0", "measurement": "meas_0"}] == 0.0
+
+
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
+def test_reloo_se_uses_sample_variance(mock_wrapper_reloo, high_k_loo_data):
+    result = reloo(mock_wrapper_reloo, loo_orig=high_k_loo_data, k_threshold=0.7, pointwise=True)
+    expected_se = np.sqrt(result.n_data_points * np.var(result.elpd_i.values, ddof=1))
+    assert result.se == pytest.approx(expected_se)
+
+
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
+def test_reloo_log_weights_obs_dim_last(mock_wrapper_reloo, high_k_loo_data):
+    loo_orig = deepcopy(high_k_loo_data)
+    loo_orig.log_weights = loo_orig.log_weights.transpose("chain", "draw", "school")
+
+    result = reloo(mock_wrapper_reloo, loo_orig=loo_orig, k_threshold=0.7, pointwise=True)
+
+    bad_k_mask = high_k_loo_data.pareto_k.values > 0.7
+    all_nan_per_obs = np.isnan(result.log_weights).all(dim=("chain", "draw")).values
+    assert np.array_equal(all_nan_per_obs, bad_k_mask)
+    assert not np.isnan(result.log_weights).all(dim=("draw", "school")).values.any()
+
+
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
+def test_reloo_dataset_log_weights_pointwise(mock_wrapper_reloo, high_k_loo_data):
+    loo_orig = deepcopy(high_k_loo_data)
+    loo_orig.log_weights = xr.Dataset({"obs": loo_orig.log_weights})
+
+    result = reloo(
+        mock_wrapper_reloo, loo_orig=loo_orig, var_name="obs", k_threshold=0.7, pointwise=True
+    )
+
+    bad_k_mask = high_k_loo_data.pareto_k.values > 0.7
+    assert isinstance(result.log_weights, xr.DataArray)
+    assert np.all(np.isnan(result.log_weights.values[bad_k_mask]))
+    assert not np.any(np.isnan(result.log_weights.values[~bad_k_mask]))
+
+
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
+def test_reloo_log_likelihood_shape_error(mock_wrapper_reloo, high_k_loo_data):
+    class BadLogLikWrapper(type(mock_wrapper_reloo)):
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            log_lik = super().log_likelihood__i(excluded_obs, idata__i)
+            return xr.concat([log_lik, log_lik], dim="extra")
+
+    wrapper = BadLogLikWrapper(None, idata_orig=mock_wrapper_reloo.idata_orig)
+    with pytest.raises(ValueError, match="log_likelihood__i"):
+        reloo(wrapper, loo_orig=high_k_loo_data, k_threshold=0.7)
+
+
+def test_reloo_requires_idata_orig(mock_wrapper_reloo, high_k_loo_data):
+    wrapper = type(mock_wrapper_reloo)(None, idata_orig=None)
+
+    with pytest.raises(ValueError, match="idata_orig"):
+        reloo(wrapper, loo_orig=high_k_loo_data, k_threshold=0.7)
+
+
+def test_reloo_loo_orig_size_mismatch(mock_wrapper_reloo, high_k_loo_data):
+    idata_subset = mock_wrapper_reloo.idata_orig.isel(school=slice(0, 7))
+    wrapper = type(mock_wrapper_reloo)(None, idata_orig=idata_subset)
+
+    with pytest.raises(ValueError, match="do not match"):
+        reloo(wrapper, loo_orig=high_k_loo_data, k_threshold=0.7)
