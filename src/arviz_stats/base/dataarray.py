@@ -228,6 +228,89 @@ class BaseDataArray:
         )
         return out
 
+    def histogram2d(
+        self,
+        da_x,
+        da_y,
+        dim=None,
+        bins=10,
+        range=None,
+        weights=None,
+        density=True,
+    ):
+        """Compute a two-dimensional histogram on paired DataArray inputs."""
+        if set(da_x.sizes) != set(da_y.sizes) or any(
+            da_x.sizes[dim] != da_y.sizes[dim] for dim in da_x.sizes
+        ):
+            raise ValueError("`da_x` and `da_y` must have identical dimensions and shapes.")
+        dims = validate_dims(dim)
+        if weights is not None:
+            if not isinstance(weights, DataArray):
+                weights = DataArray(weights, dims=da_x.dims, coords=da_x.coords)
+            if set(weights.sizes) != set(da_x.sizes) or any(
+                weights.sizes[dim] != da_x.sizes[dim] for dim in da_x.sizes
+            ):
+                raise ValueError("`weights` must have the same dimensions and shape as the data.")
+
+        def histogram2d_array(x, y, sample_weights):
+            return self.array_class.histogram2d(
+                x,
+                y,
+                bins=bins,
+                range=range,
+                weights=sample_weights,
+                axis=np.arange(-len(dims), 0, 1),
+                density=density,
+            )
+
+        histogram, x_edges, y_edges = apply_ufunc(
+            histogram2d_array,
+            da_x,
+            da_y,
+            weights,
+            input_core_dims=[dims, dims, [] if weights is None else dims],
+            output_core_dims=[
+                ["histogram2d_x", "histogram2d_y"],
+                ["histogram2d_x_edge"],
+                ["histogram2d_y_edge"],
+            ],
+        )
+        return Dataset(
+            {
+                "histogram": histogram,
+                "x_edges": x_edges,
+                "y_edges": y_edges,
+            }
+        )
+
+    def hexbin(self, da_x, da_y, dim=None, gridsize=100, extent=None, density=True):
+        """Compute a hexagonal histogram on paired DataArray inputs."""
+        if set(da_x.sizes) != set(da_y.sizes) or any(
+            da_x.sizes[dim] != da_y.sizes[dim] for dim in da_x.sizes
+        ):
+            raise ValueError("`da_x` and `da_y` must have identical dimensions and shapes.")
+        dims = validate_dims(dim)
+        values, offsets = apply_ufunc(
+            self.array_class.hexbin,
+            da_x,
+            da_y,
+            input_core_dims=[dims, dims],
+            output_core_dims=[["hexbin"], ["hexbin", "hexbin_coord"]],
+            kwargs={
+                "gridsize": gridsize,
+                "extent": extent,
+                "axis": np.arange(-len(dims), 0, 1),
+                "density": density,
+            },
+        )
+        return Dataset(
+            {
+                "values": values,
+                "x_centers": offsets.isel(hexbin_coord=0, drop=True),
+                "y_centers": offsets.isel(hexbin_coord=1, drop=True),
+            }
+        )
+
     def kde(self, da, dim=None, circular=False, grid_len=512, **kwargs):
         """Compute KDE on DataArray input.
 

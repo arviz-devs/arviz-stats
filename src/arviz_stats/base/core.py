@@ -6,6 +6,7 @@ should go here. e.g. fft is used for kde bandwidth estimation and for ess.
 """
 
 import warnings
+from math import sqrt
 
 import numpy as np
 from scipy.fftpack import next_fast_len
@@ -268,6 +269,106 @@ class _CoreBase:
         if bins is None:
             bins = self._get_bins(ary)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
+
+    def _histogram2d(self, x, y, bins=10, range=None, weights=None, density=True):
+        return np.histogram2d(
+            x,
+            y,
+            bins=bins,
+            range=range,
+            weights=weights,
+            density=density,
+        )
+
+    @staticmethod
+    def _nonsingular_extent(lower, upper):
+        if not np.isfinite(lower) or not np.isfinite(upper):
+            raise ValueError("Extent values must be finite.")
+        if lower > upper:
+            raise ValueError("Extent upper bounds must be greater than lower bounds.")
+        if lower == upper:
+            delta = 0.1 * abs(lower) if lower else 0.1
+            return lower - delta, upper + delta
+        return lower, upper
+
+    def _hexbin(self, x, y, gridsize=100, extent=None, density=True):
+        if np.isscalar(gridsize):
+            if not isinstance(gridsize, (int, np.integer)):
+                raise ValueError("`gridsize` values must be integers.")
+            nx = int(gridsize)
+            ny = int(nx / sqrt(3))
+        else:
+            try:
+                nx, ny = gridsize
+            except (TypeError, ValueError) as err:
+                raise ValueError("`gridsize` must be an integer or a pair of integers.") from err
+
+        if not isinstance(nx, (int, np.integer)) or not isinstance(ny, (int, np.integer)):
+            raise ValueError("`gridsize` values must be integers.")
+        nx, ny = int(nx), int(ny)
+        if nx <= 0 or ny <= 0:
+            raise ValueError("`gridsize` values must be positive.")
+
+        if extent is None:
+            xmin, xmax = self._nonsingular_extent(np.min(x), np.max(x))
+            ymin, ymax = self._nonsingular_extent(np.min(y), np.max(y))
+        else:
+            if np.size(extent) != 4:
+                raise ValueError("`extent` must contain (xmin, xmax, ymin, ymax).")
+            xmin, xmax, ymin, ymax = np.asarray(extent, dtype=float)
+            xmin, xmax = self._nonsingular_extent(xmin, xmax)
+            ymin, ymax = self._nonsingular_extent(ymin, ymax)
+
+        nx1, ny1 = nx + 1, ny + 1
+        nx2, ny2 = nx, ny
+
+        padding = 1e-9 * (xmax - xmin)
+        xmin -= padding
+        xmax += padding
+        sx = (xmax - xmin) / nx
+        sy = (ymax - ymin) / ny
+
+        ix = (x - xmin) / sx
+        iy = (y - ymin) / sy
+        ix1 = np.round(ix).astype(int)
+        iy1 = np.round(iy).astype(int)
+        ix2 = np.floor(ix).astype(int)
+        iy2 = np.floor(iy).astype(int)
+
+        i1 = np.where(
+            (0 <= ix1) & (ix1 < nx1) & (0 <= iy1) & (iy1 < ny1),
+            ix1 * ny1 + iy1 + 1,
+            0,
+        )
+        i2 = np.where(
+            (0 <= ix2) & (ix2 < nx2) & (0 <= iy2) & (iy2 < ny2),
+            ix2 * ny2 + iy2 + 1,
+            0,
+        )
+        d1 = (ix - ix1) ** 2 + 3 * (iy - iy1) ** 2
+        d2 = (ix - ix2 - 0.5) ** 2 + 3 * (iy - iy2 - 0.5) ** 2
+        use_first_grid = d1 < d2
+
+        counts1 = np.bincount(i1[use_first_grid], minlength=1 + nx1 * ny1)[1:]
+        counts2 = np.bincount(i2[~use_first_grid], minlength=1 + nx2 * ny2)[1:]
+        values = np.concatenate((counts1, counts2)).astype(float)
+
+        offsets = np.zeros((nx1 * ny1 + nx2 * ny2, 2), dtype=float)
+        offsets[: nx1 * ny1, 0] = np.repeat(np.arange(nx1), ny1)
+        offsets[: nx1 * ny1, 1] = np.tile(np.arange(ny1), nx1)
+        offsets[nx1 * ny1 :, 0] = np.repeat(np.arange(nx2) + 0.5, ny2)
+        offsets[nx1 * ny1 :, 1] = np.tile(np.arange(ny2), nx2) + 0.5
+        offsets[:, 0] = offsets[:, 0] * sx + xmin
+        offsets[:, 1] = offsets[:, 1] * sy + ymin
+
+        if density:
+            hexagon_area = sx * sy / 2
+            in_extent_count = values.sum()
+            if in_extent_count == 0:
+                raise ValueError("No samples fall inside the requested extent.")
+            values /= in_extent_count * hexagon_area
+
+        return values, offsets
 
     def _hdi_linear_nearest_common(self, ary, prob):
         n = len(ary)

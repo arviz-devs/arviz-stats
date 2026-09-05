@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 from arviz_base import convert_to_dataset
 
-from arviz_stats.utils import _apply_multi_input_function, get_function
+from arviz_stats.utils import _apply_multi_input_function, get_array_function, get_function
 from arviz_stats.validate import validate_ci_prob, validate_dims
 
 
@@ -428,6 +428,125 @@ def histogram(
     )
 
 
+def histogram2d(
+    x,
+    y,
+    bins=10,
+    range=None,  # pylint: disable=redefined-builtin
+    weights=None,
+    axis=-1,
+    density=True,
+    dim=None,
+):
+    """Compute a two-dimensional histogram for paired samples.
+
+    Plain arrays return ``(histogram, x_edges, y_edges)``. DataArray inputs return
+    a Dataset with variables named ``histogram``, ``x_edges``, and ``y_edges``.
+
+    Parameters
+    ----------
+    x, y : array-like or DataArray
+        Paired samples with identical shapes.
+    bins : int or array-like or pair, default 10
+        Bin specification passed to :func:`numpy.histogram2d`.
+    range : array-like, optional
+        ``((xmin, xmax), (ymin, ymax))`` passed to :func:`numpy.histogram2d`.
+    weights : array-like or DataArray, optional
+        Sample weights with the same shape as the samples.
+    axis : int, sequence of int or None, default -1
+        Array axis or axes along which to reduce.
+    density : bool, default True
+        Normalize the histogram as a probability density.
+    dim : str or sequence of str, optional
+        DataArray dimension or dimensions along which to reduce.
+
+    Returns
+    -------
+    tuple or xarray.Dataset
+        Histogram values and x and y bin edges.
+    """
+    x_is_dataarray = isinstance(x, xr.DataArray)
+    y_is_dataarray = isinstance(y, xr.DataArray)
+    if x_is_dataarray != y_is_dataarray:
+        raise TypeError("`x` and `y` must both be DataArrays or both be array-like.")
+    if x_is_dataarray:
+        if axis != -1:
+            raise ValueError("Use `dim` instead of `axis` with DataArray inputs.")
+        return get_function("histogram2d")(
+            x,
+            y,
+            dim=validate_dims(dim),
+            bins=bins,
+            range=range,
+            weights=weights,
+            density=density,
+        )
+    if dim is not None:
+        raise ValueError("Use `axis` instead of `dim` with array inputs.")
+    return get_array_function("histogram2d")(
+        np.asarray(x),
+        np.asarray(y),
+        bins=bins,
+        range=range,
+        weights=None if weights is None else np.asarray(weights),
+        axis=axis,
+        density=density,
+    )
+
+
+def hexbin(x, y, gridsize=100, extent=None, axis=-1, density=True, dim=None):
+    """Compute a hexagonal histogram for paired samples.
+
+    Plain arrays return ``(values, offsets)``. DataArray inputs return a Dataset
+    with variables named ``values``, ``x_centers``, and ``y_centers``.
+
+    Parameters
+    ----------
+    x, y : array-like or DataArray
+        Paired samples with identical shapes.
+    gridsize : int or pair of int, default 100
+        Number of hexagons in the x and y directions.
+    extent : array-like, optional
+        Limits ``(xmin, xmax, ymin, ymax)`` of the hexagon grid.
+    axis : int, sequence of int or None, default -1
+        Array axis or axes along which to reduce.
+    density : bool, default True
+        Divide counts by the valid sample count and hexagon area.
+    dim : str or sequence of str, optional
+        DataArray dimension or dimensions along which to reduce.
+
+    Returns
+    -------
+    tuple or xarray.Dataset
+        Hexagon values and center coordinates.
+    """
+    x_is_dataarray = isinstance(x, xr.DataArray)
+    y_is_dataarray = isinstance(y, xr.DataArray)
+    if x_is_dataarray != y_is_dataarray:
+        raise TypeError("`x` and `y` must both be DataArrays or both be array-like.")
+    if x_is_dataarray:
+        if axis != -1:
+            raise ValueError("Use `dim` instead of `axis` with DataArray inputs.")
+        return get_function("hexbin")(
+            x,
+            y,
+            dim=validate_dims(dim),
+            gridsize=gridsize,
+            extent=extent,
+            density=density,
+        )
+    if dim is not None:
+        raise ValueError("Use `axis` instead of `dim` with array inputs.")
+    return get_array_function("hexbin")(
+        np.asarray(x),
+        np.asarray(y),
+        gridsize=gridsize,
+        extent=extent,
+        axis=axis,
+        density=density,
+    )
+
+
 def kde(
     data,
     dim=None,
@@ -738,8 +857,6 @@ def kde2d(
            ...: )
     """
     if isinstance(da_x, np.ndarray | list | tuple) and isinstance(da_y, np.ndarray | list | tuple):
-        from arviz_stats.utils import get_array_function
-
         x = np.asarray(da_x)
         y = np.asarray(da_y)
         return get_array_function("kde2d")(
