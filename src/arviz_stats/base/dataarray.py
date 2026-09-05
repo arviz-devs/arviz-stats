@@ -288,9 +288,7 @@ class BaseDataArray:
             }
         )
 
-    def hexbin(
-        self, da_x, da_y, dim=None, gridsize=100, extent=None, weights=None, density=True
-    ):
+    def hexbin(self, da_x, da_y, dim=None, gridsize=100, extent=None, weights=None, density=True):
         """Compute a hexagonal histogram on paired DataArray inputs."""
         self._validate_bivariate_dataarrays(da_x, da_y)
         dims = validate_dims(dim)
@@ -298,19 +296,25 @@ class BaseDataArray:
             if not isinstance(weights, DataArray):
                 weights = DataArray(weights, dims=da_x.dims, coords=da_x.coords)
             assert weights.dims == da_x.dims
+
+        def hexbin_array(x, y, sample_weights):
+            return self.array_class.hexbin(
+                x,
+                y,
+                gridsize=gridsize,
+                extent=extent,
+                weights=sample_weights,
+                axis=np.arange(-len(dims), 0, 1),
+                density=density,
+            )
+
         values, offsets = apply_ufunc(
-            self.array_class.hexbin,
+            hexbin_array,
             da_x,
             da_y,
             weights,
             input_core_dims=[dims, dims, [] if weights is None else dims],
             output_core_dims=[["hexbin"], ["hexbin", "hexbin_coord"]],
-            kwargs={
-                "gridsize": gridsize,
-                "extent": extent,
-                "axis": np.arange(-len(dims), 0, 1),
-                "density": density,
-            },
         )
         return Dataset(
             {
