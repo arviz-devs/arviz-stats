@@ -50,6 +50,62 @@ def process_ary_axes(ary, axes):
     return ary, np.arange(-len(axes), 0, dtype=int)
 
 
+def _prepare_bivariate_inputs(x, y, axis, weights=None):
+    x = np.asarray(x)
+    y = np.asarray(y)
+    if x.shape != y.shape:
+        raise ValueError(f"`x` and `y` must have the same shape. Got {x.shape} and {y.shape}.")
+    if weights is not None:
+        weights = np.asarray(weights)
+        if weights.shape != x.shape:
+            raise ValueError(
+                "`weights` must have the same shape as `x` and `y`. "
+                f"Got {weights.shape} and {x.shape}."
+            )
+
+    x, axes = process_ary_axes(x, axis)
+    y, _ = process_ary_axes(y, axis)
+    if weights is not None:
+        weights, _ = process_ary_axes(weights, axis)
+
+    sample_ndim = len(axes)
+    batch_shape = x.shape[:-sample_ndim]
+    sample_size = int(np.prod(x.shape[-sample_ndim:]))
+    x = x.reshape(*batch_shape, sample_size)
+    y = y.reshape(*batch_shape, sample_size)
+    if weights is not None:
+        weights = weights.reshape(*batch_shape, sample_size)
+    return x, y, weights, batch_shape
+
+
+def _apply_bivariate_statistic(func, x, y, axis, weights=None, **func_kwargs):
+    x, y, weights, batch_shape = _prepare_bivariate_inputs(x, y, axis, weights)
+    results = []
+    for index in np.ndindex(batch_shape):
+        x_batch = x[index]
+        y_batch = y[index]
+        valid = np.isfinite(x_batch) & np.isfinite(y_batch)
+        batch_kwargs = func_kwargs
+        if weights is not None:
+            weights_batch = weights[index]
+            valid &= np.isfinite(weights_batch)
+            batch_kwargs = {**func_kwargs, "weights": weights_batch[valid]}
+        if not np.any(valid):
+            raise ValueError("No finite paired samples remain after removing invalid values.")
+        results.append(func(x_batch[valid], y_batch[valid], **batch_kwargs))
+
+    if not batch_shape:
+        return results[0]
+
+    output_count = len(results[0])
+    return tuple(
+        np.stack([result[output_index] for result in results]).reshape(
+            batch_shape + results[0][output_index].shape
+        )
+        for output_index in range(output_count)
+    )
+
+
 class BaseArray(_DensityBase, _DiagnosticsBase):
     """Class with numpy+scipy only functions that take array inputs.
 
@@ -570,6 +626,77 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=len(axes),
         )
         return histogram_ufunc(ary, bins, range, shape_from_1st=True)
+
+    def histogram2d(self, x, y, bins=10, range=None, weights=None, axis=-1, density=True):
+        """Compute a batched two-dimensional histogram.
+
+        Parameters
+        ----------
+        x, y : array-like
+            Paired samples with identical shapes.
+        weights : array-like, optional
+            Sample weights with the same shape as ``x`` and ``y``.
+        bins : int or array-like or pair, default 10
+            Bin specification passed to :func:`numpy.histogram2d`.
+        range : array-like, optional
+            ``((xmin, xmax), (ymin, ymax))`` passed to :func:`numpy.histogram2d`.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to reduce.
+        density : bool, default True
+            Normalize the histogram as a probability density.
+
+        Returns
+        -------
+        histogram, x_edges, y_edges : ndarray
+            Histogram values and bin edges, with output dimensions appended after
+            any batch dimensions.
+        """
+        return _apply_bivariate_statistic(
+            self._histogram2d,
+            x,
+            y,
+            axis,
+            weights=weights,
+            bins=bins,
+            range=range,
+            density=density,
+        )
+
+    def hexbin(self, x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True):
+        """Compute a batched hexagonal histogram.
+
+        Parameters
+        ----------
+        x, y : array-like
+            Paired samples with identical shapes.
+        weights : array-like, optional
+            Sample weights with the same shape as ``x`` and ``y``. Values in each
+            cell are the sum of its sample weights.
+        gridsize : int or pair of int, default 100
+            Number of hexagons in the x and y directions. A scalar derives the
+            y-direction size as ``int(gridsize / sqrt(3))``.
+        extent : array-like, optional
+            Limits ``(xmin, xmax, ymin, ymax)`` of the hexagon grid.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to reduce.
+        density : bool, default True
+            Divide counts by the valid sample count and hexagon area.
+
+        Returns
+        -------
+        values, offsets : ndarray
+            Values for every cell and their ``(x, y)`` center coordinates.
+        """
+        return _apply_bivariate_statistic(
+            self._hexbin,
+            x,
+            y,
+            axis,
+            weights=weights,
+            gridsize=gridsize,
+            extent=extent,
+            density=density,
+        )
 
     def kde(self, ary, axis=-1, circular=False, grid_len=512, **kwargs):
         """Compute KDE on array-like inputs.

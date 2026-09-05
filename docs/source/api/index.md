@@ -51,7 +51,9 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.eti
    arviz_stats.iqr
    arviz_stats.hdi
+   arviz_stats.hexbin
    arviz_stats.histogram
+   arviz_stats.histogram2d
    arviz_stats.kde
    arviz_stats.kl_divergence
    arviz_stats.loo_expectations
@@ -148,6 +150,8 @@ In addition, many functions are also available via accessors:
    arviz_stats.base.dataarray_stats.rhat_nested
    arviz_stats.base.dataarray_stats.mcse
    arviz_stats.base.dataarray_stats.histogram
+   arviz_stats.base.dataarray_stats.histogram2d
+   arviz_stats.base.dataarray_stats.hexbin
    arviz_stats.base.dataarray_stats.kde
    arviz_stats.base.dataarray_stats.autocorr
 ```
@@ -198,6 +202,8 @@ refer you to other pages for the full argument or algorithm descriptions.
    arviz_stats.base.array_stats.eti
    arviz_stats.base.array_stats.hdi
    arviz_stats.base.array_stats.histogram
+   arviz_stats.base.array_stats.histogram2d
+   arviz_stats.base.array_stats.hexbin
    arviz_stats.base.array_stats.kde
    arviz_stats.base.array_stats.quantile
 ```
