@@ -116,6 +116,26 @@ class TestHistogram2D:
 
 
 class TestHexbin:
+    @pytest.mark.parametrize("density", [False, True])
+    def test_weights(self, array_stats, density):
+        x = np.array([0.25, 0.75, 0.75])
+        y = np.array([0.25, 0.75, 0.75])
+        weights = np.array([1.0, 2.0, 3.0])
+
+        values, _ = array_stats.hexbin(
+            x,
+            y,
+            gridsize=(2, 1),
+            extent=(0, 1, 0, 1),
+            weights=weights,
+            density=density,
+        )
+
+        expected = np.array([0, 0, 0, 0, 0, 0, 1, 5], dtype=float)
+        if density:
+            expected /= weights.sum() / 4
+        assert_allclose(values, expected)
+
     def test_matches_fixed_matplotlib_reference(self, array_stats):
         x = np.array([0.0, 0.2, 0.8, 1.0])
         y = np.array([0.0, 0.8, 0.2, 1.0])
@@ -337,6 +357,25 @@ class TestLabeledBivariateHistograms:
         assert_allclose(result["values"].values, expected_values)
         assert_allclose(result.x_centers.values, expected_offsets[..., 0])
         assert_allclose(result.y_centers.values, expected_offsets[..., 1])
+
+    def test_hexbin_dataarray_weights(self, _xr):
+        import arviz_stats as azs
+
+        x = _xr.DataArray([0.25, 0.75, 0.75], dims="sample")
+        y = _xr.DataArray([0.25, 0.75, 0.75], dims="sample")
+        weights = _xr.DataArray([1.0, 2.0, 3.0], dims="sample")
+
+        result = azs.hexbin(
+            x,
+            y,
+            gridsize=(2, 1),
+            extent=(0, 1, 0, 1),
+            weights=weights,
+            dim="sample",
+            density=False,
+        )
+
+        assert_allclose(result["values"], [0, 0, 0, 0, 0, 0, 1, 5])
 
     def test_array_top_level_dispatch(self, _xr):
         import arviz_stats as azs

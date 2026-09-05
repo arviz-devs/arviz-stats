@@ -494,7 +494,7 @@ def histogram2d(
     )
 
 
-def hexbin(x, y, gridsize=100, extent=None, axis=-1, density=True, dim=None):
+def hexbin(x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True, dim=None):
     """Compute a hexagonal histogram for paired samples.
 
     Plain arrays return ``(values, offsets)``. DataArray inputs return a Dataset
@@ -508,6 +508,9 @@ def hexbin(x, y, gridsize=100, extent=None, axis=-1, density=True, dim=None):
         Number of hexagons in the x and y directions.
     extent : array-like, optional
         Limits ``(xmin, xmax, ymin, ymax)`` of the hexagon grid.
+    weights : array-like or DataArray, optional
+        Sample weights with the same shape as the samples. Values in each cell
+        are the sum of its sample weights.
     axis : int, sequence of int or None, default -1
         Array axis or axes along which to reduce.
     density : bool, default True
@@ -533,6 +536,7 @@ def hexbin(x, y, gridsize=100, extent=None, axis=-1, density=True, dim=None):
             dim=validate_dims(dim),
             gridsize=gridsize,
             extent=extent,
+            weights=weights,
             density=density,
         )
     if dim is not None:
@@ -542,6 +546,7 @@ def hexbin(x, y, gridsize=100, extent=None, axis=-1, density=True, dim=None):
         np.asarray(y),
         gridsize=gridsize,
         extent=extent,
+        weights=None if weights is None else np.asarray(weights),
         axis=axis,
         density=density,
     )

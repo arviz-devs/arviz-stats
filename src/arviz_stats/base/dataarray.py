@@ -26,6 +26,13 @@ class BaseDataArray:
     def __init__(self, array_class=None):
         self.array_class = array_stats if array_class is None else array_class
 
+    @staticmethod
+    def _validate_bivariate_dataarrays(da_x, da_y):
+        if set(da_x.sizes) != set(da_y.sizes) or any(
+            da_x.sizes[dim] != da_y.sizes[dim] for dim in da_x.sizes
+        ):
+            raise ValueError("`da_x` and `da_y` must have identical dimensions and shapes.")
+
     def eti(self, da, prob=None, dim=None, method="linear", **kwargs):
         """Compute eti on DataArray input."""
         dims = validate_dims(dim)
@@ -239,14 +246,12 @@ class BaseDataArray:
         density=True,
     ):
         """Compute a two-dimensional histogram on paired DataArray inputs."""
-        if set(da_x.sizes) != set(da_y.sizes) or any(
-            da_x.sizes[dim] != da_y.sizes[dim] for dim in da_x.sizes
-        ):
-            raise ValueError("`da_x` and `da_y` must have identical dimensions and shapes.")
+        self._validate_bivariate_dataarrays(da_x, da_y)
         dims = validate_dims(dim)
         if weights is not None:
             if not isinstance(weights, DataArray):
                 weights = DataArray(weights, dims=da_x.dims, coords=da_x.coords)
+            assert weights.dims == da_x.dims
             if set(weights.sizes) != set(da_x.sizes) or any(
                 weights.sizes[dim] != da_x.sizes[dim] for dim in da_x.sizes
             ):
@@ -283,18 +288,22 @@ class BaseDataArray:
             }
         )
 
-    def hexbin(self, da_x, da_y, dim=None, gridsize=100, extent=None, density=True):
+    def hexbin(
+        self, da_x, da_y, dim=None, gridsize=100, extent=None, weights=None, density=True
+    ):
         """Compute a hexagonal histogram on paired DataArray inputs."""
-        if set(da_x.sizes) != set(da_y.sizes) or any(
-            da_x.sizes[dim] != da_y.sizes[dim] for dim in da_x.sizes
-        ):
-            raise ValueError("`da_x` and `da_y` must have identical dimensions and shapes.")
+        self._validate_bivariate_dataarrays(da_x, da_y)
         dims = validate_dims(dim)
+        if weights is not None:
+            if not isinstance(weights, DataArray):
+                weights = DataArray(weights, dims=da_x.dims, coords=da_x.coords)
+            assert weights.dims == da_x.dims
         values, offsets = apply_ufunc(
             self.array_class.hexbin,
             da_x,
             da_y,
-            input_core_dims=[dims, dims],
+            weights,
+            input_core_dims=[dims, dims, [] if weights is None else dims],
             output_core_dims=[["hexbin"], ["hexbin", "hexbin_coord"]],
             kwargs={
                 "gridsize": gridsize,

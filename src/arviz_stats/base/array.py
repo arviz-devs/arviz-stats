@@ -662,13 +662,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             density=density,
         )
 
-    def hexbin(self, x, y, gridsize=100, extent=None, axis=-1, density=True):
+    def hexbin(self, x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True):
         """Compute a batched hexagonal histogram.
 
         Parameters
         ----------
         x, y : array-like
             Paired samples with identical shapes.
+        weights : array-like, optional
+            Sample weights with the same shape as ``x`` and ``y``. Values in each
+            cell are the sum of its sample weights.
         gridsize : int or pair of int, default 100
             Number of hexagons in the x and y directions. A scalar derives the
             y-direction size as ``int(gridsize / sqrt(3))``.
@@ -689,6 +692,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             x,
             y,
             axis,
+            weights=weights,
             gridsize=gridsize,
             extent=extent,
             density=density,

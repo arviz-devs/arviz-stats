@@ -6,7 +6,6 @@ should go here. e.g. fft is used for kde bandwidth estimation and for ess.
 """
 
 import warnings
-from math import sqrt
 
 import numpy as np
 from scipy.fftpack import next_fast_len
@@ -291,12 +290,12 @@ class _CoreBase:
             return lower - delta, upper + delta
         return lower, upper
 
-    def _hexbin(self, x, y, gridsize=100, extent=None, density=True):
+    def _hexbin(self, x, y, gridsize=100, extent=None, weights=None, density=True):
         if np.isscalar(gridsize):
             if not isinstance(gridsize, (int, np.integer)):
                 raise ValueError("`gridsize` values must be integers.")
             nx = int(gridsize)
-            ny = int(nx / sqrt(3))
+            ny = int(nx / 1.732)
         else:
             try:
                 nx, ny = gridsize
@@ -349,8 +348,16 @@ class _CoreBase:
         d2 = (ix - ix2 - 0.5) ** 2 + 3 * (iy - iy2 - 0.5) ** 2
         use_first_grid = d1 < d2
 
-        counts1 = np.bincount(i1[use_first_grid], minlength=1 + nx1 * ny1)[1:]
-        counts2 = np.bincount(i2[~use_first_grid], minlength=1 + nx2 * ny2)[1:]
+        counts1 = np.bincount(
+            i1[use_first_grid],
+            weights=None if weights is None else weights[use_first_grid],
+            minlength=1 + nx1 * ny1,
+        )[1:]
+        counts2 = np.bincount(
+            i2[~use_first_grid],
+            weights=None if weights is None else weights[~use_first_grid],
+            minlength=1 + nx2 * ny2,
+        )[1:]
         values = np.concatenate((counts1, counts2)).astype(float)
 
         offsets = np.zeros((nx1 * ny1 + nx2 * ny2, 2), dtype=float)
