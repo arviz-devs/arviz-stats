@@ -450,6 +450,7 @@ def ci_in_rope(
     var_names=None,
     filter_vars=None,
     group="posterior",
+    coords=None,
     dim=None,
     ci_prob=None,
     ci_kind=None,
@@ -535,6 +536,9 @@ def ci_in_rope(
         combined=False,
         keep_dataset=True,
     )
+
+    if coords is not None:
+        dataset = dataset.sel(coords)
 
     if isinstance(rope, dict):
         if not all(var in dataset.data_vars for var in rope.keys()):
