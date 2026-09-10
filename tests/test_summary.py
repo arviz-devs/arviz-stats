@@ -122,10 +122,6 @@ def test_rope_multiple(fake_dt):
 
 
 def test_rope_coords(centered_eight):
-    """`coords` must subset the selected group, as it does for `summary`.
-
-    It was documented but not accepted, so passing it raised TypeError.
-    """
     schools = ["Choate", "Deerfield"]
     full = ci_in_rope(centered_eight, var_names=["theta"], rope=(-0.5, 0.5))
     subset = ci_in_rope(
@@ -135,7 +131,6 @@ def test_rope_coords(centered_eight):
     assert full["theta"].sizes["school"] == 8
     assert subset["theta"].sizes["school"] == 2
     assert list(subset["theta"].coords["school"].values) == schools
-    # subsetting must not change the values computed for the retained schools
     assert_allclose(subset["theta"].values, full["theta"].sel(school=schools).values)
 
 
