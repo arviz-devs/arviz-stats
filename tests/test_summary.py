@@ -5,7 +5,7 @@ from copy import deepcopy
 
 import numpy as np
 import pytest
-from numpy.testing import assert_array_equal
+from numpy.testing import assert_allclose, assert_array_equal
 
 from .helpers import importorskip
 
@@ -119,6 +119,19 @@ def test_rope_multiple(fake_dt):
     assert result["b"] > 90
     assert "a" in result.data_vars
     assert "b" in result.data_vars
+
+
+def test_rope_coords(centered_eight):
+    schools = ["Choate", "Deerfield"]
+    full = ci_in_rope(centered_eight, var_names=["theta"], rope=(-0.5, 0.5))
+    subset = ci_in_rope(
+        centered_eight, var_names=["theta"], rope=(-0.5, 0.5), coords={"school": schools}
+    )
+
+    assert full["theta"].sizes["school"] == 8
+    assert subset["theta"].sizes["school"] == 2
+    assert list(subset["theta"].coords["school"].values) == schools
+    assert_allclose(subset["theta"].values, full["theta"].sel(school=schools).values)
 
 
 def test_hdi(datatree):
