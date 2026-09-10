@@ -109,6 +109,23 @@ def test_rhat_nested_dataarray_returns_dataarray(centered_eight):
     assert isinstance(result, xr.DataArray)
 
 
+def test_rhat_nested_dataset_single_draw():
+    rng = np.random.default_rng(0)
+    ds = xr.Dataset(
+        {
+            "a": (("chain", "draw"), rng.normal(size=(8, 1))),
+            "b": (("chain", "draw", "dim"), rng.normal(size=(8, 1, 3))),
+        }
+    )
+    superchain_ids = [0, 0, 0, 0, 1, 1, 1, 1]
+    identity = rhat_nested(ds, superchain_ids=superchain_ids, method="identity")
+    assert np.all(np.isfinite(identity["a"]))
+    assert np.all(np.isfinite(identity["b"]))
+    rank = rhat_nested(ds, superchain_ids=superchain_ids)
+    assert np.all(np.isnan(rank["a"]))
+    assert np.all(np.isnan(rank["b"]))
+
+
 def test_mcse_datatree_returns_datatree(centered_eight):
     result = mcse(centered_eight, group="posterior")
     assert isinstance(result, xr.DataTree)

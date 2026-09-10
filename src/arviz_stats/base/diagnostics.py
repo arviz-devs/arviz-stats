@@ -1,6 +1,7 @@
 # pylint: disable=too-many-lines, too-many-function-args, redefined-outer-name
 """Diagnostic functions for ArviZ."""
 
+import logging
 import warnings
 from collections.abc import Sequence
 
@@ -11,6 +12,8 @@ from scipy.special import logsumexp
 from arviz_stats.base.circular_utils import circular_diff, circular_mean, circular_sd, circular_var
 from arviz_stats.base.core import _CoreBase
 from arviz_stats.base.stats_utils import not_valid as _not_valid
+
+_log = logging.getLogger(__name__)
 
 
 class _DiagnosticsBase(_CoreBase):
@@ -1416,7 +1419,7 @@ class _DiagnosticsBase(_CoreBase):
         Computation follows https://arxiv.org/abs/1903.08008
         """
         ary = np.asarray(ary)
-        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+        if _not_valid(ary, shape_kwargs={"min_draws": 2, "min_chains": 2}):
             return np.nan
         split_ary = self._split_chains(ary)
         # splitting we "duplicate the number of chains so we need to update
@@ -1434,7 +1437,7 @@ class _DiagnosticsBase(_CoreBase):
     def _rhat_nested_folded(self, ary, superchain_ids):
         """Calculate split-Rhat for folded z-values."""
         ary = np.asarray(ary)
-        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+        if _not_valid(ary, shape_kwargs={"min_draws": 2, "min_chains": 2}):
             return np.nan
         ary = self._z_fold(self._split_chains(ary))
         superchain_ids = np.hstack((superchain_ids, superchain_ids))
@@ -1442,7 +1445,7 @@ class _DiagnosticsBase(_CoreBase):
 
     def _rhat_nested_z_scale(self, ary, superchain_ids):
         ary = np.asarray(ary)
-        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+        if _not_valid(ary, shape_kwargs={"min_draws": 2, "min_chains": 2}):
             return np.nan
         ary = self._z_scale(self._split_chains(ary))
         superchain_ids = np.hstack((superchain_ids, superchain_ids))
@@ -1450,20 +1453,21 @@ class _DiagnosticsBase(_CoreBase):
 
     def _rhat_nested_split(self, ary, superchain_ids):
         ary = np.asarray(ary)
-        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+        if _not_valid(ary, shape_kwargs={"min_draws": 2, "min_chains": 2}):
             return np.nan
         superchain_ids = np.hstack((superchain_ids, superchain_ids))
         return self._rhat_nested(self._split_chains(ary), superchain_ids)
 
     def _rhat_nested_identity(self, ary, superchain_ids):
         ary = np.asarray(ary)
-        if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 2}):
+        if _not_valid(ary, shape_kwargs={"min_draws": 1, "min_chains": 2}):
             return np.nan
         return self._rhat_nested(ary, superchain_ids)
 
     @staticmethod
     def _rhat_nested(ary, superchain_ids):
         ary = np.asarray(ary)
+        superchain_ids = np.asarray(superchain_ids)
         nchains, niterations = ary.shape
 
         # Check that all chains are assigned a superchain
@@ -1471,17 +1475,24 @@ class _DiagnosticsBase(_CoreBase):
             raise ValueError("Length of superchain_ids not equal to number of chains")
 
         # Check that superchains have equal length
-        superchain_counts = np.bincount(superchain_ids)
+        superchains, superchain_counts = np.unique(superchain_ids, return_counts=True)
         nchains_per_superchain = np.max(superchain_counts)
 
         if nchains_per_superchain != np.min(superchain_counts):
             raise ValueError("Number of chains per superchain is not the same for each superchain")
 
-        superchains = np.unique(superchain_ids)
+        if len(superchains) < 2:
+            _log.info("Nested rhat is undefined: need at least 2 superchains")
+            return np.nan
 
-        # Compute chain means and variances
+        if niterations == 1 and nchains_per_superchain == 1:
+            _log.info(
+                "Nested rhat is undefined: need at least 2 draws per chain "
+                "or 2 chains per superchain"
+            )
+            return np.nan
+
         chain_mean = np.mean(ary, axis=1)
-        chain_var = np.var(ary, axis=1, ddof=1)
 
         # mean of superchains calculated by only including specified chains
         # (equation 4 in Margossian et al. 2024)
@@ -1499,8 +1510,9 @@ class _DiagnosticsBase(_CoreBase):
         if niterations == 1:
             var_within_chain = np.zeros(len(superchains))
         else:
+            chain_var = np.var(ary, axis=1, ddof=1)
             var_within_chain = np.array(
-                [np.mean(chain_var[np.where(superchain_ids == k)[0]]) for k in superchains]
+                [np.mean(chain_var[superchain_ids == k]) for k in superchains]
             )
 
         # between-superchain variance (Bhat_nu in equation 6 in Margossian et al. 2024)

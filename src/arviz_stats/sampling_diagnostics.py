@@ -333,8 +333,12 @@ def rhat_nested(
         - xarray object: apply dimension aware function to all relevant subsets
         - others: passed to :func:`arviz_base.convert_to_dataset`
 
-        At least 2 posterior chains are needed to compute this diagnostic of one or more
-        stochastic parameters.
+        At least 2 superchains are needed to compute this diagnostic. Each superchain
+        must contain at least 2 chains, or each chain must have at least 2 draws, so that
+        the within-superchain variance can be estimated. The split-based methods ("rank",
+        "split", "folded", "z_scale") split each chain in two and therefore need at least
+        2 draws per chain. ``method="identity"`` works with a single draw per chain and is
+        the estimator exactly as defined in Margossian et al. (2024) [1]_.
 
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
@@ -352,6 +356,9 @@ def rhat_nested(
         - "folded"
         - "z_scale"
         - "identity"
+
+        ``"identity"`` matches the definition in [1]_ and the ``posterior`` R package;
+        the other methods first apply the split/rank/fold transformations of [2]_.
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
@@ -368,6 +375,27 @@ def rhat_nested(
     rhat : Compute split R-hat convergence diagnostic
     ess : Estimate the effective sample size (ess).
     plot_forest : Forest plot to compare HDI intervals from a number of distributions.
+
+    Examples
+    --------
+    Calculate nested R-hat with two superchains of two chains each:
+
+    .. ipython::
+
+        In [1]: from arviz_base import load_arviz_data
+           ...: import arviz_stats as azs
+           ...: data = load_arviz_data('centered_eight')
+           ...: azs.rhat_nested(data, superchain_ids=[0, 0, 1, 1])
+
+    With a single draw per chain the split-based methods return nan; use
+    ``method="identity"``:
+
+    .. ipython::
+
+        In [1]: import numpy as np
+           ...: rng = np.random.default_rng(0)
+           ...: samples = rng.normal(size=(8, 1))
+           ...: azs.rhat_nested(samples, superchain_ids=[0, 0, 0, 0, 1, 1, 1, 1], method="identity")
 
     References
     ----------
