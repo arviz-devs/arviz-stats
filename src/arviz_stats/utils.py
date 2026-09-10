@@ -193,6 +193,11 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     log_jacobian: DataArray = None
     influence_pareto_k: DataArray = None
     n_eff_i: DataArray = None
+    forecast_horizon: int = None
+    min_observations: int = None
+    refits: np.ndarray = None
+    n_refits: int = None
+    p_lfo_i: DataArray = None
 
     def __str__(self):
         """Print elpd data in a user friendly way."""
@@ -213,6 +218,40 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
                 ic_se=self.se,
                 p_value=self.p,
             )
+
+            return base
+
+        # lfo_cv
+        if kind == "lfo_cv" and self.forecast_horizon is not None:
+            display_kind = "lfo"
+            padding = len(scale_str) + len(display_kind) + 1
+            origin_word = "origin" if self.n_data_points == 1 else "origins"
+            base = (
+                f"Computed from {self.n_data_points} forecast {origin_word} with "
+                f"{self.forecast_horizon}-step-ahead predictions.\n"
+                f"Minimum training observations: {self.min_observations}.\n"
+            )
+            if self.good_k is None:
+                base += "The model was fit at every forecast origin.\n\n"
+            else:
+                refit_word = "refit" if self.n_refits == 1 else "refits"
+                base += (
+                    f"PSIS triggered {self.n_refits} additional exact {refit_word} "
+                    f"(k threshold: {self.good_k:.2f}).\n\n"
+                )
+            base += f"{{0:{padding}}} Estimate       SE\n"
+            base += f"{scale_str}_{display_kind} {{ic_value:8.2f}}  {{ic_se:7.2f}}\n"
+            base += f"p_{display_kind:{padding - 2}} {{p_value:8.2f}}        -"
+            base = base.format(
+                "",
+                ic_value=self.elpd,
+                ic_se=self.se,
+                p_value=self.p,
+            )
+            if self.warning:
+                base += (
+                    "\n\nThere has been a warning during the calculation. Please check the results."
+                )
 
             return base
 
