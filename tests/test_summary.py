@@ -596,7 +596,9 @@ def test_summary_data_frame():
     assert "0.123" in html
     assert "1.06" in html
 
-    latex = sdf._repr_latex_()
+    assert sdf._repr_latex_() is None
+    with pd.option_context("styler.render.repr", "latex"):
+        latex = sdf._repr_latex_()
     assert "0.123" in latex
     assert "-1.988" in latex
     assert "1.00" in latex
@@ -612,7 +614,8 @@ def test_summary_data_frame():
 
     sdf_t = sdf.T
     assert sdf_t._fmt_map is not None
-    latex_t = sdf_t._repr_latex_()
+    with pd.option_context("styler.render.repr", "latex"):
+        latex_t = sdf_t._repr_latex_()
     assert "0.123" in latex_t
     assert "1.06" in latex_t
     assert "r\\_hat" in latex_t
