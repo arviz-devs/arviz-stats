@@ -415,7 +415,6 @@ class SummaryDataFrame(pd.DataFrame):
         return self._display_df().to_html()
 
     def _repr_latex_(self):  # pylint: disable=overridden-final-method
-        # Like pandas, only when asked for: IPython calls every repr, and to_latex needs jinja2.
         if self._fmt_map is None or pd.get_option("styler.render.repr") != "latex":
             return super()._repr_latex_()
         return self.to_latex(escape=True)

@@ -596,8 +596,6 @@ def test_summary_data_frame():
     assert "0.123" in html
     assert "1.06" in html
 
-    # As for a plain DataFrame, the LaTeX repr is only built when asked for,
-    # since IPython calls every repr on display and to_latex needs jinja2.
     assert sdf._repr_latex_() is None
     with pd.option_context("styler.render.repr", "latex"):
         latex = sdf._repr_latex_()
