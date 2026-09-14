@@ -265,7 +265,7 @@ class ELPDData:  # pylint: disable=too-many-instance-attributes
 
 @dataclass(kw_only=True, repr=False)
 class ELPDDataLOO(ELPDData):
-    """PSIS-LOO-CV results, returned by :func:`loo` and related functions.
+    """PSIS-LOO-CV results returned by :func:`loo` and related functions.
 
     Also returned by :func:`loo_i`, :func:`loo_approximate_posterior`,
     :func:`loo_moment_match` and :func:`reloo`. Inherits the
@@ -321,7 +321,7 @@ class ELPDDataLOO(ELPDData):
 
 @dataclass(kw_only=True, repr=False)
 class ELPDDataLOOSubsample(ELPDDataLOO):
-    """Subsampled PSIS-LOO-CV results, returned by :func:`loo_subsample`.
+    """Subsampled PSIS-LOO-CV results returned by :func:`loo_subsample`.
 
     Also returned by :func:`update_subsample`. Inherits the attributes of
     :class:`ELPDDataLOO`. Here ``log_weights`` holds a :class:`~xarray.Dataset` with one
@@ -374,7 +374,7 @@ class ELPDDataLOOSubsample(ELPDDataLOO):
 
 @dataclass(kw_only=True, repr=False)
 class ELPDDataLOOKFold(ELPDData):
-    """K-fold cross-validation results, returned by :func:`loo_kfold`.
+    """K-fold cross-validation results returned by :func:`loo_kfold`.
 
     Inherits the attributes of :class:`ELPDData`. ``good_k`` and ``pareto_k`` are always
     None because k-fold cross-validation does not use importance sampling.
@@ -402,7 +402,7 @@ class ELPDDataLOOKFold(ELPDData):
 
 @dataclass(kw_only=True, repr=False)
 class ELPDDataLFO(ELPDData):
-    """Leave-future-out cross-validation results, returned by :func:`lfo_cv`.
+    """Leave-future-out cross-validation results returned by :func:`lfo_cv`.
 
     Inherits the attributes of :class:`ELPDData`. ``n_data_points`` counts forecast origins.
 
