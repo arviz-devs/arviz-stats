@@ -186,7 +186,7 @@ def log_likelihood_dataset(centered_eight):
 
 @pytest.fixture(scope="module")
 def elpd_data(centered_eight):
-    from arviz_stats.utils import ELPDData, get_log_likelihood_dataset
+    from arviz_stats.utils import ELPDDataLOO, get_log_likelihood_dataset
 
     xr = importorskip("xarray")
     log_likelihood = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
@@ -203,7 +203,7 @@ def elpd_data(centered_eight):
         pareto_k_values, dims=["school"], coords={"school": log_likelihood.school}
     )
 
-    mock_elpd = ELPDData(
+    mock_elpd = ELPDDataLOO(
         elpd=float(elpd_values.sum()),
         se=1.0,
         p=2.0,
@@ -214,7 +214,6 @@ def elpd_data(centered_eight):
         elpd_i=elpd_i,
         pareto_k=pareto_k,
         scale="log",
-        kind="loo",
     )
     return mock_elpd
 
@@ -505,10 +504,10 @@ def mock_wrapper_reloo(non_centered_eight):
 @pytest.fixture
 def high_k_loo_data(non_centered_eight):
     from arviz_stats import loo
-    from arviz_stats.utils import ELPDData
+    from arviz_stats.utils import ELPDDataLOO
 
     loo_data = loo(non_centered_eight, pointwise=True, var_name="obs")
-    loo_data_modified = ELPDData(
+    loo_data_modified = ELPDDataLOO(
         elpd=loo_data.elpd,
         se=loo_data.se,
         p=loo_data.p,
@@ -516,7 +515,6 @@ def high_k_loo_data(non_centered_eight):
         n_samples=loo_data.n_samples,
         n_data_points=loo_data.n_data_points,
         warning=True,
-        kind=loo_data.kind,
         scale=loo_data.scale,
         elpd_i=loo_data.elpd_i.copy(),
         pareto_k=loo_data.pareto_k.copy(),

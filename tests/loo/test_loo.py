@@ -12,11 +12,13 @@ sp = importorskip("scipy")
 np = importorskip("numpy")
 
 from arviz_stats import loo, loo_i
+from arviz_stats.utils import ELPDDataLOO
 
 
 @pytest.mark.parametrize("pointwise", [True, False])
 def test_loo(centered_eight, pointwise):
     loo_data = loo(centered_eight, pointwise=pointwise)
+    assert isinstance(loo_data, ELPDDataLOO)
     assert_almost_equal(loo_data.elpd, -30.78, decimal=1)
     assert_almost_equal(loo_data.p, 0.94, decimal=1)
     assert_almost_equal(loo_data.se, 1.34, decimal=1)

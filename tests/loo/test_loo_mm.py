@@ -20,6 +20,7 @@ tempfile = importorskip("tempfile")
 from arviz_stats.loo import loo, loo_moment_match
 from arviz_stats.loo.loo_helper import _prepare_loo_inputs
 from arviz_stats.loo.loo_moment_match import _loo_moment_match_i, _split_moment_match
+from arviz_stats.utils import ELPDDataLOOKFold
 
 
 @ft.lru_cache(maxsize=1)
@@ -37,6 +38,22 @@ def _get_roaches_data_path():
 
     atexit.register(lambda target=path: target.unlink(missing_ok=True))
     return path
+
+
+def test_loo_moment_match_rejects_kfold_result(centered_eight):
+    kfold_result = ELPDDataLOOKFold(
+        elpd=-30.0,
+        se=2.0,
+        p=3.0,
+        n_samples=100,
+        n_data_points=8,
+        scale="log",
+        warning=False,
+        good_k=None,
+        n_folds=4,
+    )
+    with pytest.raises(TypeError, match="loo_orig must be an ELPDDataLOO object"):
+        loo_moment_match(centered_eight, kfold_result)
 
 
 def _safe_exp(da):

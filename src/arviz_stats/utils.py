@@ -4,6 +4,7 @@ import warnings
 from collections.abc import Hashable
 from dataclasses import dataclass
 from importlib import import_module
+from typing import ClassVar
 
 import numpy as np
 import xarray as xr
@@ -12,7 +13,15 @@ from xarray import DataArray
 
 from arviz_stats.validate import validate_dims
 
-__all__ = ["ELPDData", "get_function", "get_log_likelihood"]
+__all__ = [
+    "ELPDData",
+    "ELPDDataLFO",
+    "ELPDDataLOO",
+    "ELPDDataLOOKFold",
+    "ELPDDataLOOSubsample",
+    "get_function",
+    "get_log_likelihood",
+]
 
 
 def get_function(func_name):
@@ -148,12 +157,13 @@ def get_log_prior(idata, var_names=None):
     return idata.log_prior.ds[var_names]
 
 
-BASE_FMT = """Computed from {{n_samples}} posterior samples and \
-{{n_points}} observations log-likelihood matrix.
-
-{{0:{0}}} Estimate       SE
+BASE_HEADER_FMT = (
+    "Computed from {n_samples} posterior samples and {n_points} observations log-likelihood matrix."
+)
+BASE_TABLE_FMT = """{{0:{0}}} Estimate       SE
 {{scale}}_{{kind}} {{ic_value:8.2f}}  {{ic_se:7.2f}}
 p_{{kind:{1}}} {{p_value:8.2f}}        -"""
+WARNING_FMT = "\n\nThere has been a warning during the calculation. Please check the results."
 POINTWISE_LOO_FMT = """------
 
 Pareto k diagnostic values:
@@ -165,9 +175,42 @@ Pareto k diagnostic values:
 SCALE_DICT = {"deviance": "deviance", "log": "elpd", "negative_log": "-elpd"}
 
 
-@dataclass
-class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attributes
-    """Class to contain the data from elpd information criterion like waic or loo."""
+@dataclass(kw_only=True)
+class ELPDData:  # pylint: disable=too-many-instance-attributes
+    """Base container for expected log pointwise predictive density (ELPD) results.
+
+    Every cross-validation function returns a subclass of this class.
+    :class:`ELPDDataLOO` holds PSIS-LOO-CV results, :class:`ELPDDataLOOSubsample`
+    holds subsampled PSIS-LOO-CV results, :class:`ELPDDataLOOKFold` holds k-fold
+    cross-validation results and :class:`ELPDDataLFO` holds leave-future-out
+    cross-validation results. The ``kind`` attribute names the estimator and the class
+    says which additional attributes are available.
+
+    Attributes
+    ----------
+    kind : str
+        Name of the estimator, one of ``"loo"``, ``"loo_kfold"`` or ``"lfo_cv"``.
+    elpd : float
+        Expected log pointwise predictive density.
+    se : float
+        Standard error of ``elpd``.
+    p : float
+        Effective number of parameters.
+    n_samples : int
+        Number of posterior samples.
+    n_data_points : int
+        Number of observations.
+    scale : str
+        Scale of the estimate, ``"log"``, ``"negative_log"`` or ``"deviance"``.
+    warning : bool
+        True when a warning was raised during the computation.
+    good_k : float
+        Threshold on the Pareto k diagnostic above which estimates are unreliable.
+    elpd_i : DataArray, optional
+        Pointwise ELPD values, only when ``pointwise=True`` was requested.
+    pareto_k : DataArray, optional
+        Pointwise Pareto k diagnostics, only when ``pointwise=True`` was requested.
+    """
 
     kind: str
     elpd: float
@@ -180,133 +223,32 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     good_k: float
     elpd_i: DataArray = None
     pareto_k: DataArray = None
-    approx_posterior: bool = False
-    subsampling_se: float = None
-    subsample_size: int = None
-    log_p: object = None
-    log_q: object = None
-    thin_factor: object = None
-    log_weights: DataArray = None
-    n_folds: int = None
-    loo_subsample_observations: np.ndarray = None
-    elpd_loo_approx: DataArray = None
-    log_jacobian: DataArray = None
-    influence_pareto_k: DataArray = None
-    n_eff_i: DataArray = None
-    forecast_horizon: int = None
-    min_observations: int = None
-    refits: np.ndarray = None
-    n_refits: int = None
-    p_lfo_i: DataArray = None
+
+    _display_kind: ClassVar[str | None] = None
+
+    def _header(self):
+        return BASE_HEADER_FMT.format(n_samples=self.n_samples, n_points=self.n_data_points)
+
+    def _table(self):
+        scale_str = SCALE_DICT[self.scale]
+        display_kind = self._display_kind or self.kind
+        padding = len(scale_str) + len(display_kind) + 1
+        table = BASE_TABLE_FMT.format(padding, padding - 2)
+        return table.format(
+            "",
+            kind=display_kind,
+            scale=scale_str,
+            ic_value=self.elpd,
+            ic_se=self.se,
+            p_value=self.p,
+        )
+
+    def _footer(self):
+        return WARNING_FMT if self.warning else ""
 
     def __str__(self):
         """Print elpd data in a user friendly way."""
-        kind = self.kind
-        scale_str = SCALE_DICT[self["scale"]]
-
-        # loo_kfold
-        if kind == "loo_kfold" and self.n_folds is not None:
-            display_kind = "kfold"
-            padding = len(scale_str) + len(display_kind) + 1
-            base = f"Computed from {self.n_folds}-fold cross validation.\n\n"
-            base += f"{{0:{padding}}} Estimate       SE\n"
-            base += f"{scale_str}_{display_kind} {{ic_value:8.2f}}  {{ic_se:7.2f}}\n"
-            base += f"p_{display_kind:{padding - 2}} {{p_value:8.2f}}        -"
-            base = base.format(
-                "",
-                ic_value=self.elpd,
-                ic_se=self.se,
-                p_value=self.p,
-            )
-
-            return base
-
-        # lfo_cv
-        if kind == "lfo_cv" and self.forecast_horizon is not None:
-            display_kind = "lfo"
-            padding = len(scale_str) + len(display_kind) + 1
-            origin_word = "origin" if self.n_data_points == 1 else "origins"
-            base = (
-                f"Computed from {self.n_data_points} forecast {origin_word} with "
-                f"{self.forecast_horizon}-step-ahead predictions.\n"
-                f"Minimum training observations: {self.min_observations}.\n"
-            )
-            if self.good_k is None:
-                base += "The model was fit at every forecast origin.\n\n"
-            else:
-                refit_word = "refit" if self.n_refits == 1 else "refits"
-                base += (
-                    f"PSIS triggered {self.n_refits} additional exact {refit_word} "
-                    f"(k threshold: {self.good_k:.2f}).\n\n"
-                )
-            base += f"{{0:{padding}}} Estimate       SE\n"
-            base += f"{scale_str}_{display_kind} {{ic_value:8.2f}}  {{ic_se:7.2f}}\n"
-            base += f"p_{display_kind:{padding - 2}} {{p_value:8.2f}}        -"
-            base = base.format(
-                "",
-                ic_value=self.elpd,
-                ic_se=self.se,
-                p_value=self.p,
-            )
-            if self.warning:
-                base += (
-                    "\n\nThere has been a warning during the calculation. Please check the results."
-                )
-
-            return base
-
-        padding = len(scale_str) + len(kind) + 1
-
-        # loo_subsample
-        if self.subsample_size:
-            base = (
-                f"Computed from {self.n_samples} by {self.subsample_size} "
-                f"subsampled log-likelihood\n"
-            )
-            base += f"values from {self.n_data_points} total observations.\n\n"
-            base += "         Estimate   SE subsampling SE\n"
-            base += (
-                f"{scale_str}_{kind}  {self.elpd:8.1f} {self.se:4.1f} "
-                f"           {self.subsampling_se:0.1f}\n"
-            )
-            base += f"p_{kind}         {self.p:4.1f}\n"
-            if self.approx_posterior:
-                header, table = base.split("\n\n", 1)
-                base = header + " Posterior approximation correction used.\n\n" + table
-        else:
-            base = BASE_FMT.format(padding, padding - 2)
-            base = base.format(
-                "",
-                kind=kind,
-                scale=scale_str,
-                n_samples=self.n_samples,
-                n_points=self.n_data_points,
-                ic_value=self.elpd,
-                ic_se=self.se,
-                p_value=self.p,
-            )
-
-            if self.approx_posterior:
-                header, table = base.split("\n\n", 1)
-                base = header + "\nPosterior approximation correction used.\n\n" + table
-
-        if self.warning:
-            base += "\n\nThere has been a warning during the calculation. Please check the results."
-
-        # loo
-        if kind == "loo" and self.pareto_k is not None:
-            bins = np.asarray([-np.inf, self.good_k, 1, np.inf])
-            counts, *_ = np.histogram(self.pareto_k, bins=bins, density=False)
-            extended = POINTWISE_LOO_FMT.format(max(4, len(str(np.max(counts)))))
-            extended = extended.format(
-                "Count",
-                "Pct.",
-                *[*counts, *(counts / np.sum(counts) * 100)],
-                self.good_k,
-            )
-            base = "\n".join([base, extended])
-
-        return base
+        return self._header() + "\n\n" + self._table() + self._footer()
 
     def __repr__(self):
         """Alias to ``__str__``."""
@@ -319,6 +261,188 @@ class ELPDData:  # pylint: disable=too-many-ancestors, too-many-instance-attribu
     def __setitem__(self, key, item):
         """Define setitem magic method."""
         setattr(self, key, item)
+
+
+@dataclass(kw_only=True)
+class ELPDDataLOO(ELPDData):
+    """PSIS-LOO-CV results, returned by :func:`loo` and related functions.
+
+    Also returned by :func:`loo_i`, :func:`loo_approximate_posterior`,
+    :func:`loo_moment_match` and :func:`reloo`. Inherits the
+    attributes of :class:`ELPDData`.
+
+    Attributes
+    ----------
+    approx_posterior : bool
+        True when the approximate posterior correction was applied.
+    log_weights : DataArray, optional
+        Smoothed log importance weights.
+    log_jacobian : DataArray, optional
+        Log-Jacobian adjustment for variable transformations.
+    p_loo_i : DataArray, optional
+        Pointwise effective number of parameters, set by ``reloo`` and
+        ``loo_moment_match``.
+    influence_pareto_k : DataArray, optional
+        Pareto k values before moment matching, set by ``loo_moment_match``.
+    n_eff_i : DataArray, optional
+        Effective sample size per observation, set by ``loo_moment_match``.
+    """
+
+    kind: str = "loo"
+    approx_posterior: bool = False
+    log_weights: DataArray = None
+    log_jacobian: DataArray = None
+    p_loo_i: DataArray = None
+    influence_pareto_k: DataArray = None
+    n_eff_i: DataArray = None
+
+    def _header(self):
+        header = super()._header()
+        if self.approx_posterior:
+            header += "\nPosterior approximation correction used."
+        return header
+
+    def __str__(self):
+        """Print elpd data followed by the Pareto k diagnostic table."""
+        base = super().__str__()
+        if self.pareto_k is None or self.good_k is None:
+            return base
+        bins = np.asarray([-np.inf, self.good_k, 1, np.inf])
+        counts, *_ = np.histogram(self.pareto_k, bins=bins, density=False)
+        extended = POINTWISE_LOO_FMT.format(max(4, len(str(np.max(counts)))))
+        extended = extended.format(
+            "Count",
+            "Pct.",
+            *[*counts, *(counts / np.sum(counts) * 100)],
+            self.good_k,
+        )
+        return "\n".join([base, extended])
+
+
+@dataclass(kw_only=True)
+class ELPDDataLOOSubsample(ELPDDataLOO):
+    """Subsampled PSIS-LOO-CV results, returned by :func:`loo_subsample`.
+
+    Also returned by :func:`update_subsample`. Inherits the attributes of
+    :class:`ELPDDataLOO`. Here ``log_weights`` holds a :class:`~xarray.Dataset` with one
+    variable named after the log likelihood variable.
+
+    Attributes
+    ----------
+    subsample_size : int
+        Number of observations in the subsample.
+    subsampling_se : float
+        Standard error due to subsampling uncertainty only.
+    loo_subsample_observations : ndarray
+        Indices of the subsampled observations.
+    elpd_loo_approx : DataArray
+        Approximate pointwise ELPD for every observation.
+    log_p : DataArray or ndarray, optional
+        Log density of the target posterior.
+    log_q : DataArray or ndarray, optional
+        Log density of the proposal posterior.
+    thin_factor : int or str, optional
+        Thinning factor applied to the posterior draws, an integer or ``"auto"``.
+    """
+
+    subsample_size: int
+    subsampling_se: float
+    loo_subsample_observations: np.ndarray
+    elpd_loo_approx: DataArray
+    log_p: DataArray | np.ndarray = None
+    log_q: DataArray | np.ndarray = None
+    thin_factor: int | str = None
+
+    def _header(self):
+        header = (
+            f"Computed from {self.n_samples} by {self.subsample_size} "
+            f"subsampled log-likelihood\nvalues from {self.n_data_points} total observations."
+        )
+        if self.approx_posterior:
+            header += " Posterior approximation correction used."
+        return header
+
+    def _table(self):
+        scale_str = SCALE_DICT[self.scale]
+        return (
+            "         Estimate   SE subsampling SE\n"
+            f"{scale_str}_{self.kind}  {self.elpd:8.1f} {self.se:4.1f} "
+            f"           {self.subsampling_se:0.1f}\n"
+            f"p_{self.kind}         {self.p:4.1f}\n"
+        )
+
+
+@dataclass(kw_only=True)
+class ELPDDataLOOKFold(ELPDData):
+    """K-fold cross-validation results, returned by :func:`loo_kfold`.
+
+    Inherits the attributes of :class:`ELPDData`. ``good_k`` and ``pareto_k`` are always
+    None because k-fold cross-validation does not use importance sampling.
+
+    Attributes
+    ----------
+    n_folds : int
+        Number of folds.
+    p_kfold_i : DataArray, optional
+        Pointwise effective number of parameters, only when ``pointwise=True``.
+    fold_fits : dict, optional
+        Fitted models for each fold, only when ``save_fits=True``.
+    """
+
+    kind: str = "loo_kfold"
+    n_folds: int
+    p_kfold_i: DataArray = None
+    fold_fits: dict = None
+
+    _display_kind: ClassVar[str] = "kfold"
+
+    def _header(self):
+        return f"Computed from {self.n_folds}-fold cross validation."
+
+
+@dataclass(kw_only=True)
+class ELPDDataLFO(ELPDData):
+    """Leave-future-out cross-validation results, returned by :func:`lfo_cv`.
+
+    Inherits the attributes of :class:`ELPDData`. ``n_data_points`` counts forecast origins.
+
+    Attributes
+    ----------
+    forecast_horizon : int
+        Number of steps ahead that were predicted.
+    min_observations : int
+        Minimum number of training observations.
+    refits : ndarray
+        Time indices at which the model was refit.
+    n_refits : int
+        Number of refits performed.
+    p_lfo_i : DataArray, optional
+        Pointwise effective number of parameters, only when ``pointwise=True``.
+    """
+
+    kind: str = "lfo_cv"
+    forecast_horizon: int
+    min_observations: int
+    refits: np.ndarray
+    n_refits: int
+    p_lfo_i: DataArray = None
+
+    _display_kind: ClassVar[str] = "lfo"
+
+    def _header(self):
+        origin_word = "origin" if self.n_data_points == 1 else "origins"
+        header = (
+            f"Computed from {self.n_data_points} forecast {origin_word} with "
+            f"{self.forecast_horizon}-step-ahead predictions.\n"
+            f"Minimum training observations: {self.min_observations}.\n"
+        )
+        if self.good_k is None:
+            return header + "The model was fit at every forecast origin."
+        refit_word = "refit" if self.n_refits == 1 else "refits"
+        return header + (
+            f"PSIS triggered {self.n_refits} additional exact {refit_word} "
+            f"(k threshold: {self.good_k:.2f})."
+        )
 
 
 def _warn_non_unique_coords(xr_obj, dims_to_reduce):

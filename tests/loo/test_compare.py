@@ -254,6 +254,27 @@ def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
     assert_almost_equal(comparison_regular["elpd_diff"].iloc[0], 0.0, decimal=4)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_subsampled_with_full_loo(centered_eight_with_sigma):
+    loo_sub = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 1, 2, 3]),
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        pointwise=True,
+    )
+    loo_full = loo(centered_eight_with_sigma, pointwise=True, var_name="obs")
+
+    with pytest.warns(UserWarning, match="observations included in loo calculations"):
+        result = compare({"sub": loo_sub, "full": loo_full})
+
+    assert "subsampling_dse" in result.columns
+    assert np.isfinite(result["subsampling_dse"].values).all()
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
 @pytest.mark.parametrize("method", ["BB-pseudo-BMA", "pseudo-BMA"])
 def test_compare_single_model(centered_eight, method):
     single_dict = {"model": centered_eight}

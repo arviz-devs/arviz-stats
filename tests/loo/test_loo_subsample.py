@@ -12,7 +12,7 @@ xr = importorskip("xarray")
 sp = importorskip("scipy")
 
 from arviz_stats import loo, loo_subsample, update_subsample
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDDataLOOSubsample
 
 
 def log_lik_fn(obs_da, datatree):
@@ -43,7 +43,7 @@ def test_loo_subsample(centered_eight_with_sigma, pointwise, method):
         seed=42,
     )
 
-    assert isinstance(loo_sub, ELPDData)
+    assert isinstance(loo_sub, ELPDDataLOOSubsample)
     assert loo_sub.kind == "loo"
     assert loo_sub.subsample_size == observations
     assert isinstance(loo_sub.elpd, float)
@@ -91,7 +91,7 @@ def test_loo_subsample_with_custom_loglik(centered_eight_with_sigma, method):
         pointwise=True,
     )
 
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     assert result.subsample_size == observations
     assert -40 < result.elpd < -25
     assert np.sum(~np.isnan(result.pareto_k.values)) == observations
@@ -178,13 +178,12 @@ def test_loo_subsample_thin_parameter(centered_eight_with_sigma, thin):
         seed=42,
     )
 
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     assert result.kind == "loo"
     assert -40 < result.elpd < -25
     assert result.subsample_size == 4
 
     if thin is not None:
-        assert hasattr(result, "thin_factor")
         assert result.thin_factor == thin
 
 
@@ -337,7 +336,7 @@ def test_loo_subsample_observations_as_array(centered_eight_with_sigma):
         seed=42,
     )
     assert result.subsample_size == 4
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     non_nan_indices = np.where(~np.isnan(result.elpd_i.values))[0]
     assert np.array_equal(non_nan_indices, indices)
     assert np.sum(~np.isnan(result.pareto_k.values)) == 4
@@ -377,7 +376,7 @@ def test_loo_subsample_custom_reff(centered_eight_with_sigma):
         seed=42,
         pointwise=True,
     )
-    assert isinstance(result_custom, ELPDData)
+    assert isinstance(result_custom, ELPDDataLOOSubsample)
     assert result_custom.elpd != result_default.elpd
 
 
@@ -400,7 +399,7 @@ def test_loo_subsample_lpd_custom_loglik(centered_eight_with_sigma):
         seed=42,
         pointwise=True,
     )
-    assert isinstance(result_custom, ELPDData)
+    assert isinstance(result_custom, ELPDDataLOOSubsample)
     assert_allclose(result_custom.elpd, result_precomputed.elpd, rtol=5e-2)
     assert_allclose(result_custom.p, result_precomputed.p, rtol=5e-2)
 
@@ -422,7 +421,7 @@ def test_loo_subsample_log_false(centered_eight_with_sigma):
         seed=42,
         pointwise=True,
     )
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     assert np.isfinite(result.elpd)
     assert -40 < result.elpd < -25
 
@@ -635,7 +634,7 @@ def test_update_subsample_p_loo_independent_of_approximation(centered_eight_with
         param_names=["theta"],
     )
     assert updated_plpd.subsample_size == 5
-    assert isinstance(updated_plpd, ELPDData)
+    assert isinstance(updated_plpd, ELPDDataLOOSubsample)
     assert np.isfinite(updated_plpd.elpd)
     assert_allclose(updated_lpd.p, updated_plpd.p)
 
@@ -657,6 +656,12 @@ def test_update_subsample_without_pointwise_raises(centered_eight_with_sigma):
         )
 
 
+def test_update_subsample_rejects_plain_loo_result(centered_eight_with_sigma):
+    loo_result = loo(centered_eight_with_sigma, pointwise=True, var_name="obs")
+    with pytest.raises(TypeError, match="loo_orig must be an ELPDDataLOOSubsample object"):
+        update_subsample(loo_result, centered_eight_with_sigma, observations=2, var_name="obs")
+
+
 def test_loo_subsample_approximate_posterior(centered_eight, log_densities):
     log_p, log_q = log_densities["dataarray"]
     result = loo_subsample(
@@ -668,7 +673,7 @@ def test_loo_subsample_approximate_posterior(centered_eight, log_densities):
         seed=42,
         pointwise=True,
     )
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     assert result.approx_posterior is True
     assert np.isfinite(result.elpd)
     assert result.log_p is not None
