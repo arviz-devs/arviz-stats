@@ -387,7 +387,19 @@ def test_elpddata_repr():
         warning=False,
         good_k=0.7,
     )
+    kfold = ELPDDataLOOKFold(
+        elpd=-20,
+        se=2,
+        p=5.6,
+        n_samples=1000,
+        n_data_points=370,
+        scale="log",
+        warning=False,
+        good_k=None,
+        n_folds=10,
+    )
     assert repr(elpddata) == str(elpddata)
+    assert repr(kfold) == str(kfold)
 
 
 @pytest.mark.parametrize(

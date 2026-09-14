@@ -263,7 +263,7 @@ class ELPDData:  # pylint: disable=too-many-instance-attributes
         setattr(self, key, item)
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, repr=False)
 class ELPDDataLOO(ELPDData):
     """PSIS-LOO-CV results, returned by :func:`loo` and related functions.
 
@@ -319,7 +319,7 @@ class ELPDDataLOO(ELPDData):
         return "\n".join([base, extended])
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, repr=False)
 class ELPDDataLOOSubsample(ELPDDataLOO):
     """Subsampled PSIS-LOO-CV results, returned by :func:`loo_subsample`.
 
@@ -372,7 +372,7 @@ class ELPDDataLOOSubsample(ELPDDataLOO):
         )
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, repr=False)
 class ELPDDataLOOKFold(ELPDData):
     """K-fold cross-validation results, returned by :func:`loo_kfold`.
 
@@ -400,7 +400,7 @@ class ELPDDataLOOKFold(ELPDData):
         return f"Computed from {self.n_folds}-fold cross validation."
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, repr=False)
 class ELPDDataLFO(ELPDData):
     """Leave-future-out cross-validation results, returned by :func:`lfo_cv`.
 
