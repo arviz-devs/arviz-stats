@@ -302,11 +302,10 @@ class ELPDDataLOO(ELPDData):
             header += "\nPosterior approximation correction used."
         return header
 
-    def __str__(self):
-        """Print elpd data followed by the Pareto k diagnostic table."""
-        base = super().__str__()
+    def _footer(self):
+        footer = super()._footer()
         if self.pareto_k is None or self.good_k is None:
-            return base
+            return footer
         bins = np.asarray([-np.inf, self.good_k, 1, np.inf])
         counts, *_ = np.histogram(self.pareto_k, bins=bins, density=False)
         extended = POINTWISE_LOO_FMT.format(max(4, len(str(np.max(counts)))))
@@ -316,7 +315,7 @@ class ELPDDataLOO(ELPDData):
             *[*counts, *(counts / np.sum(counts) * 100)],
             self.good_k,
         )
-        return "\n".join([base, extended])
+        return footer + "\n" + extended
 
 
 @dataclass(kw_only=True, repr=False)
@@ -324,8 +323,9 @@ class ELPDDataLOOSubsample(ELPDDataLOO):
     """Subsampled PSIS-LOO-CV results returned by :func:`loo_subsample`.
 
     Also returned by :func:`update_subsample`. Inherits the attributes of
-    :class:`ELPDDataLOO`. Here ``log_weights`` holds a :class:`~xarray.Dataset` with one
-    variable named after the log likelihood variable.
+    :class:`ELPDDataLOO`. With ``pointwise=True`` the ``log_weights`` attribute holds a
+    :class:`~xarray.Dataset` with one variable named after the log likelihood variable,
+    otherwise a :class:`~xarray.DataArray` restricted to the subsampled observations.
 
     Attributes
     ----------
@@ -364,11 +364,12 @@ class ELPDDataLOOSubsample(ELPDDataLOO):
 
     def _table(self):
         scale_str = SCALE_DICT[self.scale]
+        display_kind = self._display_kind or self.kind
         return (
             "         Estimate   SE subsampling SE\n"
-            f"{scale_str}_{self.kind}  {self.elpd:8.1f} {self.se:4.1f} "
+            f"{scale_str}_{display_kind}  {self.elpd:8.1f} {self.se:4.1f} "
             f"           {self.subsampling_se:0.1f}\n"
-            f"p_{self.kind}         {self.p:4.1f}\n"
+            f"p_{display_kind}         {self.p:4.1f}\n"
         )
 
 

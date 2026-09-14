@@ -10,7 +10,7 @@ from xarray_einstats.stats import logsumexp
 from arviz_stats.loo.loo import loo
 from arviz_stats.loo.loo_helper import _prepare_loo_inputs
 from arviz_stats.loo.wrapper import SamplingWrapper
-from arviz_stats.utils import ELPDDataLOO
+from arviz_stats.utils import ELPDData, ELPDDataLOO
 
 __all__ = ["reloo"]
 
@@ -159,8 +159,8 @@ def reloo(
 
     if loo_orig is None:
         pareto_k = None
-        if isinstance(log_weights, ELPDDataLOO):
-            if log_weights.log_weights is None:
+        if isinstance(log_weights, ELPDData):
+            if not isinstance(log_weights, ELPDDataLOO) or log_weights.log_weights is None:
                 raise ValueError("ELPDData object does not contain log_weights")
             pareto_k = log_weights.pareto_k
             log_weights = log_weights.log_weights

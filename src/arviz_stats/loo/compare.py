@@ -403,21 +403,24 @@ def compare(
     return result
 
 
-def _subsample_fields(elpd_data):
-    """Return the subsampling fields of a result, or Nones when it is not subsampled."""
+def _subsample_observations(elpd_data):
+    """Return the subsampled observation indices, or None for a result without subsampling."""
     if isinstance(elpd_data, ELPDDataLOOSubsample):
-        return (
-            elpd_data.loo_subsample_observations,
-            elpd_data.elpd_loo_approx,
-            elpd_data.subsampling_se,
-        )
-    return None, None, None
+        return elpd_data.loo_subsample_observations
+    return None
+
+
+def _subsampling_dse(elpd_a, elpd_b):
+    """Combine the subsampling standard errors of two results, zero when not subsampled."""
+    se_a = elpd_a.subsampling_se if isinstance(elpd_a, ELPDDataLOOSubsample) else 0.0
+    se_b = elpd_b.subsampling_se if isinstance(elpd_b, ELPDDataLOOSubsample) else 0.0
+    return np.sqrt(se_a**2 + se_b**2)
 
 
 def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
     """Compute ELPD differences for subsampled models."""
-    subsample_a, _, subsampling_se_a = _subsample_fields(elpd_a)
-    subsample_b, _, subsampling_se_b = _subsample_fields(elpd_b)
+    subsample_a = _subsample_observations(elpd_a)
+    subsample_b = _subsample_observations(elpd_b)
     mixed_subsample = (subsample_a is None) != (subsample_b is None)
 
     if subsample_a is None and subsample_b is None:
@@ -436,11 +439,7 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
         elpd_diff = np.nansum(valid)
         se_diff = np.sqrt(valid.size * np.nanvar(valid))
         result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
-
-        subsampling_a = subsampling_se_a or 0.0
-        subsampling_b = subsampling_se_b or 0.0
-        combined = np.sqrt(subsampling_a**2 + subsampling_b**2)
-
+        combined = _subsampling_dse(elpd_a, elpd_b)
         if combined:
             result["subsampling_dse"] = combined
         return result
@@ -507,16 +506,16 @@ def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subs
         None if elpd_b_values is None else np.asarray(elpd_b_values, dtype=float).reshape(-1)
     )
 
-    _, approx_a_values, _ = _subsample_fields(elpd_a)
-    if approx_a_values is None:
-        approx_a_values = elpd_a_values
+    approx_a_values = (
+        elpd_a.elpd_loo_approx if isinstance(elpd_a, ELPDDataLOOSubsample) else elpd_a_values
+    )
     approx_a_full = (
         None if approx_a_values is None else np.asarray(approx_a_values, dtype=float).reshape(-1)
     )
 
-    _, approx_b_values, _ = _subsample_fields(elpd_b)
-    if approx_b_values is None:
-        approx_b_values = elpd_b_values
+    approx_b_values = (
+        elpd_b.elpd_loo_approx if isinstance(elpd_b, ELPDDataLOOSubsample) else elpd_b_values
+    )
     approx_b_full = (
         None if approx_b_values is None else np.asarray(approx_b_values, dtype=float).reshape(-1)
     )
@@ -557,12 +556,7 @@ def _compute_naive_diff(elpd_a, elpd_b):
     se_diff = np.sqrt(elpd_a.se**2 + elpd_b.se**2)
 
     result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
-    _, _, subsampling_se_a = _subsample_fields(elpd_a)
-    _, _, subsampling_se_b = _subsample_fields(elpd_b)
-    subsampling_a = subsampling_se_a or 0.0
-    subsampling_b = subsampling_se_b or 0.0
-    combined = np.sqrt(subsampling_a**2 + subsampling_b**2)
-
+    combined = _subsampling_dse(elpd_a, elpd_b)
     if combined:
         result["subsampling_dse"] = combined
     return result

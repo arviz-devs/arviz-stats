@@ -18,7 +18,7 @@ from arviz_stats.loo.loo_helper import (
     _select_obs_by_indices,
     _warn_pareto_k,
 )
-from arviz_stats.utils import ELPDDataLOO, ELPDDataLOOSubsample
+from arviz_stats.utils import ELPDData, ELPDDataLOO, ELPDDataLOOSubsample
 
 
 def loo_subsample(
@@ -259,8 +259,8 @@ def loo_subsample(
         approx_posterior = True
     else:
         if log_weights is not None:
-            if isinstance(log_weights, ELPDDataLOO):
-                if log_weights.log_weights is None:
+            if isinstance(log_weights, ELPDData):
+                if not isinstance(log_weights, ELPDDataLOO) or log_weights.log_weights is None:
                     raise ValueError("ELPDData object does not contain log_weights")
                 log_weights = log_weights.log_weights
                 if loo_inputs.var_name in log_weights:
@@ -509,12 +509,12 @@ def update_subsample(
         https://proceedings.mlr.press/v97/magnusson19a.html
         arXiv preprint https://arxiv.org/abs/1904.10679
     """
+    if observations is None or (isinstance(observations, int) and observations == 0):
+        return loo_orig
     if not isinstance(loo_orig, ELPDDataLOOSubsample):
         raise TypeError(
             "loo_orig must be an ELPDDataLOOSubsample object, as returned by loo_subsample."
         )
-    if observations is None or (isinstance(observations, int) and observations == 0):
-        return loo_orig
     if loo_orig.elpd_i is None:
         raise ValueError("Original loo_subsample result must have pointwise=True")
     if method not in ["lpd", "plpd"]:
@@ -555,8 +555,8 @@ def update_subsample(
         log_weights = loo_orig.log_weights
 
     if log_weights is not None:
-        if isinstance(log_weights, ELPDDataLOO):
-            if log_weights.log_weights is None:
+        if isinstance(log_weights, ELPDData):
+            if not isinstance(log_weights, ELPDDataLOO) or log_weights.log_weights is None:
                 raise ValueError("ELPDData object does not contain log_weights")
             log_weights = log_weights.log_weights
             if loo_inputs.var_name in log_weights:

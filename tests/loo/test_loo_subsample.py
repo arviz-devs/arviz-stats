@@ -12,7 +12,7 @@ xr = importorskip("xarray")
 sp = importorskip("scipy")
 
 from arviz_stats import loo, loo_subsample, update_subsample
-from arviz_stats.utils import ELPDDataLOOSubsample
+from arviz_stats.utils import ELPDDataLOO, ELPDDataLOOKFold, ELPDDataLOOSubsample
 
 
 def log_lik_fn(obs_da, datatree):
@@ -656,8 +656,35 @@ def test_update_subsample_without_pointwise_raises(centered_eight_with_sigma):
         )
 
 
+def test_loo_subsample_rejects_kfold_log_weights(centered_eight_with_sigma):
+    kfold_result = ELPDDataLOOKFold(
+        elpd=-30.0,
+        se=2.0,
+        p=3.0,
+        n_samples=100,
+        n_data_points=8,
+        scale="log",
+        warning=False,
+        good_k=None,
+        n_folds=4,
+    )
+    with pytest.raises(ValueError, match="ELPDData object does not contain log_weights"):
+        loo_subsample(
+            centered_eight_with_sigma, observations=4, var_name="obs", log_weights=kfold_result
+        )
+
+
 def test_update_subsample_rejects_plain_loo_result(centered_eight_with_sigma):
-    loo_result = loo(centered_eight_with_sigma, pointwise=True, var_name="obs")
+    loo_result = ELPDDataLOO(
+        elpd=-30.0,
+        se=2.0,
+        p=3.0,
+        n_samples=100,
+        n_data_points=8,
+        scale="log",
+        warning=False,
+        good_k=0.7,
+    )
     with pytest.raises(TypeError, match="loo_orig must be an ELPDDataLOOSubsample object"):
         update_subsample(loo_result, centered_eight_with_sigma, observations=2, var_name="obs")
 
