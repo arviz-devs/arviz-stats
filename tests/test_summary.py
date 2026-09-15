@@ -596,9 +596,10 @@ def test_summary_data_frame():
     assert "0.123" in html
     assert "1.06" in html
 
-    assert sdf._repr_latex_() is None
-    with pd.option_context("styler.render.repr", "latex"):
-        latex = sdf._repr_latex_()
+    with pd.option_context("styler.render.repr", "html"):
+        assert sdf._repr_latex_() is None
+
+    latex = sdf.to_latex()
     assert "0.123" in latex
     assert "-1.988" in latex
     assert "1.00" in latex
@@ -606,19 +607,13 @@ def test_summary_data_frame():
     assert "r\\_hat" in latex
     assert "mu\\_1" in latex
 
-    latex = sdf.to_latex()
-    assert "0.123" in latex
-    assert "1.06" in latex
-    assert "r\\_hat" in latex
-    assert "mu\\_1" in latex
+    with pd.option_context("styler.render.repr", "latex"):
+        assert sdf._repr_latex_() == latex
 
     sdf_t = sdf.T
     assert sdf_t._fmt_map is not None
     with pd.option_context("styler.render.repr", "latex"):
-        latex_t = sdf_t._repr_latex_()
-    assert "0.123" in latex_t
-    assert "1.06" in latex_t
-    assert "r\\_hat" in latex_t
+        assert sdf_t._repr_latex_() == sdf_t.to_latex()
 
     plain = SummaryDataFrame(data, index=["mu_1", "tau"])
     assert "0.123456" in plain.to_latex()

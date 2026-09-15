@@ -414,11 +414,6 @@ class SummaryDataFrame(pd.DataFrame):
             return super()._repr_html_()
         return self._display_df().to_html()
 
-    def _repr_latex_(self):  # pylint: disable=overridden-final-method
-        if self._fmt_map is None or pd.get_option("styler.render.repr") != "latex":
-            return super()._repr_latex_()
-        return self.to_latex(escape=True)
-
     def to_html(self, *args, **kwargs):
         if self._fmt_map is None:
             return super().to_html(*args, **kwargs)
