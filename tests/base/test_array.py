@@ -591,6 +591,10 @@ class TestECDF:
         x, y = array_stats.ecdf(ary, npoints=50, pit=True)
         assert len(x) == 50
         assert len(y) == 50
+        assert x[0] == 0
+        assert x[-1] == 1
+        expected = np.searchsorted(np.sort(ary), x, side="right") / ary.size - x
+        np.testing.assert_allclose(y, expected)
 
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     def test_ecdf_axis(self, array_stats, rng, axis):
