@@ -264,6 +264,41 @@ def test_elpddata_kfold():
     assert "kfold" in printed
 
 
+def test_elpddata_lfo():
+    elpd_i = xr.DataArray([-1.0, -1.2, -0.9], dims=["time"], coords={"time": [5, 6, 7]})
+    elpddata = ELPDData(
+        kind="lfo_cv",
+        elpd=-3.1,
+        se=0.2,
+        p=0.4,
+        n_samples=100,
+        n_data_points=3,
+        scale="log",
+        warning=False,
+        good_k=0.7,
+        elpd_i=elpd_i,
+        forecast_horizon=2,
+        min_observations=5,
+        refits=np.array([6]),
+        n_refits=1,
+        p_lfo_i=xr.zeros_like(elpd_i),
+    )
+
+    assert {
+        "forecast_horizon",
+        "min_observations",
+        "refits",
+        "n_refits",
+        "p_lfo_i",
+    }.issubset(ELPDData.__dataclass_fields__)
+    printed = str(elpddata)
+    assert "3 forecast origins" in printed
+    assert "2-step-ahead" in printed
+    assert "PSIS triggered 1 additional exact refit" in printed
+    assert "elpd_lfo" in printed
+    assert "observations log-likelihood matrix" not in printed
+
+
 def test_elpddata_subsample():
     elpddata = ELPDData(
         kind="loo",

@@ -702,6 +702,18 @@ class TestECDF:
         eval_points, ecdf = density._ecdf(x, npoints=50, pit=True)
         assert len(eval_points) == 50
         assert len(ecdf) == 50
+        assert eval_points[0] == 0
+        assert eval_points[-1] == 1
+        expected = np.searchsorted(np.sort(x), eval_points, side="right") / len(x) - eval_points
+        np.testing.assert_allclose(ecdf, expected)
+
+    def test_ecdf_pit_clustered_values(self, density):
+        x = np.linspace(0.4, 0.6, 100)
+        eval_points, ecdf = density._ecdf(x, npoints=101, pit=True)
+        below = eval_points < 0.4
+        above = eval_points > 0.6
+        np.testing.assert_allclose(ecdf[below], -eval_points[below])
+        np.testing.assert_allclose(ecdf[above], 1 - eval_points[above])
 
     @pytest.mark.parametrize("npoints", [10, 50, 100, 200])
     def test_ecdf_npoints(self, density, rng, npoints):

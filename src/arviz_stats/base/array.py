@@ -864,8 +864,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         npoints : int, default 200
             Maximun number of evaluation points to use.
         pit : bool
-            If True compute the difference between the ecdf and the uniform ecdf
-            and the x values will be normalized to the [0, 1] range.
+            If True compute the difference between the ecdf and the uniform ecdf,
+            with the ecdf evaluated on `npoints` evenly spaced points in the [0, 1] range.
         axis : int, sequence of int or None, default -1
         **kwargs
 

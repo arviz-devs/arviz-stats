@@ -414,11 +414,6 @@ class SummaryDataFrame(pd.DataFrame):
             return super()._repr_html_()
         return self._display_df().to_html()
 
-    def _repr_latex_(self):  # pylint: disable=overridden-final-method
-        if self._fmt_map is None:
-            return super()._repr_latex_()
-        return self.to_latex(escape=True)
-
     def to_html(self, *args, **kwargs):
         if self._fmt_map is None:
             return super().to_html(*args, **kwargs)
@@ -450,6 +445,7 @@ def ci_in_rope(
     var_names=None,
     filter_vars=None,
     group="posterior",
+    coords=None,
     dim=None,
     ci_prob=None,
     ci_kind=None,
@@ -535,6 +531,9 @@ def ci_in_rope(
         combined=False,
         keep_dataset=True,
     )
+
+    if coords is not None:
+        dataset = dataset.sel(coords)
 
     if isinstance(rope, dict):
         if not all(var in dataset.data_vars for var in rope.keys()):

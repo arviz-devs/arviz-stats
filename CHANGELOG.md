@@ -1,3 +1,39 @@
+<a id="v1.3.2"></a>
+# [v1.3.2](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.3.2) - 2026-09-05
+
+## What's Changed
+
+### Maintenance and bug fixes
+* Respect ci_kind in summary for the stats and all kinds by [@VenishPaneliya](https://github.com/VenishPaneliya) in [#416](https://github.com/arviz-devs/arviz-stats/pull/416)
+* Remove deprecated inplace in sort_values by [@aloctavodia](https://github.com/aloctavodia) in [#417](https://github.com/arviz-devs/arviz-stats/pull/417)
+* Write the bandwidth into the kde gufunc output by [@VenishPaneliya](https://github.com/VenishPaneliya) in [#414](https://github.com/arviz-devs/arviz-stats/pull/414)
+* Ensure correct order for bounds in circular std by [@aloctavodia](https://github.com/aloctavodia) in [#418](https://github.com/arviz-devs/arviz-stats/pull/418)
+* Add PyMC and Bambi support for `loo_subsample` by [@jordandeklerk](https://github.com/jordandeklerk) in [#411](https://github.com/arviz-devs/arviz-stats/pull/411)
+* Fix `p_loo` calculation in sub-sampled PSIS-LOO-CV by [@jordandeklerk](https://github.com/jordandeklerk) in [#421](https://github.com/arviz-devs/arviz-stats/pull/421)
+* Fix rounding of `subsampling_dse` in `compare()` by [@jordandeklerk](https://github.com/jordandeklerk) in [#422](https://github.com/arviz-devs/arviz-stats/pull/422)
+* Honour circular in the Numba KDE by [@VenishPaneliya](https://github.com/VenishPaneliya) in [#423](https://github.com/arviz-devs/arviz-stats/pull/423)
+* Fix _mcse_sd to use ESS of squared deviations by [@aloctavodia](https://github.com/aloctavodia) in [#429](https://github.com/arviz-devs/arviz-stats/pull/429)
+* Fix custom limits for circular KDE by [@jordandeklerk](https://github.com/jordandeklerk) in [#430](https://github.com/arviz-devs/arviz-stats/pull/430)
+* Fix Kaplan–Meier estimates for integer event times by [@jordandeklerk](https://github.com/jordandeklerk) in [#431](https://github.com/arviz-devs/arviz-stats/pull/431)
+* Fix covariance and split steps in `loo_moment_match` by [@jordandeklerk](https://github.com/jordandeklerk) in [#432](https://github.com/arviz-devs/arviz-stats/pull/432)
+* Fix `num_samples` default in survival curves by [@jordandeklerk](https://github.com/jordandeklerk) in [#433](https://github.com/arviz-devs/arviz-stats/pull/433)
+* Fix bug in acc_balanced, and switch to ddof=1 by [@aloctavodia](https://github.com/aloctavodia) in [#434](https://github.com/arviz-devs/arviz-stats/pull/434)
+* Fix `loo_subsample` pointwise output for multi-dim observations by [@jordandeklerk](https://github.com/jordandeklerk) in [#435](https://github.com/arviz-devs/arviz-stats/pull/435)
+* Fix reloo SE, log weights, and input checks by [@jordandeklerk](https://github.com/jordandeklerk) in [#436](https://github.com/arviz-devs/arviz-stats/pull/436)
+* Fix jacobian term for p_loo by [@aloctavodia](https://github.com/aloctavodia) in [#437](https://github.com/arviz-devs/arviz-stats/pull/437)
+
+### Documentation
+* Correct the BaseArray summary statistic docstrings by [@VenishPaneliya](https://github.com/VenishPaneliya) in [#427](https://github.com/arviz-devs/arviz-stats/pull/427)
+* Add weight_predictions to docs, add example by [@aloctavodia](https://github.com/aloctavodia) in [#424](https://github.com/arviz-devs/arviz-stats/pull/424)
+
+## New Contributors
+* [@VenishPaneliya](https://github.com/VenishPaneliya) made their first contribution in [#416](https://github.com/arviz-devs/arviz-stats/pull/416)
+
+**Full Changelog**: https://github.com/arviz-devs/arviz-stats/compare/v1.3.1...v1.3.2
+
+[Changes][v1.3.2]
+
+
 <a id="v1.3.1"></a>
 # [v1.3.1](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.3.1) - 2026-08-21
 
@@ -413,6 +449,7 @@
 [Changes][v.0.4.0]
 
 
+[v1.3.2]: https://github.com/arviz-devs/arviz-stats/compare/v1.3.1...v1.3.2
 [v1.3.1]: https://github.com/arviz-devs/arviz-stats/compare/v1.3.0...v1.3.1
 [v1.3.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.2.0...v1.3.0
 [v1.2.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.1.0...v1.2.0

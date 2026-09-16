@@ -818,13 +818,15 @@ class _DensityBase(_CoreBase):
             ecdf = np.full(npoints, np.nan)
             return eval_points, ecdf
 
-        eval_points = np.linspace(np.min(ary), np.max(ary), npoints)
+        if pit:
+            eval_points = np.linspace(0, 1, npoints)
+        else:
+            eval_points = np.linspace(np.min(ary), np.max(ary), npoints)
 
         ary = np.sort(ary)
         ecdf = np.searchsorted(ary, eval_points, side="right") / total_points
 
         if pit:
-            eval_points = eval_points / eval_points.max()
             ecdf -= eval_points
         return eval_points, ecdf
 
