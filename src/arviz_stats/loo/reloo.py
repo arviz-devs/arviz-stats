@@ -10,7 +10,7 @@ from xarray_einstats.stats import logsumexp
 from arviz_stats.loo.loo import loo
 from arviz_stats.loo.loo_helper import _prepare_loo_inputs
 from arviz_stats.loo.wrapper import SamplingWrapper
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDData, ELPDDataLOO
 
 __all__ = ["reloo"]
 
@@ -47,18 +47,18 @@ def reloo(
         An instance of a SamplingWrapper subclass that implements the necessary
         methods for model refitting. This wrapper allows ``reloo`` to work with
         any modeling framework.
-    loo_orig : ELPDData, optional
+    loo_orig : ELPDDataLOO, optional
         Existing LOO results with pointwise data. If None, will compute
         PSIS-LOO-CV first using the data from ``wrapper``.
     var_name : str, optional
         The name of the variable in log_likelihood groups storing the pointwise log
         likelihood data to use for loo computation. Defaults to None, which will
         use all log likelihood data.
-    log_weights : DataArray or ELPDData, optional
+    log_weights : DataArray or ELPDDataLOO, optional
         Smoothed log weights. Can be either:
 
         - A DataArray with the same shape as the log likelihood data
-        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
+        - An ELPDDataLOO object from a previous :func:`arviz_stats.loo` call.
 
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     k_threshold : float, optional
@@ -71,7 +71,7 @@ def reloo(
 
     Returns
     -------
-    ELPDData
+    ELPDDataLOO
         Updated LOO results with the following attributes:
 
         - **kind**: "loo"
@@ -160,7 +160,7 @@ def reloo(
     if loo_orig is None:
         pareto_k = None
         if isinstance(log_weights, ELPDData):
-            if log_weights.log_weights is None:
+            if not isinstance(log_weights, ELPDDataLOO) or log_weights.log_weights is None:
                 raise ValueError("ELPDData object does not contain log_weights")
             pareto_k = log_weights.pareto_k
             log_weights = log_weights.log_weights
@@ -180,8 +180,8 @@ def reloo(
             pareto_k=pareto_k,
         )
 
-    if not isinstance(loo_orig, ELPDData):
-        raise TypeError("loo_orig must be an ELPDData object.")
+    if not isinstance(loo_orig, ELPDDataLOO):
+        raise TypeError("loo_orig must be an ELPDDataLOO object.")
 
     if loo_orig.pareto_k is None or loo_orig.elpd_i is None:
         raise ValueError(
@@ -221,7 +221,7 @@ def reloo(
             loo_refitted.pareto_k = None
         return loo_refitted
 
-    if not hasattr(loo_refitted, "p_loo_i") or loo_refitted.p_loo_i is None:
+    if loo_refitted.p_loo_i is None:
         loo_refitted.p_loo_i = xr.full_like(loo_refitted.elpd_i, np.nan)
         lpd_i = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims)
         loo_refitted.p_loo_i = lpd_i - loo_refitted.elpd_i
@@ -285,10 +285,10 @@ def reloo(
         loo_refitted.elpd_i = None
         loo_refitted.pareto_k = None
         loo_refitted.p_loo_i = None
-        if hasattr(loo_orig, "log_weights") and loo_orig.log_weights is not None:
+        if loo_orig.log_weights is not None:
             loo_refitted.log_weights = loo_orig.log_weights
     else:
-        if hasattr(loo_orig, "log_weights") and loo_orig.log_weights is not None:
+        if loo_orig.log_weights is not None:
             log_weights_refitted = loo_orig.log_weights
             if isinstance(log_weights_refitted, xr.Dataset):
                 log_weights_refitted = log_weights_refitted[loo_inputs.var_name]

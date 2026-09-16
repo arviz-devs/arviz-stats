@@ -21,7 +21,7 @@ from arviz_stats.loo.loo_helper import (
     _shift_and_scale,
     _warn_pareto_k,
 )
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDDataLOO
 
 SplitMomentMatch = namedtuple("SplitMomentMatch", ["lwi", "lwfi", "log_liki", "reff"])
 UpdateQuantities = namedtuple("UpdateQuantities", ["lwi", "lwfi", "ki", "kfi", "log_liki"])
@@ -64,8 +64,8 @@ def loo_moment_match(
     ----------
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
-    loo_orig : ELPDData
-        An existing ELPDData object from a previous `loo` result. Must contain
+    loo_orig : ELPDDataLOO
+        An existing ELPDDataLOO object from a previous `loo` result. Must contain
         pointwise Pareto k values (`pointwise=True` must have been used).
     log_prob_upars_fn : callable, optional
         Function that computes the log probability density of the full posterior
@@ -118,7 +118,7 @@ def loo_moment_match(
 
     Returns
     -------
-    ELPDData
+    ELPDDataLOO
         Object with the following attributes:
 
         - **kind**: "loo"
@@ -163,8 +163,8 @@ def loo_moment_match(
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    if not isinstance(loo_orig, ELPDData):
-        raise TypeError("loo_orig must be an ELPDData object.")
+    if not isinstance(loo_orig, ELPDDataLOO):
+        raise TypeError("loo_orig must be an ELPDDataLOO object.")
     if loo_orig.pareto_k is None or loo_orig.elpd_i is None:
         raise ValueError(
             "Moment matching requires pointwise LOO results with Pareto k values. "
@@ -277,17 +277,14 @@ def loo_moment_match(
             loo_data.elpd_i = None
             loo_data.pareto_k = None
             loo_data.influence_pareto_k = None
-            if hasattr(loo_data, "p_loo_i"):
-                loo_data.p_loo_i = None
-            if hasattr(loo_data, "n_eff_i"):
-                loo_data.n_eff_i = None
+            loo_data.p_loo_i = None
+            loo_data.n_eff_i = None
         return loo_data
 
     lpd = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
     loo_data.p_loo_i = lpd - loo_data.elpd_i
     kfs = np.zeros(n_data_points)
-    log_weights = getattr(loo_data, "log_weights", None)
-    r_eff_data = getattr(loo_data, "r_eff", reff)
+    log_weights = loo_data.log_weights
 
     # Moment matching algorithm
     for i in bad_obs_indices:
@@ -305,7 +302,7 @@ def loo_moment_match(
             ks=ks,
             log_weights=log_weights,
             pareto_k=loo_data.pareto_k,
-            r_eff=r_eff_data,
+            r_eff=reff,
             sample_dims=sample_dims,
             obs_dims=obs_dims,
             n_samples=n_samples,
@@ -343,7 +340,7 @@ def loo_moment_match(
                 UserWarning,
                 stacklevel=2,
             )
-            if hasattr(loo_orig, "p_loo_i") and loo_orig.p_loo_i is not None:
+            if loo_orig.p_loo_i is not None:
                 if len(obs_dims) == 1:
                     idx_dict = {obs_dims[0]: i}
                 else:
@@ -380,10 +377,8 @@ def loo_moment_match(
         loo_data.elpd_i = None
         loo_data.pareto_k = None
         loo_data.influence_pareto_k = None
-        if hasattr(loo_data, "p_loo_i"):
-            loo_data.p_loo_i = None
-        if hasattr(loo_data, "n_eff_i"):
-            loo_data.n_eff_i = None
+        loo_data.p_loo_i = None
+        loo_data.n_eff_i = None
     return loo_data
 
 
@@ -910,13 +905,13 @@ def _update_loo_data_i(
     loo_data.elpd_i[idx_dict] = new_elpd_i
     loo_data.pareto_k[idx_dict] = new_pareto_k
 
-    if getattr(loo_data, "p_loo_i", None) is None:
+    if loo_data.p_loo_i is None:
         loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
 
     loo_data.p_loo_i[idx_dict] = p_loo_i
 
     if n_eff_i is not None:
-        if getattr(loo_data, "n_eff_i", None) is None:
+        if loo_data.n_eff_i is None:
             loo_data.n_eff_i = xr.full_like(loo_data.elpd_i, np.nan)
         loo_data.n_eff_i[idx_dict] = n_eff_i
 

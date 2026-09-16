@@ -93,6 +93,19 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.weight_predictions
 ```
 
+### ELPD data
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   arviz_stats.ELPDData
+   arviz_stats.ELPDDataLOO
+   arviz_stats.ELPDDataLOOSubsample
+   arviz_stats.ELPDDataLOOKFold
+   arviz_stats.ELPDDataLFO
+```
+
 ### Other
 
 ```{eval-rst}

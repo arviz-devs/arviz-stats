@@ -12,7 +12,7 @@ from scipy.stats import dirichlet, norm
 from arviz_stats.base.stats_utils import get_decimal_places_from_se, round_num
 from arviz_stats.loo import loo
 from arviz_stats.loo.loo_helper import _diff_srs_estimator
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDData, ELPDDataLFO, ELPDDataLOOSubsample
 
 
 def compare(
@@ -209,9 +209,7 @@ def compare(
     ics_dict = _calculate_ics(compare_dict, var_name=var_name)
     names = list(ics_dict.keys())
 
-    has_subsampling = any(
-        getattr(elpd, "subsample_size", None) is not None for elpd in ics_dict.values()
-    )
+    has_subsampling = any(isinstance(elpd, ELPDDataLOOSubsample) for elpd in ics_dict.values())
     if reference is not None:
         prob_direction = "p_better"
         sign = -1
@@ -252,9 +250,16 @@ def compare(
             f"Available models: {', '.join(names)}"
         )
 
-    ics = pd.DataFrame.from_dict(ics_dict, orient="index")
+    ics = pd.DataFrame(
+        {
+            "elpd": [elpd_data.elpd for elpd_data in ics_dict.values()],
+            "se": [elpd_data.se for elpd_data in ics_dict.values()],
+            "p": [elpd_data.p for elpd_data in ics_dict.values()],
+            "elpd_i": [elpd_data.elpd_i.values.flatten() for elpd_data in ics_dict.values()],
+        },
+        index=names,
+    )
     ics = ics.sort_values(by="elpd", ascending=False)
-    ics["elpd_i"] = ics["elpd_i"].apply(lambda x: x.values.flatten())
     ses = ics["se"]
 
     if method.lower() == "stacking":
@@ -398,10 +403,24 @@ def compare(
     return result
 
 
+def _subsample_observations(elpd_data):
+    """Return the subsampled observation indices, or None for a result without subsampling."""
+    if isinstance(elpd_data, ELPDDataLOOSubsample):
+        return elpd_data.loo_subsample_observations
+    return None
+
+
+def _subsampling_dse(elpd_a, elpd_b):
+    """Combine the subsampling standard errors of two results, zero when not subsampled."""
+    se_a = elpd_a.subsampling_se if isinstance(elpd_a, ELPDDataLOOSubsample) else 0.0
+    se_b = elpd_b.subsampling_se if isinstance(elpd_b, ELPDDataLOOSubsample) else 0.0
+    return np.sqrt(se_a**2 + se_b**2)
+
+
 def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
     """Compute ELPD differences for subsampled models."""
-    subsample_a = getattr(elpd_a, "loo_subsample_observations", None)
-    subsample_b = getattr(elpd_b, "loo_subsample_observations", None)
+    subsample_a = _subsample_observations(elpd_a)
+    subsample_b = _subsample_observations(elpd_b)
     mixed_subsample = (subsample_a is None) != (subsample_b is None)
 
     if subsample_a is None and subsample_b is None:
@@ -420,11 +439,7 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
         elpd_diff = np.nansum(valid)
         se_diff = np.sqrt(valid.size * np.nanvar(valid))
         result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
-
-        subsampling_a = getattr(elpd_a, "subsampling_se", None) or 0.0
-        subsampling_b = getattr(elpd_b, "subsampling_se", None) or 0.0
-        combined = np.sqrt(subsampling_a**2 + subsampling_b**2)
-
+        combined = _subsampling_dse(elpd_a, elpd_b)
         if combined:
             result["subsampling_dse"] = combined
         return result
@@ -491,16 +506,16 @@ def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subs
         None if elpd_b_values is None else np.asarray(elpd_b_values, dtype=float).reshape(-1)
     )
 
-    approx_a_values = getattr(elpd_a, "elpd_loo_approx", None)
-    if approx_a_values is None:
-        approx_a_values = elpd_a_values
+    approx_a_values = (
+        elpd_a.elpd_loo_approx if isinstance(elpd_a, ELPDDataLOOSubsample) else elpd_a_values
+    )
     approx_a_full = (
         None if approx_a_values is None else np.asarray(approx_a_values, dtype=float).reshape(-1)
     )
 
-    approx_b_values = getattr(elpd_b, "elpd_loo_approx", None)
-    if approx_b_values is None:
-        approx_b_values = elpd_b_values
+    approx_b_values = (
+        elpd_b.elpd_loo_approx if isinstance(elpd_b, ELPDDataLOOSubsample) else elpd_b_values
+    )
     approx_b_full = (
         None if approx_b_values is None else np.asarray(approx_b_values, dtype=float).reshape(-1)
     )
@@ -538,15 +553,10 @@ def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subs
 def _compute_naive_diff(elpd_a, elpd_b):
     """Compute naive ELPD difference using paired observations."""
     elpd_diff = elpd_a.elpd - elpd_b.elpd
-    se_a = getattr(elpd_a, "se", 0.0)
-    se_b = getattr(elpd_b, "se", 0.0)
-    se_diff = np.sqrt(se_a**2 + se_b**2)
+    se_diff = np.sqrt(elpd_a.se**2 + elpd_b.se**2)
 
     result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
-    subsampling_a = getattr(elpd_a, "subsampling_se", None) or 0.0
-    subsampling_b = getattr(elpd_b, "subsampling_se", None) or 0.0
-    combined = np.sqrt(subsampling_a**2 + subsampling_b**2)
-
+    combined = _subsampling_dse(elpd_a, elpd_b)
     if combined:
         result["subsampling_dse"] = combined
     return result
@@ -634,7 +644,7 @@ def _calculate_ics(
 
             # LFO-CV should only be compared with other LFO-CV results
             if has_lfo:
-                method_list = sorted(methods_used.keys())
+                method_list = sorted(methods_used, key=str)
                 raise ValueError(
                     f"Cannot compare LFO-CV results with other cross-validation methods: "
                     f"{method_list}. LFO-CV evaluates time series predictive accuracy and "
@@ -648,28 +658,24 @@ def _calculate_ics(
                     UserWarning,
                 )
             else:
-                method_list = sorted(methods_used.keys())
+                method_list = sorted(methods_used, key=str)
                 raise ValueError(
                     f"Cannot compare models with incompatible cross-validation methods: "
                     f"{method_list}. Only 'loo', 'loo_kfold', and 'lfo_cv' methods "
                     f"are supported currently."
                 )
 
-        lfo_names = methods_used.get("lfo_cv", [])
-        if len(lfo_names) > 1:
-            lfo_settings = {
-                name: (
-                    getattr(precomputed_elpds[name], "forecast_horizon", None),
-                    getattr(precomputed_elpds[name], "min_observations", None),
-                )
-                for name in lfo_names
-            }
-            if len(set(lfo_settings.values())) > 1:
-                raise ValueError(
-                    f"Cannot compare LFO-CV results computed with different settings: "
-                    f"{lfo_settings}. All models must use the same forecast_horizon "
-                    f"and min_observations."
-                )
+        lfo_settings = {
+            name: (elpd_data.forecast_horizon, elpd_data.min_observations)
+            for name, elpd_data in precomputed_elpds.items()
+            if isinstance(elpd_data, ELPDDataLFO)
+        }
+        if len(lfo_settings) > 1 and len(set(lfo_settings.values())) > 1:
+            raise ValueError(
+                f"Cannot compare LFO-CV results computed with different settings: "
+                f"{lfo_settings}. All models must use the same forecast_horizon "
+                f"and min_observations."
+            )
 
     new_compare_dict = deepcopy(compare_dict)
     for name, dataset in compare_dict.items():
