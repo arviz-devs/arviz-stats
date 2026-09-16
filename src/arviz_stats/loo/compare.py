@@ -644,7 +644,7 @@ def _calculate_ics(
 
             # LFO-CV should only be compared with other LFO-CV results
             if has_lfo:
-                method_list = sorted(methods_used.keys())
+                method_list = sorted(methods_used, key=str)
                 raise ValueError(
                     f"Cannot compare LFO-CV results with other cross-validation methods: "
                     f"{method_list}. LFO-CV evaluates time series predictive accuracy and "
@@ -658,7 +658,7 @@ def _calculate_ics(
                     UserWarning,
                 )
             else:
-                method_list = sorted(methods_used.keys())
+                method_list = sorted(methods_used, key=str)
                 raise ValueError(
                     f"Cannot compare models with incompatible cross-validation methods: "
                     f"{method_list}. Only 'loo', 'loo_kfold', and 'lfo_cv' methods "

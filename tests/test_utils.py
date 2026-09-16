@@ -1,6 +1,6 @@
 """Test for general computational backend agnostic utilities."""
 
-# pylint: disable=too-many-function-args, missing-kwoa
+# pylint: disable=too-many-function-args, missing-kwoa, unexpected-keyword-arg
 import dataclasses
 import inspect
 
@@ -99,7 +99,6 @@ def test_get_log_likelihood_no_group():
 
 def test_elpddata_base():
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -111,9 +110,12 @@ def test_elpddata_base():
     )
 
     printed = str(elpddata)
+    assert elpddata.kind is None
     assert "warning" not in printed
     assert "1000 posterior samples" in printed
     assert "370 observations" in printed
+    assert "elpd   -20.00     2.00" in printed
+    assert "p        5.60        -" in printed
 
 
 def test_get_function_invalid():
@@ -216,7 +218,6 @@ def test_get_log_prior_not_found():
 
 def test_elpddata_with_warning():
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -343,7 +344,6 @@ def test_elpddata_approx_posterior():
 )
 def test_elpddata_scale(scale, expected):
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -359,7 +359,6 @@ def test_elpddata_scale(scale, expected):
 
 def test_elpddata_getitem_setitem():
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -377,7 +376,6 @@ def test_elpddata_getitem_setitem():
 
 def test_elpddata_repr():
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -431,7 +429,7 @@ def test_round_num_dataarray():
     assert result == 3.14
 
 
-def test_elpddata_subclass_kind_defaults():
+def test_elpddata_kind_determined_by_class():
     loo = ELPDDataLOO(
         elpd=-20,
         se=2,
@@ -489,11 +487,26 @@ def test_elpddata_subclass_kind_defaults():
     assert not isinstance(loo, ELPDDataLOOSubsample)
     assert not isinstance(kfold, ELPDDataLOO)
     assert not isinstance(lfo, ELPDDataLOO)
+    with pytest.raises(TypeError, match="kind"):
+        ELPDDataLOOKFold(
+            kind="loo",
+            elpd=-20,
+            se=2,
+            p=5.6,
+            n_samples=1000,
+            n_data_points=370,
+            scale="log",
+            warning=False,
+            good_k=None,
+            n_folds=10,
+        )
+    with pytest.raises(AttributeError):
+        kfold.kind = "loo"
 
 
 def test_elpddata_keyword_only():
     with pytest.raises(TypeError, match="positional"):
-        ELPDData("loo", -20, 2, 5.6, 1000, 370, "log", False, 0.7)
+        ELPDData(-20, 2, 5.6, 1000, 370, "log", False, 0.7)
 
 
 def test_elpddata_top_level_exports():
@@ -508,7 +521,6 @@ def test_elpddata_top_level_exports():
 
 def test_elpddata_base_fields():
     assert [field.name for field in dataclasses.fields(ELPDData)] == [
-        "kind",
         "elpd",
         "se",
         "p",

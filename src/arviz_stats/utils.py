@@ -161,8 +161,8 @@ BASE_HEADER_FMT = (
     "Computed from {n_samples} posterior samples and {n_points} observations log-likelihood matrix."
 )
 BASE_TABLE_FMT = """{{0:{0}}} Estimate       SE
-{{scale}}_{{kind}} {{ic_value:8.2f}}  {{ic_se:7.2f}}
-p_{{kind:{1}}} {{p_value:8.2f}}        -"""
+{{ic_label}} {{ic_value:8.2f}}  {{ic_se:7.2f}}
+{{p_label:{0}}} {{p_value:8.2f}}        -"""
 WARNING_FMT = "\n\nThere has been a warning during the calculation. Please check the results."
 POINTWISE_LOO_FMT = """------
 
@@ -176,20 +176,21 @@ SCALE_DICT = {"deviance": "deviance", "log": "elpd", "negative_log": "-elpd"}
 
 
 @dataclass(kw_only=True)
-class ELPDData:  # pylint: disable=too-many-instance-attributes
+class ELPDData:
     """Base container for expected log pointwise predictive density (ELPD) results.
 
     Every cross-validation function returns a subclass of this class.
     :class:`ELPDDataLOO` holds PSIS-LOO-CV results, :class:`ELPDDataLOOSubsample`
     holds subsampled PSIS-LOO-CV results, :class:`ELPDDataLOOKFold` holds k-fold
     cross-validation results and :class:`ELPDDataLFO` holds leave-future-out
-    cross-validation results. The ``kind`` attribute names the estimator and the class
-    says which additional attributes are available.
+    cross-validation results. The class fixes the ``kind`` attribute that names the
+    estimator and determines which additional attributes are available.
 
     Attributes
     ----------
-    kind : str
-        Name of the estimator, one of ``"loo"``, ``"loo_kfold"`` or ``"lfo_cv"``.
+    kind : str or None
+        Name of the estimator, one of ``"loo"``, ``"loo_kfold"`` or ``"lfo_cv"``. It is
+        read-only and None for a bare ``ELPDData``.
     elpd : float
         Expected log pointwise predictive density.
     se : float
@@ -212,7 +213,6 @@ class ELPDData:  # pylint: disable=too-many-instance-attributes
         Pointwise Pareto k diagnostics, only when ``pointwise=True`` was requested.
     """
 
-    kind: str
     elpd: float
     se: float
     p: float
@@ -224,7 +224,13 @@ class ELPDData:  # pylint: disable=too-many-instance-attributes
     elpd_i: DataArray = None
     pareto_k: DataArray = None
 
+    _kind: ClassVar[str | None] = None
     _display_kind: ClassVar[str | None] = None
+
+    @property
+    def kind(self):
+        """Name of the estimator that produced the result."""
+        return self._kind
 
     def _header(self):
         return BASE_HEADER_FMT.format(n_samples=self.n_samples, n_points=self.n_data_points)
@@ -232,12 +238,13 @@ class ELPDData:  # pylint: disable=too-many-instance-attributes
     def _table(self):
         scale_str = SCALE_DICT[self.scale]
         display_kind = self._display_kind or self.kind
-        padding = len(scale_str) + len(display_kind) + 1
-        table = BASE_TABLE_FMT.format(padding, padding - 2)
+        ic_label = f"{scale_str}_{display_kind}" if display_kind else scale_str
+        p_label = f"p_{display_kind}" if display_kind else "p"
+        table = BASE_TABLE_FMT.format(len(ic_label))
         return table.format(
             "",
-            kind=display_kind,
-            scale=scale_str,
+            ic_label=ic_label,
+            p_label=p_label,
             ic_value=self.elpd,
             ic_se=self.se,
             p_value=self.p,
@@ -288,7 +295,8 @@ class ELPDDataLOO(ELPDData):
         Effective sample size per observation, set by ``loo_moment_match``.
     """
 
-    kind: str = "loo"
+    _kind: ClassVar[str] = "loo"
+
     approx_posterior: bool = False
     log_weights: DataArray = None
     log_jacobian: DataArray = None
@@ -390,12 +398,12 @@ class ELPDDataLOOKFold(ELPDData):
         Fitted models for each fold, only when ``save_fits=True``.
     """
 
-    kind: str = "loo_kfold"
+    _kind: ClassVar[str] = "loo_kfold"
+    _display_kind: ClassVar[str] = "kfold"
+
     n_folds: int
     p_kfold_i: DataArray = None
     fold_fits: dict = None
-
-    _display_kind: ClassVar[str] = "kfold"
 
     def _header(self):
         return f"Computed from {self.n_folds}-fold cross validation."
@@ -421,14 +429,14 @@ class ELPDDataLFO(ELPDData):
         Pointwise effective number of parameters, only when ``pointwise=True``.
     """
 
-    kind: str = "lfo_cv"
+    _kind: ClassVar[str] = "lfo_cv"
+    _display_kind: ClassVar[str] = "lfo"
+
     forecast_horizon: int
     min_observations: int
     refits: np.ndarray
     n_refits: int
     p_lfo_i: DataArray = None
-
-    _display_kind: ClassVar[str] = "lfo"
 
     def _header(self):
         origin_word = "origin" if self.n_data_points == 1 else "origins"
