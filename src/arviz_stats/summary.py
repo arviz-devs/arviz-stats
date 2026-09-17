@@ -483,7 +483,6 @@ def ci_in_rope(
         Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``.
     ci_kind : {"hdi", "eti"}, optional
         Type of credible interval. Defaults to ``rcParams["stats.ci_kind"]``.
-        If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
     rope_dim : str, default "rope_dim"
         Name for the dimension containing the ROPE values. Only used when `rope`
         is a :class:`~xarray.Dataset`
@@ -521,6 +520,8 @@ def ci_in_rope(
         JAGS, and Stan. Academic Press, 2014. ISBN 978-0-12-405888-0.
     """
     sample_dims = validate_dims(dim)
+    if ci_kind is None:
+        ci_kind = rcParams["stats.ci_kind"]
 
     dataset = extract(
         data,
