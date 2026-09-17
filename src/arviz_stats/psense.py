@@ -7,7 +7,7 @@ import xarray as xr
 from arviz_base import convert_to_datatree, dataset_to_dataframe, extract
 from arviz_base.labels import BaseLabeller
 
-from arviz_stats.utils import get_log_likelihood_dataset, get_log_prior
+from arviz_stats.utils import _warn_pareto_k, get_log_likelihood_dataset, get_log_prior
 from arviz_stats.validate import validate_dims
 
 _log = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ def psense(
     if coords is not None:
         dataset = dataset.sel(coords)
 
-    lower_w, upper_w = _get_power_scale_weights(
+    lower_w, upper_w, lower_pareto_k, upper_pareto_k = _get_power_scale_weights(
         data,
         alphas=alphas,
         group=group,
@@ -99,6 +99,10 @@ def psense(
         group_var_names=group_var_names,
         group_coords=group_coords,
     )
+
+    pareto_k_values = np.array([lower_pareto_k, upper_pareto_k])
+
+    _warn_pareto_k(pareto_k_values, lower_w.size)
 
     return dataset.azstats.power_scale_sense(
         lower_w=lower_w,
@@ -328,10 +332,18 @@ def _get_power_scale_weights(
     )
 
     # calculate importance sampling weights for lower and upper alpha power-scaling
-    lower_w = np.exp(group_draws.azstats.power_scale_lw(alpha=alphas[0], dim=sample_dims))
+    lower_w, lower_pareto_k = np.exp(
+        group_draws.azstats.power_scale_lw(
+            alpha=alphas[0], dim=sample_dims
+        )
+    )
     lower_w = lower_w / lower_w.sum(sample_dims)
 
-    upper_w = np.exp(group_draws.azstats.power_scale_lw(alpha=alphas[1], dim=sample_dims))
+    upper_w, upper_pareto_k = np.exp(
+        group_draws.azstats.power_scale_lw(
+            alpha=alphas[1], dim=sample_dims
+        )
+    )
     upper_w = upper_w / upper_w.sum(sample_dims)
 
-    return lower_w, upper_w
+    return lower_w, upper_w, lower_pareto_k, upper_pareto_k

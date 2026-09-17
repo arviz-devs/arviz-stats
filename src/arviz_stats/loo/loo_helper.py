@@ -10,7 +10,7 @@ import xarray as xr
 from arviz_base import convert_to_datatree, extract, ndarray_to_dataarray, rcParams
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.utils import ELPDData, get_log_likelihood
+from arviz_stats.utils import ELPDData, get_log_likelihood, _warn_pareto_k
 
 __all__ = [
     "_shift",
@@ -29,7 +29,6 @@ __all__ = [
     "_extract_loo_data",
     "_check_log_density",
     "_check_log_jacobian",
-    "_warn_pareto_k",
     "_warn_pointwise_loo",
     "_prepare_subsample",
     "_prepare_update_subsample",
@@ -1158,24 +1157,6 @@ def _select_obs_by_coords(data_array, coord_array, dims, dim_name):
         stacked_data = data_array.stack({dim_name: dims})
         return stacked_data.sel({dim_name: coord_array[dim_name]})
     return data_array.sel({dims[0]: coord_array[dims[0]]})
-
-
-def _warn_pareto_k(pareto_k_values, n_samples, suppress=False):
-    """Check Pareto k values and issue warnings if necessary."""
-    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
-    warn_mg = False
-
-    if np.any(pareto_k_values > good_k):
-        if not suppress:
-            warnings.warn(
-                f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-                "for one or more samples. You should consider using a more robust model, this is "
-                "because importance sampling is less likely to work well if the marginal posterior "
-                "and LOO posterior are very different. This is more likely to happen with a "
-                "non-robust model and highly influential observations."
-            )
-        warn_mg = True
-    return warn_mg, good_k
 
 
 def _warn_pointwise_loo(elpd, elpd_i_values):

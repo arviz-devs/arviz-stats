@@ -13,11 +13,10 @@ from arviz_stats.loo.loo_helper import (
     _get_weights_and_k_i,
     _log_lik_i,
     _prepare_loo_inputs,
-    _warn_pareto_k,
     _warn_pointwise_loo,
 )
 from arviz_stats.loo.loo_moment_match import loo_moment_match
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDData, _warn_pareto_k
 
 
 def loo(

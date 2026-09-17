@@ -401,3 +401,28 @@ def _apply_multi_input_function(
 
     _warn_non_unique_coords(data, dims)
     return getattr(data.azstats, name)(**all_kwargs)
+
+
+def _warn_pareto_k(pareto_k_values, n_samples, suppress=False, usage="loo"):
+    """Check Pareto k values and issue warnings if necessary."""
+    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
+    warn_mg = False
+
+    if np.any(pareto_k_values > good_k):
+        if not suppress:
+            if usage == "loo":
+                warnings.warn(
+                    f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
+                    "for one or more samples. You should consider using a more robust model, this is "
+                    "because importance sampling is less likely to work well if the marginal posterior "
+                    "and LOO posterior are very different. This is more likely to happen with a "
+                    "non-robust model and highly influential observations."
+                )
+            elif usage == "power_scale":
+                warnings.warn(
+                f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
+                    "for the tail of the importance weights for one or more power-scaled posterior estimates. "
+                    "This means that the posterior is shifting more than can be estimated by importance sampling."
+                )
+        warn_mg = True
+    return warn_mg, good_k

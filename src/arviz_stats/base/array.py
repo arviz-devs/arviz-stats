@@ -355,7 +355,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary, axes = process_ary_axes(ary, axis)
         psl_ufunc = make_ufunc(
             self._power_scale_lw,
-            n_output=1,
+            n_output=2,
             n_input=1,
             n_dims=len(axes),
             ravel=False,
@@ -382,7 +382,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         lower_w, _ = process_ary_axes(lower_w, [chain_axis, draw_axis])
         upper_w, _ = process_ary_axes(upper_w, [chain_axis, draw_axis])
         pss_array = make_ufunc(
-            self._power_scale_sense, n_output=1, n_input=3, n_dims=2, ravel=False
+            self._power_scale_sense, n_output=2, n_input=3, n_dims=2, ravel=False
         )
         return pss_array(ary, lower_w, upper_w, lower_alpha=lower_alpha, upper_alpha=upper_alpha)
 

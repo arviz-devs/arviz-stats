@@ -1360,7 +1360,7 @@ class _DiagnosticsBase(_CoreBase):
         n_draws = len(log_weights)
         r_eff = self._ess_tail(ary, prob=0.05, relative=True)
         n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail="both")
-        log_weights, _ = self._ps_tail(
+        log_weights, pareto_k = self._ps_tail(
             log_weights,
             n_draws,
             n_draws_tail,
@@ -1368,7 +1368,7 @@ class _DiagnosticsBase(_CoreBase):
             log_weights=True,
         )
 
-        return log_weights.reshape(shape)
+        return log_weights.reshape(shape), pareto_k
 
     @staticmethod
     def _cjs_dist(ary, weights):
