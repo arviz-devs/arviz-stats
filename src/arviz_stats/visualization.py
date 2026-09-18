@@ -367,7 +367,7 @@ def histogram(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    bind : array-like, optional
+    bins : array-like, optional
     range : array-like, optional
     weights : array-like, optional
     density : bool, default True
@@ -682,7 +682,7 @@ def qds(
           similar functions.
 
           It is recommended to first perform the conversion manually and then call
-          ``arviz_stats.kde``. This allows controlling the conversion step and inspecting
+          ``arviz_stats.qds``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
         Dimensions to be reduced when computing the quantile dots

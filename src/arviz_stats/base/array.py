@@ -302,6 +302,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         prob : float, default None
             When using the array interface, `prob` is a required argument for
             "quantile" method.
+        circular : bool, default False
+            Whether to treat the data as circular.
         """
         method = method.lower()
         valid_methods = {"mean", "sd", "median", "quantile"}
