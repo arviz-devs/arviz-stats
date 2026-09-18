@@ -55,7 +55,7 @@ def get_array_function(func_name):
     """Get a function from arviz_stats' array layer.
 
     Attempts to import the provided function from array class in the module indicated
-    in the rcParam ``stats.module``, and if it fails, it imports it from ``arviz_stats.base``.
+    in the rcParam ``stats.module``. If the function is not available, a KeyError is raised.
 
     Parameters
     ----------
@@ -108,7 +108,7 @@ def get_log_likelihood(idata, var_name=None):
 
 # get_log_likelihood and get_log_prior functions should be somewhere else
 def get_log_likelihood_dataset(idata, var_names=None):
-    """Retrieve the log likelihood dataarray of a given variable."""
+    """Retrieve the log likelihood dataset of a given variable."""
     if (
         not hasattr(idata, "log_likelihood")
         and hasattr(idata, "sample_stats")
@@ -147,7 +147,7 @@ def get_log_likelihood_dataarray(data, var_name=None):
 
 
 def get_log_prior(idata, var_names=None):
-    """Retrieve the log prior dataarray of a given variable."""
+    """Retrieve the log prior dataset of a given variable."""
     if not hasattr(idata, "log_prior"):
         raise TypeError("log prior not found in inference data object")
     if var_names is None:

@@ -21,10 +21,12 @@ def difference_ecdf_pit(predictive_dist, observed_dist, ci_prob, coverage, n_sim
         The posterior predictive distribution.
     observed_dist : xarray.Dataset
         The observed data.
-    ci_prob : float, optional
+    ci_prob : float
         The probability for the credible interval.
+    coverage : bool
+        Whether to compute the coverage.
     n_simulations : int
-        The number of simulations to use with method `simulation`.
+        The number of simulations to use.
     """
     rng = np.random.default_rng(214)
 
@@ -63,14 +65,14 @@ def ecdf_pit(vals, ci_prob, n_simulations, n_chains=1, rng=None):
     ----------
     vals : array-like
         The values to compute the PIT ECDF.
-    ci_prob : float, optional
+    ci_prob : float
         The probability for the credible interval.
     n_simulations : int
-        The number of simulations to use with method `simulation`.
+        The number of simulations to use.
     n_chains : int, optional
         The number of chains.
     rng : Generator, optional
-        The random number generator to use with the simulation method.
+        The random number generator to use.
 
     Returns
     -------

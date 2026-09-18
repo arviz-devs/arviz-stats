@@ -1090,6 +1090,7 @@ class _DiagnosticsBase(_CoreBase):
 
         Returns
         -------
+        ary : array
         khat : float
             Pareto k-hat value.
         """
@@ -1145,7 +1146,7 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        x : array
+        ary : array
             1D array.
         n_draws : int
             Number of draws.
@@ -1520,13 +1521,14 @@ class _DiagnosticsBase(_CoreBase):
         ----------
         mu_pred: array-like of shape = (n_posterior_samples, n_outputs)
             Estimated mean for the response variable.
-        var : array-like of shape (n_posterior_samples,), optional
-            Posterior draws of the variance or pseudo-variance.
-            - If provided: treated as the model-implied residual variance.
+        scale : array-like of shape (n_posterior_samples,), optional
+            Posterior draws of the scale (standard deviation, variance, or pseudo-variance).
+            - If provided: treated as the model-implied residual variance or standard deviation
+            depending on `scale_kind`
             - If None: assumes Bernoulli-like model and computes pseudo-variance
             as mean(mu_pred) * (1 - mean(mu_pred)) per posterior draw.
         scale_kind : str, optional
-            Kind of scale for the variance. Options are 'sd' (standard deviation) or
+            Kind of `scale` for the variance. Options are 'sd' (standard deviation) or
             'var' (variance). Default is 'sd'.
         circular: bool, optional
             Whether the response variable is circular. For circular response,

@@ -61,8 +61,8 @@ def psense(
 
     Returns
     -------
-    xarray.DataTree
-        Returns dataTree of power-scaling sensitivity diagnostic values.
+    xarray.Dataset
+        Returns Dataset of power-scaling sensitivity diagnostic values.
         Higher sensitivity values indicate greater sensitivity.
         Prior sensitivity above 0.05 indicates informative prior.
         Likelihood sensitivity below 0.05 indicates weak or non-informative likelihood.
@@ -165,10 +165,10 @@ def psense_summary(
     psense_df : DataFrame
         DataFrame containing the prior and likelihood sensitivity values for each variable
         in the data. And a diagnosis column with the following values:
-        - "prior-data conflict" if both prior and likelihood sensitivity are above threshold
-        - "strong prior / weak likelihood" if the prior sensitivity is above threshold
+        - ""potential prior-data conflict" if prior and likelihood sensitivity are above threshold
+        - "potential strong prior / weak likelihood" if the prior sensitivity is above threshold
         and the likelihood sensitivity is below the threshold
-        - "-" otherwise
+        - "✓" otherwise
 
     Examples
     --------

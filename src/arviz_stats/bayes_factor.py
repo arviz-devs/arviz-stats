@@ -21,7 +21,7 @@ def bayes_factor(data, var_names, ref_vals=0, return_ref_vals=False, prior=None,
         Reference value for each variable. Must match var_names in length if list.
     return_ref_vals : bool, default False
         If True, return the reference density values for the posterior and prior.
-    prior : dict, optional
+    prior : dict, DataTree, or Dataset, optional
         Dictionary with prior distributions for each variable of interest. If not provided,
         the prior will be taken from the `prior` group in the data object.
     circular : bool, default False
@@ -34,6 +34,9 @@ def bayes_factor(data, var_names, ref_vals=0, return_ref_vals=False, prior=None,
         Dataset with one variable per requested variable. Each DataArray has a
         ``bf_type`` dimension with coordinates ``["BF10", "BF01"]``, plus any
         non-sample coordinates of the original variable (e.g. ``school``).
+    If `return_ref_vals` is True, returns a tuple of two elements:
+        - xr.Dataset with Bayes factors as described above.
+        - dict with reference density values for the posterior and prior for each variable.
 
     References
     ----------

@@ -189,7 +189,7 @@ def rhat(
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the ESS.
+        Group on which to compute the R-hat.
     var_names : str or list of str, optional
         Names of the variables for which the Rhat should be computed.
     filter_vars : {None, "like", "regex"}, default None
@@ -362,6 +362,11 @@ def rhat_nested(
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
+
+    Returns
+    -------
+    xarray.DataArray or xarray.Dataset
+        R-hat values for the specified variables and groups.
 
     See Also
     --------

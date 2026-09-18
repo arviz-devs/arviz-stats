@@ -420,7 +420,7 @@ class _DensityBase(_CoreBase):
             Defaults to True.
         extend_fct: float, optional
             Number of standard deviations used to widen the lower and upper bounds of `x`.
-            Defaults to 0.5.
+            Defaults to 0.
         bw_fct: float, optional
             A value that multiplies `bw` which enables tuning smoothness by hand.
             Must be positive. Values below 1 decrease smoothness while values above 1 decrease it.
