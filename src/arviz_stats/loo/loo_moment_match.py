@@ -136,6 +136,8 @@ def loo_moment_match(
           ``pointwise=True``.
         - **pareto_k**: :class:`~xarray.DataArray` with moment-matched Pareto shape values, only if
           ``pointwise=True``.
+        - **p_loo_i**: :class:`~xarray.DataArray` with pointwise effective number of parameters,
+          only if ``pointwise=True``.
         - **approx_posterior**: False (not used for standard LOO)
         - **log_weights**: class:`~xarray.DataArray` with smoothed log weights
           (updated for successfully moment-matched observations).
