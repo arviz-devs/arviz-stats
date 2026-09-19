@@ -176,7 +176,6 @@ def loo(
     .. [1] Paananen, T., Piironen, J., Buerkner, P.-C., Vehtari, A. (2021). Implicitly Adaptive
        Importance Sampling. Statistics and Computing. 31(2) (2021)
        https://doi.org/10.1007/s11222-020-09982-2
-       arXiv preprint https://arxiv.org/abs/1906.08850.
 
     .. [2] Silva and Zanella. *Robust Leave-One-Out Cross-Validation for High-Dimensional
        Bayesian Models*. Journal of the American Statistical Association. 119(547) (2023)
