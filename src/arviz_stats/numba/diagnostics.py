@@ -159,8 +159,8 @@ def autocov(da, dim="draw", **kwargs):
 
     Parameters
     ----------
-    ary : xr.DataArray
-        A DataArray containing MCMC samples. It must have the ``draw`` dimension
+    da : xr.DataArray
+        A DataArray containing MCMC samples. It must have the ``draw`` dimension.
 
     Returns
     -------
