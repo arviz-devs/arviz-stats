@@ -182,7 +182,7 @@ def summary(
         mean_value = dataset.azstats.mean(dim=sample_dims, skipna=skipna).expand_dims(
             summary=["mean"]
         )
-        std_value = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
+        std_value = dataset.azstats.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
         ci_fun = dataset.azstats.eti if ci_kind == "eti" else dataset.azstats.hdi
         ci = (
             ci_fun(prob=ci_prob, dim=sample_dims, skipna=skipna)

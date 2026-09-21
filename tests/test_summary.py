@@ -487,6 +487,12 @@ def test_mode_single_value_array():
     assert result.item() == 1.0
 
 
+def test_summary_sd_uses_sample_std(centered_eight):
+    summary_df = summary(centered_eight, var_names=["mu"], kind="stats", round_to="none")
+    expected = centered_eight.posterior["mu"].std(dim=["chain", "draw"], ddof=1)
+    assert_allclose(summary_df.loc["mu", "sd"], expected)
+
+
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_summary_zero_variance():
     array = np.ones((4, 100, 2))
