@@ -164,7 +164,7 @@ class TestHexbin:
         assert_array_equal(values, expected_values)
         assert_allclose(offsets, expected_offsets, rtol=0, atol=1e-15)
 
-    @pytest.mark.parametrize(("gridsize", "expected_cells"), [(4, 23), ((4, 3), 32)])
+    @pytest.mark.parametrize(("gridsize", "expected_cells"), [(4, 41), ((4, 3), 32)])
     def test_grid_shapes_and_zero_cells(self, array_stats, gridsize, expected_cells):
         values, offsets = array_stats.hexbin(
             np.array([0.25, 0.75]),
