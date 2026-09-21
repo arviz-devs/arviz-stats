@@ -567,7 +567,8 @@ class BaseDataArray:
             By default, the ESS target will be preserving the ESS of all available samples.
             If an integer value is passed, it must be lower than the average ESS of the input
             samples.
-        mode : {"mean", "min"}, default "mean"
+        reduce_func : {"mean", "min"}, default "mean"
+            Function to reduce the ESS array to a single value for comparison with the target ESS.
         """
         n_samples = da.sizes["chain"] * da.sizes["draw"]
         ess = np.minimum(
@@ -626,7 +627,7 @@ class BaseDataArray:
         return da.sel({sample_dims: slice(None, None, factor)})
 
     def pareto_min_ss(self, da, sample_dims=None):
-        """Compute the minimum effective sample size for all variables in the dataset."""
+        """Compute the minimum effective sample size."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.pareto_min_ss,
@@ -954,6 +955,8 @@ class BaseDataArray:
             Sample dimensions. Defaults to ["chain", "draw"].
         random_state : int or Generator, optional
             Random seed or Generator for tie-breaking. If None, uses seed 214.
+        pareto_pit : bool, default False
+            If True, use Pareto-smoothed PIT values.
 
         Returns
         -------

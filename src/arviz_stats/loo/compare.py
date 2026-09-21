@@ -134,9 +134,6 @@ def compare(
         - **subsampling_dse**: (Only when subsampling is used) The subsampling component
           of the standard error of the ELPD difference. This quantifies the uncertainty due to
           using a subsample rather than all observations.
-        - **warning**: A value of 1 indicates that the computation of the ELPD may not be reliable.
-          This could be indication of LOO starting to fail see
-          http://arxiv.org/abs/1507.04544 for details.
 
     Examples
     --------

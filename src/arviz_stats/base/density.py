@@ -175,6 +175,12 @@ class _DensityBase(_CoreBase):
         bw: int, float or str
             If numeric, indicates the bandwidth and must be positive.
             If str, indicates the method to estimate the bandwidth.
+        grid_counts : array-like, optional
+            Precomputed histogram counts for the data `x`.
+        x_std : float, optional
+            Standard deviation of the data `x`.
+        grid_range : float, optional
+            Range of the grid used for histogram.
 
         Returns
         -------
@@ -281,7 +287,8 @@ class _DensityBase(_CoreBase):
 
         Returns
         -------
-        None: Object of type None
+        list
+            Validated custom limits as a list of two numeric values.
         """
         if not isinstance(custom_lims, list | tuple):
             raise TypeError(
@@ -357,12 +364,12 @@ class _DensityBase(_CoreBase):
 
         Returns
         -------
-        grid_len: int
-            Number of bins
         grid_min: float
-            Minimum value of the grid
+            Minimum value of the grid.
         grid_max: float
-            Maximum value of the grid
+            Maximum value of the grid.
+        grid_len: int
+            Number of bins.
         """
         # Set up number of bins.
         grid_len = max(int(grid_len), 100)

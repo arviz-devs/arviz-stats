@@ -539,11 +539,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -559,11 +559,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -604,11 +604,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -626,11 +626,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -648,11 +648,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -672,14 +672,14 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         quantiles : tuple of two floats, default (0.25, 0.75)
             Quantiles to compute the interquantile range. Defaults to (0.25, 0.75), that is,
             the interquartile range.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
