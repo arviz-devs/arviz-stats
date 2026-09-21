@@ -494,7 +494,7 @@ def histogram2d(
     )
 
 
-def hexbin(x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True, dim=None):
+def hexbin(x, y, gridsize="auto", extent=None, weights=None, axis=-1, density=True, dim=None):
     """Compute a hexagonal histogram for paired samples.
 
     Plain arrays return ``(values, offsets)``. DataArray inputs return a Dataset
@@ -504,8 +504,9 @@ def hexbin(x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True,
     ----------
     x, y : array-like or DataArray
         Paired samples with identical shapes.
-    gridsize : int or pair of int, default 100
-        Number of hexagons in the x and y directions.
+    gridsize : "auto" or int or pair of int, default "auto"
+        Number of hexagons in the x and y directions. ``"auto"`` computes
+        the gridsize as ``int(n_samples ** 0.35)``.
     extent : array-like, optional
         Limits ``(xmin, xmax, ymin, ymax)`` of the hexagon grid.
     weights : array-like or DataArray, optional

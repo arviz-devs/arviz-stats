@@ -288,7 +288,9 @@ class BaseDataArray:
             }
         )
 
-    def hexbin(self, da_x, da_y, dim=None, gridsize=100, extent=None, weights=None, density=True):
+    def hexbin(
+        self, da_x, da_y, dim=None, gridsize="auto", extent=None, weights=None, density=True
+    ):
         """Compute a hexagonal histogram on paired DataArray inputs."""
         self._validate_bivariate_dataarrays(da_x, da_y)
         dims = validate_dims(dim)

@@ -290,12 +290,14 @@ class _CoreBase:
             return lower - delta, upper + delta
         return lower, upper
 
-    def _hexbin(self, x, y, gridsize=100, extent=None, weights=None, density=True):
-        if np.isscalar(gridsize):
+    def _hexbin(self, x, y, gridsize="auto", extent=None, weights=None, density=True):
+        if gridsize == "auto":
+            nx = int(len(x) ** 0.35)
+            ny = int(len(y) ** 0.35)
+        elif np.isscalar(gridsize):
             if not isinstance(gridsize, (int, np.integer)):
                 raise ValueError("`gridsize` values must be integers.")
-            nx = int(gridsize)
-            ny = int(nx / 1.732)
+            nx = ny = int(gridsize)
         else:
             try:
                 nx, ny = gridsize
@@ -304,7 +306,8 @@ class _CoreBase:
 
         if not isinstance(nx, (int, np.integer)) or not isinstance(ny, (int, np.integer)):
             raise ValueError("`gridsize` values must be integers.")
-        nx, ny = int(nx), int(ny)
+        nx = int(nx)
+        ny = int(ny)
         if nx <= 0 or ny <= 0:
             raise ValueError("`gridsize` values must be positive.")
 
