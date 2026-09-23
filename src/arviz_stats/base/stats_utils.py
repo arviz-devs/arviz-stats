@@ -265,6 +265,8 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
     if isnan.all():
         return True
 
+    shape = ary.shape
+
     if check_nan:
         if nan_kwargs is None:
             nan_kwargs = {}
@@ -275,12 +277,14 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
         else:
             nan_error = isnan.any(axis)
 
+        # TODO: think about API for this
+        if len(shape) == 1 or shape[0] == 1:
+            nan_error = np.array([False])
+
         if (isinstance(nan_error, bool) and nan_error) or nan_error.any():
             _log.info("Array contains NaN-value.")
 
     if check_shape:
-        shape = ary.shape
-
         if shape_kwargs is None:
             shape_kwargs = {}
 
