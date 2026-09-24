@@ -765,7 +765,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                 raise ValueError('`gridsize` must be "auto", an integer or a pair of integers.')
             nx, ny = self._get_bivariate_counts(x, y, axis, weights=weights, bounds=extent)
             if regular:
-                gridsize = max(1, int(round(np.sqrt(nx * ny * 3**0.5 / 2))))
+                gridsize = max(2, int(round(np.sqrt(nx * ny * 3**0.5 / 2))))
             else:
                 hex_nx = max(1, int(round(nx / 2**0.5)))
                 hex_ny = max(1, int(round(ny / 2**0.5)))
