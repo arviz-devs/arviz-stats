@@ -411,6 +411,14 @@ class TestBinning:
         counts, _ = array_stats.histogram(ary, bins=bins)
         assert len(counts) == bins
 
+    def test_histogram_bin_edges(self, array_stats, rng):
+        ary = rng.normal(size=(1000,))
+        bins = np.linspace(-4, 4, 9)
+        counts, edges = array_stats.histogram(ary, bins=bins)
+        expected_counts, expected_edges = np.histogram(ary, bins=bins, density=True)
+        np.testing.assert_allclose(counts, expected_counts)
+        np.testing.assert_allclose(edges, expected_edges)
+
     def test_histogram_density(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
         counts, edges = array_stats.histogram(ary, density=True)
