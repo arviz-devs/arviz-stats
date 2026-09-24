@@ -261,7 +261,7 @@ class TestHexbin:
         assert values.sum() == 2
         assert np.all(np.isfinite(offsets))
 
-    @pytest.mark.parametrize("gridsize", [0, -1, (2, 0), (2, 1.5), (1, 2, 3)])
+    @pytest.mark.parametrize("gridsize", [0, -1, "bad", (2, 0), (2, 1.5), (1, 2, 3)])
     def test_invalid_gridsize(self, array_stats, gridsize):
         with pytest.raises(ValueError, match="gridsize"):
             array_stats.hexbin([0], [0], gridsize=gridsize)

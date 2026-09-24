@@ -487,6 +487,66 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         n_bins = np.ceil(np.mean(valid_n_bins)).astype(int)
         return np.moveaxis(np.linspace(x_min, x_max, n_bins + 1), 0, -1)
 
+    def _get_bivariate_counts(self, x, y, axis, weights=None, bounds=None):
+        """Compute default in 2D.
+
+        Applies the ``bins="arviz"`` rule with ``d=2`` to each marginal of
+        every batch slice and reduces the batch to shared counts so all
+        slices use the same grid.
+
+        Parameters
+        ----------
+        x, y : array-like
+            Paired samples with identical shapes.
+        axis : int, sequence of int or None
+            Axis or axes along which to reduce.
+        weights : array-like, optional
+            Sample weights with the same shape as ``x`` and ``y``. Samples with
+            non-finite weights are ignored.
+        bounds : array-like, optional
+            ``((xmin, xmax), (ymin, ymax))`` limits (or a flat 4-element
+            sequence with the same meaning). When provided, implied counts
+            cover these limits instead of the data range.
+
+        Returns
+        -------
+        tuple of int
+            Numbers of bins in the x and y directions.
+        """
+        x, y, weights, _ = _prepare_bivariate_inputs(x, y, axis, weights)
+        valid = np.isfinite(x) & np.isfinite(y)
+        if weights is not None:
+            valid &= np.isfinite(weights)
+        if not np.all(valid):
+            x = np.where(valid, x, np.nan)
+            y = np.where(valid, y, np.nan)
+
+        bininfo_ufunc = make_ufunc(self._get_bininfo, n_output=3, n_input=1, n_dims=1)
+        x_min, x_max, width_x = bininfo_ufunc(x, d=2)
+        y_min, y_max, width_y = bininfo_ufunc(y, d=2)
+        if bounds is not None and np.size(bounds) == 4:
+            (x_min, x_max), (y_min, y_max) = np.asarray(bounds, dtype=float).reshape(2, 2)
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            n_x = np.asarray(np.ceil((x_max - x_min) / width_x))
+            n_y = np.asarray(np.ceil((y_max - y_min) / width_y))
+        mask = (
+            np.isfinite(width_x)
+            & (width_x > 0)
+            & np.isfinite(width_y)
+            & (width_y > 0)
+            & np.isfinite(n_x)
+            & (n_x >= 1)
+            & np.isfinite(n_y)
+            & (n_y >= 1)
+        )
+        if not np.any(mask):
+            return 2, 2
+        return (
+            max(1, int(np.ceil(np.mean(n_x[mask])))),
+            max(1, int(np.ceil(np.mean(n_y[mask])))),
+        )
+
     # pylint: disable=redefined-builtin, too-many-return-statements
     # noqa: PLR0911
     def histogram(self, ary, bins=None, range=None, weights=None, axis=-1, density=True):
@@ -629,7 +689,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return histogram_ufunc(ary, bins, range, shape_from_1st=True)
 
-    def histogram2d(self, x, y, bins=10, range=None, weights=None, axis=-1, density=True):
+    def histogram2d(self, x, y, bins=None, range=None, weights=None, axis=-1, density=True):
         """Compute a batched two-dimensional histogram.
 
         Parameters
@@ -638,8 +698,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Paired samples with identical shapes.
         weights : array-like, optional
             Sample weights with the same shape as ``x`` and ``y``.
-        bins : int or array-like or pair, default 10
-            Bin specification passed to :func:`numpy.histogram2d`.
+        bins : None, str, int or array-like or pair, default None
+            Bin specification passed to :func:`numpy.histogram2d`. ``None`` or
+            ``"auto"`` applies the default two-dimensional bin rule to each
+            marginal, reduced to shared counts over batched input.
         range : array-like, optional
             ``((xmin, xmax), (ymin, ymax))`` passed to :func:`numpy.histogram2d`.
         axis : int, sequence of int or None, default -1
@@ -653,6 +715,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Histogram values and bin edges, with output dimensions appended after
             any batch dimensions.
         """
+        if bins is None or (isinstance(bins, str) and bins == "auto"):
+            bins = self._get_bivariate_counts(x, y, axis, weights=weights, bounds=range)
         return _apply_bivariate_statistic(
             self._histogram2d,
             x,
@@ -664,7 +728,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             density=density,
         )
 
-    def hexbin(self, x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True):
+    def hexbin(
+        self, x, y, gridsize="auto", extent=None, weights=None, axis=-1, density=True, regular=True
+    ):
         """Compute a batched hexagonal histogram.
 
         Parameters
@@ -674,21 +740,36 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         weights : array-like, optional
             Sample weights with the same shape as ``x`` and ``y``. Values in each
             cell are the sum of its sample weights.
-        gridsize : int or pair of int, default 100
-            Number of hexagons in the x and y directions. A scalar derives the
-            y-direction size as ``int(gridsize / sqrt(3))``.
+        gridsize : "auto" or int or pair of int, default "auto"
+            Number of hexagons in the x and y directions. ``"auto"`` applies the
+            default two-dimensional bin rule to each marginal (the counts
+            :meth:`histogram2d` would use on those marginals), reduced to shared
+            counts over batched input.
+            A pair sets both directions explicitly.
         extent : array-like, optional
             Limits ``(xmin, xmax, ymin, ymax)`` of the hexagon grid.
         axis : int, sequence of int or None, default -1
             Axis or axes along which to reduce.
         density : bool, default True
             Divide counts by the valid sample count and hexagon area.
+        regular : bool, default True
+            Whether to use a regular hexagonal grid. Ignored if ``gridsize`` is not ``"auto"``.
 
         Returns
         -------
         values, offsets : ndarray
             Values for every cell and their ``(x, y)`` center coordinates.
         """
+        if isinstance(gridsize, str):
+            if gridsize != "auto":
+                raise ValueError('`gridsize` must be "auto", an integer or a pair of integers.')
+            nx, ny = self._get_bivariate_counts(x, y, axis, weights=weights, bounds=extent)
+            if regular:
+                gridsize = max(2, int(round(np.sqrt(nx * ny * 3**0.5 / 2))))
+            else:
+                hex_nx = max(1, int(round(nx / 2**0.5)))
+                hex_ny = max(1, int(round(ny / 2**0.5)))
+                gridsize = (hex_nx, hex_ny)
         return _apply_bivariate_statistic(
             self._hexbin,
             x,

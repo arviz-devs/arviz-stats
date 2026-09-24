@@ -431,7 +431,7 @@ def histogram(
 def histogram2d(
     x,
     y,
-    bins=10,
+    bins=None,
     range=None,  # pylint: disable=redefined-builtin
     weights=None,
     axis=-1,
@@ -447,8 +447,10 @@ def histogram2d(
     ----------
     x, y : array-like or DataArray
         Paired samples with identical shapes.
-    bins : int or array-like or pair, default 10
-        Bin specification passed to :func:`numpy.histogram2d`.
+    bins : None, str, int or array-like or pair, default None
+        Bin specification passed to :func:`numpy.histogram2d`. ``None`` or
+        ``"auto"`` applies the default two-dimensional bin rule to each
+        marginal, reduced to shared counts over batched input.
     range : array-like, optional
         ``((xmin, xmax), (ymin, ymax))`` passed to :func:`numpy.histogram2d`.
     weights : array-like or DataArray, optional
@@ -494,7 +496,9 @@ def histogram2d(
     )
 
 
-def hexbin(x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True, dim=None):
+def hexbin(
+    x, y, gridsize="auto", extent=None, weights=None, axis=-1, density=True, regular=True, dim=None
+):
     """Compute a hexagonal histogram for paired samples.
 
     Plain arrays return ``(values, offsets)``. DataArray inputs return a Dataset
@@ -504,8 +508,13 @@ def hexbin(x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True,
     ----------
     x, y : array-like or DataArray
         Paired samples with identical shapes.
-    gridsize : int or pair of int, default 100
-        Number of hexagons in the x and y directions.
+    gridsize : "auto" or int or pair of int, default "auto"
+        Number of hexagons in the x and y directions. ``"auto"`` applies the
+        default two-dimensional bin rule to each marginal, reduced to shared
+        counts over batched input. A scalar derives the y-direction size as
+        ``int(gridsize / sqrt(3))``, giving approximately regular hexagons as
+        in :func:`matplotlib.pyplot.hexbin`. A pair sets both directions
+        explicitly.
     extent : array-like, optional
         Limits ``(xmin, xmax, ymin, ymax)`` of the hexagon grid.
     weights : array-like or DataArray, optional
@@ -515,6 +524,8 @@ def hexbin(x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True,
         Array axis or axes along which to reduce.
     density : bool, default True
         Divide counts by the valid sample count and hexagon area.
+    regular : bool, default True
+        Whether to use a regular hexagonal grid.
     dim : str or sequence of str, optional
         DataArray dimension or dimensions along which to reduce.
 
@@ -538,6 +549,7 @@ def hexbin(x, y, gridsize=100, extent=None, weights=None, axis=-1, density=True,
             extent=extent,
             weights=weights,
             density=density,
+            regular=regular,
         )
     if dim is not None:
         raise ValueError("Use `axis` instead of `dim` with array inputs.")

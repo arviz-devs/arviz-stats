@@ -177,7 +177,21 @@ class _CoreBase:
             return out / out.size
         return out
 
-    def _get_bininfo(self, values, bins="arviz"):
+    def _get_bininfo(self, values, bins="arviz", d=1):
+        """Compute ``(min, max, width)`` for the default or given bin rule.
+
+        Parameters
+        ----------
+        values : array-like
+        bins : str, int or array-like, default "arviz"
+        d : int, default 1
+            Dimension of the density being binned. The Freedman-Diaconis width
+            scales as ``n**(-1/(d + 2))``.
+        """
+        values = np.asarray(values)
+        finite = np.isfinite(values)
+        if not finite.all():
+            values = values[finite]
         dtype = values.dtype.kind
 
         if isinstance(bins, str) and bins != "arviz":
@@ -185,6 +199,9 @@ class _CoreBase:
 
         if isinstance(bins, np.ndarray):
             return bins[0], bins[-1], bins[1] - bins[0]
+
+        if not values.size:
+            return np.nan, np.nan, np.nan
 
         if dtype == "i":
             x_min = values.min().astype(int)
@@ -204,7 +221,7 @@ class _CoreBase:
 
         # The Freedman-Diaconis width estimator.
         iqr = np.subtract(*self.quantile(values, [0.75, 0.25]))  # pylint: disable=assignment-from-no-return
-        width_fd = 2 * iqr * values.size ** (-1 / 3)
+        width_fd = 2 * iqr * values.size ** (-1 / (d + 2))
 
         # Correct Freedman-Diaconis. Heuristic to limit the maximal number of bins
         width_sqrt = (x_max - x_min) / np.sqrt(values.size)
@@ -249,6 +266,10 @@ class _CoreBase:
         It is considered a robust version of the Scott rule as the IQR is less affected by outliers
         than the standard deviation. However, the IQR depends on fewer points than the standard
         deviation, so it is less accurate, especially for long tailed distributions.
+
+        For two-dimensional input the same rule is applied to each marginal with the
+        ``d=2`` exponent ``n**(-1/4)`` (the MISE-optimal rate for 2D histograms,
+        Scott), instead of the 1D ``n**(-1/3)``.
         """
         dtype = values.dtype.kind
 
