@@ -402,7 +402,8 @@ class _CoreBase:
         n = len(ary)
 
         ary = np.sort(ary)
-        interval_idx_inc = int(np.floor(prob * n))
+        # with prob=1 the interval spans all samples, so it can't be n positions wide
+        interval_idx_inc = min(int(np.floor(prob * n)), n - 1)
         n_intervals = n - interval_idx_inc
         interval_width = np.subtract(ary[interval_idx_inc:], ary[:n_intervals], dtype=np.float64)
 
