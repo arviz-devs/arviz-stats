@@ -93,6 +93,12 @@ class TestHDI:
         else:
             assert result.shape == (2,)
 
+    def test_hdi_prob_one(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(100,))
+        result = array_stats.hdi(ary, prob=1)
+        np.testing.assert_array_equal(result, [ary.min(), ary.max()])
+
     def test_hdi_invalid_prob(self, array_stats):
         ary = np.empty((100,))
         with pytest.raises(ValueError, match="must be in the"):
