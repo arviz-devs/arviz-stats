@@ -1,3 +1,34 @@
+<a id="v1.3.3"></a>
+# [v1.3.3](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.3.3) - 2026-09-25
+
+## What's Changed
+* Add PSIS LFO-CV by [@TeemuSailynoja](https://github.com/TeemuSailynoja) in [#305](https://github.com/arviz-devs/arviz-stats/pull/305)
+* Accept coords in ci_in_rope, as its docstring documents by [@VenishPaneliya](https://github.com/VenishPaneliya) in [#443](https://github.com/arviz-devs/arviz-stats/pull/443)
+* Correct interval for pit evaluation by [@aloctavodia](https://github.com/aloctavodia) in [#451](https://github.com/arviz-devs/arviz-stats/pull/451)
+* Only build the summary's LaTeX repr when asked for by [@habakan](https://github.com/habakan) in [#448](https://github.com/arviz-devs/arviz-stats/pull/448)
+* Add bivariate histogram and hexbin statistics by [@tjburch](https://github.com/tjburch) in [#438](https://github.com/arviz-devs/arviz-stats/pull/438)
+* Add ELPD subclasses  by [@jordandeklerk](https://github.com/jordandeklerk) in [#449](https://github.com/arviz-devs/arviz-stats/pull/449)
+* Add default `ci_kind` handling in `ci_in_rope` by [@jordandeklerk](https://github.com/jordandeklerk) in [#453](https://github.com/arviz-devs/arviz-stats/pull/453)
+* Miscelaneous docstrings fixes by [@aloctavodia](https://github.com/aloctavodia) in [#454](https://github.com/arviz-devs/arviz-stats/pull/454)
+* Update citation information by [@aloctavodia](https://github.com/aloctavodia) in [#455](https://github.com/arviz-devs/arviz-stats/pull/455)
+* More miscellaneous docstring fixes by [@aloctavodia](https://github.com/aloctavodia) in [#456](https://github.com/arviz-devs/arviz-stats/pull/456)
+* Fix ddof in `summary` std computation by [@jordandeklerk](https://github.com/jordandeklerk) in [#458](https://github.com/arviz-devs/arviz-stats/pull/458)
+* Hexbin and histogram2d: Use adaptive binning by [@aloctavodia](https://github.com/aloctavodia) in [#457](https://github.com/arviz-devs/arviz-stats/pull/457)
+* Fix histogram with array-like bins by [@anishmehta24](https://github.com/anishmehta24) in [#459](https://github.com/arviz-devs/arviz-stats/pull/459)
+* Allow hdi with prob=1 by [@anishmehta24](https://github.com/anishmehta24) in [#460](https://github.com/arviz-devs/arviz-stats/pull/460)
+
+
+## New Contributors
+* [@TeemuSailynoja](https://github.com/TeemuSailynoja) made their first contribution in [#305](https://github.com/arviz-devs/arviz-stats/pull/305)
+* [@habakan](https://github.com/habakan) made their first contribution in [#448](https://github.com/arviz-devs/arviz-stats/pull/448)
+* [@tjburch](https://github.com/tjburch) made their first contribution in [#438](https://github.com/arviz-devs/arviz-stats/pull/438)
+* [@anishmehta24](https://github.com/anishmehta24) made their first contribution in [#459](https://github.com/arviz-devs/arviz-stats/pull/459)
+
+**Full Changelog**: https://github.com/arviz-devs/arviz-stats/compare/v1.3.2...v1.3.3
+
+[Changes][v1.3.3]
+
+
 <a id="v1.3.2"></a>
 # [v1.3.2](https://github.com/arviz-devs/arviz-stats/releases/tag/v1.3.2) - 2026-09-05
 
@@ -449,6 +480,7 @@
 [Changes][v.0.4.0]
 
 
+[v1.3.3]: https://github.com/arviz-devs/arviz-stats/compare/v1.3.2...v1.3.3
 [v1.3.2]: https://github.com/arviz-devs/arviz-stats/compare/v1.3.1...v1.3.2
 [v1.3.1]: https://github.com/arviz-devs/arviz-stats/compare/v1.3.0...v1.3.1
 [v1.3.0]: https://github.com/arviz-devs/arviz-stats/compare/v1.2.0...v1.3.0
