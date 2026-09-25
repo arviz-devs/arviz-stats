@@ -982,18 +982,7 @@ def _wrap__psislw(log_weights, sample_dims, r_eff):
     stacked = log_weights.stack(__sample__=sample_dims)
     stacked_for_psis = -stacked
 
-    try:
-        lw_stacked, k = stacked_for_psis.azstats.psislw(dim="__sample__", r_eff=r_eff)
-    except ValueError as err:
-        err_message = str(err)
-        fallback_errors = ("All tail values are the same", "n_draws_tail must be at least 5")
-        if not any(msg in err_message for msg in fallback_errors):
-            raise
-
-        log_norm = logsumexp(stacked, dims="__sample__")
-        lw_stacked = stacked - log_norm
-
-        k = np.inf
+    lw_stacked, k = stacked_for_psis.azstats.psislw(dim="__sample__", r_eff=r_eff)
 
     lw = lw_stacked.unstack("__sample__").transpose(*log_weights.dims)
 
