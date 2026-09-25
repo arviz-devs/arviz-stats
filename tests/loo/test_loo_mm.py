@@ -346,6 +346,7 @@ def test_moment_match_matches_r_reference(roaches_r_example):
             assert not np.allclose(orig_weights, updated_weights, rtol=1e-10, atol=1e-10)
 
 
+@pytest.mark.filterwarnings("ignore:Input contains infinite or NA values:UserWarning")
 def test_split_moment_match_matches_r_snapshot(roaches_r_example):
     data_path = _get_roaches_data_path()
     split_case_ds = xr.load_dataset(data_path, group="split_case")

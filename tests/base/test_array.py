@@ -825,6 +825,21 @@ class TestLOO:
         with pytest.raises(ValueError, match="pareto_k must also be provided"):
             array_stats.loo(ary, log_weights=log_weights)
 
+    def test_loo_few_draws_fallback(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(1, 20, 5))
+
+        with pytest.warns(UserWarning, match="Number of tail draws cannot be less than 5"):
+            elpd_i, pareto_k, p_loo_i = array_stats.loo(ary, chain_axis=0, draw_axis=1)
+
+        log_lik = ary[0]
+        log_ratios = -log_lik
+        lw = log_ratios - np.logaddexp.reduce(log_ratios, axis=0)
+        expected = np.logaddexp.reduce(lw + log_lik, axis=0)
+
+        assert_allclose(elpd_i, expected)
+        assert np.all(np.isnan(pareto_k))
+        assert np.all(np.isfinite(p_loo_i))
+
     def test_loo_matches_xarray(self, array_stats, centered_eight):
         log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
         loo_inputs = _prepare_loo_inputs(centered_eight, var_name="obs")
