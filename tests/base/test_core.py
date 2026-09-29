@@ -291,6 +291,18 @@ class TestMode:
         result = core._mode(x)
         assert not np.isnan(result)
 
+    @pytest.mark.parametrize(
+        "x, expected",
+        [
+            ([0.0, 10.0, 10.1], 10.05),
+            ([12.0, 15.0, 25.0, 32.0, 37.0], 34.5),
+            ([1.0, 2.0, 5.0, 20.0, 25.0, 27.0, 31.0], 26.0),
+        ],
+    )
+    def test_mode_half_sample(self, core, x, expected):
+        result = core._mode(np.array(x))
+        assert_allclose(result, expected)
+
 
 class TestStd:
     def test_std_continuous(self, core, rng):

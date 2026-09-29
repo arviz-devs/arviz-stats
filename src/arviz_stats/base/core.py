@@ -611,8 +611,9 @@ class _CoreBase:
             x = np.sort(ary)
             while len(x) > 2:
                 n = (len(x) + 1) // 2
-                widths = x[n:] - x[:-n]
-                min_idx = np.argmin(widths)
+                # width of each window of n consecutive sorted values
+                widths = x[n - 1 :] - x[: len(x) - n + 1]
+                min_idx = np.argmin(np.where(np.isnan(widths), np.inf, widths))
                 x = x[min_idx : min_idx + n]
 
             return round_num((x[0] + x[1]) / 2, round_to)
