@@ -13,7 +13,7 @@ azb = importorskip("arviz_base")
 pd = importorskip("pandas")
 sp = importorskip("scipy")
 
-from arviz_stats import compare, loo, loo_subsample, update_subsample
+from arviz_stats import compare, lfo_cv, loo, loo_subsample, update_subsample
 from arviz_stats.loo import _calculate_ics
 from arviz_stats.loo.compare import _round_compare
 from arviz_stats.utils import ELPDData, ELPDDataLOOKFold
@@ -175,6 +175,22 @@ def test_compare_lfo(lfo_result_factory):
 
     assert len(result) == 2
     assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_lfo_refits_not_flagged(varying_lfo_wrapper, lfo_varying_data):
+    result = lfo_cv(
+        lfo_varying_data,
+        varying_lfo_wrapper,
+        min_observations=3,
+        forecast_horizon=2,
+        method="approx",
+        k_threshold=0.5,
+        pointwise=True,
+    )
+
+    comparison = compare({"m1": result, "m2": result})
+
+    assert (comparison["diag_elpd"] == "").all()
 
 
 def test_compare_lfo_mixed_settings(lfo_result_factory):

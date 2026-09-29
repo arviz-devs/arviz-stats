@@ -1,15 +1,9 @@
 """Leave-Future-Out Cross-Validation (LFO-CV) for time series models."""
 
-import warnings
-
 import numpy as np
 from arviz_base import rcParams
 
-from arviz_stats.loo.lfo_cv_helper import (
-    _compute_lfo_approx,
-    _compute_lfo_exact,
-    _prepare_lfo_inputs,
-)
+from arviz_stats.loo.lfo_cv_helper import _compute_lfo, _prepare_lfo_inputs, _warn_lfo_refits
 from arviz_stats.utils import ELPDDataLFO
 
 __all__ = ["lfo_cv"]
@@ -93,7 +87,9 @@ def lfo_cv(
         - **elpd_i**: :class:`~xarray.DataArray` with pointwise predictive accuracy,
           only if ``pointwise=True``
         - **pareto_k**: :class:`~xarray.DataArray` with Pareto k diagnostics,
-          only if ``method="approx"`` and ``pointwise=True``
+          only if ``method="approx"`` and ``pointwise=True``. It is NaN at the first
+          forecast origin. At origins where the model was refit it holds the value that
+          exceeded ``k_threshold``, which is infinite when PSIS could not be computed
         - **p_lfo_i**: :class:`~xarray.DataArray` with pointwise effective number of
           parameters, only if ``pointwise=True``
         - **forecast_horizon**: forecast horizon
@@ -120,11 +116,13 @@ def lfo_cv(
     evaluation. The two approaches coincide when ``forecast_horizon=1`` and whenever the
     likelihood does not depend on lagged values of the response. Otherwise they estimate
     different quantities, so results computed one way should not be compared with results
-    computed the other way.
+    computed the other way. Sample-based scores of forecast trajectories are available
+    through :func:`lfo_score`.
 
     See Also
     --------
     :func:`loo` : Pareto-smoothed importance sampling LOO-CV.
+    :func:`lfo_score` : CRPS and SCRPS with leave-future-out cross-validation.
     :func:`compare` : Compare models based on their ELPD.
 
     References
@@ -156,23 +154,11 @@ def lfo_cv(
         data, var_name, wrapper, min_observations, forecast_horizon, time_dim
     )
 
-    if method == "exact":
-        lfo_results = _compute_lfo_exact(lfo_inputs, wrapper)
-    else:
-        lfo_results = _compute_lfo_approx(lfo_inputs, wrapper, k_threshold)
+    lfo_results = _compute_lfo(lfo_inputs, wrapper, method, k_threshold)
 
-    warning = False
     good_k = k_threshold if method == "approx" else None
     n_refits = len(lfo_results.refits)
-    if method == "approx":
-        if n_refits > lfo_results.n_data_points / 2:
-            warnings.warn(
-                f"LFO-CV triggered {n_refits} refits out of {lfo_results.n_data_points} forecast "
-                "origins. The importance sampling approximation may be unreliable. "
-                "Consider method='exact'.",
-                UserWarning,
-            )
-            warning = True
+    warning = _warn_lfo_refits(method, n_refits, lfo_results.n_data_points)
 
     return ELPDDataLFO(
         elpd=lfo_results.elpd,

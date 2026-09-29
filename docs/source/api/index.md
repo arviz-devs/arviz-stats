@@ -82,6 +82,7 @@ you should jump to {ref}`array_stats_api` and read forward.
 
    arviz_stats.compare
    arviz_stats.lfo_cv
+   arviz_stats.lfo_score
    arviz_stats.loo
    arviz_stats.loo_approximate_posterior
    arviz_stats.loo_i

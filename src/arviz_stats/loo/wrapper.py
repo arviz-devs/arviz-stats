@@ -176,6 +176,47 @@ class SamplingWrapper:
         )
         return log_lik_idx
 
+    def posterior_predictive__i(self, excluded_obs, idata__i):
+        r"""Get posterior predictive draws :math:`\tilde{y}_i \sim p_{post(-i)}(\tilde{y}_i)`.
+
+        Draw predictions for the observations contained in ``excluded_obs`` from the model
+        fitted with this data excluded, the results of which are stored in ``idata__i``.
+        Sample-based scoring rules such as those in :func:`lfo_score` are computed from
+        these draws.
+
+        **Not implemented**: This method is optional. It must be implemented by
+        SamplingWrapper subclasses that are used with functions requiring predictive draws.
+        It is documented here to show its format and call signature.
+
+        Parameters
+        ----------
+        excluded_obs
+            Observations for which to draw predictions. The second item from the tuple
+            returned by `sel_observations` is passed as this argument.
+        idata__i: datatree or InferenceData
+            Inference results of refitting the data excluding some observations. The
+            result of `get_inference_data` is used as this argument.
+
+        Returns
+        -------
+        posterior_predictive: xr.DataArray
+            Predictive draws for ``excluded_obs`` at each of the posterior samples stored in
+            ``idata__i``. The returned array must keep a dimension with one entry per
+            excluded observation, in the same order as the requested indices. All other
+            dimensions (e.g. ``chain`` and ``draw``) are treated as sample dimensions.
+
+        Notes
+        -----
+        When several consecutive observations are excluded and the likelihood depends on
+        lagged values of the response, as in autoregressive models, the draws for each
+        observation should condition on simulated draws of the earlier excluded
+        observations rather than on their observed values. The returned draws are then
+        forecast trajectories that carry predictive uncertainty across the whole block.
+        """
+        raise NotImplementedError(
+            "posterior_predictive__i method must be implemented for each subclass"
+        )
+
     def check_implemented_methods(self, methods):
         """Check that all methods listed are implemented.
 
@@ -197,6 +238,7 @@ class SamplingWrapper:
             "sample",
             "get_inference_data",
             "log_likelihood__i",
+            "posterior_predictive__i",
         )
         bad_methods = [method for method in methods if method not in supported_methods]
         if bad_methods:
