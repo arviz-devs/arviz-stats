@@ -598,13 +598,13 @@ class _CoreBase:
     def _mode(self, ary, round_to=None, skipna=False):
         ary = ary.flatten()
 
+        if skipna:
+            ary = ary[~np.isnan(ary)]
+
         if ary.size == 0:
             return np.nan
         if ary.size == 1:
             return ary.item()
-
-        if skipna:
-            ary = ary[~np.isnan(ary)]
 
         if ary.dtype.kind == "f":
             # For continuous data, we use the half-sample mode algorithm.
