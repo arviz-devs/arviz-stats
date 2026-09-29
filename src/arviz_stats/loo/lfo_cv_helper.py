@@ -1,5 +1,6 @@
 """Helper functions for Leave-Future-Out Cross-Validation (LFO-CV)."""
 
+import warnings
 from collections import namedtuple
 
 import numpy as np
@@ -13,9 +14,10 @@ from arviz_stats.utils import get_log_likelihood
 
 __all__ = [
     "_prepare_lfo_inputs",
-    "_compute_lfo_exact",
-    "_compute_lfo_approx",
+    "_compute_lfo",
+    "_forecast_origins",
     "_validate_lfo_parameters",
+    "_warn_lfo_refits",
 ]
 
 LFOInputs = namedtuple(
@@ -35,6 +37,24 @@ LFOInputs = namedtuple(
 LFOResults = namedtuple(
     "LFOResults",
     ["elpd", "se", "p", "n_data_points", "elpd_i", "p_lfo_i", "refits", "pareto_k"],
+)
+
+LFOFit = namedtuple("LFOFit", ["log_lik", "sample_dims", "n_samples", "idata"])
+
+LFOOrigin = namedtuple(
+    "LFOOrigin",
+    [
+        "pos",
+        "cutoff",
+        "offset",
+        "log_lik",
+        "sample_dims",
+        "n_samples",
+        "idata",
+        "log_weights",
+        "pareto_k",
+        "refit",
+    ],
 )
 
 
@@ -87,11 +107,12 @@ def _prepare_lfo_inputs(data, var_name, wrapper, min_observations, forecast_hori
     )
 
 
-def _compute_lfo_exact(lfo_inputs, wrapper):
-    """Compute LFO-CV by refitting the model at every forecast origin.
+def _compute_lfo(lfo_inputs, wrapper, method, k_threshold=None):
+    """Compute LFO-CV elpd values at every forecast origin.
 
-    For each origin ``i`` the model is refit on ``y[:i]`` and scored on the joint predictive
-    density of the block ``y[i:i + forecast_horizon]``.
+    For each origin ``i`` the model is scored on the joint predictive density of the block
+    ``y[i:i + forecast_horizon]``, refitting at every origin (``method="exact"``) or carrying
+    the posterior forward with Pareto-smoothed importance sampling (``method="approx"``).
 
     Parameters
     ----------
@@ -99,6 +120,10 @@ def _compute_lfo_exact(lfo_inputs, wrapper):
         Prepared inputs from ``_prepare_lfo_inputs``.
     wrapper : SamplingWrapper
         Wrapper instance handling model refitting.
+    method : str
+        Either ``"exact"`` or ``"approx"``.
+    k_threshold : float, optional
+        Pareto k threshold above which the model is refit, only used by ``"approx"``.
 
     Returns
     -------
@@ -112,7 +137,9 @@ def _compute_lfo_exact(lfo_inputs, wrapper):
         - elpd_i: Per-origin elpd values along the time dimension
         - p_lfo_i: Per-origin effective number of parameters
         - refits: Time indices where refits occurred, every origin for the exact method
-        - pareto_k: None for the exact method
+        - pareto_k: Per-origin Pareto k values for the approximate method, None for the
+          exact method. NaN at the first origin. At a refit origin it holds the value that
+          triggered the refit
     """
     ll_full = lfo_inputs.log_likelihood
     sample_dims = lfo_inputs.sample_dims
@@ -123,23 +150,39 @@ def _compute_lfo_exact(lfo_inputs, wrapper):
     origins = lfo_inputs.origins
     elpds = np.empty(len(origins))
     lpds = np.empty(len(origins))
-    for pos, cutoff in enumerate(origins):
-        log_lik, dims, n_refit_samples, _ = _refit_loglik(lfo_inputs, wrapper, cutoff)
-        block = log_lik.isel({time_dim: slice(0, horizon)}).sum(time_dim)
-        elpds[pos] = logsumexp(block, dims=dims, b=1 / n_refit_samples)
+    pareto_ks = np.full(len(origins), np.nan)
+    refits = []
+
+    for origin in _forecast_origins(lfo_inputs, wrapper, method, k_threshold):
+        pos, cutoff = origin.pos, origin.cutoff
+        block = origin.log_lik.isel({time_dim: slice(origin.offset, origin.offset + horizon)})
+        block = block.sum(time_dim)
+
+        if origin.log_weights is None:
+            elpds[pos] = logsumexp(block, dims=origin.sample_dims, b=1 / origin.n_samples)
+        else:
+            weighted = logsumexp(origin.log_weights + block, dims=origin.sample_dims)
+            elpds[pos] = weighted - logsumexp(origin.log_weights, dims=origin.sample_dims)
 
         ll_block = ll_full.isel({time_dim: slice(cutoff, cutoff + horizon)}).sum(time_dim)
         lpds[pos] = logsumexp(ll_block, dims=sample_dims, b=1 / n_samples)
+        pareto_ks[pos] = origin.pareto_k
+        if origin.refit:
+            refits.append(cutoff)
 
-    return _assemble_results(lfo_inputs, origins, elpds, lpds, origins, None)
+    refits = np.array(refits, dtype=int)
+    return _assemble_results(
+        lfo_inputs, origins, elpds, lpds, refits, pareto_ks if method == "approx" else None
+    )
 
 
-def _compute_lfo_approx(lfo_inputs, wrapper, k_threshold):
-    """Compute LFO-CV with Pareto-smoothed importance sampling between refits.
+def _forecast_origins(lfo_inputs, wrapper, method, k_threshold=None):
+    """Walk the forecast origins with the fit and importance weights that apply at each one.
 
-    Starting from a fit on ``y[:min_observations]``, the posterior is carried forward with
-    importance weights over the observations added since the last refit, and the model is only
-    refit when the Pareto :math:`k` of those weights exceeds ``k_threshold``.
+    With ``method="exact"`` the model is refit at every origin and the weights are uniform.
+    With ``method="approx"`` the fit on ``y[:min_observations]`` is carried forward with
+    importance weights over the observations added since the last refit, and the model is
+    only refit when the Pareto :math:`k` of those weights exceeds ``k_threshold``.
 
     Parameters
     ----------
@@ -147,67 +190,65 @@ def _compute_lfo_approx(lfo_inputs, wrapper, k_threshold):
         Prepared inputs from ``_prepare_lfo_inputs``.
     wrapper : SamplingWrapper
         Wrapper instance handling model refitting.
-    k_threshold : float
-        Pareto k threshold above which the model is refit.
+    method : str
+        Either ``"exact"`` or ``"approx"``.
+    k_threshold : float, optional
+        Pareto k threshold above which the model is refit, only used by ``"approx"``.
 
     Returns
     -------
-    LFOResults
-        A namedtuple containing:
+    generator of LFOOrigin
+        One namedtuple per forecast origin, produced lazily so that each refit happens
+        when the origin is reached. Each contains:
 
-        - elpd: Total expected log pointwise predictive density
-        - se: Standard error of the elpd
-        - p: Effective number of parameters
-        - n_data_points: Number of forecast origins evaluated
-        - elpd_i: Per-origin elpd values along the time dimension
-        - p_lfo_i: Per-origin effective number of parameters
-        - refits: Time indices where PSIS triggered a refit
-        - pareto_k: Per-origin Pareto k values, NaN at the first origin and wherever a
-          refit occurred
+        - pos: Position of the origin within ``lfo_inputs.origins``
+        - cutoff: Number of observations the current fit conditions on through
+          importance weighting, that is, the forecast origin
+        - offset: Position of the origin within the fit's ``log_lik`` time dimension
+        - log_lik: Log likelihood of the observations from the last refit onward
+        - sample_dims: Sample dimensions of ``log_lik``
+        - n_samples: Number of posterior draws in the fit
+        - idata: Inference data of the fit
+        - log_weights: Smoothed log importance weights, None when they are uniform
+        - pareto_k: Pareto k of the importance ratios since the last refit. At a refit
+          origin it holds the value that triggered the refit. NaN at the first origin and
+          for the exact method
+        - refit: Whether the model was refit at this origin. The initial fit at the first
+          origin only counts as a refit for the exact method
     """
-    ll_full = lfo_inputs.log_likelihood
-    sample_dims = lfo_inputs.sample_dims
-    n_samples = lfo_inputs.n_samples
     time_dim = lfo_inputs.time_dim
-    horizon = lfo_inputs.forecast_horizon
-
     origins = lfo_inputs.origins
     last_refit = origins[0]
-    ll_star, star_dims, n_star, idata_star = _refit_loglik(lfo_inputs, wrapper, last_refit)
-    r_eff = _get_r_eff(idata_star, n_star)
-
-    elpds = np.empty(len(origins))
-    lpds = np.empty(len(origins))
-    pareto_ks = np.full(len(origins), np.nan)
-    refits = []
+    fit = _refit_loglik(lfo_inputs, wrapper, last_refit)
+    r_eff = _get_r_eff(fit.idata, fit.n_samples) if method == "approx" else None
 
     for pos, cutoff in enumerate(origins):
         offset = cutoff - last_refit
-        if offset == 0:
-            log_weights, pareto_k = None, np.nan
-        else:
-            log_ratios = ll_star.isel({time_dim: slice(0, offset)}).sum(time_dim)
-            log_weights, pareto_k = _psis_lfo_weights(log_ratios, star_dims, r_eff)
+        log_weights, pareto_k, refit = None, np.nan, method == "exact"
+        if method == "exact" and offset > 0:
+            fit = _refit_loglik(lfo_inputs, wrapper, cutoff)
+            last_refit, offset = cutoff, 0
+        elif offset > 0:
+            log_ratios = fit.log_lik.isel({time_dim: slice(0, offset)}).sum(time_dim)
+            log_weights, pareto_k = _psis_lfo_weights(log_ratios, fit.sample_dims, r_eff)
             if pareto_k > k_threshold:
-                ll_star, star_dims, n_star, idata_star = _refit_loglik(lfo_inputs, wrapper, cutoff)
-                r_eff = _get_r_eff(idata_star, n_star)
-                last_refit = cutoff
-                offset = 0
-                log_weights, pareto_k = None, np.nan
-                refits.append(cutoff)
+                fit = _refit_loglik(lfo_inputs, wrapper, cutoff)
+                r_eff = _get_r_eff(fit.idata, fit.n_samples)
+                last_refit, offset = cutoff, 0
+                log_weights, refit = None, True
 
-        block = ll_star.isel({time_dim: slice(offset, offset + horizon)}).sum(time_dim)
-        if log_weights is None:
-            log_weights = xr.zeros_like(block)
-        weighted = logsumexp(log_weights + block, dims=star_dims)
-        elpds[pos] = weighted - logsumexp(log_weights, dims=star_dims)
-
-        ll_block = ll_full.isel({time_dim: slice(cutoff, cutoff + horizon)}).sum(time_dim)
-        lpds[pos] = logsumexp(ll_block, dims=sample_dims, b=1 / n_samples)
-        pareto_ks[pos] = pareto_k
-
-    refits = np.array(refits, dtype=int)
-    return _assemble_results(lfo_inputs, origins, elpds, lpds, refits, pareto_ks)
+        yield LFOOrigin(
+            pos=pos,
+            cutoff=cutoff,
+            offset=offset,
+            log_lik=fit.log_lik,
+            sample_dims=fit.sample_dims,
+            n_samples=fit.n_samples,
+            idata=fit.idata,
+            log_weights=log_weights,
+            pareto_k=pareto_k,
+            refit=refit,
+        )
 
 
 def _psis_lfo_weights(log_ratios, sample_dims, r_eff):
@@ -263,15 +304,14 @@ def _refit_loglik(lfo_inputs, wrapper, cutoff):
 
     Returns
     -------
-    log_lik : DataArray
-        Log likelihood of observations ``cutoff`` onward, evaluated at the refit
-        posterior draws.
-    sample_dims : list of str
-        Dimensions of ``log_lik`` other than the time dimension.
-    n_samples : int
-        Number of posterior draws in the refit.
-    idata : DataTree
-        Inference data of the refit returned by the wrapper.
+    LFOFit
+        A namedtuple containing:
+
+        - log_lik: Log likelihood of observations ``cutoff`` onward, evaluated at the refit
+          posterior draws
+        - sample_dims: Dimensions of ``log_lik`` other than the time dimension
+        - n_samples: Number of posterior draws in the refit
+        - idata: Inference data of the refit returned by the wrapper
     """
     exclude_idx = np.arange(cutoff, lfo_inputs.n_time_points)
     train_data, excluded_data = wrapper.sel_observations(exclude_idx)
@@ -291,7 +331,7 @@ def _refit_loglik(lfo_inputs, wrapper, cutoff):
         log_lik = log_lik.transpose("chain", "draw", ...)
     sample_dims = [dim for dim in log_lik.dims if dim != time_dim]
     n_samples = np.prod([log_lik.sizes[dim] for dim in sample_dims])
-    return log_lik, sample_dims, n_samples, idata
+    return LFOFit(log_lik=log_lik, sample_dims=sample_dims, n_samples=n_samples, idata=idata)
 
 
 def _assemble_results(lfo_inputs, origins, elpds, lpds, refits, pareto_k_values):
@@ -341,3 +381,16 @@ def _validate_lfo_parameters(min_observations, forecast_horizon, n_time_points):
             f"= {min_observations + forecast_horizon} exceeds the number of "
             f"time points ({n_time_points})"
         )
+
+
+def _warn_lfo_refits(method, n_refits, n_data_points):
+    """Warn when the PSIS approximation triggered refits at more than half the origins."""
+    if method != "approx" or n_refits <= n_data_points / 2:
+        return False
+    warnings.warn(
+        f"LFO-CV triggered {n_refits} refits out of {n_data_points} forecast "
+        "origins. The importance sampling approximation may be unreliable. "
+        "Consider method='exact'.",
+        UserWarning,
+    )
+    return True

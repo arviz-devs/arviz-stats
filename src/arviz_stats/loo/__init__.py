@@ -15,6 +15,7 @@ from arviz_stats.loo.wrapper import SamplingWrapper
 from arviz_stats.loo.compare import compare, _calculate_ics
 from arviz_stats.loo.loo_kfold import loo_kfold
 from arviz_stats.loo.lfo_cv import lfo_cv
+from arviz_stats.loo.lfo_score import lfo_score
 
 __all__ = [
     "loo",
@@ -34,4 +35,5 @@ __all__ = [
     "compare",
     "loo_kfold",
     "lfo_cv",
+    "lfo_score",
 ]
