@@ -608,10 +608,16 @@ class _CoreBase:
 
         if ary.dtype.kind == "f":
             # For continuous data, we use the half-sample mode algorithm.
+            if np.isnan(ary).any():
+                return np.nan
             x = np.sort(ary)
             while len(x) > 2:
                 n = (len(x) + 1) // 2
-                widths = x[n:] - x[:-n]
+                # width of each window of n consecutive sorted values
+                widths = x[n - 1 :] - x[: len(x) - n + 1]
+                if len(x) == 3 and widths[0] == widths[1]:
+                    # equal gaps: the middle point, as in Bickel & Frühwirth (2006)
+                    return round_num(x[1], round_to)
                 min_idx = np.argmin(widths)
                 x = x[min_idx : min_idx + n]
 
