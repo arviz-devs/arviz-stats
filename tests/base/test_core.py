@@ -286,6 +286,11 @@ class TestMode:
         result = core._mode(x)
         assert np.isnan(result)
 
+    @pytest.mark.parametrize("x, expected", [([1.0, np.nan], 1.0), ([np.nan, np.nan], np.nan)])
+    def test_mode_skipna_few_values(self, core, x, expected):
+        result = core._mode(np.array(x), skipna=True)
+        assert_allclose(result, expected)
+
     def test_mode_with_nan(self, core):
         x = np.array([1.0, 2.0, 2.0, np.nan, 2.0, 3.0])
         result = core._mode(x)
