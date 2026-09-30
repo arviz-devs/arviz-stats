@@ -50,6 +50,13 @@ class TestHelperFunctions:
         assert chain_axis == 0
         assert draw_axis == -2
 
+    def test_process_chain_none_draw_axis_zero(self):
+        ary = np.empty((100, 50))
+        ary_out, chain_axis, draw_axis = process_chain_none(ary, None, 0)
+        assert ary_out.shape == (1, 100, 50)
+        assert chain_axis == 0
+        assert draw_axis == 1
+
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     def test_process_ary_axes_single_axis(self, axis):
         ary = np.empty((10, 20, 30))
@@ -184,6 +191,13 @@ class TestESS:
         result = array_stats.ess(ary, chain_axis=1, draw_axis=3)
         assert result.shape == (5, 10)
         assert result.min() > 0
+
+    def test_ess_chain_none_draw_axis_zero(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(100, 3))
+        result = array_stats.ess(ary, chain_axis=None, draw_axis=0)
+        expected = array_stats.ess(ary.T, chain_axis=None, draw_axis=-1)
+        assert_allclose(result, expected)
 
 
 class TestRhat:
