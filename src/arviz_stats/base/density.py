@@ -796,7 +796,8 @@ class _DensityBase(_CoreBase):
         x = x[np.isfinite(x)]
         qvalues, binwidth = self._compute_quantiles_and_binwidth(x, nquantiles, binwidth)
 
-        if np.isnan(binwidth):
+        # also catches a zero width (e.g. constant data), for which stacking never ends
+        if not binwidth > 0:
             return np.full(nquantiles, np.nan), np.full(nquantiles, np.nan), np.nan
 
         stack_locs, stack_counts = self._wilkinson_algorithm(qvalues, binwidth)
