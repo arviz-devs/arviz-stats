@@ -1,4 +1,4 @@
-"""Continuously ranked probability scores with leave-future-out cross-validation."""
+"""Continuous ranked probability scores with leave-future-out cross-validation."""
 
 from collections import namedtuple
 
@@ -7,7 +7,13 @@ import xarray as xr
 from arviz_base import convert_to_datatree, rcParams
 
 from arviz_stats.base.stats_utils import round_num
-from arviz_stats.loo.lfo_cv_helper import _forecast_origins, _prepare_lfo_inputs, _warn_lfo_refits
+from arviz_stats.loo.lfo_cv_helper import (
+    _forecast_origins,
+    _label_origins,
+    _prepare_lfo_inputs,
+    _validate_lfo_method,
+    _warn_lfo_refits,
+)
 
 __all__ = ["lfo_score"]
 
@@ -57,7 +63,10 @@ def lfo_score(
         ``log_likelihood__i`` is used to form the importance ratios between refits. At every
         forecast origin ``sel_observations`` is called again with the indices of the
         forecast block only, and the excluded observations it returns are passed to
-        ``posterior_predictive__i`` together with the current fit.
+        ``posterior_predictive__i`` together with the current fit. With ``method="approx"``
+        the current fit is the most recent refit, which may have been trained on fewer
+        observations than precede the block. ``log_likelihood__i`` must condition each
+        observation on the observed values before it, because it forms the importance ratios.
     min_observations : int
         Minimum number of observations required before making predictions.
         The first prediction is made at time min_observations.
@@ -93,10 +102,11 @@ def lfo_score(
     namedtuple
         A namedtuple named ``CRPS`` or ``SCRPS`` with fields ``mean`` and ``se`` computed
         over forecast origins, ``refits`` with the time indices where refits occurred and
-        ``n_refits``. If ``pointwise`` is True, the namedtuple also includes ``pointwise``
-        with the per-origin scores and ``pareto_k`` with the per-origin Pareto k
-        diagnostics, which is None for ``method="exact"``. At origins where the model was
-        refit, ``pareto_k`` holds the value that triggered the refit.
+        ``n_refits``. For ``method="approx"`` the initial fit at the first forecast origin is
+        not counted as a refit. If ``pointwise`` is True, the namedtuple also includes
+        ``pointwise`` with the per-origin scores and ``pareto_k`` with the per-origin
+        Pareto k diagnostics, which is None for ``method="exact"``. At origins where the
+        model was refit, ``pareto_k`` holds the value that triggered the refit.
 
     Notes
     -----
@@ -134,12 +144,7 @@ def lfo_score(
 
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
-    method = method.lower()
-    if method not in ("exact", "approx"):
-        raise ValueError(
-            f"method must be 'exact' or 'approx', got '{method}'. "
-            "Use 'exact' for always refitting or 'approx' for PSIS approximation."
-        )
+    method = _validate_lfo_method(method)
 
     data = convert_to_datatree(data)
     lfo_inputs = _prepare_lfo_inputs(
@@ -150,7 +155,7 @@ def lfo_score(
             "The following methods must be implemented in the SamplingWrapper: "
             "['posterior_predictive__i']"
         )
-    y_obs = _get_observed(data, lfo_inputs.log_likelihood.name, time_dim)
+    y_obs = _get_observed(data, lfo_inputs.log_likelihood, time_dim)
 
     origins = lfo_inputs.origins
     scores = np.empty(len(origins))
@@ -166,16 +171,11 @@ def lfo_score(
         if origin.log_weights is None:
             log_weights = xr.zeros_like(y_pred)
         else:
-            log_weights = xr.DataArray(origin.log_weights.values, dims=origin.log_weights.dims)
-            log_weights = log_weights.broadcast_like(y_pred).transpose(*y_pred.dims)
-        block_y = xr.DataArray(y_obs.values[cutoff : cutoff + forecast_horizon], dims=[time_dim])
+            log_weights = origin.log_weights.broadcast_like(y_pred)
+        block_y = y_obs.isel({time_dim: slice(cutoff, cutoff + forecast_horizon)})
 
         block_scores, _ = y_pred.azstats.loo_score(
-            y_obs=block_y,
-            log_weights=log_weights,
-            pareto_k=origin.pareto_k,
-            kind=kind,
-            sample_dims=origin.sample_dims,
+            y_obs=block_y, log_weights=log_weights, kind=kind, sample_dims=origin.sample_dims
         )
         scores[origin.pos] = block_scores.sum().values
         pareto_ks[origin.pos] = origin.pareto_k
@@ -193,51 +193,41 @@ def lfo_score(
     if not pointwise:
         return namedtuple(name, ["mean", "se", "refits", "n_refits"])(mean, se, refits, n_refits)
 
-    origin_coord = lfo_inputs.log_likelihood.coords[time_dim].isel({time_dim: origins}).values
-    pointwise_scores = xr.DataArray(scores, dims=[time_dim], coords={time_dim: origin_coord})
-    pareto_k = None
-    if method == "approx":
-        pareto_k = xr.DataArray(pareto_ks, dims=[time_dim], coords={time_dim: origin_coord})
+    pointwise_scores = _label_origins(lfo_inputs, scores)
+    pareto_k = _label_origins(lfo_inputs, pareto_ks) if method == "approx" else None
     return namedtuple(name, ["mean", "se", "pointwise", "pareto_k", "refits", "n_refits"])(
         mean, se, pointwise_scores, pareto_k, refits, n_refits
     )
 
 
-def _get_observed(data, var_name, time_dim):
-    """Return the observed values of ``var_name`` ordered along the time dimension."""
-    if "observed_data" not in data.children:
+def _get_observed(data, log_likelihood, time_dim):
+    """Return the observed values that correspond to ``log_likelihood``."""
+    var_name = log_likelihood.name
+    if not hasattr(data, "observed_data"):
         raise ValueError("data must contain an observed_data group to compute lfo_score")
-    observed = data.observed_data.to_dataset()
-    if var_name not in observed:
+    if var_name not in data.observed_data.data_vars:
         raise ValueError(
             f"Variable '{var_name}' not found in observed_data. "
-            f"Available variables: {list(observed.data_vars)}"
+            f"Available variables: {list(data.observed_data.data_vars)}"
         )
-    y_obs = observed[var_name]
-    if y_obs.dims != (time_dim,):
+    y_obs = data.observed_data[var_name]
+    expected = {time_dim: log_likelihood.sizes[time_dim]}
+    if dict(y_obs.sizes) != expected:
         raise ValueError(
-            f"observed_data['{var_name}'] must have dimensions ('{time_dim}',), got {y_obs.dims}"
+            f"observed_data['{var_name}'] must have sizes {expected} to match the log "
+            f"likelihood, got {dict(y_obs.sizes)}."
         )
     return y_obs
 
 
 def _forecast_draws(wrapper, block_obs, origin, time_dim, horizon):
-    """Request predictive draws for the forecast block and check their layout."""
+    """Request predictive draws for the forecast block and check their sizes."""
     y_pred = wrapper.posterior_predictive__i(block_obs, origin.idata)
-    if y_pred.sizes.get(time_dim) != horizon:
+    expected = {dim: origin.log_lik.sizes[dim] for dim in origin.sample_dims} | {time_dim: horizon}
+    if dict(y_pred.sizes) != expected:
         raise ValueError(
-            "posterior_predictive__i must return one value per excluded observation. "
-            f"Expected size {horizon} along '{time_dim}', got {y_pred.sizes.get(time_dim)} "
-            f"for forecast origin {origin.cutoff}."
+            "posterior_predictive__i must return the sample dimensions of log_likelihood__i and "
+            f"one value per excluded observation. Expected sizes {expected}, got "
+            f"{dict(y_pred.sizes)} for forecast origin {origin.cutoff}."
         )
-    pred_dims = [dim for dim in y_pred.dims if dim != time_dim]
-    if sorted(pred_dims) != sorted(origin.sample_dims) or any(
-        y_pred.sizes[dim] != origin.log_lik.sizes[dim] for dim in pred_dims
-    ):
-        raise ValueError(
-            "posterior_predictive__i must return draws with the same sample dimensions as "
-            f"log_likelihood__i. Expected {dict(origin.log_lik.sizes)} without '{time_dim}', "
-            f"got {dict(y_pred.sizes)}."
-        )
-    y_pred = y_pred.transpose(*origin.sample_dims, time_dim)
-    return xr.DataArray(y_pred.values, dims=y_pred.dims)
+    return y_pred.drop_vars(time_dim, errors="ignore")

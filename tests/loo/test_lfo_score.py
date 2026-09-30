@@ -42,53 +42,58 @@ def test_lfo_score_constant_draws(constant_lfo_wrapper, lfo_constant_data, horiz
     assert result.n_refits == len(origins)
 
 
-def test_lfo_score_exact_uses_uniform_weights(varying_lfo_wrapper, lfo_varying_data):
-    min_obs, horizon = 20, 2
+def test_lfo_score_exact_refits_before_scoring(varying_lfo_wrapper, lfo_varying_data):
     result = lfo_score(
         lfo_varying_data,
         varying_lfo_wrapper,
-        min_observations=min_obs,
-        forecast_horizon=horizon,
+        min_observations=20,
+        forecast_horizon=2,
         kind="scrps",
         method="exact",
         pointwise=True,
     )
 
-    cutoff = result.pointwise.coords["time"].values[0]
-    _, excluded = varying_lfo_wrapper.sel_observations(np.arange(cutoff, cutoff + horizon))
-    idata = varying_lfo_wrapper.get_inference_data(
-        varying_lfo_wrapper.sample(varying_lfo_wrapper.sel_observations(np.arange(cutoff, 25))[0])
-    )
-    draws = varying_lfo_wrapper.posterior_predictive__i(excluded, idata)
-    y_obs = lfo_varying_data.observed_data["obs"].isel(time=slice(cutoff, cutoff + horizon))
+    train, block = varying_lfo_wrapper.sel_observations(np.arange(23, 25))
+    idata = varying_lfo_wrapper.get_inference_data(varying_lfo_wrapper.sample(train))
+    draws = varying_lfo_wrapper.posterior_predictive__i(block, idata)
+    y_obs = lfo_varying_data.observed_data["obs"].isel(time=slice(23, 25))
     scores, _ = draws.azstats.loo_score(y_obs=y_obs, log_weights=xr.zeros_like(draws), kind="scrps")
 
     assert type(result).__name__ == "SCRPS"
-    np.testing.assert_allclose(result.pointwise.values[0], scores.sum().values)
+    np.testing.assert_allclose(result.pointwise.values[-1], scores.sum().values)
 
 
-@pytest.mark.filterwarnings("ignore::UserWarning")
-def test_lfo_score_approx(varying_lfo_wrapper, lfo_varying_data):
-    min_obs, horizon = 5, 2
-    n_time = lfo_varying_data.log_likelihood["obs"].sizes["time"]
-    n_origins = n_time - horizon - min_obs + 1
-
+def test_lfo_score_approx_weights_draws(varying_lfo_wrapper, lfo_varying_data):
     result = lfo_score(
         lfo_varying_data,
         varying_lfo_wrapper,
-        min_observations=min_obs,
-        forecast_horizon=horizon,
+        min_observations=20,
+        forecast_horizon=2,
         method="approx",
-        k_threshold=0.7,
         pointwise=True,
     )
 
-    assert result.pointwise.sizes["time"] == n_origins
-    assert np.all(np.isfinite(result.pointwise.values))
-    assert result.pareto_k.sizes["time"] == n_origins
-    assert np.isnan(result.pareto_k.values[0])
-    assert result.n_refits == len(result.refits)
-    assert varying_lfo_wrapper.fit_count == result.n_refits + 1
+    train, excluded = varying_lfo_wrapper.sel_observations(np.arange(20, 25))
+    idata = varying_lfo_wrapper.get_inference_data(varying_lfo_wrapper.sample(train))
+    log_lik = varying_lfo_wrapper.log_likelihood__i(excluded, idata)
+    log_weights, _ = (-log_lik.isel(time=0)).azstats.psislw(dim=["chain", "draw"], r_eff=1.0)
+    _, block = varying_lfo_wrapper.sel_observations(np.arange(21, 23))
+    draws = varying_lfo_wrapper.posterior_predictive__i(block, idata)
+    y_obs = lfo_varying_data.observed_data["obs"].isel(time=slice(21, 23))
+    scores, _ = draws.azstats.loo_score(y_obs=y_obs, log_weights=log_weights.broadcast_like(draws))
+
+    assert result.n_refits == 0
+    np.testing.assert_allclose(result.pointwise.values[1], scores.sum().values)
+
+
+def test_lfo_score_rejects_short_observed_data(varying_lfo_wrapper, lfo_varying_data):
+    data = lfo_varying_data.copy()
+    data["observed_data"] = lfo_varying_data.observed_data.to_dataset().isel(time=slice(0, -1))
+
+    with pytest.raises(ValueError, match="to match the log likelihood"):
+        lfo_score(data, varying_lfo_wrapper, min_observations=20, forecast_horizon=2)
+
+    assert varying_lfo_wrapper.fit_count == 0
 
 
 def test_lfo_score_requires_posterior_predictive(custom_dim_lfo_wrapper, lfo_custom_dim_data):
