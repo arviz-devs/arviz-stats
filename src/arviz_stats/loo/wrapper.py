@@ -179,8 +179,8 @@ class SamplingWrapper:
     def posterior_predictive__i(self, excluded_obs, idata__i):
         r"""Get posterior predictive draws :math:`\tilde{y}_i \sim p_{post(-i)}(\tilde{y}_i)`.
 
-        Draw predictions for the observations contained in ``excluded_obs`` from the model
-        fitted with this data excluded, the results of which are stored in ``idata__i``.
+        Draw predictions for the observations contained in ``excluded_obs`` from a fit of
+        the model that excludes them, the results of which are stored in ``idata__i``.
         Sample-based scoring rules such as those in :func:`lfo_score` are computed from
         these draws.
 
@@ -193,17 +193,24 @@ class SamplingWrapper:
         excluded_obs
             Observations for which to draw predictions. The second item from the tuple
             returned by `sel_observations` is passed as this argument.
-        idata__i: datatree or InferenceData
-            Inference results of refitting the data excluding some observations. The
-            result of `get_inference_data` is used as this argument.
+        idata__i : DataTree or InferenceData
+            Inference results of a fit that excludes ``excluded_obs``. The result of
+            `get_inference_data` is used as this argument. The fit may also exclude some
+            observations just before ``excluded_obs``. :func:`lfo_score` does this with
+            ``method="approx"``, where it reuses the most recent refit and accounts for
+            the newer observations with importance weights.
 
         Returns
         -------
-        posterior_predictive: xr.DataArray
+        posterior_predictive : DataArray
             Predictive draws for ``excluded_obs`` at each of the posterior samples stored in
-            ``idata__i``. The returned array must keep a dimension with one entry per
-            excluded observation, in the same order as the requested indices. All other
-            dimensions (e.g. ``chain`` and ``draw``) are treated as sample dimensions.
+            ``idata__i``. The returned array must keep the time dimension with one entry
+            per excluded observation, in the same order as the requested indices. All other
+            dimensions (e.g. ``chain`` and ``draw``) are treated as sample dimensions and
+            must match those returned by ``log_likelihood__i``. :func:`lfo_score` supports at
+            most two sample dimensions. The draw at each sample position must come from the
+            posterior sample at the same position, because importance weights are applied
+            draw by draw.
 
         Notes
         -----
@@ -212,6 +219,9 @@ class SamplingWrapper:
         observation should condition on simulated draws of the earlier excluded
         observations rather than on their observed values. The returned draws are then
         forecast trajectories that carry predictive uncertainty across the whole block.
+        Lagged values from before the block should be read from the observed data, for
+        example ``idata_orig``, rather than from the data the fit was trained on. The two
+        differ when the fit excludes observations just before the block.
         """
         raise NotImplementedError(
             "posterior_predictive__i method must be implemented for each subclass"

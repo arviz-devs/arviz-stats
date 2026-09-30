@@ -16,6 +16,8 @@ __all__ = [
     "_prepare_lfo_inputs",
     "_compute_lfo",
     "_forecast_origins",
+    "_label_origins",
+    "_validate_lfo_method",
     "_validate_lfo_parameters",
     "_warn_lfo_refits",
 ]
@@ -84,10 +86,10 @@ def _prepare_lfo_inputs(data, var_name, wrapper, min_observations, forecast_hori
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
     if obs_dims != [time_dim]:
         raise ValueError(
-            "lfo_cv currently requires one log-likelihood value per time point. "
+            "LFO-CV currently requires one log-likelihood value per time point. "
             f"Found observation dimensions {obs_dims}, expected only '{time_dim}'. "
             "Combine a multivariate likelihood into one joint log-likelihood value per time "
-            "point before calling lfo_cv."
+            "point first."
         )
 
     n_samples = int(np.prod([log_likelihood.sizes[dim] for dim in sample_dims]))
@@ -172,7 +174,7 @@ def _compute_lfo(lfo_inputs, wrapper, method, k_threshold=None):
 
     refits = np.array(refits, dtype=int)
     return _assemble_results(
-        lfo_inputs, origins, elpds, lpds, refits, pareto_ks if method == "approx" else None
+        lfo_inputs, elpds, lpds, refits, pareto_ks if method == "approx" else None
     )
 
 
@@ -197,15 +199,15 @@ def _forecast_origins(lfo_inputs, wrapper, method, k_threshold=None):
 
     Returns
     -------
-    generator of LFOOrigin
-        One namedtuple per forecast origin, produced lazily so that each refit happens
-        when the origin is reached. Each contains:
+    generator
+        Produces one ``LFOOrigin`` namedtuple per forecast origin, in order. Each refit
+        happens only when its origin is reached. Each namedtuple contains:
 
         - pos: Position of the origin within ``lfo_inputs.origins``
-        - cutoff: Number of observations the current fit conditions on through
-          importance weighting, that is, the forecast origin
+        - cutoff: The forecast origin, which is the number of leading observations the fit
+          conditions on through training and importance weighting together
         - offset: Position of the origin within the fit's ``log_lik`` time dimension
-        - log_lik: Log likelihood of the observations from the last refit onward
+        - log_lik: Log likelihood of every observation after the fit's training data
         - sample_dims: Sample dimensions of ``log_lik``
         - n_samples: Number of posterior draws in the fit
         - idata: Inference data of the fit
@@ -334,17 +336,19 @@ def _refit_loglik(lfo_inputs, wrapper, cutoff):
     return LFOFit(log_lik=log_lik, sample_dims=sample_dims, n_samples=n_samples, idata=idata)
 
 
-def _assemble_results(lfo_inputs, origins, elpds, lpds, refits, pareto_k_values):
-    """Build the per-origin DataArrays and aggregate totals shared by both methods."""
+def _label_origins(lfo_inputs, values):
+    """Wrap per-origin values in a DataArray with the time coordinates of the origins."""
     time_dim = lfo_inputs.time_dim
-    ps = lpds - elpds
-    origin_coord = lfo_inputs.log_likelihood.coords[time_dim].isel({time_dim: origins}).values
+    times = lfo_inputs.log_likelihood.coords[time_dim].isel({time_dim: lfo_inputs.origins})
+    return xr.DataArray(values, dims=[time_dim], coords={time_dim: times.values})
 
-    elpd_i = xr.DataArray(elpds, dims=[time_dim], coords={time_dim: origin_coord})
-    p_lfo_i = xr.DataArray(ps, dims=[time_dim], coords={time_dim: origin_coord})
-    pareto_k = None
-    if pareto_k_values is not None:
-        pareto_k = xr.DataArray(pareto_k_values, dims=[time_dim], coords={time_dim: origin_coord})
+
+def _assemble_results(lfo_inputs, elpds, lpds, refits, pareto_k_values):
+    """Build the per-origin DataArrays and aggregate totals shared by both methods."""
+    ps = lpds - elpds
+    elpd_i = _label_origins(lfo_inputs, elpds)
+    p_lfo_i = _label_origins(lfo_inputs, ps)
+    pareto_k = None if pareto_k_values is None else _label_origins(lfo_inputs, pareto_k_values)
 
     n_data_points = len(elpds)
     se = np.sqrt(n_data_points * np.var(elpds)) if n_data_points > 1 else 0.0
@@ -359,6 +363,17 @@ def _assemble_results(lfo_inputs, origins, elpds, lpds, refits, pareto_k_values)
         refits=refits,
         pareto_k=pareto_k,
     )
+
+
+def _validate_lfo_method(method):
+    """Normalize ``method`` and check that it names a supported LFO-CV method."""
+    method = method.lower()
+    if method not in ("exact", "approx"):
+        raise ValueError(
+            f"method must be 'exact' or 'approx', got '{method}'. "
+            "Use 'exact' for always refitting or 'approx' for PSIS approximation."
+        )
+    return method
 
 
 def _validate_lfo_parameters(min_observations, forecast_horizon, n_time_points):
@@ -392,5 +407,6 @@ def _warn_lfo_refits(method, n_refits, n_data_points):
         "origins. The importance sampling approximation may be unreliable. "
         "Consider method='exact'.",
         UserWarning,
+        stacklevel=2,
     )
     return True
