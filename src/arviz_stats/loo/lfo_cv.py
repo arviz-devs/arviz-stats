@@ -3,7 +3,12 @@
 import numpy as np
 from arviz_base import rcParams
 
-from arviz_stats.loo.lfo_cv_helper import _compute_lfo, _prepare_lfo_inputs, _warn_lfo_refits
+from arviz_stats.loo.lfo_cv_helper import (
+    _compute_lfo,
+    _prepare_lfo_inputs,
+    _validate_lfo_method,
+    _warn_lfo_refits,
+)
 from arviz_stats.utils import ELPDDataLFO
 
 __all__ = ["lfo_cv"]
@@ -143,12 +148,7 @@ def lfo_cv(
     """
     pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
-    method = method.lower()
-    if method not in ("exact", "approx"):
-        raise ValueError(
-            f"method must be 'exact' or 'approx', got '{method}'. "
-            "Use 'exact' for always refitting or 'approx' for PSIS approximation."
-        )
+    method = _validate_lfo_method(method)
 
     lfo_inputs = _prepare_lfo_inputs(
         data, var_name, wrapper, min_observations, forecast_horizon, time_dim
