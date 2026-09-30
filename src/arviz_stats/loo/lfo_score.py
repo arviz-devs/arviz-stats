@@ -8,7 +8,9 @@ from arviz_base import convert_to_datatree, rcParams
 
 from arviz_stats.base.stats_utils import round_num
 from arviz_stats.loo.lfo_cv_helper import (
+    _forecast_draws,
     _forecast_origins,
+    _get_observed,
     _label_origins,
     _prepare_lfo_inputs,
     _validate_lfo_method,
@@ -198,36 +200,3 @@ def lfo_score(
     return namedtuple(name, ["mean", "se", "pointwise", "pareto_k", "refits", "n_refits"])(
         mean, se, pointwise_scores, pareto_k, refits, n_refits
     )
-
-
-def _get_observed(data, log_likelihood, time_dim):
-    """Return the observed values that correspond to ``log_likelihood``."""
-    var_name = log_likelihood.name
-    if not hasattr(data, "observed_data"):
-        raise ValueError("data must contain an observed_data group to compute lfo_score")
-    if var_name not in data.observed_data.data_vars:
-        raise ValueError(
-            f"Variable '{var_name}' not found in observed_data. "
-            f"Available variables: {list(data.observed_data.data_vars)}"
-        )
-    y_obs = data.observed_data[var_name]
-    expected = {time_dim: log_likelihood.sizes[time_dim]}
-    if dict(y_obs.sizes) != expected:
-        raise ValueError(
-            f"observed_data['{var_name}'] must have sizes {expected} to match the log "
-            f"likelihood, got {dict(y_obs.sizes)}."
-        )
-    return y_obs
-
-
-def _forecast_draws(wrapper, block_obs, origin, time_dim, horizon):
-    """Request predictive draws for the forecast block and check their sizes."""
-    y_pred = wrapper.posterior_predictive__i(block_obs, origin.idata)
-    expected = {dim: origin.log_lik.sizes[dim] for dim in origin.sample_dims} | {time_dim: horizon}
-    if dict(y_pred.sizes) != expected:
-        raise ValueError(
-            "posterior_predictive__i must return the sample dimensions of log_likelihood__i and "
-            f"one value per excluded observation. Expected sizes {expected}, got "
-            f"{dict(y_pred.sizes)} for forecast origin {origin.cutoff}."
-        )
-    return y_pred.drop_vars(time_dim, errors="ignore")
