@@ -74,7 +74,7 @@ def lfo_score(
         The first prediction is made at time min_observations.
     forecast_horizon : int
         Number of steps ahead to predict.
-    kind : str, default "crps"
+    kind : str, default="crps"
         The kind of score to compute. Available options are:
 
         - 'crps': continuous ranked probability score. Default.
@@ -107,8 +107,9 @@ def lfo_score(
         ``n_refits``. For ``method="approx"`` the initial fit at the first forecast origin is
         not counted as a refit. If ``pointwise`` is True, the namedtuple also includes
         ``pointwise`` with the per-origin scores and ``pareto_k`` with the per-origin
-        Pareto k diagnostics, which is None for ``method="exact"``. At origins where the
-        model was refit, ``pareto_k`` holds the value that triggered the refit.
+        Pareto k diagnostics, which is None for ``method="exact"``. ``pareto_k`` is NaN at
+        the first forecast origin. At origins where the model was refit it holds the value
+        that exceeded ``k_threshold``, which is infinite when PSIS could not be computed.
 
     Notes
     -----
@@ -174,12 +175,12 @@ def lfo_score(
             log_weights = xr.zeros_like(y_pred)
         else:
             log_weights = origin.log_weights.broadcast_like(y_pred)
-        block_y = y_obs.isel({time_dim: slice(cutoff, cutoff + forecast_horizon)})
+        block_y = y_obs.isel({time_dim: block_idx})
 
         block_scores, _ = y_pred.azstats.loo_score(
             y_obs=block_y, log_weights=log_weights, kind=kind, sample_dims=origin.sample_dims
         )
-        scores[origin.pos] = block_scores.sum().values
+        scores[origin.pos] = block_scores.sum(skipna=False).values
         pareto_ks[origin.pos] = origin.pareto_k
         if origin.refit:
             refits.append(cutoff)
