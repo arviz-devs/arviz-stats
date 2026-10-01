@@ -606,6 +606,23 @@ class TestQuantileDots:
         assert non_nan_count > 0
         assert non_nan_count <= 20
 
+    @pytest.mark.parametrize(
+        "x, binwidth", [([1.5, 1.5, 1.5], None), ([1.5], None), ([0.0, 1.0, 2.0], 0)]
+    )
+    def test_qds_zero_binwidth(self, density, x, binwidth):
+        x_out, y_out, radius = density._qds(
+            np.array(x),
+            nquantiles=len(x),
+            binwidth=binwidth,
+            dotsize=1,
+            stackratio=1,
+            top_only=False,
+        )
+        expected = np.full(len(x), np.nan)
+        assert_allclose(x_out, expected)
+        assert_allclose(y_out, expected)
+        assert np.isnan(radius)
+
     def test_compute_quantiles_and_binwidth(self, density, rng):
         x = rng.normal(size=100)
         qvalues, binwidth = density._compute_quantiles_and_binwidth(x, nquantiles=10)
