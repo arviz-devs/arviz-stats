@@ -622,7 +622,7 @@ def lfo_constant_data():
             "observed_data": {"obs": np.arange(n_time, dtype=float)},
         },
         dims={"obs": ["time"]},
-        coords={"time": np.arange(n_time)},
+        coords={"time": np.arange(n_time) + 2000},
     )
 
 

@@ -33,7 +33,7 @@ def test_lfo_score_constant_draws(constant_lfo_wrapper, lfo_constant_data, horiz
 
     assert type(result).__name__ == "CRPS"
     assert result.pointwise.dims == ("time",)
-    np.testing.assert_array_equal(result.pointwise.coords["time"].values, origins)
+    np.testing.assert_array_equal(result.pointwise.coords["time"].values, origins + 2000)
     np.testing.assert_allclose(result.pointwise.values, expected)
     np.testing.assert_allclose(result.mean, expected.mean())
     np.testing.assert_allclose(result.se, expected.std() / np.sqrt(len(expected)))
@@ -76,7 +76,7 @@ def test_lfo_score_approx_weights_draws(varying_lfo_wrapper, lfo_varying_data):
     train, excluded = varying_lfo_wrapper.sel_observations(np.arange(20, 25))
     idata = varying_lfo_wrapper.get_inference_data(varying_lfo_wrapper.sample(train))
     log_lik = varying_lfo_wrapper.log_likelihood__i(excluded, idata)
-    log_weights, _ = (-log_lik.isel(time=0)).azstats.psislw(dim=["chain", "draw"], r_eff=1.0)
+    log_weights, khat = (-log_lik.isel(time=0)).azstats.psislw(dim=["chain", "draw"], r_eff=1.0)
     _, block = varying_lfo_wrapper.sel_observations(np.arange(21, 23))
     draws = varying_lfo_wrapper.posterior_predictive__i(block, idata)
     y_obs = lfo_varying_data.observed_data["obs"].isel(time=slice(21, 23))
@@ -84,6 +84,7 @@ def test_lfo_score_approx_weights_draws(varying_lfo_wrapper, lfo_varying_data):
 
     assert result.n_refits == 0
     np.testing.assert_allclose(result.pointwise.values[1], scores.sum().values)
+    np.testing.assert_allclose(result.pareto_k.values[1], khat.values)
 
 
 def test_lfo_score_rejects_short_observed_data(varying_lfo_wrapper, lfo_varying_data):
