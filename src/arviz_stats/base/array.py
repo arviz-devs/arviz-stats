@@ -19,7 +19,7 @@ def process_chain_none(ary, chain_axis, draw_axis):
     if chain_axis is None:
         ary = np.expand_dims(ary, axis=0)
         chain_axis = 0
-        draw_axis = draw_axis + 1 if draw_axis > 0 else draw_axis
+        draw_axis = draw_axis + 1 if draw_axis >= 0 else draw_axis
     return ary, chain_axis, draw_axis
 
 
