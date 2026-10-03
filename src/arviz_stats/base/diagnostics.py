@@ -61,7 +61,13 @@ class _DiagnosticsBase(_CoreBase):
         ary = np.asarray(ary)
         if len(ary.shape) <= 1:
             ary = np.atleast_2d(ary)
-        _, n_draw = ary.shape
+        n_chains, n_draw = ary.shape
+        if n_chains == 1:
+            # if we split chains on an array that has nan padding at the end
+            # we end up with a ragged nan-padded array again. I tried keeping one
+            # chain first, we can also handle the nan mask here instead of doing
+            # so in _ess
+            return ary
         half = n_draw // 2
         return np.vstack((ary[:, :half], ary[:, -half:]))
 
@@ -137,9 +143,13 @@ class _DiagnosticsBase(_CoreBase):
     def _ess(self, ary, relative=False):
         """Compute the effective sample size for a 2D array."""
         ary = np.asarray(ary, dtype=float)
+        n_chain, n_draw = ary.shape
+        if n_chain == 1:
+            nans = np.isnan(ary)[0]
+            if nans.any():
+                ary = ary[:, ~nans]
         if (np.max(ary) - np.min(ary)) < np.finfo(float).resolution:  # pylint: disable=no-member
             return ary.size
-        n_chain, n_draw = ary.shape
         acov = self.autocov(ary, axis=1)
         chain_mean = ary.mean(axis=1)
         mean_var = np.mean(acov[:, 0]) * n_draw / (n_draw - 1.0)
