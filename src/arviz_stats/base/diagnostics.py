@@ -1484,7 +1484,7 @@ class _DiagnosticsBase(_CoreBase):
             raise ValueError("Length of superchain_ids not equal to number of chains")
 
         # Check that superchains have equal length
-        superchain_counts = np.bincount(superchain_ids)
+        _, superchain_counts = np.unique(superchain_ids, return_counts=True)
         nchains_per_superchain = np.max(superchain_counts)
 
         if nchains_per_superchain != np.min(superchain_counts):
