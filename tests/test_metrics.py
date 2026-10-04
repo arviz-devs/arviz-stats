@@ -56,7 +56,7 @@ def test_residual_r2_circular_array(datatree_regression):
     assert result.shape == (mu_pred.shape[0],)
 
 
-@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+@pytest.mark.parametrize("point_estimate", ["mean", "median", "mode"])
 def test_residual_r2_point_estimate(datatree_regression, point_estimate):
     result = residual_r2(
         datatree_regression,
@@ -64,8 +64,12 @@ def test_residual_r2_point_estimate(datatree_regression, point_estimate):
         obs_name="y",
         summary=True,
         point_estimate=point_estimate,
+        round_to="none",
     )
     assert point_estimate in result._fields
+    samples = residual_r2(datatree_regression, pred_mean="mu", obs_name="y", summary=False)
+    expected = getattr(array_stats, point_estimate)(samples)
+    assert_almost_equal(getattr(result, point_estimate), expected)
 
 
 @pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
@@ -160,7 +164,7 @@ def test_bayesian_r2_circular_array(datatree_regression):
     assert result.shape == (mu_pred.shape[0],)
 
 
-@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+@pytest.mark.parametrize("point_estimate", ["mean", "median", "mode"])
 def test_bayesian_r2_point_estimate(datatree_regression, point_estimate):
     result = bayesian_r2(
         datatree_regression,
@@ -168,8 +172,12 @@ def test_bayesian_r2_point_estimate(datatree_regression, point_estimate):
         scale="sigma",
         summary=True,
         point_estimate=point_estimate,
+        round_to="none",
     )
     assert point_estimate in result._fields
+    samples = bayesian_r2(datatree_regression, pred_mean="mu", scale="sigma", summary=False)
+    expected = getattr(array_stats, point_estimate)(samples)
+    assert_almost_equal(getattr(result, point_estimate), expected)
 
 
 def test_bayesian_r2_scale_var(datatree_regression):
