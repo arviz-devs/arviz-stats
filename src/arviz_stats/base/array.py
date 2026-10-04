@@ -484,7 +484,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         mask = np.isfinite(width) & (width > 0)
 
         valid_n_bins = np.ceil((x_max[mask] - x_min[mask]) / width[mask])
-        n_bins = np.ceil(np.mean(valid_n_bins)).astype(int)
+        n_bins = max(1, int(np.ceil(np.mean(valid_n_bins)))) if valid_n_bins.size else 1
+        # widen constant slices by 0.5 on each side, like np.histogram does
+        constant = x_min == x_max
+        x_min = np.where(constant, x_min - 0.5, x_min)
+        x_max = np.where(constant, x_max + 0.5, x_max)
         return np.moveaxis(np.linspace(x_min, x_max, n_bins + 1), 0, -1)
 
     def _get_bivariate_counts(self, x, y, axis, weights=None, bounds=None):
