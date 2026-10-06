@@ -216,7 +216,7 @@ def test_loo_r2_array(datatree_regression):
     assert result.shape == (n_sims,)
 
 
-@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+@pytest.mark.parametrize("point_estimate", ["mean", "median", "mode"])
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter of Pareto distribution:UserWarning")
 def test_loo_r2_point_estimate(datatree_regression, point_estimate):
     result = loo_r2(datatree_regression, var_name="y", summary=True, point_estimate=point_estimate)

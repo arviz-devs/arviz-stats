@@ -704,7 +704,7 @@ def _metrics(observed, predicted, kind, round_to):
 
 
 def _summary_r2(name, r_squared, point_estimate, ci_kind, ci_prob, round_to):
-    estimate = getattr(np, point_estimate)(r_squared).item()
+    estimate = getattr(array_stats, point_estimate)(r_squared).item()
     c_i = getattr(array_stats, ci_kind)(r_squared, ci_prob)
 
     r2_summary = namedtuple(f"{name}_R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])
