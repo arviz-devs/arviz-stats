@@ -336,8 +336,7 @@ def _get_power_scale_weights(
     lower_w = np.exp(lower_lw)
     lower_w = lower_w / lower_w.sum(sample_dims)
 
-    upper_lw, upper_pareto_k = group_draws.azstats.power_scale_lw(
-            alpha=alphas[1], dim=sample_dims)
+    upper_lw, upper_pareto_k = group_draws.azstats.power_scale_lw(alpha=alphas[1], dim=sample_dims)
     upper_w = np.exp(upper_lw)
     upper_w = upper_w / upper_w.sum(sample_dims)
 

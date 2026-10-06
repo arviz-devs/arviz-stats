@@ -9,8 +9,8 @@ import numpy as np
 import xarray as xr
 from arviz_base import convert_to_datatree, extract, ndarray_to_dataarray, rcParams
 from xarray_einstats.stats import logsumexp
-from arviz_stats.utils import ELPDDataLOO, get_log_likelihood, _warn_pareto_k
 
+from arviz_stats.utils import ELPDDataLOO, _warn_pareto_k, get_log_likelihood
 
 __all__ = [
     "_shift",
