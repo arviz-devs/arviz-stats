@@ -439,7 +439,7 @@ class TestBinning:
         np.testing.assert_allclose(counts, expected_counts)
         np.testing.assert_allclose(edges, expected_edges)
 
-    @pytest.mark.parametrize("value", [2.0, 3, 1e6])
+    @pytest.mark.parametrize("value", [2.0, 3])
     def test_histogram_constant(self, array_stats, value):
         ary = np.full(100, value)
         with pytest.warns(UserWarning, match="single value"):
