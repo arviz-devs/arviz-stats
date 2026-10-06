@@ -439,6 +439,23 @@ class TestBinning:
         np.testing.assert_allclose(counts, expected_counts)
         np.testing.assert_allclose(edges, expected_edges)
 
+    @pytest.mark.parametrize("value", [2.0, 3])
+    def test_histogram_constant(self, array_stats, value):
+        ary = np.full(100, value)
+        with pytest.warns(UserWarning, match="single value"):
+            counts, edges = array_stats.histogram(ary, density=False)
+        assert counts.sum() == 100
+        assert edges[0] < value < edges[-1]
+        assert_allclose(edges[[0, -1]], value, rtol=1e-5)
+
+    def test_histogram_constant_slice(self, array_stats, rng):
+        ary = rng.normal(size=(3, 100))
+        ary[1] = 2.0
+        with pytest.warns(UserWarning, match="single value"):
+            counts, edges = array_stats.histogram(ary)
+        assert np.all(np.diff(edges, axis=-1) > 0)
+        assert_allclose(np.sum(counts * np.diff(edges, axis=-1), axis=-1), 1.0)
+
     def test_histogram_density(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
         counts, edges = array_stats.histogram(ary, density=True)
