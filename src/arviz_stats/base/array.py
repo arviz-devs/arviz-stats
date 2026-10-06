@@ -485,14 +485,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         valid_n_bins = np.ceil((x_max[mask] - x_min[mask]) / width[mask])
         n_bins = max(1, int(np.ceil(np.mean(valid_n_bins)))) if valid_n_bins.size else 1
-        # a constant slice gets a narrow range around its value, relative to the value so
-        # it does not vanish in floating point for large values
         constant = x_min == x_max
         if np.any(constant):
             warnings.warn("Your data appears to have a single value or no finite values")
-            half_width = 1e-6 * np.maximum(np.abs(x_min), 1)
-            x_min = np.where(constant, x_min - half_width, x_min)
-            x_max = np.where(constant, x_max + half_width, x_max)
+            x_min = np.where(constant, x_min - 1e-6, x_min)
+            x_max = np.where(constant, x_max + 1e-6, x_max)
         return np.moveaxis(np.linspace(x_min, x_max, n_bins + 1), 0, -1)
 
     def _get_bivariate_counts(self, x, y, axis, weights=None, bounds=None):
