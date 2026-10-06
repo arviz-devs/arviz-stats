@@ -476,7 +476,7 @@ class AzStatsDtAccessor(_BaseAccessor):
 
     @property
     def datatree(self):
-        """Return the underlying Dataset."""
+        """Return the underlying DataTree."""
         return self._obj
 
     def _process_input(self, group, method, allow_non_matching=True):

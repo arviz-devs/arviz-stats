@@ -274,7 +274,8 @@ def loo_metrics(data, kind="rmse", var_name=None, round_to=None):
         likelihood data to use for loo computation.
     round_to: int or str or None, optional
         If integer, number of decimal places to round the result. If string of the
-        form '2g' number of significant digits to round the result. Defaults to '2g'.
+        form '2g' number of significant digits to round the result.
+        Default to None, the value is taken from ``rcParams["stats.round_to"]``.
 
     Returns
     -------
@@ -343,8 +344,6 @@ def loo_r2(
         Name of the observed variable
     n_simulations : int, default 4000
         Number of Dirichlet-weighted bootstrap samples for variance estimation.
-    circular : bool, default False
-        Whether the variable is circular (angles in radians, range [-π, π]).
     summary: bool
         Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval

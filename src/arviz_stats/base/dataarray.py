@@ -26,6 +26,13 @@ class BaseDataArray:
     def __init__(self, array_class=None):
         self.array_class = array_stats if array_class is None else array_class
 
+    @staticmethod
+    def _validate_bivariate_dataarrays(da_x, da_y):
+        if set(da_x.sizes) != set(da_y.sizes) or any(
+            da_x.sizes[dim] != da_y.sizes[dim] for dim in da_x.sizes
+        ):
+            raise ValueError("`da_x` and `da_y` must have identical dimensions and shapes.")
+
     def eti(self, da, prob=None, dim=None, method="linear", **kwargs):
         """Compute eti on DataArray input."""
         dims = validate_dims(dim)
@@ -227,6 +234,106 @@ class BaseDataArray:
             dim=plot_axis,
         )
         return out
+
+    def histogram2d(
+        self,
+        da_x,
+        da_y,
+        dim=None,
+        bins=None,
+        range=None,
+        weights=None,
+        density=True,
+    ):
+        """Compute a two-dimensional histogram on paired DataArray inputs."""
+        self._validate_bivariate_dataarrays(da_x, da_y)
+        dims = validate_dims(dim)
+        if weights is not None:
+            if not isinstance(weights, DataArray):
+                weights = DataArray(weights, dims=da_x.dims, coords=da_x.coords)
+            assert weights.dims == da_x.dims
+            if set(weights.sizes) != set(da_x.sizes) or any(
+                weights.sizes[dim] != da_x.sizes[dim] for dim in da_x.sizes
+            ):
+                raise ValueError("`weights` must have the same dimensions and shape as the data.")
+
+        def histogram2d_array(x, y, sample_weights):
+            return self.array_class.histogram2d(
+                x,
+                y,
+                bins=bins,
+                range=range,
+                weights=sample_weights,
+                axis=np.arange(-len(dims), 0, 1),
+                density=density,
+            )
+
+        histogram, x_edges, y_edges = apply_ufunc(
+            histogram2d_array,
+            da_x,
+            da_y,
+            weights,
+            input_core_dims=[dims, dims, [] if weights is None else dims],
+            output_core_dims=[
+                ["histogram2d_x", "histogram2d_y"],
+                ["histogram2d_x_edge"],
+                ["histogram2d_y_edge"],
+            ],
+        )
+        return Dataset(
+            {
+                "histogram": histogram,
+                "x_edges": x_edges,
+                "y_edges": y_edges,
+            }
+        )
+
+    def hexbin(
+        self,
+        da_x,
+        da_y,
+        dim=None,
+        gridsize="auto",
+        extent=None,
+        weights=None,
+        density=True,
+        regular=True,
+    ):
+        """Compute a hexagonal histogram on paired DataArray inputs."""
+        self._validate_bivariate_dataarrays(da_x, da_y)
+        dims = validate_dims(dim)
+        if weights is not None:
+            if not isinstance(weights, DataArray):
+                weights = DataArray(weights, dims=da_x.dims, coords=da_x.coords)
+            assert weights.dims == da_x.dims
+
+        def hexbin_array(x, y, sample_weights):
+            return self.array_class.hexbin(
+                x,
+                y,
+                gridsize=gridsize,
+                extent=extent,
+                weights=sample_weights,
+                axis=np.arange(-len(dims), 0, 1),
+                density=density,
+                regular=regular,
+            )
+
+        values, offsets = apply_ufunc(
+            hexbin_array,
+            da_x,
+            da_y,
+            weights,
+            input_core_dims=[dims, dims, [] if weights is None else dims],
+            output_core_dims=[["hexbin"], ["hexbin", "hexbin_coord"]],
+        )
+        return Dataset(
+            {
+                "values": values,
+                "x_centers": offsets.isel(hexbin_coord=0, drop=True),
+                "y_centers": offsets.isel(hexbin_coord=1, drop=True),
+            }
+        )
 
     def kde(self, da, dim=None, circular=False, grid_len=512, **kwargs):
         """Compute KDE on DataArray input.
@@ -471,7 +578,8 @@ class BaseDataArray:
             By default, the ESS target will be preserving the ESS of all available samples.
             If an integer value is passed, it must be lower than the average ESS of the input
             samples.
-        mode : {"mean", "min"}, default "mean"
+        reduce_func : {"mean", "min"}, default "mean"
+            Function to reduce the ESS array to a single value for comparison with the target ESS.
         """
         n_samples = da.sizes["chain"] * da.sizes["draw"]
         ess = np.minimum(
@@ -530,7 +638,7 @@ class BaseDataArray:
         return da.sel({sample_dims: slice(None, None, factor)})
 
     def pareto_min_ss(self, da, sample_dims=None):
-        """Compute the minimum effective sample size for all variables in the dataset."""
+        """Compute the minimum effective sample size."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         return apply_ufunc(
             self.array_class.pareto_min_ss,
@@ -858,6 +966,8 @@ class BaseDataArray:
             Sample dimensions. Defaults to ["chain", "draw"].
         random_state : int or Generator, optional
             Random seed or Generator for tie-breaking. If None, uses seed 214.
+        pareto_pit : bool, default False
+            If True, use Pareto-smoothed PIT values.
 
         Returns
         -------

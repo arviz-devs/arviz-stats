@@ -245,7 +245,7 @@ def not_valid(ary, check_nan=True, check_shape=True, nan_kwargs=None, shape_kwar
     shape_kwargs : dict
         Valid kwargs are:
             min_chains : int
-                Defaults to 1.
+                Defaults to 2.
             min_draws : int
                 Defaults to 4.
 

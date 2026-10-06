@@ -1,5 +1,7 @@
 """Test for general computational backend agnostic utilities."""
 
+# pylint: disable=too-many-function-args, missing-kwoa, unexpected-keyword-arg
+import dataclasses
 import inspect
 
 import numpy as np
@@ -15,6 +17,10 @@ from arviz_stats.base.dataarray import dataarray_stats
 from arviz_stats.base.stats_utils import round_num
 from arviz_stats.utils import (
     ELPDData,
+    ELPDDataLFO,
+    ELPDDataLOO,
+    ELPDDataLOOKFold,
+    ELPDDataLOOSubsample,
     get_array_function,
     get_function,
     get_log_likelihood,
@@ -93,7 +99,6 @@ def test_get_log_likelihood_no_group():
 
 def test_elpddata_base():
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -105,9 +110,12 @@ def test_elpddata_base():
     )
 
     printed = str(elpddata)
+    assert elpddata.kind is None
     assert "warning" not in printed
     assert "1000 posterior samples" in printed
     assert "370 observations" in printed
+    assert "elpd   -20.00     2.00" in printed
+    assert "p        5.60        -" in printed
 
 
 def test_get_function_invalid():
@@ -210,7 +218,6 @@ def test_get_log_prior_not_found():
 
 def test_elpddata_with_warning():
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -228,8 +235,7 @@ def test_elpddata_with_pareto_k():
     pareto_k = xr.DataArray(
         np.array([0.3, 0.5, 0.8, 1.2]), dims=["observation"], coords={"observation": range(4)}
     )
-    elpddata = ELPDData(
-        kind="loo",
+    elpddata = ELPDDataLOO(
         elpd=-20,
         se=2,
         p=5.6,
@@ -247,8 +253,7 @@ def test_elpddata_with_pareto_k():
 
 
 def test_elpddata_kfold():
-    elpddata = ELPDData(
-        kind="loo_kfold",
+    elpddata = ELPDDataLOOKFold(
         elpd=-20,
         se=2,
         p=5.6,
@@ -266,8 +271,7 @@ def test_elpddata_kfold():
 
 def test_elpddata_lfo():
     elpd_i = xr.DataArray([-1.0, -1.2, -0.9], dims=["time"], coords={"time": [5, 6, 7]})
-    elpddata = ELPDData(
-        kind="lfo_cv",
+    elpddata = ELPDDataLFO(
         elpd=-3.1,
         se=0.2,
         p=0.4,
@@ -290,7 +294,7 @@ def test_elpddata_lfo():
         "refits",
         "n_refits",
         "p_lfo_i",
-    }.issubset(ELPDData.__dataclass_fields__)
+    }.issubset(ELPDDataLFO.__dataclass_fields__)
     printed = str(elpddata)
     assert "3 forecast origins" in printed
     assert "2-step-ahead" in printed
@@ -300,8 +304,7 @@ def test_elpddata_lfo():
 
 
 def test_elpddata_subsample():
-    elpddata = ELPDData(
-        kind="loo",
+    elpddata = ELPDDataLOOSubsample(
         elpd=-20,
         se=2,
         p=5.6,
@@ -312,6 +315,8 @@ def test_elpddata_subsample():
         good_k=0.7,
         subsample_size=100,
         subsampling_se=0.5,
+        loo_subsample_observations=np.arange(100),
+        elpd_loo_approx=xr.DataArray(np.zeros(370), dims=["obs"]),
     )
     printed = str(elpddata)
     assert "subsampled" in printed
@@ -319,8 +324,7 @@ def test_elpddata_subsample():
 
 
 def test_elpddata_approx_posterior():
-    elpddata = ELPDData(
-        kind="loo",
+    elpddata = ELPDDataLOO(
         elpd=-20,
         se=2,
         p=5.6,
@@ -340,7 +344,6 @@ def test_elpddata_approx_posterior():
 )
 def test_elpddata_scale(scale, expected):
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -356,7 +359,6 @@ def test_elpddata_scale(scale, expected):
 
 def test_elpddata_getitem_setitem():
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -374,7 +376,6 @@ def test_elpddata_getitem_setitem():
 
 def test_elpddata_repr():
     elpddata = ELPDData(
-        kind="loo",
         elpd=-20,
         se=2,
         p=5.6,
@@ -384,7 +385,19 @@ def test_elpddata_repr():
         warning=False,
         good_k=0.7,
     )
+    kfold = ELPDDataLOOKFold(
+        elpd=-20,
+        se=2,
+        p=5.6,
+        n_samples=1000,
+        n_data_points=370,
+        scale="log",
+        warning=False,
+        good_k=None,
+        n_folds=10,
+    )
     assert repr(elpddata) == str(elpddata)
+    assert repr(kfold) == str(kfold)
 
 
 @pytest.mark.parametrize(
@@ -414,3 +427,133 @@ def test_round_num_dataarray():
     da = xr.DataArray([3.14159])
     result = round_num(da, 2)
     assert result == 3.14
+
+
+def test_elpddata_kind_determined_by_class():
+    loo = ELPDDataLOO(
+        elpd=-20,
+        se=2,
+        p=5.6,
+        n_samples=1000,
+        n_data_points=370,
+        scale="log",
+        warning=False,
+        good_k=0.7,
+    )
+    subsample = ELPDDataLOOSubsample(
+        elpd=-20,
+        se=2,
+        p=5.6,
+        n_samples=1000,
+        n_data_points=370,
+        scale="log",
+        warning=False,
+        good_k=0.7,
+        subsample_size=100,
+        subsampling_se=0.5,
+        loo_subsample_observations=np.arange(100),
+        elpd_loo_approx=xr.DataArray(np.zeros(370), dims=["obs"]),
+    )
+    kfold = ELPDDataLOOKFold(
+        elpd=-20,
+        se=2,
+        p=5.6,
+        n_samples=1000,
+        n_data_points=370,
+        scale="log",
+        warning=False,
+        good_k=None,
+        n_folds=10,
+    )
+    lfo = ELPDDataLFO(
+        elpd=-20,
+        se=2,
+        p=5.6,
+        n_samples=1000,
+        n_data_points=370,
+        scale="log",
+        warning=False,
+        good_k=0.7,
+        forecast_horizon=1,
+        min_observations=5,
+        refits=np.array([5]),
+        n_refits=1,
+    )
+    assert loo.kind == "loo"
+    assert subsample.kind == "loo"
+    assert kfold.kind == "loo_kfold"
+    assert lfo.kind == "lfo_cv"
+    assert isinstance(subsample, ELPDDataLOO)
+    assert not isinstance(loo, ELPDDataLOOSubsample)
+    assert not isinstance(kfold, ELPDDataLOO)
+    assert not isinstance(lfo, ELPDDataLOO)
+    with pytest.raises(TypeError, match="kind"):
+        ELPDDataLOOKFold(
+            kind="loo",
+            elpd=-20,
+            se=2,
+            p=5.6,
+            n_samples=1000,
+            n_data_points=370,
+            scale="log",
+            warning=False,
+            good_k=None,
+            n_folds=10,
+        )
+    with pytest.raises(AttributeError):
+        kfold.kind = "loo"
+
+
+def test_elpddata_keyword_only():
+    with pytest.raises(TypeError, match="positional"):
+        ELPDData(-20, 2, 5.6, 1000, 370, "log", False, 0.7)
+
+
+def test_elpddata_top_level_exports():
+    import arviz_stats
+
+    assert arviz_stats.ELPDData is ELPDData
+    assert arviz_stats.ELPDDataLOO is ELPDDataLOO
+    assert arviz_stats.ELPDDataLOOSubsample is ELPDDataLOOSubsample
+    assert arviz_stats.ELPDDataLOOKFold is ELPDDataLOOKFold
+    assert arviz_stats.ELPDDataLFO is ELPDDataLFO
+
+
+def test_elpddata_base_fields():
+    assert [field.name for field in dataclasses.fields(ELPDData)] == [
+        "elpd",
+        "se",
+        "p",
+        "n_samples",
+        "n_data_points",
+        "scale",
+        "warning",
+        "good_k",
+        "elpd_i",
+        "pareto_k",
+    ]
+
+
+def test_elpddata_subclass_fields():
+    loo_fields = {field.name for field in dataclasses.fields(ELPDDataLOO)}
+    subsample_fields = {field.name for field in dataclasses.fields(ELPDDataLOOSubsample)}
+    kfold_fields = {field.name for field in dataclasses.fields(ELPDDataLOOKFold)}
+    lfo_fields = {field.name for field in dataclasses.fields(ELPDDataLFO)}
+    assert {
+        "approx_posterior",
+        "log_weights",
+        "p_loo_i",
+        "n_eff_i",
+        "influence_pareto_k",
+    } <= loo_fields
+    assert "subsample_size" not in loo_fields
+    assert {
+        "subsample_size",
+        "subsampling_se",
+        "loo_subsample_observations",
+        "elpd_loo_approx",
+    } <= subsample_fields
+    assert {"n_folds", "p_kfold_i", "fold_fits"} <= kfold_fields
+    assert "log_weights" not in kfold_fields
+    assert {"forecast_horizon", "min_observations", "refits", "n_refits", "p_lfo_i"} <= lfo_fields
+    assert "n_folds" not in lfo_fields

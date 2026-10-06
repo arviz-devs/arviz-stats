@@ -14,7 +14,7 @@ xr = importorskip("xarray")
 
 from arviz_stats import loo, reloo
 from arviz_stats.loo.wrapper import SamplingWrapper
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDDataLOO, ELPDDataLOOKFold
 
 
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
@@ -24,7 +24,7 @@ def test_reloo(mock_wrapper_reloo, high_k_loo_data):
         loo_orig=high_k_loo_data,
         k_threshold=0.7,
     )
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOO)
     assert result.kind == "loo"
     assert result.pareto_k.values[0] == 0.0
     assert result.pareto_k.values[2] == 0.0
@@ -52,7 +52,7 @@ def test_reloo_wrapper_validation():
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_multidimensional(mock_2d_data, mock_wrapper_2d):
     loo_orig = loo(mock_2d_data, pointwise=True, var_name="log_lik")
-    loo_modified = ELPDData(
+    loo_modified = ELPDDataLOO(
         elpd=loo_orig.elpd,
         se=loo_orig.se,
         p=loo_orig.p,
@@ -60,7 +60,6 @@ def test_reloo_multidimensional(mock_2d_data, mock_wrapper_2d):
         n_samples=loo_orig.n_samples,
         n_data_points=loo_orig.n_data_points,
         warning=True,
-        kind=loo_orig.kind,
         scale=loo_orig.scale,
         elpd_i=loo_orig.elpd_i.copy(),
         pareto_k=loo_orig.pareto_k.copy(),
@@ -129,7 +128,7 @@ def test_reloo_log_weights_storage(mock_wrapper_reloo, high_k_loo_data):
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_loo_orig_none(mock_wrapper_reloo):
     result = reloo(mock_wrapper_reloo, loo_orig=None, k_threshold=0.7, var_name="obs")
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOO)
     assert result.kind == "loo"
     assert result.elpd is not None
     assert result.se is not None
@@ -138,7 +137,7 @@ def test_reloo_loo_orig_none(mock_wrapper_reloo):
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_loo_orig_none_elpd_data_input(mock_wrapper_reloo, high_k_loo_data):
     result = reloo(mock_wrapper_reloo, log_weights=high_k_loo_data, k_threshold=0.7)
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOO)
     assert result.pareto_k is not None
 
 
@@ -150,14 +149,30 @@ def test_reloo_missing_pointwise_data(mock_wrapper_reloo):
 
 
 def test_reloo_invalid_loo_orig_type(mock_wrapper_reloo):
-    with pytest.raises(TypeError, match="loo_orig must be an ELPDData object"):
+    with pytest.raises(TypeError, match="loo_orig must be an ELPDDataLOO object"):
         reloo(mock_wrapper_reloo, loo_orig="not_elpd_data")
+
+
+def test_reloo_rejects_kfold_result(mock_wrapper_reloo):
+    kfold_result = ELPDDataLOOKFold(
+        elpd=-30.0,
+        se=2.0,
+        p=3.0,
+        n_samples=100,
+        n_data_points=8,
+        scale="log",
+        warning=False,
+        good_k=None,
+        n_folds=4,
+    )
+    with pytest.raises(TypeError, match="loo_orig must be an ELPDDataLOO object"):
+        reloo(mock_wrapper_reloo, loo_orig=kfold_result)
 
 
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_no_bad_observations(mock_wrapper_reloo, high_k_loo_data):
     result = reloo(mock_wrapper_reloo, loo_orig=high_k_loo_data, k_threshold=1.5)
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOO)
     assert_array_almost_equal(result.pareto_k.values, high_k_loo_data.pareto_k.values)
     assert_array_almost_equal(result.elpd_i.values, high_k_loo_data.elpd_i.values)
 
@@ -165,7 +180,7 @@ def test_reloo_no_bad_observations(mock_wrapper_reloo, high_k_loo_data):
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_no_bad_observations_pointwise_false(mock_wrapper_reloo, high_k_loo_data):
     result = reloo(mock_wrapper_reloo, loo_orig=high_k_loo_data, k_threshold=1.5, pointwise=False)
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOO)
     assert result.elpd_i is None
     assert result.pareto_k is None
 
@@ -174,7 +189,7 @@ def test_reloo_no_bad_observations_pointwise_false(mock_wrapper_reloo, high_k_lo
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_k_threshold_values(mock_wrapper_reloo, high_k_loo_data, k_threshold):
     result = reloo(mock_wrapper_reloo, loo_orig=high_k_loo_data, k_threshold=k_threshold)
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOO)
     if k_threshold < 0.8:
         bad_k_count = np.sum(high_k_loo_data.pareto_k.values > k_threshold)
         refitted_count = np.sum(result.pareto_k.values == 0.0)
@@ -184,20 +199,20 @@ def test_reloo_k_threshold_values(mock_wrapper_reloo, high_k_loo_data, k_thresho
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_k_threshold_none(mock_wrapper_reloo, high_k_loo_data):
     result = reloo(mock_wrapper_reloo, loo_orig=high_k_loo_data, k_threshold=None)
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOO)
 
 
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_var_name(mock_wrapper_reloo):
     result = reloo(mock_wrapper_reloo, loo_orig=None, var_name="obs", k_threshold=0.7)
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOO)
     assert result.kind == "loo"
 
 
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_pointwise_false(mock_wrapper_reloo, high_k_loo_data):
     result = reloo(mock_wrapper_reloo, loo_orig=high_k_loo_data, k_threshold=0.7, pointwise=False)
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOO)
     assert result.elpd_i is None
     assert result.pareto_k is None
 
@@ -224,10 +239,8 @@ def test_reloo_warning_flag(mock_wrapper_reloo, high_k_loo_data):
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_p_loo_i_computation(mock_wrapper_reloo, high_k_loo_data):
     loo_data_no_p_loo = deepcopy(high_k_loo_data)
-    if hasattr(loo_data_no_p_loo, "p_loo_i"):
-        delattr(loo_data_no_p_loo, "p_loo_i")
+    loo_data_no_p_loo.p_loo_i = None
     result = reloo(mock_wrapper_reloo, loo_orig=loo_data_no_p_loo, k_threshold=0.7)
-    assert hasattr(result, "p_loo_i")
     assert result.p_loo_i is not None
 
 
@@ -243,7 +256,7 @@ def test_reloo_preserves_good_k_values(mock_wrapper_reloo, high_k_loo_data):
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_elpd_data_without_log_weights(mock_wrapper_reloo):
     loo_result = loo(mock_wrapper_reloo.data, pointwise=True, var_name="obs")
-    loo_result_no_weights = ELPDData(
+    loo_result_no_weights = ELPDDataLOO(
         elpd=loo_result.elpd,
         se=loo_result.se,
         p=loo_result.p,
@@ -251,7 +264,6 @@ def test_reloo_elpd_data_without_log_weights(mock_wrapper_reloo):
         n_samples=loo_result.n_samples,
         n_data_points=loo_result.n_data_points,
         warning=loo_result.warning,
-        kind=loo_result.kind,
         scale=loo_result.scale,
         elpd_i=loo_result.elpd_i,
         pareto_k=loo_result.pareto_k,
@@ -264,7 +276,7 @@ def test_reloo_elpd_data_without_log_weights(mock_wrapper_reloo):
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
 def test_reloo_dataset_log_weights(mock_2d_data, mock_wrapper_2d):
     loo_orig = loo(mock_2d_data, pointwise=True, var_name="log_lik")
-    loo_modified = ELPDData(
+    loo_modified = ELPDDataLOO(
         elpd=loo_orig.elpd,
         se=loo_orig.se,
         p=loo_orig.p,
@@ -272,7 +284,6 @@ def test_reloo_dataset_log_weights(mock_2d_data, mock_wrapper_2d):
         n_samples=loo_orig.n_samples,
         n_data_points=loo_orig.n_data_points,
         warning=True,
-        kind=loo_orig.kind,
         scale=loo_orig.scale,
         elpd_i=loo_orig.elpd_i.copy(),
         pareto_k=loo_orig.pareto_k.copy(),

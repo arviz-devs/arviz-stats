@@ -175,6 +175,12 @@ class _DensityBase(_CoreBase):
         bw: int, float or str
             If numeric, indicates the bandwidth and must be positive.
             If str, indicates the method to estimate the bandwidth.
+        grid_counts : array-like, optional
+            Precomputed histogram counts for the data `x`.
+        x_std : float, optional
+            Standard deviation of the data `x`.
+        grid_range : float, optional
+            Range of the grid used for histogram.
 
         Returns
         -------
@@ -281,7 +287,8 @@ class _DensityBase(_CoreBase):
 
         Returns
         -------
-        None: Object of type None
+        list
+            Validated custom limits as a list of two numeric values.
         """
         if not isinstance(custom_lims, list | tuple):
             raise TypeError(
@@ -357,12 +364,12 @@ class _DensityBase(_CoreBase):
 
         Returns
         -------
-        grid_len: int
-            Number of bins
         grid_min: float
-            Minimum value of the grid
+            Minimum value of the grid.
         grid_max: float
-            Maximum value of the grid
+            Maximum value of the grid.
+        grid_len: int
+            Number of bins.
         """
         # Set up number of bins.
         grid_len = max(int(grid_len), 100)
@@ -420,7 +427,7 @@ class _DensityBase(_CoreBase):
             Defaults to True.
         extend_fct: float, optional
             Number of standard deviations used to widen the lower and upper bounds of `x`.
-            Defaults to 0.5.
+            Defaults to 0.
         bw_fct: float, optional
             A value that multiplies `bw` which enables tuning smoothness by hand.
             Must be positive. Values below 1 decrease smoothness while values above 1 decrease it.
@@ -789,7 +796,8 @@ class _DensityBase(_CoreBase):
         x = x[np.isfinite(x)]
         qvalues, binwidth = self._compute_quantiles_and_binwidth(x, nquantiles, binwidth)
 
-        if np.isnan(binwidth):
+        # also catches a zero width (e.g. constant data), for which stacking never ends
+        if not binwidth > 0:
             return np.full(nquantiles, np.nan), np.full(nquantiles, np.nan), np.nan
 
         stack_locs, stack_counts = self._wilkinson_algorithm(qvalues, binwidth)

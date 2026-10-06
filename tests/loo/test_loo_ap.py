@@ -10,6 +10,7 @@ azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
 from arviz_stats import loo, loo_approximate_posterior
+from arviz_stats.utils import ELPDDataLOO
 
 
 def test_loo_approx_invalid_var_name(centered_eight, log_densities):
@@ -31,6 +32,7 @@ def test_loo_approx_basic(centered_eight, log_densities, input_type):
 
     result = loo_approximate_posterior(centered_eight, log_p=log_p, log_q=log_q, var_name="obs")
 
+    assert isinstance(result, ELPDDataLOO)
     assert result.kind == "loo"
     assert result.n_samples == n_samples
     assert result.n_data_points == n_data_points

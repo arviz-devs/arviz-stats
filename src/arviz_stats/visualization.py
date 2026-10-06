@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 from arviz_base import convert_to_dataset
 
-from arviz_stats.utils import _apply_multi_input_function, get_function
+from arviz_stats.utils import _apply_multi_input_function, get_array_function, get_function
 from arviz_stats.validate import validate_ci_prob, validate_dims
 
 
@@ -367,7 +367,7 @@ def histogram(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    bind : array-like, optional
+    bins : array-like, optional
     range : array-like, optional
     weights : array-like, optional
     density : bool, default True
@@ -424,6 +424,142 @@ def histogram(
         bins=bins,
         range=range,
         weights=weights,
+        density=density,
+    )
+
+
+def histogram2d(
+    x,
+    y,
+    bins=None,
+    range=None,  # pylint: disable=redefined-builtin
+    weights=None,
+    axis=-1,
+    density=True,
+    dim=None,
+):
+    """Compute a two-dimensional histogram for paired samples.
+
+    Plain arrays return ``(histogram, x_edges, y_edges)``. DataArray inputs return
+    a Dataset with variables named ``histogram``, ``x_edges``, and ``y_edges``.
+
+    Parameters
+    ----------
+    x, y : array-like or DataArray
+        Paired samples with identical shapes.
+    bins : None, str, int or array-like or pair, default None
+        Bin specification passed to :func:`numpy.histogram2d`. ``None`` or
+        ``"auto"`` applies the default two-dimensional bin rule to each
+        marginal, reduced to shared counts over batched input.
+    range : array-like, optional
+        ``((xmin, xmax), (ymin, ymax))`` passed to :func:`numpy.histogram2d`.
+    weights : array-like or DataArray, optional
+        Sample weights with the same shape as the samples.
+    axis : int, sequence of int or None, default -1
+        Array axis or axes along which to reduce.
+    density : bool, default True
+        Normalize the histogram as a probability density.
+    dim : str or sequence of str, optional
+        DataArray dimension or dimensions along which to reduce.
+
+    Returns
+    -------
+    tuple or xarray.Dataset
+        Histogram values and x and y bin edges.
+    """
+    x_is_dataarray = isinstance(x, xr.DataArray)
+    y_is_dataarray = isinstance(y, xr.DataArray)
+    if x_is_dataarray != y_is_dataarray:
+        raise TypeError("`x` and `y` must both be DataArrays or both be array-like.")
+    if x_is_dataarray:
+        if axis != -1:
+            raise ValueError("Use `dim` instead of `axis` with DataArray inputs.")
+        return get_function("histogram2d")(
+            x,
+            y,
+            dim=validate_dims(dim),
+            bins=bins,
+            range=range,
+            weights=weights,
+            density=density,
+        )
+    if dim is not None:
+        raise ValueError("Use `axis` instead of `dim` with array inputs.")
+    return get_array_function("histogram2d")(
+        np.asarray(x),
+        np.asarray(y),
+        bins=bins,
+        range=range,
+        weights=None if weights is None else np.asarray(weights),
+        axis=axis,
+        density=density,
+    )
+
+
+def hexbin(
+    x, y, gridsize="auto", extent=None, weights=None, axis=-1, density=True, regular=True, dim=None
+):
+    """Compute a hexagonal histogram for paired samples.
+
+    Plain arrays return ``(values, offsets)``. DataArray inputs return a Dataset
+    with variables named ``values``, ``x_centers``, and ``y_centers``.
+
+    Parameters
+    ----------
+    x, y : array-like or DataArray
+        Paired samples with identical shapes.
+    gridsize : "auto" or int or pair of int, default "auto"
+        Number of hexagons in the x and y directions. ``"auto"`` applies the
+        default two-dimensional bin rule to each marginal, reduced to shared
+        counts over batched input. A scalar derives the y-direction size as
+        ``int(gridsize / sqrt(3))``, giving approximately regular hexagons as
+        in :func:`matplotlib.pyplot.hexbin`. A pair sets both directions
+        explicitly.
+    extent : array-like, optional
+        Limits ``(xmin, xmax, ymin, ymax)`` of the hexagon grid.
+    weights : array-like or DataArray, optional
+        Sample weights with the same shape as the samples. Values in each cell
+        are the sum of its sample weights.
+    axis : int, sequence of int or None, default -1
+        Array axis or axes along which to reduce.
+    density : bool, default True
+        Divide counts by the valid sample count and hexagon area.
+    regular : bool, default True
+        Whether to use a regular hexagonal grid.
+    dim : str or sequence of str, optional
+        DataArray dimension or dimensions along which to reduce.
+
+    Returns
+    -------
+    tuple or xarray.Dataset
+        Hexagon values and center coordinates.
+    """
+    x_is_dataarray = isinstance(x, xr.DataArray)
+    y_is_dataarray = isinstance(y, xr.DataArray)
+    if x_is_dataarray != y_is_dataarray:
+        raise TypeError("`x` and `y` must both be DataArrays or both be array-like.")
+    if x_is_dataarray:
+        if axis != -1:
+            raise ValueError("Use `dim` instead of `axis` with DataArray inputs.")
+        return get_function("hexbin")(
+            x,
+            y,
+            dim=validate_dims(dim),
+            gridsize=gridsize,
+            extent=extent,
+            weights=weights,
+            density=density,
+            regular=regular,
+        )
+    if dim is not None:
+        raise ValueError("Use `axis` instead of `dim` with array inputs.")
+    return get_array_function("hexbin")(
+        np.asarray(x),
+        np.asarray(y),
+        gridsize=gridsize,
+        extent=extent,
+        weights=None if weights is None else np.asarray(weights),
+        axis=axis,
         density=density,
     )
 
@@ -558,7 +694,7 @@ def qds(
           similar functions.
 
           It is recommended to first perform the conversion manually and then call
-          ``arviz_stats.kde``. This allows controlling the conversion step and inspecting
+          ``arviz_stats.qds``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
         Dimensions to be reduced when computing the quantile dots
@@ -738,8 +874,6 @@ def kde2d(
            ...: )
     """
     if isinstance(da_x, np.ndarray | list | tuple) and isinstance(da_y, np.ndarray | list | tuple):
-        from arviz_stats.utils import get_array_function
-
         x = np.asarray(da_x)
         y = np.asarray(da_y)
         return get_array_function("kde2d")(

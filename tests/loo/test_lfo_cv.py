@@ -10,6 +10,7 @@ azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
 from arviz_stats import lfo_cv
+from arviz_stats.utils import ELPDDataLFO
 
 
 @pytest.mark.parametrize("method", ["exact", "approx"])
@@ -29,6 +30,7 @@ def test_lfo_cv_constant_log_likelihood(constant_lfo_wrapper, lfo_constant_data,
         pointwise=True,
     )
 
+    assert isinstance(result, ELPDDataLFO)
     assert result.kind == "lfo_cv"
     assert result.n_data_points == n_origins
     assert result.elpd_i.sizes["time"] == n_origins

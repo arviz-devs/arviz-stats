@@ -56,7 +56,7 @@ def test_residual_r2_circular_array(datatree_regression):
     assert result.shape == (mu_pred.shape[0],)
 
 
-@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+@pytest.mark.parametrize("point_estimate", ["mean", "median", "mode"])
 def test_residual_r2_point_estimate(datatree_regression, point_estimate):
     result = residual_r2(
         datatree_regression,
@@ -160,7 +160,7 @@ def test_bayesian_r2_circular_array(datatree_regression):
     assert result.shape == (mu_pred.shape[0],)
 
 
-@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+@pytest.mark.parametrize("point_estimate", ["mean", "median", "mode"])
 def test_bayesian_r2_point_estimate(datatree_regression, point_estimate):
     result = bayesian_r2(
         datatree_regression,

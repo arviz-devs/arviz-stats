@@ -36,11 +36,11 @@ def thin(
 
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
-        Default ``rcParams["data.sample_dims"]``.
+        Default ``"draw"``.
     group : hashable, default "posterior"
-        Group on which to compute the ESS.
+        Group on which to perform the thinning.
     var_names : str or list of str, optional
-        Names of the variables for which the ess should be computed.
+        Names of the variables for which the thinning should be applied.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset

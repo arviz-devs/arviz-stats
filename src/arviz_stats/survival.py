@@ -15,9 +15,14 @@ def kaplan_meier(
     Parameters
     ----------
     dt: DataTree
-        DataTree with "posterior_predictive" and "observed_data" groups
+        DataTree with "constant_data" and "observed_data" groups
     var_names : str or list of str
-        The variables to compute the unique values.
+        The variables for which to compute the Kaplan-Meier survival curves.
+
+    Returns
+    -------
+    xarray.Dataset
+        Kaplan-Meier survival curves for the specified variables.
     """
     if isinstance(var_names, str):
         var_names = [var_names]

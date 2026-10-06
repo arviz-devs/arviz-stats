@@ -10,7 +10,7 @@ from arviz_stats.loo.lfo_cv_helper import (
     _compute_lfo_exact,
     _prepare_lfo_inputs,
 )
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDDataLFO
 
 __all__ = ["lfo_cv"]
 
@@ -76,7 +76,7 @@ def lfo_cv(
 
     Returns
     -------
-    ELPDData
+    ELPDDataLFO
         Object with the following attributes:
 
         - **kind**: "lfo_cv"
@@ -174,8 +174,7 @@ def lfo_cv(
             )
             warning = True
 
-    elpd_data = ELPDData(
-        kind="lfo_cv",
+    return ELPDDataLFO(
         elpd=lfo_results.elpd,
         se=lfo_results.se,
         p=lfo_results.p,
@@ -192,5 +191,3 @@ def lfo_cv(
         n_refits=n_refits,
         p_lfo_i=lfo_results.p_lfo_i if pointwise else None,
     )
-
-    return elpd_data

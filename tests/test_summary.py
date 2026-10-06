@@ -434,6 +434,17 @@ def test_ci_in_rope_array_rope(fake_dt):
     assert result["a"] > 60
 
 
+def test_ci_in_rope_default_ci_kind(centered_eight):
+    eti_result = ci_in_rope(centered_eight, var_names=["mu"], rope=(1.0, 3.0), ci_kind="eti")
+    hdi_result = ci_in_rope(centered_eight, var_names=["mu"], rope=(1.0, 3.0), ci_kind="hdi")
+    with azb.rc_context({"stats.ci_kind": "eti"}):
+        default_eti = ci_in_rope(centered_eight, var_names=["mu"], rope=(1.0, 3.0))
+    with azb.rc_context({"stats.ci_kind": "hdi"}):
+        default_hdi = ci_in_rope(centered_eight, var_names=["mu"], rope=(1.0, 3.0))
+    assert_allclose(default_eti["mu"], eti_result["mu"])
+    assert_allclose(default_hdi["mu"], hdi_result["mu"])
+
+
 def test_hdi_empty_coords(datatree):
     result = hdi(datatree, var_names=["mu"], coords={})
     assert result["mu"].shape == (2,)
@@ -474,6 +485,12 @@ def test_mode_single_value_array():
     result = mode(array)
     assert result.shape == ()
     assert result.item() == 1.0
+
+
+def test_summary_sd_uses_sample_std(centered_eight):
+    summary_df = summary(centered_eight, var_names=["mu"], kind="stats", round_to="none")
+    expected = centered_eight.posterior["mu"].std(dim=["chain", "draw"], ddof=1)
+    assert_allclose(summary_df.loc["mu", "sd"], expected)
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")

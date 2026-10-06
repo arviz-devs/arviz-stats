@@ -9,8 +9,8 @@ import numpy as np
 import xarray as xr
 from arviz_base import convert_to_datatree, extract, ndarray_to_dataarray, rcParams
 from xarray_einstats.stats import logsumexp
+from arviz_stats.utils import ELPDDataLOO, get_log_likelihood, _warn_pareto_k
 
-from arviz_stats.utils import ELPDData, get_log_likelihood, _warn_pareto_k
 
 __all__ = [
     "_shift",
@@ -146,18 +146,17 @@ def _compute_loo_results(
     if pointwise:
         _warn_pointwise_loo(elpd, elpd_i.values)
 
-    return ELPDData(
-        "loo",
-        elpd,
-        elpd_se,
-        p_loo,
-        n_samples,
-        n_data_points,
-        "log",
-        warn_mg,
-        good_k,
-        elpd_i if pointwise else None,
-        pareto_k if pointwise else None,
+    return ELPDDataLOO(
+        elpd=elpd,
+        se=elpd_se,
+        p=p_loo,
+        n_samples=n_samples,
+        n_data_points=n_data_points,
+        scale="log",
+        warning=warn_mg,
+        good_k=good_k,
+        elpd_i=elpd_i if pointwise else None,
+        pareto_k=pareto_k if pointwise else None,
         approx_posterior=approx_posterior,
         log_weights=log_weights,
     )
