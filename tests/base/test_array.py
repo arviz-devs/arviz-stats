@@ -315,14 +315,15 @@ class TestParetoFunctions:
 class TestPowerScale:
     def test_power_scale_lw(self, array_stats, rng):
         ary = rng.normal(size=(100,))
-        result = array_stats.power_scale_lw(ary, alpha=0.5)
+        result, khat = array_stats.power_scale_lw(ary, alpha=0.5)
         assert result.shape == (100,)
+        assert khat.shape == ()
 
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
     def test_power_scale_lw_axis(self, array_stats, rng, axis):
         ary = rng.normal(size=(10, 20, 30))
-        result = array_stats.power_scale_lw(ary, alpha=0.5, axis=axis)
+        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=axis)
         assert result.ndim == ary.ndim
         expected_shape = {
             0: (20, 30, 10),
@@ -335,7 +336,7 @@ class TestPowerScale:
     @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
     def test_power_scale_lw_axis_list(self, array_stats, rng):
         ary = rng.normal(size=(10, 20, 30, 40))
-        result = array_stats.power_scale_lw(ary, alpha=0.5, axis=[1, 3])
+        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=[1, 3])
         assert result.ndim == ary.ndim
         assert result.shape == (10, 30, 20, 40)
 
