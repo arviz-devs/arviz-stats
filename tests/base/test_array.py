@@ -18,7 +18,7 @@ xr = importorskip("xarray")
 
 from numpy.testing import assert_allclose, assert_array_equal
 
-from arviz_stats import loo, loo_approximate_posterior, loo_pit, loo_score
+from arviz_stats import loo, loo_approximate_posterior, loo_influence, loo_pit, loo_score
 from arviz_stats.loo.loo_helper import _get_r_eff, _prepare_loo_inputs
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -1639,3 +1639,67 @@ class TestLooQuantile:
 
         assert quantile.shape == (8,)
         assert np.all(np.isfinite(quantile))
+
+
+class TestLooInfluence:
+    @pytest.fixture
+    def log_weights(self, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        reff = _get_r_eff(centered_eight, log_lik.chain.size * log_lik.draw.size)
+        log_weights, _ = log_lik.azstats.psislw(r_eff=reff)
+        return log_weights.transpose("chain", "draw", "school").values
+
+    @pytest.mark.parametrize(
+        "kind, kwargs",
+        [
+            ("mean", {}),
+            ("mean", {"standardize": False}),
+            ("median", {}),
+            ("sd", {}),
+            ("var", {}),
+            ("quantile", {"probs": [0.25, 0.75]}),
+            ("octiles", {}),
+        ],
+    )
+    def test_loo_influence_matches_xarray(
+        self, array_stats, centered_eight, log_weights, kind, kwargs
+    ):
+        y_pred = centered_eight.posterior_predictive["obs"].transpose("chain", "draw", "school")
+
+        influence = array_stats.loo_influence(
+            y_pred.values, log_weights, kind=kind, chain_axis=0, draw_axis=1, **kwargs
+        )
+
+        expected, _ = loo_influence(centered_eight, kind=kind, **kwargs)
+        if isinstance(expected, xr.Dataset):
+            expected = expected["obs"]
+        assert influence.shape == (8,)
+        assert_allclose(influence, expected.transpose("school").values)
+
+    def test_loo_influence_posterior(self, array_stats, centered_eight, log_weights):
+        mu = centered_eight.posterior["mu"].transpose("chain", "draw").values[..., None]
+
+        influence = array_stats.loo_influence(
+            mu, log_weights, kind="median", chain_axis=0, draw_axis=1
+        )
+
+        expected, _ = loo_influence(
+            centered_eight, kind="median", var_names="mu", group="posterior"
+        )
+        assert influence.shape == (8,)
+        assert_allclose(influence, expected["mu"].transpose("school").values)
+
+    def test_loo_influence_ignores_probs_for_other_kinds(self, array_stats, rng):
+        ary = rng.normal(size=(2, 50, 3))
+        log_weights = rng.normal(size=(2, 50, 3))
+        assert_allclose(
+            array_stats.loo_influence(ary, log_weights, kind="mean", probs=[0.5]),
+            array_stats.loo_influence(ary, log_weights, kind="mean"),
+        )
+
+    def test_loo_influence_invalid_kind(self, array_stats, rng):
+        ary = rng.normal(size=(2, 50, 3))
+        with pytest.raises(ValueError, match="kind must be one of"):
+            array_stats.loo_influence(ary, ary, kind="mode")
+        with pytest.raises(ValueError, match="probs must be provided"):
+            array_stats.loo_influence(ary, ary, kind="quantile")
