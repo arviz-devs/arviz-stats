@@ -421,8 +421,9 @@ def _warn_pareto_k(pareto_k_values, n_samples, suppress=False, usage="loo"):
             elif usage == "power_scale":
                 warnings.warn(
                 f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-                    "for the tail of the importance weights for one or more power-scaled posterior estimates. "
-                    "This means that the posterior is shifting more than can be estimated by importance sampling."
+                    "for the tail of the importance weights for one or more power-scaled ",
+                    "posterior estimates. This means that the posterior is shifting more ",
+                    "than can be reliably estimated by importance sampling."
                 )
         warn_mg = True
     return warn_mg, good_k
