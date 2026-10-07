@@ -786,12 +786,27 @@ def diagnose(
         if n_divergent > 0:
             has_errors = True
             pct = diagnostics_results["divergent"]["pct"]
+            inference_library = dt.attrs.get("inference_library", "").lower()
+
+            param_mapping = {
+                "pymc": "target_accept",
+                "stan": "adapt_delta",
+                "cmdstan": "adapt_delta",
+                "numpyro": "adapt_step_size",
+                "pyro": "adapt_step_size",
+                "blackjax": "target_acceptance_rate",
+                "tensorflow_probability": "target_accept_prob",
+                "tfp": "target_accept_prob",
+            }
+
+            param_name = param_mapping.get(inference_library, "target acceptance rate")
+
             messages.append(
                 f"{n_divergent} of {total_samples} ({pct:.2f}%) transitions ended with a "
                 "divergence.\n"
                 "These divergent transitions indicate that HMC is not fully able to explore "
                 "the posterior distribution.\n"
-                "Try increasing adapt delta closer to 1.\n"
+                f"Try increasing the {param_name} parameter closer to 1.\n"
                 "If this doesn't remove all divergences, try to reparameterize the model."
             )
         else:
