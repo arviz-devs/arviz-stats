@@ -19,7 +19,6 @@ from arviz_stats.loo.loo_moment_match import loo_moment_match
 from arviz_stats.utils import ELPDDataLOO, _warn_pareto_k
 
 
-
 def loo(
     data,
     pointwise=None,
