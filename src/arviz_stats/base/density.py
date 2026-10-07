@@ -206,7 +206,7 @@ class _DensityBase(_CoreBase):
                     f"Expected one of: {self.bw_methods_linear}."
                 )
 
-            bw_fun = getattr(self, f"bw_{bw}")
+            bw_fun = getattr(self, f"bw_{bw_lower}")
             bw = bw_fun(x, grid_counts=grid_counts, x_std=x_std, grid_range=grid_range)
         else:
             raise ValueError(
