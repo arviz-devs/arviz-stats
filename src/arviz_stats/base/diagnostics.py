@@ -937,7 +937,7 @@ class _DiagnosticsBase(_CoreBase):
         lppd = elpd + p_loo
         return elpd, se, p_loo, lppd
 
-    def _pareto_pit_vec(self, draws_matrix, y_obs_array, log_weights=None, rng=None):
+    def _pareto_pit_vec(self, draws_matrix, y_obs_array, rng, log_weights=None):
         """Compute Pareto-smoothed PIT.
 
         Compute PIT value using the ECDF, then refine in the tails by fitting a
@@ -951,11 +951,11 @@ class _DiagnosticsBase(_CoreBase):
             2D array of posterior predictive draws with shape (n_obs, n_draws).
         y_obs_array : np.ndarray of shape (n_obs,)
             1D array of observed values with shape (n_obs,).
+        rng : np.random.Generator
+            Random number generator for the within-cell randomization of the PIT.
         log_weights : np.ndarray of shape (n_obs, n_draws) and dtype float, optional
             1D array of normalized log weights matching ary.
             If None, uniform weights are used.
-        rng : np.random.Generator, optional
-            Random number generator for tie-breaking. If None, midpoint is used.
 
         Returns
         -------
@@ -992,27 +992,29 @@ class _DiagnosticsBase(_CoreBase):
         draws = np.asarray(draws, dtype=float).ravel()
         y_val = float(y_val)
         n_draws = len(draws)
+        min_tail_prob = 1.0 / n_draws / 1e4
+        u_val = rng.uniform()
 
         # --- raw PIT ---
         sel_below = draws < y_val
-        if not np.any(sel_below):
-            raw_pit = 0.0
-        elif lw is None:
-            raw_pit = np.mean(sel_below)
-        else:
-            raw_pit = np.exp(logsumexp(lw[sel_below]))
-
         sel_equal = draws == y_val
-        if np.any(sel_equal):
-            if lw is None:
-                pit_upper = raw_pit + np.mean(sel_equal)
+
+        if lw is None:
+            n_below = int(np.count_nonzero(sel_below))
+            n_equal = int(np.count_nonzero(sel_equal))
+            raw_pit = (n_below + (n_equal + 1) * u_val) / (n_draws + 1)
+        else:
+            if not np.any(sel_below):
+                raw_pit = 0.0
             else:
+                raw_pit = np.exp(logsumexp(lw[sel_below]))
+
+            if np.any(sel_equal):
                 pit_upper = raw_pit + np.exp(logsumexp(lw[sel_equal]))
-            raw_pit = rng.uniform(raw_pit, pit_upper)
+                raw_pit = raw_pit + u_val * (pit_upper - raw_pit)
 
         # --- GPD tail refinement ---
         if not gpd_ok or not np.all(np.isfinite(draws)):
-            min_tail_prob = 1.0 / n_draws / 1e4
             return float(np.clip(raw_pit, min_tail_prob, 1.0 - min_tail_prob))
 
         ord_idx = np.argsort(draws)
@@ -1022,7 +1024,8 @@ class _DiagnosticsBase(_CoreBase):
         if lw_sorted is not None:
             tail_proportion = np.exp(logsumexp(lw_sorted[tail_ids]))
         else:
-            tail_proportion = ndraws_tail / n_draws
+            # Using n_draws + 1 instead of n_draws to match the scaling used for the bulk
+            tail_proportion = ndraws_tail / (n_draws + 1)
 
         # --- right tail ---
         right_tail = sorted_draws[tail_ids]
@@ -1069,7 +1072,7 @@ class _DiagnosticsBase(_CoreBase):
                     )
                     raw_pit = left_proportion * (1.0 - gpd_cdf)
 
-        return raw_pit
+        return float(np.clip(raw_pit, min_tail_prob, 1.0 - min_tail_prob))
 
     def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
         """
