@@ -247,9 +247,10 @@ def test_psislw_r_eff(data_c0d1, r_eff):
 @pytest.mark.parametrize("alpha", [0.0, 0.5, 0.9])
 def test_power_scale_lw(alpha):
     rng = np.random.default_rng(42)
-    log_lik = rng.uniform(-10, -1, size=(4, 200, 3))
-    scaled_lw = array_stats.power_scale_lw(log_lik, alpha=alpha, axis=(0, 1))
-    assert scaled_lw.shape == (3, 4, 200)
+    log_lik = rng.uniform(-10, -1, size=(4, 200))
+    scaled_lw, khat = array_stats.power_scale_lw(log_lik, alpha=alpha, axis=(0, 1))
+    assert scaled_lw.shape == (4, 200)
+    assert khat.shape == ()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
@@ -257,8 +258,8 @@ def test_power_scale_sense():
     rng = np.random.default_rng(42)
     log_lik = rng.uniform(-10, -1, size=(4, 200, 3))
     data = rng.normal(size=(4, 200, 3))
-    lower_w = array_stats.power_scale_lw(log_lik, alpha=0.8, axis=-1)
-    upper_w = array_stats.power_scale_lw(log_lik, alpha=0.9, axis=-1)
+    lower_w, _ = array_stats.power_scale_lw(log_lik, alpha=0.8, axis=-1)
+    upper_w, _ = array_stats.power_scale_lw(log_lik, alpha=0.9, axis=-1)
     sense = array_stats.power_scale_sense(
         data, lower_w, upper_w, lower_alpha=0.8, upper_alpha=0.9, chain_axis=0, draw_axis=1
     )

@@ -1192,7 +1192,7 @@ class BaseDataArray:
             da,
             alpha,
             input_core_dims=[dims, []],
-            output_core_dims=[dims],
+            output_core_dims=[dims, []],
             kwargs={"axis": np.arange(-len(dims), 0, 1)},
         )
 

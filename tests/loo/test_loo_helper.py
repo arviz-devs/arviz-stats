@@ -275,6 +275,10 @@ def test_warn_pareto_k():
         warn_flag, _ = _warn_pareto_k(pareto_k_bad, n_samples=1000)
         assert warn_flag
 
+    with pytest.warns(UserWarning, match="power-scaled posterior estimates"):
+        warn_flag, _ = _warn_pareto_k(pareto_k_bad, n_samples=1000, usage="power_scale")
+        assert warn_flag
+
 
 def test_warn_pointwise_loo():
     elpd = np.array([1.0, 2.0, 3.0])

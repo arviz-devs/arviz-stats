@@ -411,14 +411,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         axis : int, sequence of int or None, default -1
         """
         ary, axes = process_ary_axes(ary, axis)
+        sample_shape = tuple(ary.shape[i] for i in axes)
         psl_ufunc = make_ufunc(
             self._power_scale_lw,
-            n_output=1,
+            n_output=2,
             n_input=1,
             n_dims=len(axes),
             ravel=False,
         )
-        return psl_ufunc(ary, out_shape=(ary.shape[i] for i in axes), alpha=alpha)
+        return psl_ufunc(ary, out_shape=(sample_shape, ()), alpha=alpha)
 
     def power_scale_sense(
         self, ary, lower_w, upper_w, lower_alpha, upper_alpha, chain_axis=-2, draw_axis=-1
