@@ -791,7 +791,7 @@ def diagnose(
             param_mapping = {
                 "pymc": "target_accept",
                 "stan": "adapt_delta",
-                "cmdstan": "adapt_delta",
+                "cmdstanpy": "adapt_delta",
                 "numpyro": "adapt_step_size",
                 "pyro": "adapt_step_size",
                 "blackjax": "target_acceptance_rate",
