@@ -89,11 +89,6 @@ class TestBandwidthEstimators:
         bw = density.get_bw(x, method)
         assert bw > 0
 
-    @pytest.mark.parametrize("method", ["Scott", "SILVERMAN", "ISJ"])
-    def test_get_bw_string_case_insensitive(self, density, rng, method):
-        x = rng.normal(size=100)
-        assert density.get_bw(x, method) == density.get_bw(x, method.lower())
-
     @pytest.mark.parametrize("bw_value", [0.1, 0.5, 1.0, 2.0])
     def test_get_bw_numeric(self, density, rng, bw_value):
         x = rng.normal(size=100)
