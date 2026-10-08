@@ -36,6 +36,8 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.psense_summary
    arviz_stats.rhat
    arviz_stats.rhat_nested
+   arviz_stats.text_loo_pit
+   arviz_stats.text_ppc_pit
 ```
 
 ### Statistical summaries
