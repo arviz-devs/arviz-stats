@@ -705,6 +705,16 @@ class TestThinning:
         result = array_stats.thin(ary, factor=1)
         assert_array_equal(result, ary)
 
+    @pytest.mark.parametrize("factor", ["auto", 1, 2])
+    def test_thin_chain_axis_none(self, array_stats, factor):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(3, 1000))
+        result = array_stats.thin(ary, factor=factor, chain_axis=None)
+        assert result.ndim == ary.ndim
+        assert result.shape[0] == ary.shape[0]
+        if factor != "auto":
+            assert_array_equal(result, ary[:, ::factor])
+
     def test_thin_invalid_factor(self, array_stats):
         ary = np.empty((4, 100))
         with pytest.raises(ValueError, match="must be greater than 1"):
