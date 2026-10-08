@@ -225,6 +225,24 @@ def test_metrics_acc(datatree_binary, kind, round_to, expected_mean, expected_se
     assert_almost_equal(result.se, expected_se, decimal=4)
 
 
+@pytest.mark.parametrize("kind", ["mae", "mse", "rmse"])
+def test_metrics_2d_observations(kind):
+    rng = np.random.default_rng(0)
+    y = rng.normal(size=(4, 5))
+    y_pred = y + rng.normal(scale=0.5, size=(2, 50, 4, 5))
+    dt_2d = azb.from_dict({"posterior_predictive": {"y": y_pred}, "observed_data": {"y": y}})
+    dt_1d = azb.from_dict(
+        {
+            "posterior_predictive": {"y": y_pred.reshape(2, 50, 20)},
+            "observed_data": {"y": y.ravel()},
+        }
+    )
+    result = metrics(dt_2d, kind=kind, round_to="None")
+    expected = metrics(dt_1d, kind=kind, round_to="None")
+    assert_almost_equal(result.mean, expected.mean)
+    assert_almost_equal(result.se, expected.se)
+
+
 def test_metrics_invalid_kind(datatree):
     with pytest.raises(ValueError, match="kind must be one of"):
         metrics(datatree, kind="invalid_kind")
