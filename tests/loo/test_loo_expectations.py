@@ -183,6 +183,7 @@ def test_loo_metrics(centered_eight, kind):
     assert isinstance(result.se, int | float | str)
 
 
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter of Pareto distribution:UserWarning")
 @pytest.mark.parametrize("kind", ["mae", "mse", "rmse"])
 def test_loo_metrics_2d_observations(kind):
     rng = np.random.default_rng(0)
