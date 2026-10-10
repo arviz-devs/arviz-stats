@@ -1725,6 +1725,87 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         loo_quantile_ufunc = make_ufunc(self._loo_quantile, n_output=1, n_input=2, n_dims=len(axes))
         return loo_quantile_ufunc(ary, log_weights, prob)
 
+    def loo_influence(
+        self,
+        ary,
+        log_weights,
+        kind="mean",
+        standardize=True,
+        probs=None,
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute the influence of each observation from PSIS-LOO-CV expectations.
+
+        The influence is the absolute change in a summary of `ary` when the observation is
+        left out, i.e. the difference between the LOO weighted summary and the summary over
+        all the samples.
+
+        Parameters
+        ----------
+        ary : array-like
+            Posterior or posterior predictive samples. It is broadcast against
+            `log_weights`, so for example posterior samples with shape
+            ``(chain, draw, 1)`` can be combined with log weights with shape
+            ``(chain, draw, n_obs)``.
+        log_weights : array-like
+            Pre-computed PSIS log weights.
+        kind : str, default "mean"
+            Summary to compare: "mean", "median", "sd", "var", "quantile" or "octiles".
+        standardize : bool, default True
+            Whether to divide the change by the standard deviation (``kind="mean"``),
+            the MAD (``kind="median"``) or the summary itself (``kind="sd"`` and
+            ``kind="var"``). Ignored for "quantile" and "octiles".
+        probs : float or list of float, optional
+            Quantile probabilities to use when `kind` is "quantile". The change is
+            averaged over them.
+        chain_axis : int, default -2
+            Axis for chains.
+        draw_axis : int, default -1
+            Axis for draws.
+
+        Returns
+        -------
+        influence : array-like
+            Influence of each observation.
+        """
+        valid_kinds = ("mean", "median", "sd", "var", "quantile", "octiles")
+        if kind not in valid_kinds:
+            raise ValueError(f"kind must be one of {valid_kinds}, got {kind}")
+        if kind == "octiles":
+            probs = [0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]
+        elif kind == "quantile" and probs is None:
+            raise ValueError("probs must be provided when kind is 'quantile'")
+
+        ary, log_weights = np.broadcast_arrays(ary, log_weights)
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+        sample_axes = [chain_axis, draw_axis]
+
+        if kind in ("quantile", "octiles"):
+            probs = np.atleast_1d(probs)
+            loo_values = np.stack(
+                [
+                    self.loo_quantile(
+                        ary, log_weights, prob, chain_axis=chain_axis, draw_axis=draw_axis
+                    )
+                    for prob in probs
+                ]
+            )
+            full_values = np.quantile(ary, probs, axis=tuple(sample_axes))
+            return np.abs(loo_values - full_values).mean(axis=0)
+
+        summaries = {"mean": self.mean, "median": self.median, "sd": self.std, "var": self.var}
+        scales = {"mean": self.std, "median": self.mad, "sd": self.std, "var": self.var}
+        loo_values = self.loo_expectation(
+            ary, log_weights, kind=kind, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+        influence = np.abs(loo_values - summaries[kind](ary, axis=sample_axes))
+        if standardize:
+            influence = influence / scales[kind](ary, axis=sample_axes)
+        return influence
+
     def loo_summary(self, elpd_i, p_loo_i):
         """Aggregate pointwise LOO values.
 
