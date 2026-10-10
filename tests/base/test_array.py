@@ -50,6 +50,13 @@ class TestHelperFunctions:
         assert chain_axis == 0
         assert draw_axis == -2
 
+    def test_process_chain_none_draw_axis_zero(self):
+        ary = np.empty((100, 50))
+        ary_out, chain_axis, draw_axis = process_chain_none(ary, None, 0)
+        assert ary_out.shape == (1, 100, 50)
+        assert chain_axis == 0
+        assert draw_axis == 1
+
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     def test_process_ary_axes_single_axis(self, axis):
         ary = np.empty((10, 20, 30))
@@ -92,6 +99,12 @@ class TestHDI:
             assert result.shape[-1] == 2
         else:
             assert result.shape == (2,)
+
+    def test_hdi_prob_one(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(100,))
+        result = array_stats.hdi(ary, prob=1)
+        np.testing.assert_array_equal(result, [ary.min(), ary.max()])
 
     def test_hdi_invalid_prob(self, array_stats):
         ary = np.empty((100,))
@@ -178,6 +191,13 @@ class TestESS:
         result = array_stats.ess(ary, chain_axis=1, draw_axis=3)
         assert result.shape == (5, 10)
         assert result.min() > 0
+
+    def test_ess_chain_none_draw_axis_zero(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(100, 3))
+        result = array_stats.ess(ary, chain_axis=None, draw_axis=0)
+        expected = array_stats.ess(ary.T, chain_axis=None, draw_axis=-1)
+        assert_allclose(result, expected)
 
 
 class TestRhat:
@@ -315,14 +335,15 @@ class TestParetoFunctions:
 class TestPowerScale:
     def test_power_scale_lw(self, array_stats, rng):
         ary = rng.normal(size=(100,))
-        result = array_stats.power_scale_lw(ary, alpha=0.5)
+        result, khat = array_stats.power_scale_lw(ary, alpha=0.5)
         assert result.shape == (100,)
+        assert khat.shape == ()
 
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
     def test_power_scale_lw_axis(self, array_stats, rng, axis):
         ary = rng.normal(size=(10, 20, 30))
-        result = array_stats.power_scale_lw(ary, alpha=0.5, axis=axis)
+        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=axis)
         assert result.ndim == ary.ndim
         expected_shape = {
             0: (20, 30, 10),
@@ -335,7 +356,7 @@ class TestPowerScale:
     @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
     def test_power_scale_lw_axis_list(self, array_stats, rng):
         ary = rng.normal(size=(10, 20, 30, 40))
-        result = array_stats.power_scale_lw(ary, alpha=0.5, axis=[1, 3])
+        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=[1, 3])
         assert result.ndim == ary.ndim
         assert result.shape == (10, 30, 20, 40)
 
@@ -410,6 +431,31 @@ class TestBinning:
         ary = rng.normal(size=(1000,))
         counts, _ = array_stats.histogram(ary, bins=bins)
         assert len(counts) == bins
+
+    def test_histogram_bin_edges(self, array_stats, rng):
+        ary = rng.normal(size=(1000,))
+        bins = np.linspace(-4, 4, 9)
+        counts, edges = array_stats.histogram(ary, bins=bins)
+        expected_counts, expected_edges = np.histogram(ary, bins=bins, density=True)
+        np.testing.assert_allclose(counts, expected_counts)
+        np.testing.assert_allclose(edges, expected_edges)
+
+    @pytest.mark.parametrize("value", [2.0, 3])
+    def test_histogram_constant(self, array_stats, value):
+        ary = np.full(100, value)
+        with pytest.warns(UserWarning, match="single value"):
+            counts, edges = array_stats.histogram(ary, density=False)
+        assert counts.sum() == 100
+        assert edges[0] < value < edges[-1]
+        assert_allclose(edges[[0, -1]], value, rtol=1e-5)
+
+    def test_histogram_constant_slice(self, array_stats, rng):
+        ary = rng.normal(size=(3, 100))
+        ary[1] = 2.0
+        with pytest.warns(UserWarning, match="single value"):
+            counts, edges = array_stats.histogram(ary)
+        assert np.all(np.diff(edges, axis=-1) > 0)
+        assert_allclose(np.sum(counts * np.diff(edges, axis=-1), axis=-1), 1.0)
 
     def test_histogram_density(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
@@ -591,6 +637,10 @@ class TestECDF:
         x, y = array_stats.ecdf(ary, npoints=50, pit=True)
         assert len(x) == 50
         assert len(y) == 50
+        assert x[0] == 0
+        assert x[-1] == 1
+        expected = np.searchsorted(np.sort(ary), x, side="right") / ary.size - x
+        np.testing.assert_allclose(y, expected)
 
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     def test_ecdf_axis(self, array_stats, rng, axis):
@@ -806,6 +856,21 @@ class TestLOO:
 
         with pytest.raises(ValueError, match="pareto_k must also be provided"):
             array_stats.loo(ary, log_weights=log_weights)
+
+    def test_loo_few_draws_fallback(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(1, 20, 5))
+
+        with pytest.warns(UserWarning, match="Number of tail draws cannot be less than 5"):
+            elpd_i, pareto_k, p_loo_i = array_stats.loo(ary, chain_axis=0, draw_axis=1)
+
+        log_lik = ary[0]
+        log_ratios = -log_lik
+        lw = log_ratios - np.logaddexp.reduce(log_ratios, axis=0)
+        expected = np.logaddexp.reduce(lw + log_lik, axis=0)
+
+        assert_allclose(elpd_i, expected)
+        assert np.all(np.isnan(pareto_k))
+        assert np.all(np.isfinite(p_loo_i))
 
     def test_loo_matches_xarray(self, array_stats, centered_eight):
         log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]

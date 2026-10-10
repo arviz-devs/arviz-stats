@@ -54,7 +54,7 @@ def bayesian_r2(
     Parameters
     ----------
     data : DataTree or InferenceData
-        Input data. It should contain the posterior and posterior_predictive groups.
+        Input data. It should contain the posterior or the group indicated by the `group` parameter.
     pred_mean : str
         Name of the variable representing the predicted mean.
     scale : str or None
@@ -203,7 +203,7 @@ def residual_r2(
     Parameters
     ----------
     data : DataTree or InferenceData
-        Input data. It should contain the posterior_predictive and observed_data groups.
+        Input data. It should contain the posterior or the group indicated by the `group` parameter.
     pred_mean : str
         Name of the variable representing the predicted mean.
     obs_name : str, optional
@@ -212,7 +212,7 @@ def residual_r2(
         Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
     group : str, optional
-        Group from which to obtain the predicted means (`pred_name`). Defaults to "posterior".
+        Group from which to obtain the predicted means (`pred_mean`). Defaults to "posterior".
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
@@ -704,7 +704,7 @@ def _metrics(observed, predicted, kind, round_to):
 
 
 def _summary_r2(name, r_squared, point_estimate, ci_kind, ci_prob, round_to):
-    estimate = getattr(np, point_estimate)(r_squared).item()
+    estimate = getattr(array_stats, point_estimate)(r_squared).item()
     c_i = getattr(array_stats, ci_kind)(r_squared, ci_prob)
 
     r2_summary = namedtuple(f"{name}_R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])

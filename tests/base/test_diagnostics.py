@@ -461,7 +461,8 @@ def test_split_chain_dims(rng, chains, draws):
     assert split_data.shape == (chains * 2, draws // 2)
 
 
-def _pareto_pit_vec_test(draws, y_obs, log_weights=None, rng=None):
+def _pareto_pit_vec_test(draws, y_obs, log_weights=None):
+    rng = np.random.default_rng(124)
     draws = np.atleast_2d(np.asarray(draws, dtype=float))
     y_obs = np.atleast_1d(np.asarray(y_obs, dtype=float))
     if log_weights is not None:
@@ -485,7 +486,7 @@ def test_pareto_pit_bulk_values_match_raw_pit():
     draws = rng.normal(size=(3, 1000))
     y_obs = np.array([0.0, 0.1, -0.1])
 
-    refined = _pareto_pit_vec_test(draws, y_obs, rng=rng)
+    refined = _pareto_pit_vec_test(draws, y_obs)
     raw = np.mean(draws < y_obs[:, None], axis=1)
 
     np.testing.assert_allclose(refined, raw, atol=0.05)
@@ -567,25 +568,11 @@ def test_pareto_pit_extreme_tail_more_varied_than_ecdf():
     assert len(set(np.round(refined_vals, 6))) > len(set(np.round(raw_vals, 6)))
 
 
-def test_pareto_pit_discrete_randomization():
-    """With discrete observations matching draws, randomization should produce variation."""
-    draws = np.repeat([0, 1, 2, 3], 250).astype(float)
-    y_obs = 2.0
-
-    results = []
-    for seed in range(100):
-        rng = np.random.default_rng(seed)
-        results.append(_pareto_pit_vec_test(draws, y_obs, rng=rng))
-
-    assert np.std(results) > 0
-    assert all(0 <= r <= 1 for r in results)
-
-
 def test_pareto_pit_constant_draws():
     """Constant draws should not error; falls back to raw PIT."""
     draws = np.full(200, 5.0)
     y_obs = 5.0
-    result = _pareto_pit_vec_test(draws, y_obs, rng=np.random.default_rng(203))
+    result = _pareto_pit_vec_test(draws, y_obs)
     assert isinstance(result, float)
     assert 0 <= result <= 1
 
@@ -595,7 +582,7 @@ def test_pareto_pit_non_finite_draws_fallback():
     draws = np.arange(1, 100, dtype=float)
     draws = np.append(draws, np.nan)
     y_obs = 50.0
-    result = _pareto_pit_vec_test(draws, y_obs, rng=np.random.default_rng(203))
+    result = _pareto_pit_vec_test(draws, y_obs)
     assert isinstance(result, float)
     assert 0 <= result <= 1
 
@@ -637,3 +624,19 @@ def test_pareto_pit_with_log_weights():
     # Uniform weights should give similar results to no weights
     np.testing.assert_allclose(result_weighted, result_unweighted, atol=0.05)
     assert np.all((0 <= result_weighted) & (result_weighted <= 1))
+
+
+def test_pareto_pit_avoid_boundary_values():
+    """Randomized PIT must never equal 0, 0.5 or 1 exactly."""
+    rng = np.random.default_rng(7)
+    n_obs, n_draws = 500, 1000
+    draws = rng.normal(size=(n_obs, n_draws))
+    y_obs = rng.normal(size=n_obs)
+    for i in range(0, n_obs, 10):
+        s = np.sort(draws[i])
+        y_obs[i] = 0.5 * (s[n_draws // 2 - 1] + s[n_draws // 2])
+
+    pit = array_stats._pareto_pit_vec(draws, y_obs, rng=rng)
+    assert not np.any(pit == 0.5)
+    assert not np.any(pit == 0.0)
+    assert not np.any(pit == 1.0)

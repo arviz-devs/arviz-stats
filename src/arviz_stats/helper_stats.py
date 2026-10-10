@@ -18,11 +18,11 @@ def isotonic_fit(dt, var_names, group, ci_prob, data_type="binary", residuals=Fa
     ----------
     dt: DataTree
         DataTree with "posterior_predictive" and "observed_data" groups
-    var_names : str or list of str, optional
+    var_names : str or list of str
         The variables to perform the isotonic regression on.
     group : str
         The group from which to get the unique values.
-    ci_prob : float, optional
+    ci_prob : float
         The probability for the credible interval.
     data_type : str
         Defaults to "binary", other options are "categorical" and "ordinal".
@@ -246,8 +246,6 @@ def point_unique(ds):
     ----------
     ds : Dataset
         Dataset with "observed_data" values.
-    var_names : list of str, optional
-        Variables to compute unique value counts for. If None, uses all.
 
     Returns
     -------

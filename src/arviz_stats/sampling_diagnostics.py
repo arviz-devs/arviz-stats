@@ -189,7 +189,7 @@ def rhat(
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the ESS.
+        Group on which to compute the R-hat.
     var_names : str or list of str, optional
         Names of the variables for which the Rhat should be computed.
     filter_vars : {None, "like", "regex"}, default None
@@ -369,6 +369,11 @@ def rhat_nested(
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
+
+    Returns
+    -------
+    xarray.DataArray or xarray.Dataset
+        R-hat values for the specified variables and groups.
 
     See Also
     --------
@@ -809,12 +814,27 @@ def diagnose(
         if n_divergent > 0:
             has_errors = True
             pct = diagnostics_results["divergent"]["pct"]
+            inference_library = dt.attrs.get("inference_library", "").lower()
+
+            param_mapping = {
+                "pymc": "target_accept",
+                "stan": "adapt_delta",
+                "cmdstanpy": "adapt_delta",
+                "numpyro": "adapt_step_size",
+                "pyro": "adapt_step_size",
+                "blackjax": "target_acceptance_rate",
+                "tensorflow_probability": "target_accept_prob",
+                "tfp": "target_accept_prob",
+            }
+
+            param_name = param_mapping.get(inference_library, "target acceptance rate")
+
             messages.append(
                 f"{n_divergent} of {total_samples} ({pct:.2f}%) transitions ended with a "
                 "divergence.\n"
                 "These divergent transitions indicate that HMC is not fully able to explore "
                 "the posterior distribution.\n"
-                "Try increasing adapt delta closer to 1.\n"
+                f"Try increasing the {param_name} parameter closer to 1.\n"
                 "If this doesn't remove all divergences, try to reparameterize the model."
             )
         else:

@@ -606,6 +606,23 @@ class TestQuantileDots:
         assert non_nan_count > 0
         assert non_nan_count <= 20
 
+    @pytest.mark.parametrize(
+        "x, binwidth", [([1.5, 1.5, 1.5], None), ([1.5], None), ([0.0, 1.0, 2.0], 0)]
+    )
+    def test_qds_zero_binwidth(self, density, x, binwidth):
+        x_out, y_out, radius = density._qds(
+            np.array(x),
+            nquantiles=len(x),
+            binwidth=binwidth,
+            dotsize=1,
+            stackratio=1,
+            top_only=False,
+        )
+        expected = np.full(len(x), np.nan)
+        assert_allclose(x_out, expected)
+        assert_allclose(y_out, expected)
+        assert np.isnan(radius)
+
     def test_compute_quantiles_and_binwidth(self, density, rng):
         x = rng.normal(size=100)
         qvalues, binwidth = density._compute_quantiles_and_binwidth(x, nquantiles=10)
@@ -702,6 +719,18 @@ class TestECDF:
         eval_points, ecdf = density._ecdf(x, npoints=50, pit=True)
         assert len(eval_points) == 50
         assert len(ecdf) == 50
+        assert eval_points[0] == 0
+        assert eval_points[-1] == 1
+        expected = np.searchsorted(np.sort(x), eval_points, side="right") / len(x) - eval_points
+        np.testing.assert_allclose(ecdf, expected)
+
+    def test_ecdf_pit_clustered_values(self, density):
+        x = np.linspace(0.4, 0.6, 100)
+        eval_points, ecdf = density._ecdf(x, npoints=101, pit=True)
+        below = eval_points < 0.4
+        above = eval_points > 0.6
+        np.testing.assert_allclose(ecdf[below], -eval_points[below])
+        np.testing.assert_allclose(ecdf[above], 1 - eval_points[above])
 
     @pytest.mark.parametrize("npoints", [10, 50, 100, 200])
     def test_ecdf_npoints(self, density, rng, npoints):

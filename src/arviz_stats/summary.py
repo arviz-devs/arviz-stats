@@ -182,7 +182,7 @@ def summary(
         mean_value = dataset.azstats.mean(dim=sample_dims, skipna=skipna).expand_dims(
             summary=["mean"]
         )
-        std_value = dataset.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
+        std_value = dataset.azstats.std(dim=sample_dims, skipna=skipna).expand_dims(summary=["sd"])
         ci_fun = dataset.azstats.eti if ci_kind == "eti" else dataset.azstats.hdi
         ci = (
             ci_fun(prob=ci_prob, dim=sample_dims, skipna=skipna)
@@ -414,11 +414,6 @@ class SummaryDataFrame(pd.DataFrame):
             return super()._repr_html_()
         return self._display_df().to_html()
 
-    def _repr_latex_(self):  # pylint: disable=overridden-final-method
-        if self._fmt_map is None:
-            return super()._repr_latex_()
-        return self.to_latex(escape=True)
-
     def to_html(self, *args, **kwargs):
         if self._fmt_map is None:
             return super().to_html(*args, **kwargs)
@@ -450,6 +445,7 @@ def ci_in_rope(
     var_names=None,
     filter_vars=None,
     group="posterior",
+    coords=None,
     dim=None,
     ci_prob=None,
     ci_kind=None,
@@ -465,7 +461,7 @@ def ci_in_rope(
     Parameters
     ----------
     data : DataTree, DataSet or InferenceData
-    rope : (2,) array-like or dict of {hashable : (2,) array-like} or Dataset
+    rope : (2,) array-like or dict of {hashable : (2,) tuple} or Dataset
         If tuple, the lower and upper bounds of the ROPE are the same for all variables.
         If dict, the keys are the variable names and the values are tuples with the lower
         and upper bounds of the ROPE. The keys must be in `var_names`.
@@ -487,10 +483,9 @@ def ci_in_rope(
         Probability for the credible interval. Defaults to ``rcParams["stats.ci_prob"]``.
     ci_kind : {"hdi", "eti"}, optional
         Type of credible interval. Defaults to ``rcParams["stats.ci_kind"]``.
-        If `kind` is stats_median or all_median, `ci_kind` is forced to "eti".
     rope_dim : str, default "rope_dim"
-        Name for the dimension containing the ROPE values. Only used when `rope`
-        is a :class:`~xarray.Dataset`
+        Name for the dimension containing the ROPE values. Used as the dimension name
+        when converting rope to :class:`~xarray.Dataset`
 
     Returns
     -------
@@ -525,6 +520,8 @@ def ci_in_rope(
         JAGS, and Stan. Academic Press, 2014. ISBN 978-0-12-405888-0.
     """
     sample_dims = validate_dims(dim)
+    if ci_kind is None:
+        ci_kind = rcParams["stats.ci_kind"]
 
     dataset = extract(
         data,
@@ -535,6 +532,9 @@ def ci_in_rope(
         combined=False,
         keep_dataset=True,
     )
+
+    if coords is not None:
+        dataset = dataset.sel(coords)
 
     if isinstance(rope, dict):
         if not all(var in dataset.data_vars for var in rope.keys()):
@@ -606,14 +606,14 @@ def mean(
           similar functions.
 
           It is recommended to first perform the conversion manually and then call
-          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          ``arviz_stats.mean``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
-        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+        Dimensions over which to compute the mean. Defaults to ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the mode
+        Group on which to compute the mean
     var_names : str or list of str, optional
-        Names of the variables for which the mode should be computed.
+        Names of the variables for which the mean should be computed.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
@@ -626,7 +626,7 @@ def mean(
     skipna: bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
-        Forwarded to the array or dataarray interface for mode.
+        Forwarded to the array or dataarray interface for mean.
 
     Returns
     -------
@@ -711,14 +711,14 @@ def median(
           similar functions.
 
           It is recommended to first perform the conversion manually and then call
-          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          ``arviz_stats.median``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
-        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+        Dimensions over which to compute the median. Defaults to ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the mode
+        Group on which to compute the median
     var_names : str or list of str, optional
-        Names of the variables for which the mode should be computed.
+        Names of the variables for which the median should be computed.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
@@ -731,7 +731,7 @@ def median(
     skipna: bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
-        Forwarded to the array or dataarray interface for mode.
+        Forwarded to the array or dataarray interface for median.
 
     Returns
     -------
@@ -928,14 +928,15 @@ def std(
           similar functions.
 
           It is recommended to first perform the conversion manually and then call
-          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          ``arviz_stats.std``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
-        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+        Dimensions over which to compute the standard deviation.
+        Defaults to ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the mode
+        Group on which to compute the standard deviation
     var_names : str or list of str, optional
-        Names of the variables for which the mode should be computed.
+        Names of the variables for which the standard deviation should be computed.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
@@ -948,7 +949,7 @@ def std(
     skipna: bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
-        Forwarded to the array or dataarray interface for mode.
+        Forwarded to the array or dataarray interface for std.
 
     Returns
     -------
@@ -1033,14 +1034,15 @@ def var(
           similar functions.
 
           It is recommended to first perform the conversion manually and then call
-          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          ``arviz_stats.var``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
-        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+        Dimensions over which to compute the variance.
+        Defaults to ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the mode
+        Group on which to compute the variance
     var_names : str or list of str, optional
-        Names of the variables for which the mode should be computed.
+        Names of the variables for which the variance should be computed.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
@@ -1053,7 +1055,7 @@ def var(
     skipna: bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
-        Forwarded to the array or dataarray interface for mode.
+        Forwarded to the array or dataarray interface for var.
 
     Returns
     -------
@@ -1137,14 +1139,14 @@ def mad(
           similar functions.
 
           It is recommended to first perform the conversion manually and then call
-          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          ``arviz_stats.mad``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
-        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+        Dimensions over which to compute the MAD. Defaults to ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the mode
+        Group on which to compute the MAD
     var_names : str or list of str, optional
-        Names of the variables for which the mode should be computed.
+        Names of the variables for which the MAD should be computed.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
@@ -1157,12 +1159,12 @@ def mad(
     skipna: bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
-        Forwarded to the array or dataarray interface for mode.
+        Forwarded to the array or dataarray interface for mad.
 
     Returns
     -------
     ndarray, DataArray, Dataset, DataTree
-        Requested mode of the provided input.
+        Requested mad of the provided input.
 
     See Also
     --------
@@ -1243,14 +1245,15 @@ def iqr(
           similar functions.
 
           It is recommended to first perform the conversion manually and then call
-          ``arviz_stats.mode``. This allows controlling the conversion step and inspecting
+          ``arviz_stats.iqr``. This allows controlling the conversion step and inspecting
           its results.
     dim : sequence of hashable, optional
-        Dimensions over which to compute the mode. Defaults to ``rcParams["data.sample_dims"]``.
+        Dimensions over which to compute the interquantile range.
+        Defaults to ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the mode
+        Group on which to compute the interquantile range
     var_names : str or list of str, optional
-        Names of the variables for which the mode should be computed.
+        Names of the variables for which the interquantile range should be computed.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
@@ -1265,16 +1268,16 @@ def iqr(
     skipna: bool, default False
         If True, ignore NaN values.
     **kwargs : any, optional
-        Forwarded to the array or dataarray interface for mode.
+        Forwarded to the array or dataarray interface for iqr.
 
     Returns
     -------
     ndarray, DataArray, Dataset, DataTree
-        Requested mode of the provided input.
+        Requested interquantile range of the provided input.
 
     See Also
     --------
-    :func:`arviz_stats.mean`, :func:`arviz_stats.mode`
+    :func:`arviz_stats.std`, :func:`arviz_stats.mad`
 
 
     Examples

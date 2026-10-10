@@ -9,7 +9,7 @@ from arviz_stats.loo.loo_helper import (
     _warn_pareto_k,
     _warn_pointwise_loo,
 )
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDDataLOO
 
 
 def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None, log_jacobian=None):
@@ -55,7 +55,7 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
 
     Returns
     -------
-    ELPDData
+    ELPDDataLOO
         Object with the following attributes:
 
         - **kind**: "loo"
@@ -120,17 +120,16 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
     if pointwise:
         _warn_pointwise_loo(elpd, elpd_i.values)
 
-    return ELPDData(
-        "loo",
-        elpd,
-        elpd_se,
-        p_loo,
-        loo_inputs.n_samples,
-        loo_inputs.n_data_points,
-        "log",
-        warn_mg,
-        good_k,
-        elpd_i if pointwise else None,
-        pareto_k if pointwise else None,
+    return ELPDDataLOO(
+        elpd=elpd,
+        se=elpd_se,
+        p=p_loo,
+        n_samples=loo_inputs.n_samples,
+        n_data_points=loo_inputs.n_data_points,
+        scale="log",
+        warning=warn_mg,
+        good_k=good_k,
+        elpd_i=elpd_i if pointwise else None,
+        pareto_k=pareto_k if pointwise else None,
         approx_posterior=True,
     )

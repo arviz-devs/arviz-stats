@@ -395,3 +395,18 @@ def test_generate_survival_curves_first_prob_less_than_one():
         valid_probs = probs_array[i][~np.isnan(probs_array[i])]
         if len(valid_probs) > 0:
             assert valid_probs[0] <= 1.0
+
+
+def test_generate_survival_curves_values():
+    predictive_times = np.array([[[1.0, 1.0, 2.0, 3.0, 100.0], [1.0, 2.0, 3.0, 4.0, 5.0]]])
+    observed_times = np.array([1.0, 2.0, 2.0, 3.0, 3.0])
+    dt = azb.from_dict(
+        {
+            "posterior_predictive": {"times": predictive_times},
+            "observed_data": {"times": observed_times},
+        }
+    )
+    result = generate_survival_curves(dt, var_names="times", extrapolation_factor=1.2)
+    times_array, probs_array = result["times"].values
+    np.testing.assert_allclose(times_array, [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]])
+    np.testing.assert_allclose(probs_array, [[0.6, 0.4, 0.2], [0.8, 0.6, 0.4]])

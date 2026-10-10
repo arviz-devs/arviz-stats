@@ -16,6 +16,7 @@ sp = importorskip("scipy")
 from arviz_stats import compare, loo, loo_subsample, update_subsample
 from arviz_stats.loo import _calculate_ics
 from arviz_stats.loo.compare import _round_compare
+from arviz_stats.utils import ELPDData, ELPDDataLOOKFold
 
 
 def log_lik_fn_subsample(obs_da, datatree):
@@ -114,9 +115,19 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
 
 def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
     loo_result = loo(centered_eight, pointwise=True)
-    kfold_result = loo(non_centered_eight, pointwise=True)
-    kfold_result = copy.deepcopy(kfold_result)
-    kfold_result.kind = "loo_kfold"
+    other_result = loo(non_centered_eight, pointwise=True)
+    kfold_result = ELPDDataLOOKFold(
+        elpd=other_result.elpd,
+        se=other_result.se,
+        p=other_result.p,
+        n_samples=other_result.n_samples,
+        n_data_points=other_result.n_data_points,
+        scale="log",
+        warning=False,
+        good_k=None,
+        elpd_i=other_result.elpd_i,
+        n_folds=4,
+    )
 
     compare_dict = {
         "loo_model": loo_result,
@@ -135,18 +146,63 @@ def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_compare_unsupported_mixed_methods(centered_eight):
     loo_result = loo(centered_eight, pointwise=True)
-
-    waic_result = copy.deepcopy(loo_result)
-    waic_result.kind = "waic"
+    unknown_result = ELPDData(
+        elpd=loo_result.elpd,
+        se=loo_result.se,
+        p=loo_result.p,
+        n_samples=loo_result.n_samples,
+        n_data_points=loo_result.n_data_points,
+        scale="log",
+        warning=False,
+        good_k=None,
+        elpd_i=loo_result.elpd_i,
+    )
 
     compare_dict = {
         "loo_model": loo_result,
-        "waic_model": waic_result,
+        "unknown_model": unknown_result,
     }
 
     with pytest.raises(
-        ValueError, match="Cannot compare models with incompatible cross-validation methods.*waic"
+        ValueError, match="Cannot compare models with incompatible cross-validation methods.*None"
     ):
+        compare(compare_dict)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_lfo(lfo_result_factory):
+    result = compare({"m1": lfo_result_factory(sigma=1.0), "m2": lfo_result_factory(sigma=1.3)})
+
+    assert len(result) == 2
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_lfo_mixed_settings(lfo_result_factory):
+    result_h1 = lfo_result_factory(min_observations=8, forecast_horizon=1)
+    result_h2 = lfo_result_factory(min_observations=7, forecast_horizon=2)
+    assert result_h1.n_data_points == result_h2.n_data_points
+
+    with pytest.raises(ValueError, match="different settings"):
+        compare({"m1": result_h1, "m2": result_h2})
+
+
+def test_compare_lfo_with_other_methods(centered_eight, lfo_result_factory):
+    compare_dict = {
+        "loo_model": loo(centered_eight, pointwise=True),
+        "lfo_model": lfo_result_factory(),
+    }
+
+    with pytest.raises(ValueError, match="Cannot compare LFO-CV results"):
+        compare(compare_dict)
+
+
+def test_compare_lfo_with_raw_model_data(centered_eight, lfo_result_factory):
+    compare_dict = {
+        "raw_loo_model": centered_eight,
+        "lfo_model": lfo_result_factory(),
+    }
+
+    with pytest.raises(ValueError, match="Cannot compare LFO-CV results"):
         compare(compare_dict)
 
 
@@ -215,6 +271,27 @@ def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
     assert "subsampling_dse" not in comparison_regular.columns
     assert np.isfinite(comparison_regular["dse"].values).all()
     assert_almost_equal(comparison_regular["elpd_diff"].iloc[0], 0.0, decimal=4)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_subsampled_with_full_loo(centered_eight_with_sigma):
+    loo_sub = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 1, 2, 3]),
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        pointwise=True,
+    )
+    loo_full = loo(centered_eight_with_sigma, pointwise=True, var_name="obs")
+
+    with pytest.warns(UserWarning, match="observations included in loo calculations"):
+        result = compare({"sub": loo_sub, "full": loo_full})
+
+    assert "subsampling_dse" in result.columns
+    assert np.isfinite(result["subsampling_dse"].values).all()
+    assert_allclose(result["weight"].sum(), 1.0)
 
 
 @pytest.mark.parametrize("method", ["BB-pseudo-BMA", "pseudo-BMA"])

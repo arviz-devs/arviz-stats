@@ -357,6 +357,8 @@ class _DiagnosticsBase(_CoreBase):
 
         _, kappa = self._pareto_khat(ary, tail="both", log_weights=False)
 
+        if np.isnan(kappa):
+            return np.nan
         # This should be 1, but to avoid overflow we use 0.99
         # we could even use a lower value as this will give
         # a ridiculously large number of samples needed
@@ -938,7 +940,7 @@ class _DiagnosticsBase(_CoreBase):
         lppd = elpd + p_loo
         return elpd, se, p_loo, lppd
 
-    def _pareto_pit_vec(self, draws_matrix, y_obs_array, log_weights=None, rng=None):
+    def _pareto_pit_vec(self, draws_matrix, y_obs_array, rng, log_weights=None):
         """Compute Pareto-smoothed PIT.
 
         Compute PIT value using the ECDF, then refine in the tails by fitting a
@@ -952,11 +954,11 @@ class _DiagnosticsBase(_CoreBase):
             2D array of posterior predictive draws with shape (n_obs, n_draws).
         y_obs_array : np.ndarray of shape (n_obs,)
             1D array of observed values with shape (n_obs,).
+        rng : np.random.Generator
+            Random number generator for the within-cell randomization of the PIT.
         log_weights : np.ndarray of shape (n_obs, n_draws) and dtype float, optional
             1D array of normalized log weights matching ary.
             If None, uniform weights are used.
-        rng : np.random.Generator, optional
-            Random number generator for tie-breaking. If None, midpoint is used.
 
         Returns
         -------
@@ -966,11 +968,8 @@ class _DiagnosticsBase(_CoreBase):
         n_draws = draws_matrix.shape[-1]
         ndraws_tail = self._get_ps_tails(n_draws, 1, tail="right")
 
-        gpd_ok = ndraws_tail >= 5
-        if gpd_ok and ndraws_tail > n_draws // 2:
-            ndraws_tail = n_draws // 2
-        if gpd_ok and ndraws_tail >= n_draws:
-            gpd_ok = False
+        ndraws_tail = min(ndraws_tail, n_draws // 2)
+        gpd_ok = 5 <= ndraws_tail < n_draws
 
         tail_ids = np.arange(n_draws - ndraws_tail, n_draws, dtype=int)
         min_tail_prob = 1.0 / n_draws / 1e4
@@ -996,27 +995,29 @@ class _DiagnosticsBase(_CoreBase):
         draws = np.asarray(draws, dtype=float).ravel()
         y_val = float(y_val)
         n_draws = len(draws)
+        min_tail_prob = 1.0 / n_draws / 1e4
+        u_val = rng.uniform()
 
         # --- raw PIT ---
         sel_below = draws < y_val
-        if not np.any(sel_below):
-            raw_pit = 0.0
-        elif lw is None:
-            raw_pit = np.mean(sel_below)
-        else:
-            raw_pit = np.exp(logsumexp(lw[sel_below]))
-
         sel_equal = draws == y_val
-        if np.any(sel_equal):
-            if lw is None:
-                pit_upper = raw_pit + np.mean(sel_equal)
+
+        if lw is None:
+            n_below = int(np.count_nonzero(sel_below))
+            n_equal = int(np.count_nonzero(sel_equal))
+            raw_pit = (n_below + (n_equal + 1) * u_val) / (n_draws + 1)
+        else:
+            if not np.any(sel_below):
+                raw_pit = 0.0
             else:
+                raw_pit = np.exp(logsumexp(lw[sel_below]))
+
+            if np.any(sel_equal):
                 pit_upper = raw_pit + np.exp(logsumexp(lw[sel_equal]))
-            raw_pit = rng.uniform(raw_pit, pit_upper)
+                raw_pit = raw_pit + u_val * (pit_upper - raw_pit)
 
         # --- GPD tail refinement ---
         if not gpd_ok or not np.all(np.isfinite(draws)):
-            min_tail_prob = 1.0 / n_draws / 1e4
             return float(np.clip(raw_pit, min_tail_prob, 1.0 - min_tail_prob))
 
         ord_idx = np.argsort(draws)
@@ -1026,7 +1027,8 @@ class _DiagnosticsBase(_CoreBase):
         if lw_sorted is not None:
             tail_proportion = np.exp(logsumexp(lw_sorted[tail_ids]))
         else:
-            tail_proportion = ndraws_tail / n_draws
+            # Using n_draws + 1 instead of n_draws to match the scaling used for the bulk
+            tail_proportion = ndraws_tail / (n_draws + 1)
 
         # --- right tail ---
         right_tail = sorted_draws[tail_ids]
@@ -1073,7 +1075,7 @@ class _DiagnosticsBase(_CoreBase):
                     )
                     raw_pit = left_proportion * (1.0 - gpd_cdf)
 
-        return raw_pit
+        return float(np.clip(raw_pit, min_tail_prob, 1.0 - min_tail_prob))
 
     def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
         """
@@ -1093,6 +1095,7 @@ class _DiagnosticsBase(_CoreBase):
 
         Returns
         -------
+        ary : array
         khat : float
             Pareto k-hat value.
         """
@@ -1108,10 +1111,11 @@ class _DiagnosticsBase(_CoreBase):
         n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail=tail)
 
         if tail == "both":
-            khat = max(
+            khat_both = [
                 self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=t)[1]
                 for t in ("left", "right")
-            )
+            ]
+            khat = np.nan if np.all(np.isnan(khat_both)) else np.nanmax(khat_both)
         else:
             ary, khat = self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail)
 
@@ -1124,19 +1128,23 @@ class _DiagnosticsBase(_CoreBase):
         else:
             n_draws_tail = np.floor(n_draws / 5)
 
-        if tail == "both":
-            half_n_draws = n_draws // 2
-            if n_draws_tail > half_n_draws:
-                warnings.warn(
-                    "Number of tail draws cannot be more than half "
-                    "the total number of draws if both tails are fit, "
-                    f"changing to {half_n_draws}"
-                )
-                n_draws_tail = half_n_draws
+        if n_draws_tail < 5:
+            warnings.warn("Number of tail draws cannot be less than 5. Changing to 5.")
+            n_draws_tail = 5
 
-            if n_draws_tail < 5:
-                warnings.warn("Number of tail draws cannot be less than 5. Changing to 5")
-                n_draws_tail = 5
+        if n_draws_tail >= n_draws:
+            warnings.warn(
+                f"Tail draws ({n_draws_tail}) not strictly less than total draws ({n_draws}). "
+                "Fitting of generalized Pareto distribution not performed."
+            )
+        elif tail == "both" and n_draws_tail > n_draws // 2:
+            half_n_draws = n_draws // 2
+            warnings.warn(
+                "Number of tail draws cannot be more than half "
+                "the total number of draws if both tails are fit, "
+                f"changing to {half_n_draws}"
+            )
+            n_draws_tail = half_n_draws
 
         return n_draws_tail
 
@@ -1148,7 +1156,7 @@ class _DiagnosticsBase(_CoreBase):
 
         Parameters
         ----------
-        x : array
+        ary : array
             1D array.
         n_draws : int
             Number of draws.
@@ -1166,7 +1174,8 @@ class _DiagnosticsBase(_CoreBase):
         ary : array
             Array with smoothed tail values.
         k : float
-            Estimated shape parameter.
+            Estimated shape parameter. ``nan`` when the tail is not fitted, either
+            because the input is degenerate or because the fit is undefined.
         """
         # JAX arrays are immutable; copy to a plain numpy array so in-place assignments work.
         ary = np.asarray(ary).copy()
@@ -1177,47 +1186,54 @@ class _DiagnosticsBase(_CoreBase):
         if tail not in ["right", "left", "both"]:
             raise ValueError('tail must be one of "right", "left", or "both"')
 
-        tail_ids = np.arange(n_draws - n_draws_tail, n_draws, dtype=int)
+        khat = np.nan
+        smoothed = None
 
-        if tail == "left":
-            ary = -ary
-
-        ordered = np.argsort(ary)
-        draws_tail = ary[ordered[tail_ids]]
-
-        cutoff = ary[ordered[tail_ids[0] - 1]]  # largest value smaller than tail values
-
-        max_tail = np.max(draws_tail)
-        min_tail = np.min(draws_tail)
-
-        if n_draws_tail >= 5:
-            if abs(max_tail - min_tail) < np.finfo(float).tiny:
-                raise ValueError("All tail values are the same")
-
-            if log_weights:
-                draws_tail = np.exp(draws_tail)
-                cutoff = np.exp(cutoff)
-
-            khat, sigma = self._gpdfit(draws_tail - cutoff)
-
-            if np.isfinite(khat) and smooth_draws:
-                p = np.arange(0.5, n_draws_tail) / n_draws_tail
-                smoothed = self._gpinv(p, khat, sigma, cutoff)
-
-                if log_weights:
-                    smoothed = np.log(smoothed)
-
-            else:
-                smoothed = None
+        if not np.all(np.isfinite(ary)) or abs(np.max(ary) - np.min(ary)) < np.finfo(float).eps:
+            warnings.warn(
+                "Input contains infinite or NA values, is constant or has constant tail. "
+                "Fitting of generalized Pareto distribution not performed."
+            )
+        elif n_draws_tail >= n_draws:
+            pass
+        elif n_draws_tail < 5:
+            warnings.warn(
+                "Can't fit generalized Pareto distribution because ndraws_tail is less than 5."
+            )
         else:
-            raise ValueError("n_draws_tail must be at least 5")
+            tail_ids = np.arange(n_draws - n_draws_tail, n_draws, dtype=int)
 
-        if smoothed is not None:
-            smoothed[smoothed > max_tail] = max_tail
-            ary[ordered[tail_ids]] = smoothed
+            if tail == "left":
+                ary = -ary
 
-        if tail == "left":
-            ary = -ary
+            ordered = np.argsort(ary)
+            draws_tail = ary[ordered[tail_ids]]
+
+            cutoff = ary[ordered[tail_ids[0] - 1]]  # largest value smaller than tail values
+
+            max_tail = np.max(draws_tail)
+            min_tail = np.min(draws_tail)
+
+            if abs(max_tail - min_tail) >= np.finfo(float).eps:
+                if log_weights:
+                    draws_tail = np.exp(draws_tail)
+                    cutoff = np.exp(cutoff)
+
+                khat, sigma = self._gpdfit(draws_tail - cutoff)
+
+                if np.isfinite(khat) and smooth_draws:
+                    p = np.arange(0.5, n_draws_tail) / n_draws_tail
+                    smoothed = self._gpinv(p, khat, sigma, cutoff)
+
+                    if log_weights:
+                        smoothed = np.log(smoothed)
+
+            if smoothed is not None:
+                smoothed[smoothed > max_tail] = max_tail
+                ary[ordered[tail_ids]] = smoothed
+
+            if tail == "left":
+                ary = -ary
 
         # normalise weights
         if log_weights:
@@ -1363,7 +1379,7 @@ class _DiagnosticsBase(_CoreBase):
         n_draws = len(log_weights)
         r_eff = self._ess_tail(ary, prob=0.05, relative=True)
         n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail="both")
-        log_weights, _ = self._ps_tail(
+        log_weights, pareto_k = self._ps_tail(
             log_weights,
             n_draws,
             n_draws_tail,
@@ -1371,7 +1387,7 @@ class _DiagnosticsBase(_CoreBase):
             log_weights=True,
         )
 
-        return log_weights.reshape(shape)
+        return log_weights.reshape(shape), pareto_k
 
     @staticmethod
     def _cjs_dist(ary, weights):
@@ -1532,13 +1548,14 @@ class _DiagnosticsBase(_CoreBase):
         ----------
         mu_pred: array-like of shape = (n_posterior_samples, n_outputs)
             Estimated mean for the response variable.
-        var : array-like of shape (n_posterior_samples,), optional
-            Posterior draws of the variance or pseudo-variance.
-            - If provided: treated as the model-implied residual variance.
+        scale : array-like of shape (n_posterior_samples,), optional
+            Posterior draws of the scale (standard deviation, variance, or pseudo-variance).
+            - If provided: treated as the model-implied residual variance or standard deviation
+            depending on `scale_kind`
             - If None: assumes Bernoulli-like model and computes pseudo-variance
             as mean(mu_pred) * (1 - mean(mu_pred)) per posterior draw.
         scale_kind : str, optional
-            Kind of scale for the variance. Options are 'sd' (standard deviation) or
+            Kind of `scale` for the variance. Options are 'sd' (standard deviation) or
             'var' (variance). Default is 'sd'.
         circular: bool, optional
             Whether the response variable is circular. For circular response,

@@ -13,11 +13,10 @@ from arviz_stats.loo.loo_helper import (
     _get_weights_and_k_i,
     _log_lik_i,
     _prepare_loo_inputs,
-    _warn_pareto_k,
     _warn_pointwise_loo,
 )
 from arviz_stats.loo.loo_moment_match import loo_moment_match
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDDataLOO, _warn_pareto_k
 
 
 def loo(
@@ -91,7 +90,7 @@ def loo(
 
     Returns
     -------
-    ELPDData
+    ELPDDataLOO
         Object with the following attributes:
 
         - **kind**: "loo"
@@ -176,7 +175,6 @@ def loo(
     .. [1] Paananen, T., Piironen, J., Buerkner, P.-C., Vehtari, A. (2021). Implicitly Adaptive
        Importance Sampling. Statistics and Computing. 31(2) (2021)
        https://doi.org/10.1007/s11222-020-09982-2
-       arXiv preprint https://arxiv.org/abs/1906.08850.
 
     .. [2] Silva and Zanella. *Robust Leave-One-Out Cross-Validation for High-Dimensional
        Bayesian Models*. Journal of the American Statistical Association. 119(547) (2023)
@@ -254,8 +252,7 @@ def loo(
         if pointwise:
             _warn_pointwise_loo(elpd, elpd_i.values)
 
-        return ELPDData(
-            kind="loo",
+        return ELPDDataLOO(
             elpd=elpd,
             se=elpd_se,
             p=p_loo,
@@ -365,7 +362,7 @@ def loo_i(
 
     Returns
     -------
-    ELPDData
+    ELPDDataLOO
         Object with the following attributes:
 
         - **kind**: "loo"
@@ -503,8 +500,7 @@ def loo_i(
 
     warn_mg, good_k = _warn_pareto_k(pareto_k_i, n_samples)
 
-    return ELPDData(
-        kind="loo",
+    return ELPDDataLOO(
         elpd=elpd_i,
         se=elpd_se,
         p=p_loo_i,

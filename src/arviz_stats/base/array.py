@@ -19,7 +19,7 @@ def process_chain_none(ary, chain_axis, draw_axis):
     if chain_axis is None:
         ary = np.expand_dims(ary, axis=0)
         chain_axis = 0
-        draw_axis = draw_axis + 1 if draw_axis > 0 else draw_axis
+        draw_axis = draw_axis + 1 if draw_axis >= 0 else draw_axis
     return ary, chain_axis, draw_axis
 
 
@@ -48,6 +48,62 @@ def process_ary_axes(ary, axes):
     reordered_axes = [i for i in range(ary.ndim) if i not in axes] + list(axes)
     ary = np.transpose(ary, axes=reordered_axes)
     return ary, np.arange(-len(axes), 0, dtype=int)
+
+
+def _prepare_bivariate_inputs(x, y, axis, weights=None):
+    x = np.asarray(x)
+    y = np.asarray(y)
+    if x.shape != y.shape:
+        raise ValueError(f"`x` and `y` must have the same shape. Got {x.shape} and {y.shape}.")
+    if weights is not None:
+        weights = np.asarray(weights)
+        if weights.shape != x.shape:
+            raise ValueError(
+                "`weights` must have the same shape as `x` and `y`. "
+                f"Got {weights.shape} and {x.shape}."
+            )
+
+    x, axes = process_ary_axes(x, axis)
+    y, _ = process_ary_axes(y, axis)
+    if weights is not None:
+        weights, _ = process_ary_axes(weights, axis)
+
+    sample_ndim = len(axes)
+    batch_shape = x.shape[:-sample_ndim]
+    sample_size = int(np.prod(x.shape[-sample_ndim:]))
+    x = x.reshape(*batch_shape, sample_size)
+    y = y.reshape(*batch_shape, sample_size)
+    if weights is not None:
+        weights = weights.reshape(*batch_shape, sample_size)
+    return x, y, weights, batch_shape
+
+
+def _apply_bivariate_statistic(func, x, y, axis, weights=None, **func_kwargs):
+    x, y, weights, batch_shape = _prepare_bivariate_inputs(x, y, axis, weights)
+    results = []
+    for index in np.ndindex(batch_shape):
+        x_batch = x[index]
+        y_batch = y[index]
+        valid = np.isfinite(x_batch) & np.isfinite(y_batch)
+        batch_kwargs = func_kwargs
+        if weights is not None:
+            weights_batch = weights[index]
+            valid &= np.isfinite(weights_batch)
+            batch_kwargs = {**func_kwargs, "weights": weights_batch[valid]}
+        if not np.any(valid):
+            raise ValueError("No finite paired samples remain after removing invalid values.")
+        results.append(func(x_batch[valid], y_batch[valid], **batch_kwargs))
+
+    if not batch_shape:
+        return results[0]
+
+    output_count = len(results[0])
+    return tuple(
+        np.stack([result[output_index] for result in results]).reshape(
+            batch_shape + results[0][output_index].shape
+        )
+        for output_index in range(output_count)
+    )
 
 
 class BaseArray(_DensityBase, _DiagnosticsBase):
@@ -246,6 +302,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         prob : float, default None
             When using the array interface, `prob` is a required argument for
             "quantile" method.
+        circular : bool, default False
+            Whether to treat the data as circular.
         """
         method = method.lower()
         valid_methods = {"mean", "sd", "median", "quantile"}
@@ -353,14 +411,15 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         axis : int, sequence of int or None, default -1
         """
         ary, axes = process_ary_axes(ary, axis)
+        sample_shape = tuple(ary.shape[i] for i in axes)
         psl_ufunc = make_ufunc(
             self._power_scale_lw,
-            n_output=1,
+            n_output=2,
             n_input=1,
             n_dims=len(axes),
             ravel=False,
         )
-        return psl_ufunc(ary, out_shape=(ary.shape[i] for i in axes), alpha=alpha)
+        return psl_ufunc(ary, out_shape=(sample_shape, ()), alpha=alpha)
 
     def power_scale_sense(
         self, ary, lower_w, upper_w, lower_alpha, upper_alpha, chain_axis=-2, draw_axis=-1
@@ -426,8 +485,73 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         mask = np.isfinite(width) & (width > 0)
 
         valid_n_bins = np.ceil((x_max[mask] - x_min[mask]) / width[mask])
-        n_bins = np.ceil(np.mean(valid_n_bins)).astype(int)
+        n_bins = max(1, int(np.ceil(np.mean(valid_n_bins)))) if valid_n_bins.size else 1
+        constant = x_min == x_max
+        if np.any(constant):
+            warnings.warn("Your data appears to have a single value or no finite values")
+            x_min = np.where(constant, x_min - 1e-6, x_min)
+            x_max = np.where(constant, x_max + 1e-6, x_max)
         return np.moveaxis(np.linspace(x_min, x_max, n_bins + 1), 0, -1)
+
+    def _get_bivariate_counts(self, x, y, axis, weights=None, bounds=None):
+        """Compute default in 2D.
+
+        Applies the ``bins="arviz"`` rule with ``d=2`` to each marginal of
+        every batch slice and reduces the batch to shared counts so all
+        slices use the same grid.
+
+        Parameters
+        ----------
+        x, y : array-like
+            Paired samples with identical shapes.
+        axis : int, sequence of int or None
+            Axis or axes along which to reduce.
+        weights : array-like, optional
+            Sample weights with the same shape as ``x`` and ``y``. Samples with
+            non-finite weights are ignored.
+        bounds : array-like, optional
+            ``((xmin, xmax), (ymin, ymax))`` limits (or a flat 4-element
+            sequence with the same meaning). When provided, implied counts
+            cover these limits instead of the data range.
+
+        Returns
+        -------
+        tuple of int
+            Numbers of bins in the x and y directions.
+        """
+        x, y, weights, _ = _prepare_bivariate_inputs(x, y, axis, weights)
+        valid = np.isfinite(x) & np.isfinite(y)
+        if weights is not None:
+            valid &= np.isfinite(weights)
+        if not np.all(valid):
+            x = np.where(valid, x, np.nan)
+            y = np.where(valid, y, np.nan)
+
+        bininfo_ufunc = make_ufunc(self._get_bininfo, n_output=3, n_input=1, n_dims=1)
+        x_min, x_max, width_x = bininfo_ufunc(x, d=2)
+        y_min, y_max, width_y = bininfo_ufunc(y, d=2)
+        if bounds is not None and np.size(bounds) == 4:
+            (x_min, x_max), (y_min, y_max) = np.asarray(bounds, dtype=float).reshape(2, 2)
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            n_x = np.asarray(np.ceil((x_max - x_min) / width_x))
+            n_y = np.asarray(np.ceil((y_max - y_min) / width_y))
+        mask = (
+            np.isfinite(width_x)
+            & (width_x > 0)
+            & np.isfinite(width_y)
+            & (width_y > 0)
+            & np.isfinite(n_x)
+            & (n_x >= 1)
+            & np.isfinite(n_y)
+            & (n_y >= 1)
+        )
+        if not np.any(mask):
+            return 2, 2
+        return (
+            max(1, int(np.ceil(np.mean(n_x[mask])))),
+            max(1, int(np.ceil(np.mean(n_y[mask])))),
+        )
 
     # pylint: disable=redefined-builtin, too-many-return-statements
     # noqa: PLR0911
@@ -464,7 +588,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary = np.transpose(ary, axes=reordered_axes)
         broadcased_shape = ary.shape[: -len(axes)]
 
-        if bins is None or bins == "auto":
+        if bins is None or (isinstance(bins, str) and bins == "auto"):
             bins = self.get_bins(ary, axis=np.arange(-len(axes), 0, dtype=int))
         elif isinstance(bins, int):
             # avoid broadcasting over bins -> can't be positional argument
@@ -570,6 +694,98 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=len(axes),
         )
         return histogram_ufunc(ary, bins, range, shape_from_1st=True)
+
+    def histogram2d(self, x, y, bins=None, range=None, weights=None, axis=-1, density=True):
+        """Compute a batched two-dimensional histogram.
+
+        Parameters
+        ----------
+        x, y : array-like
+            Paired samples with identical shapes.
+        weights : array-like, optional
+            Sample weights with the same shape as ``x`` and ``y``.
+        bins : None, str, int or array-like or pair, default None
+            Bin specification passed to :func:`numpy.histogram2d`. ``None`` or
+            ``"auto"`` applies the default two-dimensional bin rule to each
+            marginal, reduced to shared counts over batched input.
+        range : array-like, optional
+            ``((xmin, xmax), (ymin, ymax))`` passed to :func:`numpy.histogram2d`.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to reduce.
+        density : bool, default True
+            Normalize the histogram as a probability density.
+
+        Returns
+        -------
+        histogram, x_edges, y_edges : ndarray
+            Histogram values and bin edges, with output dimensions appended after
+            any batch dimensions.
+        """
+        if bins is None or (isinstance(bins, str) and bins == "auto"):
+            bins = self._get_bivariate_counts(x, y, axis, weights=weights, bounds=range)
+        return _apply_bivariate_statistic(
+            self._histogram2d,
+            x,
+            y,
+            axis,
+            weights=weights,
+            bins=bins,
+            range=range,
+            density=density,
+        )
+
+    def hexbin(
+        self, x, y, gridsize="auto", extent=None, weights=None, axis=-1, density=True, regular=True
+    ):
+        """Compute a batched hexagonal histogram.
+
+        Parameters
+        ----------
+        x, y : array-like
+            Paired samples with identical shapes.
+        weights : array-like, optional
+            Sample weights with the same shape as ``x`` and ``y``. Values in each
+            cell are the sum of its sample weights.
+        gridsize : "auto" or int or pair of int, default "auto"
+            Number of hexagons in the x and y directions. ``"auto"`` applies the
+            default two-dimensional bin rule to each marginal (the counts
+            :meth:`histogram2d` would use on those marginals), reduced to shared
+            counts over batched input.
+            A pair sets both directions explicitly.
+        extent : array-like, optional
+            Limits ``(xmin, xmax, ymin, ymax)`` of the hexagon grid.
+        axis : int, sequence of int or None, default -1
+            Axis or axes along which to reduce.
+        density : bool, default True
+            Divide counts by the valid sample count and hexagon area.
+        regular : bool, default True
+            Whether to use a regular hexagonal grid. Ignored if ``gridsize`` is not ``"auto"``.
+
+        Returns
+        -------
+        values, offsets : ndarray
+            Values for every cell and their ``(x, y)`` center coordinates.
+        """
+        if isinstance(gridsize, str):
+            if gridsize != "auto":
+                raise ValueError('`gridsize` must be "auto", an integer or a pair of integers.')
+            nx, ny = self._get_bivariate_counts(x, y, axis, weights=weights, bounds=extent)
+            if regular:
+                gridsize = max(2, int(round(np.sqrt(nx * ny * 3**0.5 / 2))))
+            else:
+                hex_nx = max(1, int(round(nx / 2**0.5)))
+                hex_ny = max(1, int(round(ny / 2**0.5)))
+                gridsize = (hex_nx, hex_ny)
+        return _apply_bivariate_statistic(
+            self._hexbin,
+            x,
+            y,
+            axis,
+            weights=weights,
+            gridsize=gridsize,
+            extent=extent,
+            density=density,
+        )
 
     def kde(self, ary, axis=-1, circular=False, grid_len=512, **kwargs):
         """Compute KDE on array-like inputs.
@@ -737,8 +953,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         npoints : int, default 200
             Maximun number of evaluation points to use.
         pit : bool
-            If True compute the difference between the ecdf and the uniform ecdf
-            and the x values will be normalized to the [0, 1] range.
+            If True compute the difference between the ecdf and the uniform ecdf,
+            with the ecdf evaluated on `npoints` evenly spaced points in the [0, 1] range.
         axis : int, sequence of int or None, default -1
         **kwargs
 
