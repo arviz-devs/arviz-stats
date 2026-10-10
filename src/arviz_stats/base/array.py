@@ -1175,8 +1175,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         array-like
             Thinned array
         """
-        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
-
         if factor == "auto":
             factor = self.thin_factor(ary, chain_axis=chain_axis, draw_axis=draw_axis)
 
