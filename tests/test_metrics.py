@@ -287,3 +287,32 @@ def test_kl_divergence_custom_seed(fake_dt):
 def test_kl_divergence_not_shared_vars(fake_dt):
     with pytest.raises(ValueError, match="No shared variable names found"):
         kl_divergence(fake_dt.posterior["a"], fake_dt.posterior["b"], num_samples=100)
+
+
+def test_residual_r2_dataarray_3d():
+    xr = pytest.importorskip("xarray")
+    from arviz_stats.base.dataarray import dataarray_stats
+
+    rng = np.random.default_rng(42)
+    y_obs = xr.DataArray(rng.normal(size=(3, 100)), dims=["school", "obs"])
+    y_pred = xr.DataArray(
+        rng.normal(size=(4, 3, 100)),
+        dims=["chain", "school", "obs"],
+    )
+    result = dataarray_stats.residual_r2(y_pred, y_obs, sample_dims=["chain"])
+    assert result.dims == ("chain",)
+    assert result.shape == (4,)
+
+
+def test_bayesian_r2_dataarray_3d():
+    xr = pytest.importorskip("xarray")
+    from arviz_stats.base.dataarray import dataarray_stats
+
+    rng = np.random.default_rng(42)
+    mu_pred = xr.DataArray(
+        rng.uniform(0.1, 0.9, size=(4, 3, 100)),
+        dims=["chain", "school", "obs"],
+    )
+    result = dataarray_stats.bayesian_r2(mu_pred, sample_dims=["chain"])
+    assert result.dims == ("chain",)
+    assert result.shape == (4,)

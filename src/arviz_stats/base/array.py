@@ -849,8 +849,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
-    def bayesian_r2(self, mu_pred, scale, scale_kind="sd", circular=False):
+    def bayesian_r2(self, mu_pred, scale, scale_kind="sd", circular=False, axis=-1):
         """Compute Bayesian R² for regression models."""
+        if axis != -1:
+            mu_pred = np.moveaxis(mu_pred, axis, -1)
         r2_ufunc = make_ufunc(
             self._bayesian_r2,
             n_output=1,
@@ -858,19 +860,24 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=2,
             ravel=False,
         )
-        return r2_ufunc(mu_pred, scale, scale_kind, circular, out_shape=(mu_pred.shape[0],))
+        return r2_ufunc(mu_pred, scale, scale_kind, circular, out_shape=(mu_pred.shape[-2],))
 
-    def residual_r2(self, y_obs, mu_pred, circular=False):
+    def residual_r2(self, y_obs, mu_pred, circular=False, axis=-1):
         """Compute residual R² for Bayesian regression models."""
+        if axis != -1:
+            mu_pred = np.moveaxis(mu_pred, axis, -1)
+
+        def _wrap(mu_pred_slice, y_obs_arr, circular_flag):
+            return self._residual_r2(y_obs_arr, mu_pred_slice, circular_flag)
+
         r2_ufunc = make_ufunc(
-            self._residual_r2,
+            _wrap,
             n_output=1,
             n_input=1,
-            n_dims=1,
+            n_dims=2,
             ravel=False,
         )
-
-        return r2_ufunc(y_obs, mu_pred, circular, out_shape=(mu_pred.shape[0],))
+        return r2_ufunc(mu_pred, y_obs, circular, out_shape=(mu_pred.shape[-2],))
 
     def metrics(self, observed, predicted, kind):
         """Compute metrics for Bayesian regression models."""

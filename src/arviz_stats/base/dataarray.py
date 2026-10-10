@@ -1109,6 +1109,67 @@ class BaseDataArray:
             output_core_dims=[dims],
         )
 
+    def bayesian_r2(self, da, scale=None, sample_dims=None, scale_kind="sd", circular=False):
+        """Compute Bayesian R² on DataArray input."""
+        dims = validate_dims(sample_dims)
+        obs_dims = [d for d in da.dims if d not in dims]
+
+        def _inner(da_slice, scale_slice=None):
+            n_obs = len(obs_dims)
+            if n_obs:
+                sam_shape = da_slice.shape[:-n_obs]
+                obs_size = int(np.prod(da_slice.shape[-n_obs:]))
+            else:
+                sam_shape = da_slice.shape
+                obs_size = 1
+            sam_size = int(np.prod(sam_shape)) if sam_shape else 1
+            da_flat = da_slice.reshape(sam_size, obs_size)
+            scale_flat = scale_slice.reshape(sam_size) if scale_slice is not None else None
+            result = self.array_class.bayesian_r2(da_flat, scale_flat, scale_kind, circular)
+            return result.reshape(sam_shape) if sam_shape else result
+
+        if scale is not None:
+            return apply_ufunc(
+                _inner,
+                da,
+                scale,
+                input_core_dims=[dims + obs_dims, dims],
+                output_core_dims=[dims],
+            )
+        return apply_ufunc(
+            _inner,
+            da,
+            input_core_dims=[dims + obs_dims],
+            output_core_dims=[dims],
+        )
+
+    def residual_r2(self, da, y_obs, sample_dims=None, circular=False):
+        """Compute residual R² on DataArray input."""
+        dims = validate_dims(sample_dims)
+        obs_dims = [d for d in da.dims if d not in dims]
+
+        def _inner(da_slice, y_slice):
+            n_obs = len(obs_dims)
+            if n_obs:
+                sam_shape = da_slice.shape[:-n_obs]
+                obs_size = int(np.prod(da_slice.shape[-n_obs:]))
+            else:
+                sam_shape = da_slice.shape
+                obs_size = 1
+            sam_size = int(np.prod(sam_shape)) if sam_shape else 1
+            da_flat = da_slice.reshape(sam_size, obs_size)
+            y_flat = y_slice.reshape(obs_size)
+            result = self.array_class.residual_r2(y_flat, da_flat, circular)
+            return result.reshape(sam_shape) if sam_shape else result
+
+        return apply_ufunc(
+            _inner,
+            da,
+            y_obs,
+            input_core_dims=[dims + obs_dims, obs_dims],
+            output_core_dims=[dims],
+        )
+
     def mean(self, da, round_to=None, skipna=False, dim=None):
         """Compute mean on DataArray input."""
         dims = validate_dims(dim)
