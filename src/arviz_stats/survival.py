@@ -130,6 +130,7 @@ def generate_survival_curves(
 
         for i in range(pp.sizes["sample"]):
             times = pp[var_name].isel(sample=i)
+            n_times = times.size
 
             # Filter times based on extrapolation factor
             if extrapolation_factor is not None:
@@ -141,21 +142,23 @@ def generate_survival_curves(
 
             unique_times = np.unique(np.sort(times))
             max_points = max(max_points, len(unique_times))
-            sample_data_list.append((i, times))
+            sample_data_list.append((n_times, times))
 
         # Now create aligned arrays
         n_valid_samples = len(sample_data_list)
         times_array = np.full((n_valid_samples, max_points), np.nan)
         probs_array = np.full((n_valid_samples, max_points), np.nan)
 
-        for idx, (_, times) in enumerate(sample_data_list):
+        for idx, (n_times, times) in enumerate(sample_data_list):
             # Create empirical survival function for this sample
             sorted_times = np.sort(times)
             unique_times = np.unique(sorted_times)
+            # share of all times above t, counting ties and times past the limit
+            n_events = np.searchsorted(sorted_times, unique_times, side="right")
 
             for j, t in enumerate(unique_times):
                 times_array[idx, j] = t
-                probs_array[idx, j] = 1 - (j + 1) / len(unique_times)
+                probs_array[idx, j] = 1 - n_events[j] / n_times
 
         dictio[var_name] = np.stack([times_array, probs_array], axis=0)
 
