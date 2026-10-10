@@ -204,6 +204,79 @@ def test_rhat_bad_method(rng):
         array_stats.rhat(ary, method="wrong_method")
 
 
+@pytest.mark.parametrize("method", ("rank", "split", "folded", "z_scale", "identity"))
+@pytest.mark.parametrize("draw", (1, 2, 3, 4))
+def test_rhat_nested_min_draws_by_method(rng, method, draw):
+    """Nested R-hat needs at least two draws per chain except for the identity method."""
+    ary = rng.normal(size=(4, draw))
+    rhat_data = array_stats.rhat_nested(ary, superchain_ids=[0, 0, 1, 1], method=method)
+    if method == "identity" or draw >= 2:
+        assert not np.isnan(rhat_data)
+    else:
+        assert np.isnan(rhat_data)
+
+
+def test_rhat_nested_single_draw_per_chain(rng):
+    """Single draw per chain with an extra dimension returns finite values."""
+    ary = rng.normal(size=(4, 1, 2))
+    rhat_data = array_stats.rhat_nested(
+        ary, superchain_ids=(0, 0, 1, 1), method="identity", chain_axis=0, draw_axis=1
+    )
+    assert rhat_data.shape == (2,)
+    assert np.all(np.isfinite(rhat_data))
+    assert np.all(rhat_data >= 1)
+
+
+def test_rhat_nested_undefined_returns_nan(rng):
+    """Nested R-hat is undefined without variation within and between superchains."""
+    assert np.isnan(array_stats.rhat_nested(rng.normal(size=(2, 1)), superchain_ids=[0, 1]))
+    assert np.isnan(array_stats.rhat_nested(rng.normal(size=(4, 10)), superchain_ids=[0, 0, 0, 0]))
+    assert np.isnan(array_stats.rhat_nested(rng.normal(size=(1, 10)), superchain_ids=[0]))
+
+
+@pytest.mark.parametrize("draw", (1, 5))
+def test_rhat_nested_identity_matches_formula(rng, draw):
+    ary = rng.normal(size=(4, draw))
+    superchain_ids = np.array([0, 0, 1, 1])
+
+    chain_mean = ary.mean(axis=1)
+    chain_var = ary.var(axis=1, ddof=1) if draw > 1 else np.zeros(ary.shape[0])
+
+    superchain_means = []
+    between_var = []
+    within_var = []
+    for label in np.unique(superchain_ids):
+        mask = superchain_ids == label
+        means = chain_mean[mask]
+        superchain_means.append(means.mean())
+        between_var.append(means.var(ddof=1) if means.size > 1 else 0.0)
+        within_var.append(chain_var[mask].mean())
+
+    var_between = np.var(superchain_means, ddof=1)
+    var_within = np.mean(np.asarray(within_var) + np.asarray(between_var))
+    expected = np.sqrt(1 + var_between / var_within)
+
+    result = array_stats.rhat_nested(ary, superchain_ids=superchain_ids, method="identity")
+    np.testing.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize("method", ("identity", "rank"))
+def test_rhat_nested_noncontiguous_ids(rng, method):
+    ary = rng.normal(size=(4, 100))
+    contiguous = array_stats.rhat_nested(ary, superchain_ids=[0, 0, 1, 1], method=method)
+    noncontiguous = array_stats.rhat_nested(ary, superchain_ids=[0, 0, 5, 5], method=method)
+    np.testing.assert_allclose(contiguous, noncontiguous)
+
+
+@pytest.mark.parametrize("method", ("rank", "split", "folded", "z_scale", "identity"))
+def test_rhat_nested_nan(rng, method):
+    """Confirm nested R-hat statistic returns nan."""
+    data = rng.normal(size=(4, 100))
+    data[0, 0] = np.nan  #  pylint: disable=unsupported-assignment-operation
+    rhat_data = array_stats.rhat_nested(data, superchain_ids=[0, 0, 1, 1], method=method)
+    assert np.isnan(rhat_data)
+
+
 @pytest.mark.parametrize(
     "method",
     (
