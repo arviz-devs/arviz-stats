@@ -4,6 +4,15 @@ import numpy as np
 import xarray as xr
 
 
+def _as_sample_dim(da, sample_dims):
+    """Return `da` with its sample dimensions as a single ``sample`` dimension."""
+    if len(sample_dims) == 1:
+        if sample_dims[0] == "sample":
+            return da
+        return da.rename({sample_dims[0]: "sample"})
+    return da.stack(sample=sample_dims)
+
+
 def _pit_for_hist(value, left_edges, right_edges, histogram, *, eps, rng):
     """Help compute PIT for hist on scalar `value` and 1d data."""
     bin_edges = np.append(left_edges, right_edges[-1])
@@ -36,10 +45,7 @@ def compute_pit_for_histogram(dt_group, hist_dt, sample_dims):
         right_edges = hist_data.sel(plot_axis="right_edges")
         histogram = hist_data.sel(plot_axis="histogram")
 
-        if len(sample_dims) == 1 and sample_dims[0] != "sample":
-            sample = dt_group[var_name].rename(sample=sample_dims[0])
-        else:
-            sample = dt_group[var_name].stack(sample=sample_dims)
+        sample = _as_sample_dim(dt_group[var_name], sample_dims)
         eps = 0.5 / sample.sizes["sample"]
 
         pit_da = xr.apply_ufunc(
@@ -87,10 +93,7 @@ def compute_pit_for_kde(dt_group, kde_dt, sample_dims):
         dx = grid.diff("kde_dim").isel(kde_dim=0)
         cdf = (density.cumsum("kde_dim") * dx).clip(0.0, 1.0)
 
-        if len(sample_dims) == 1 and sample_dims[0] != "sample":
-            sample = dt_group[var_name].rename(sample=sample_dims[0])
-        else:
-            sample = dt_group[var_name].stack(sample=sample_dims)
+        sample = _as_sample_dim(dt_group[var_name], sample_dims)
         eps = 0.5 / sample.sizes["sample"]
 
         pit = xr.apply_ufunc(
@@ -151,10 +154,7 @@ def compute_pit_for_qds(dt_group, qds_dt, sample_dims):
         radius = qds_data.coords[f"radius_{var_name}"].values
         nqds = qds_data.sizes["qd_dim"]
 
-        if len(sample_dims) == 1 and sample_dims[0] != "sample":
-            sample = dt_group[var_name].rename(sample=sample_dims[0])
-        else:
-            sample = dt_group[var_name].stack(sample=sample_dims)
+        sample = _as_sample_dim(dt_group[var_name], sample_dims)
 
         pit_da = xr.apply_ufunc(
             _pit_f_for_qds,
