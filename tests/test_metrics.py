@@ -231,6 +231,7 @@ def test_metrics_2d_observations(kind):
     y = rng.normal(size=(4, 5))
     y_pred = y + rng.normal(scale=0.5, size=(2, 50, 4, 5))
     dt_2d = azb.from_dict({"posterior_predictive": {"y": y_pred}, "observed_data": {"y": y}})
+    dt_2d["observed_data"] = dt_2d["observed_data"].to_dataset().transpose()
     dt_1d = azb.from_dict(
         {
             "posterior_predictive": {"y": y_pred.reshape(2, 50, 20)},
