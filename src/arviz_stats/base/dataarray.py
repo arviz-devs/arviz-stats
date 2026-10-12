@@ -1219,6 +1219,41 @@ class BaseDataArray:
             output_core_dims=[dims],
         )
 
+    def bayesian_r2(self, da, scale, sample_dims=None, scale_kind="sd", circular=False):
+        """Compute Bayesian :math:`R^2` on DataArray input."""
+        dims = validate_dims(sample_dims)
+        obs_dims = [dim for dim in da.dims if dim not in dims]
+        return apply_ufunc(
+            self.array_class.bayesian_r2,
+            da,
+            scale,
+            input_core_dims=[obs_dims, []],
+            output_core_dims=[[]],
+            kwargs={
+                "scale_kind": scale_kind,
+                "circular": circular,
+                "axis": np.arange(-len(obs_dims), 0, 1),
+            },
+        )
+
+    def residual_r2(self, da, y_obs, sample_dims=None, circular=False):
+        """Compute residual :math:`R^2` on DataArray input."""
+        dims = validate_dims(sample_dims)
+        obs_dims = [dim for dim in da.dims if dim not in dims]
+        if set(y_obs.dims) != set(obs_dims):
+            raise ValueError(
+                f"Dimensions of the observed data {list(y_obs.dims)} must match "
+                f"the non-sample dimensions of the predictions {obs_dims}"
+            )
+        return apply_ufunc(
+            self.array_class.residual_r2,
+            y_obs,
+            da,
+            input_core_dims=[obs_dims, obs_dims],
+            output_core_dims=[[]],
+            kwargs={"circular": circular, "axis": np.arange(-len(obs_dims), 0, 1)},
+        )
+
     def mean(self, da, round_to=None, skipna=False, dim=None):
         """Compute mean on DataArray input."""
         dims = validate_dims(dim)

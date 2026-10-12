@@ -92,6 +92,35 @@ def test_residual_r2_no_rounding(datatree_regression):
     assert isinstance(result.mean, float)
 
 
+def test_residual_r2_2d_observations():
+    rng = np.random.default_rng(42)
+    mu = rng.normal(size=(4, 50, 5, 6))
+    y = rng.normal(size=(5, 6))
+    dt_2d = azb.from_dict(
+        {"posterior": {"mu": mu}, "observed_data": {"y": y.T}},
+        dims={"mu": ["a", "b"], "y": ["b", "a"]},
+    )
+    dt_1d = azb.from_dict(
+        {"posterior": {"mu": mu.reshape(4, 50, 30)}, "observed_data": {"y": y.ravel()}},
+        dims={"mu": ["obs"], "y": ["obs"]},
+    )
+    result = residual_r2(dt_2d, pred_mean="mu", obs_name="y", summary=False)
+    expected = residual_r2(dt_1d, pred_mean="mu", obs_name="y", summary=False)
+    assert_array_almost_equal(result, expected)
+
+
+def test_residual_r2_mismatched_dims():
+    rng = np.random.default_rng(42)
+    dt = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(4, 50, 10))},
+            "observed_data": {"y": rng.normal(size=10)},
+        }
+    )
+    with pytest.raises(ValueError, match="must match"):
+        residual_r2(dt, pred_mean="mu", obs_name="y")
+
+
 def test_residual_r2_invalid_shapes():
     y_true = np.array([3, -0.5, 2, 7])
     y_pred = np.array([[2.5, 0.0, 2]])
@@ -196,6 +225,17 @@ def test_bayesian_r2_ci_prob(datatree_regression, ci_prob):
         datatree_regression, pred_mean="mu", scale="sigma", summary=True, ci_prob=ci_prob
     )
     assert hasattr(result, "_fields")
+
+
+def test_bayesian_r2_2d_observations():
+    rng = np.random.default_rng(42)
+    mu = rng.normal(size=(4, 50, 5, 6))
+    sigma = rng.uniform(0.5, 1.5, size=(4, 50))
+    dt_2d = azb.from_dict({"posterior": {"mu": mu, "sigma": sigma}})
+    dt_1d = azb.from_dict({"posterior": {"mu": mu.reshape(4, 50, 30), "sigma": sigma}})
+    result = bayesian_r2(dt_2d, pred_mean="mu", scale="sigma", summary=False)
+    expected = bayesian_r2(dt_1d, pred_mean="mu", scale="sigma", summary=False)
+    assert_array_almost_equal(result, expected)
 
 
 @pytest.mark.parametrize(

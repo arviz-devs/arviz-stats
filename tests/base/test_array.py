@@ -799,6 +799,24 @@ class TestMetrics:
         result = array_stats.residual_r2(y_true, y_pred)
         assert result.shape == (4,)
 
+    def test_residual_r2_batched(self, array_stats):
+        rng = np.random.default_rng(42)
+        y_true = rng.normal(size=100)
+        y_pred = rng.normal(size=(2, 4, 100))
+        result = array_stats.residual_r2(y_true, y_pred)
+        expected = array_stats.residual_r2(y_true, y_pred.reshape(8, 100))
+        assert_allclose(result, expected.reshape(2, 4))
+
+    def test_bayesian_r2_batched(self, array_stats):
+        rng = np.random.default_rng(42)
+        mu_pred = rng.normal(size=(100, 2, 4))
+        scale = rng.uniform(0.5, 1.5, size=(2, 4))
+        result = array_stats.bayesian_r2(mu_pred, scale, axis=0)
+        expected = array_stats.bayesian_r2(
+            np.moveaxis(mu_pred, 0, -1).reshape(8, 100), scale.ravel()
+        )
+        assert_allclose(result, expected.reshape(2, 4))
+
 
 class TestLOO:
     def test_loo_basic(self, array_stats, rng):

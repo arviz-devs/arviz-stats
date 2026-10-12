@@ -322,6 +322,23 @@ class _BaseAccessor:
             **kwargs,
         )
 
+    def bayesian_r2(self, scale, sample_dims=None, scale_kind="sd", circular=False, **kwargs):
+        """Compute Bayesian :math:`R^2`."""
+        return self._apply(
+            "bayesian_r2",
+            scale=scale,
+            sample_dims=sample_dims,
+            scale_kind=scale_kind,
+            circular=circular,
+            **kwargs,
+        )
+
+    def residual_r2(self, y_obs, sample_dims=None, circular=False, **kwargs):
+        """Compute residual :math:`R^2`."""
+        return self._apply(
+            "residual_r2", y_obs=y_obs, sample_dims=sample_dims, circular=circular, **kwargs
+        )
+
     def power_scale_lw(self, dim=None, **kwargs):
         """Compute log weights for power-scaling of the DataTree."""
         return self._apply("power_scale_lw", dim=dim, **kwargs)

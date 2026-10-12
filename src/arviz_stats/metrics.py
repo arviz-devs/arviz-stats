@@ -150,11 +150,13 @@ def bayesian_r2(
     if round_to is None:
         round_to = rcParams["stats.round_to"]
 
-    mu_pred = extract(data, group=group, var_names=pred_mean).values.T
+    mu_pred = extract(data, group=group, var_names=pred_mean)
     if scale is not None:
-        scale = extract(data, group=group, var_names=scale).values.T
+        scale = extract(data, group=group, var_names=scale)
 
-    r_squared = array_stats.bayesian_r2(mu_pred, scale, scale_kind, circular)
+    r_squared = mu_pred.azstats.bayesian_r2(
+        scale=scale, sample_dims="sample", scale_kind=scale_kind, circular=circular
+    ).values
 
     if summary:
         return _summary_r2("bayesian", r_squared, point_estimate, ci_kind, ci_prob, round_to)
@@ -286,10 +288,12 @@ def residual_r2(
 
     y_true = extract(
         data, group="observed_data", var_names=obs_name, combined=False, sample_dims=[]
-    ).values
-    mu_pred = extract(data, group=group, var_names=pred_mean).values.T
+    )
+    mu_pred = extract(data, group=group, var_names=pred_mean)
 
-    r_squared = array_stats.residual_r2(y_true, mu_pred, circular)
+    r_squared = mu_pred.azstats.residual_r2(
+        y_obs=y_true, sample_dims="sample", circular=circular
+    ).values
 
     if summary:
         return _summary_r2("residual", r_squared, point_estimate, ci_kind, ci_prob, round_to)

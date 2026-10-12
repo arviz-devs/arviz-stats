@@ -1072,28 +1072,21 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             **kwargs,
         )
 
-    def bayesian_r2(self, mu_pred, scale, scale_kind="sd", circular=False):
+    def bayesian_r2(self, mu_pred, scale, scale_kind="sd", circular=False, axis=-1):
         """Compute Bayesian R² for regression models."""
-        r2_ufunc = make_ufunc(
-            self._bayesian_r2,
-            n_output=1,
-            n_input=1,
-            n_dims=2,
-            ravel=False,
-        )
-        return r2_ufunc(mu_pred, scale, scale_kind, circular, out_shape=(mu_pred.shape[0],))
+        mu_pred, axes = process_ary_axes(mu_pred, axis)
+        batch_shape = mu_pred.shape[: -len(axes)]
+        mu_pred = mu_pred.reshape(int(np.prod(batch_shape)), -1)
+        if scale is not None:
+            scale = np.broadcast_to(scale, batch_shape).ravel()
+        return self._bayesian_r2(mu_pred, scale, scale_kind, circular).reshape(batch_shape)
 
-    def residual_r2(self, y_obs, mu_pred, circular=False):
+    def residual_r2(self, y_obs, mu_pred, circular=False, axis=-1):
         """Compute residual R² for Bayesian regression models."""
-        r2_ufunc = make_ufunc(
-            self._residual_r2,
-            n_output=1,
-            n_input=1,
-            n_dims=1,
-            ravel=False,
-        )
-
-        return r2_ufunc(y_obs, mu_pred, circular, out_shape=(mu_pred.shape[0],))
+        mu_pred, axes = process_ary_axes(mu_pred, axis)
+        batch_shape = mu_pred.shape[: -len(axes)]
+        mu_pred = mu_pred.reshape(int(np.prod(batch_shape)), -1)
+        return self._residual_r2(np.ravel(y_obs), mu_pred, circular).reshape(batch_shape)
 
     def metrics(self, observed, predicted, kind):
         """Compute metrics for Bayesian regression models."""
