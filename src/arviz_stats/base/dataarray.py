@@ -1110,7 +1110,7 @@ class BaseDataArray:
         )
 
     def bayesian_r2(self, da, scale, sample_dims=None, scale_kind="sd", circular=False):
-        """Compute Bayesian R² on DataArray input."""
+        """Compute Bayesian :math:`R^2` on DataArray input."""
         dims = validate_dims(sample_dims)
         obs_dims = [dim for dim in da.dims if dim not in dims]
         return apply_ufunc(
@@ -1127,7 +1127,7 @@ class BaseDataArray:
         )
 
     def residual_r2(self, da, y_obs, sample_dims=None, circular=False):
-        """Compute residual R² on DataArray input."""
+        """Compute residual :math:`R^2` on DataArray input."""
         dims = validate_dims(sample_dims)
         obs_dims = [dim for dim in da.dims if dim not in dims]
         if set(y_obs.dims) != set(obs_dims):
