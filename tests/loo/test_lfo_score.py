@@ -63,27 +63,40 @@ def test_lfo_score_exact_refits_before_scoring(varying_lfo_wrapper, lfo_varying_
     np.testing.assert_allclose(result.pointwise.values[-1], scores.sum().values)
 
 
-def test_lfo_score_approx_weights_draws(varying_lfo_wrapper, lfo_varying_data):
+@pytest.mark.parametrize("kind", ["crps", "scrps"])
+def test_lfo_score_approx_weights_draws(varying_lfo_wrapper, lfo_varying_data, kind):
+    wrapper = varying_lfo_wrapper
     result = lfo_score(
         lfo_varying_data,
-        varying_lfo_wrapper,
+        wrapper,
         min_observations=20,
         forecast_horizon=2,
+        kind=kind,
         method="approx",
         pointwise=True,
     )
-
-    train, excluded = varying_lfo_wrapper.sel_observations(np.arange(20, 25))
-    idata = varying_lfo_wrapper.get_inference_data(varying_lfo_wrapper.sample(train))
-    log_lik = varying_lfo_wrapper.log_likelihood__i(excluded, idata)
-    log_weights, khat = (-log_lik.isel(time=0)).azstats.psislw(dim=["chain", "draw"], r_eff=1.0)
-    _, block = varying_lfo_wrapper.sel_observations(np.arange(21, 23))
-    draws = varying_lfo_wrapper.posterior_predictive__i(block, idata)
-    y_obs = lfo_varying_data.observed_data["obs"].isel(time=slice(21, 23))
-    scores, _ = draws.azstats.loo_score(y_obs=y_obs, log_weights=log_weights.broadcast_like(draws))
-
+    assert wrapper.fit_count == 1
     assert result.n_refits == 0
-    np.testing.assert_allclose(result.pointwise.values[1], scores.sum().values)
+
+    obs = lfo_varying_data.observed_data["obs"]
+    fit = wrapper.get_inference_data(wrapper.sample(obs.isel(time=slice(20))))
+    mu = fit.posterior["mu"].values.ravel()
+    expected = []
+    for cutoff in range(20, obs.size - 1):
+        _, block = wrapper.sel_observations(np.arange(cutoff, cutoff + 2))
+        draws = wrapper.posterior_predictive__i(block, fit).values[0]
+        ratios = np.exp(-0.5 * ((obs.values[20:cutoff, None] - mu) ** 2).sum(axis=0))
+        weights = ratios / ratios.sum()
+        error = (np.abs(draws - block.values[:, None]) * weights).sum(axis=1)
+        pairwise = np.abs(draws[:, :, None] - draws[:, None, :])
+        gini = (pairwise * weights[:, None] * weights[None, :]).sum(axis=(1, 2))
+        score = -(error - gini / 2) if kind == "crps" else -error / gini - 0.5 * np.log(gini)
+        expected.append(score.sum())
+
+    log_ratios = xr.DataArray(-0.5 * (obs.values[20] - mu)[None] ** 2, dims=["chain", "draw"])
+    _, khat = (-log_ratios).azstats.psislw(dim=["chain", "draw"], r_eff=1.0)
+
+    np.testing.assert_allclose(result.pointwise.values, expected, atol=0.002, rtol=0)
     np.testing.assert_allclose(result.pareto_k.values[1], khat.values)
 
 
