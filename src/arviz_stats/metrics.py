@@ -701,6 +701,9 @@ def _metrics(observed, predicted, kind, round_to):
     if kind not in valid_kind:
         raise ValueError(f"kind must be one of {valid_kind}")
 
+    predicted = predicted.transpose(*observed.dims).values.ravel()
+    observed = observed.values.ravel()
+
     estimate = namedtuple(kind, ["mean", "se"])
     mean, std_error = array_stats.metrics(observed, predicted, kind=kind)
 
