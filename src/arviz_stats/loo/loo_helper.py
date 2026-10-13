@@ -383,8 +383,7 @@ def _shift_and_scale(upars, lwi):
     mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
     shift_vec = mean_weighted - mean_original
 
-    weighted_second_moment = np.sum(weights[:, None] * upars_values**2, axis=0)
-    mii = weighted_second_moment - mean_weighted**2
+    mii = np.sum(weights[:, None] * (upars_values - mean_weighted) ** 2, axis=0)
     mii = mii * samples / (samples - 1)  # Bessel's correction
 
     var_original = np.var(upars_values, axis=0, ddof=1)
@@ -922,7 +921,7 @@ def _diff_srs_estimator(
             )
 
             lpd_approx_sq_sum_all = np.nansum(approx_all**2)
-            mean_sq_diff = np.nanmean(elpd_valid**2 - approx_valid**2)
+            mean_sq_diff = np.nanmean(pointwise_diff * (elpd_valid + approx_valid))
             scaled_mean_sq_diff = n_data_points * mean_sq_diff
 
             total_variance_estimate = (
