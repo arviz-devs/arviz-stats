@@ -110,6 +110,22 @@ def test_thin_auto_factor(datatree):
     assert thinned.sizes["draw"] <= datatree.posterior.sizes["draw"]
 
 
+def test_thin_datatree_auto_factor_uses_group(centered_eight):
+    prior_factor = centered_eight.azstats.thin_factor(group="prior")
+    assert prior_factor != centered_eight.azstats.thin_factor(group="posterior")
+    thinned = thin(centered_eight, group="prior")
+    n_draws = centered_eight.prior.sizes["draw"]
+    assert thinned.sizes["draw"] == len(range(0, n_draws, prior_factor))
+
+
+def test_thin_datatree_auto_factor_without_posterior(centered_eight):
+    dt = xr.DataTree.from_dict({"prior": centered_eight.prior.dataset})
+    prior_factor = dt.azstats.thin_factor(group="prior")
+    thinned = thin(dt, group="prior")
+    n_draws = dt.prior.sizes["draw"]
+    assert thinned.sizes["draw"] == len(range(0, n_draws, prior_factor))
+
+
 def test_thin_different_sample_dims(datatree):
     thinned = thin(datatree.posterior, factor=2, sample_dims=["draw"])
     assert thinned.sizes["draw"] == datatree.posterior.sizes["draw"] // 2
