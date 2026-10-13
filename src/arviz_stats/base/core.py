@@ -417,10 +417,11 @@ class _CoreBase:
     def _hdi_nearest(self, ary, prob, circular, skipna):
         """Compute HDI over the flattened array as closest samples that contain the given prob."""
         ary = ary.flatten()
-        if skipna:
-            nans = np.isnan(ary)
-            if not nans.all():
-                ary = ary[~nans]
+        nans = np.isnan(ary)
+        if nans.any():
+            if not skipna or nans.all():
+                return np.full(2, np.nan)
+            ary = ary[~nans]
 
         if circular:
             mean = self.circular_mean(ary)

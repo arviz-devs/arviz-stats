@@ -264,6 +264,10 @@ class TestHDI:
         result = core._hdi_nearest(x, prob=0.9, circular=False, skipna=True)
         assert not np.any(np.isnan(result))
 
+    def test_hdi_nearest_nan(self, core, rng):
+        x = np.append(rng.normal(size=100), np.nan)
+        assert np.all(np.isnan(core._hdi_nearest(x, prob=0.9, circular=False, skipna=False)))
+
 
 class TestMode:
     def test_mode_discrete(self, core):
