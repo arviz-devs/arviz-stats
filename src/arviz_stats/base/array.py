@@ -374,7 +374,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=2,
             ravel=False,
         )
-        return bfmi_ufunc(ary, out_shape=(ary.shape[chain_axis],))
+        return bfmi_ufunc(ary, out_shape=(ary.shape[-2],))
 
     def pareto_khat(
         self, ary, chain_axis=-2, draw_axis=-1, r_eff=None, tail="both", log_weights=False
