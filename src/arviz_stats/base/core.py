@@ -167,11 +167,11 @@ class _CoreBase:
         """Compute ranks for continuous and discrete variables."""
         ary_shape = ary.shape
         ary = ary.flatten()
-        if ary.dtype.kind == "i":
+        if ary.dtype.kind == "i" and ary.min() < ary.max():
             min_ary, max_ary = min(ary), max(ary)
             x = np.linspace(min_ary, max_ary, len(ary))
             csi = CubicSpline(x, ary)
-            ary = csi(np.linspace(min_ary + 0.001, max_ary - 0.001, len(ary))).reshape(ary_shape)
+            ary = csi(np.linspace(min_ary + 0.001, max_ary - 0.001, len(ary)))
         out = self._float_rankdata(ary).reshape(ary_shape)
         if relative:
             return out / out.size
