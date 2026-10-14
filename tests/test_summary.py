@@ -635,3 +635,22 @@ def test_summary_data_frame():
     plain = SummaryDataFrame(data, index=["mu_1", "tau"])
     assert "0.123456" in plain.to_latex()
     assert "r_hat" in plain.to_latex()
+
+
+@pytest.mark.parametrize("sample_dims", ["draw", ["draw"]])
+def test_summary_stats_median_reduces_mad_over_sample_dims(sample_dims):
+    # MAD used to always pool chain and draw, while median and eti use sample_dims
+    data = xr.Dataset(
+        {"theta": (("chain", "draw"), [[0.0, 1.0, 2.0, 3.0], [100.0, 102.0, 104.0, 106.0]])}
+    )
+    summary_df = summary(data, kind="stats_median", sample_dims=sample_dims, round_to="none")
+    assert_allclose(summary_df["median"].to_numpy(), [1.5, 103.0])
+    assert_allclose(summary_df["mad"].to_numpy(), [1.0, 2.0])
+
+
+def test_summary_median_kind_pools_mad_by_default():
+    data = xr.Dataset(
+        {"theta": (("chain", "draw"), [[0.0, 1.0, 2.0, 3.0], [100.0, 102.0, 104.0, 106.0]])}
+    )
+    summary_df = summary(data, kind="stats_median", round_to="none")
+    assert_allclose(summary_df["mad"].to_numpy(), [50.5])
