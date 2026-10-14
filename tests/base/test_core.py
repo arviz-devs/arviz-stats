@@ -44,7 +44,7 @@ class TestFFT:
 
 
 class TestAutoCorrelation:
-    @pytest.mark.parametrize("axis", [-1, 1, 2])
+    @pytest.mark.parametrize("axis", [-1, 0, 1, 2])
     def test_autocov_shape(self, core, rng, axis):
         x = rng.normal(size=(10, 20, 5))
         result = core.autocov(x, axis=axis)
@@ -56,7 +56,16 @@ class TestAutoCorrelation:
         for i in range(x.shape[0]):
             assert_allclose(result[i, 0], np.var(x[i, :]), rtol=0.01)
 
-    @pytest.mark.parametrize("axis", [-1, 1, 2])
+    def test_autocov_axis_zero(self, core, rng):
+        x = rng.normal(size=(50, 3))
+        result = core.autocov(x, axis=0)
+        centered = x - x.mean(axis=0)
+        expected = np.stack(
+            [np.correlate(col, col, mode="full")[49:] / 50 for col in centered.T], axis=1
+        )
+        assert_allclose(result, expected, atol=1e-12)
+
+    @pytest.mark.parametrize("axis", [-1, 0, 1, 2])
     def test_autocorr_shape(self, core, rng, axis):
         x = rng.normal(size=(10, 20, 5))
         result = core.autocorr(x, axis=axis)
