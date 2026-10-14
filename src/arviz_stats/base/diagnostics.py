@@ -340,7 +340,7 @@ class _DiagnosticsBase(_CoreBase):
         th2 = sorted_ary[int(np.ceil(np.nanmin((ppf_size[1], size - 1))))]
         return (th2 - th1) / 2
 
-    def _pareto_min_ss(self, ary):
+    def _pareto_min_ss(self, ary, prob):
         """Compute the minimum effective sample size."""
         ary = np.asarray(ary)
         if _not_valid(ary, check_nan=False, shape_kwargs={"min_draws": 4, "min_chains": 1}):
@@ -355,7 +355,7 @@ class _DiagnosticsBase(_CoreBase):
             )
             return np.nan
 
-        _, kappa = self._pareto_khat(ary, tail="both", log_weights=False)
+        _, kappa = self._pareto_khat(ary, prob, tail="both", log_weights=False)
 
         if np.isnan(kappa):
             return np.nan
@@ -1077,7 +1077,7 @@ class _DiagnosticsBase(_CoreBase):
 
         return float(np.clip(raw_pit, min_tail_prob, 1.0 - min_tail_prob))
 
-    def _pareto_khat(self, ary, r_eff=None, tail="both", log_weights=False):
+    def _pareto_khat(self, ary, prob, r_eff=None, tail="both", log_weights=False):
         """
         Compute Pareto k-hat diagnostic.
 
@@ -1086,6 +1086,8 @@ class _DiagnosticsBase(_CoreBase):
         Parameters
         ----------
         ary : Array
+        prob : float
+            Probability for the tail ESS used to compute `r_eff` when it is not given.
         r_eff : float, optional
             Relative efficiency. Effective sample size divided the number of samples.
         tail : srt, optional
@@ -1103,7 +1105,7 @@ class _DiagnosticsBase(_CoreBase):
             tail = "right"
 
         if r_eff is None:
-            r_eff = self._ess_tail(ary, prob=0.05, relative=True)
+            r_eff = self._ess_tail(ary, prob=prob, relative=True)
 
         ary = ary.flatten()
         n_draws = len(ary)
@@ -1371,13 +1373,13 @@ class _DiagnosticsBase(_CoreBase):
         upper_grad = upper_cjs / np.log2(upper_alpha)
         return (lower_grad + upper_grad) / 2
 
-    def _power_scale_lw(self, ary, alpha):
+    def _power_scale_lw(self, ary, alpha, prob):
         """Compute log weights for power-scaling component by alpha."""
         shape = ary.shape
         ary = np.ravel(ary)
         log_weights = (alpha - 1) * ary
         n_draws = len(log_weights)
-        r_eff = self._ess_tail(ary, prob=0.05, relative=True)
+        r_eff = self._ess_tail(ary, prob=prob, relative=True)
         n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail="both")
         log_weights, pareto_k = self._ps_tail(
             log_weights,
