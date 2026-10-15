@@ -376,11 +376,20 @@ def _build_fmt_map(summary_result, round_val):
 class SummaryDataFrame(pd.DataFrame):
     """A pandas DataFrame subclass displaying sensible default digits."""
 
-    _metadata = ["_fmt_map"]
+    _metadata = ["_fmt_map", "_fmt_values"]
 
     def __init__(self, *args, fmt_map=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._fmt_map = fmt_map
+        # values the formatted strings were built from, so that cells changed
+        # afterwards (arithmetic, assignment) are displayed with their new value
+        self._fmt_values = None
+        if fmt_map is not None:
+            self._fmt_values = {
+                col: {idx: self.at[idx, col] for idx in idx_map if idx in self.index}
+                for col, idx_map in fmt_map.items()
+                if col in self.columns
+            }
 
     @property
     def _constructor(self):
@@ -395,7 +404,19 @@ class SummaryDataFrame(pd.DataFrame):
 
         if self._fmt_map:
             transposed_df._fmt_map = pd.DataFrame(self._fmt_map).T.to_dict()  # pylint: disable=protected-access
+        if self._fmt_values:
+            transposed_df._fmt_values = pd.DataFrame(self._fmt_values).T.to_dict()  # pylint: disable=protected-access
         return transposed_df
+
+    def _fmt_is_current(self, idx, col):
+        """Check if the formatted string of a cell still matches its value."""
+        if self._fmt_values is None:
+            return True
+        try:
+            old, new = self._fmt_values[col][idx], self.at[idx, col]
+            return bool(old == new or (pd.isna(old) and pd.isna(new)))
+        except (KeyError, TypeError, ValueError):
+            return False
 
     def _display_df(self):
         """Return a plain object-dtype DataFrame with formatted strings."""
@@ -405,7 +426,7 @@ class SummaryDataFrame(pd.DataFrame):
                 if col not in display.columns:
                     continue
                 for idx, fmt_val in idx_map.items():
-                    if idx in display.index:
+                    if idx in display.index and self._fmt_is_current(idx, col):
                         display.loc[idx, col] = fmt_val
         return display
 

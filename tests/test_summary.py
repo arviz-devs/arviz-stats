@@ -635,3 +635,37 @@ def test_summary_data_frame():
     plain = SummaryDataFrame(data, index=["mu_1", "tau"])
     assert "0.123456" in plain.to_latex()
     assert "r_hat" in plain.to_latex()
+
+
+def test_summary_data_frame_display_tracks_values():
+    data = {"mean": [0.123456, -1.987654], "r_hat": [1.001234, 1.056789]}
+    fmt_map = {
+        "mean": {"mu_1": "0.123", "tau": "-1.988"},
+        "r_hat": {"mu_1": "1.00", "tau": "1.06"},
+    }
+    sdf = SummaryDataFrame(data, index=["mu_1", "tau"], fmt_map=fmt_map)
+
+    scaled = sdf[["mean"]] * 100
+    assert "12.3456" in scaled.to_string()
+    assert "0.123" not in scaled.to_string()
+
+    edited = sdf.copy()
+    edited.loc["tau", "mean"] = 75.0
+    for out in (repr(edited), edited.to_string(), edited.to_html(), edited.to_latex()):
+        assert "75.0" in out
+        assert "-1.988" not in out
+        # unchanged cells keep their formatting
+        assert "0.123" in out
+        assert "1.06" in out
+
+    edited_t = edited.T
+    assert "75.0" in edited_t.to_string()
+    assert "1.06" in edited_t.to_string()
+
+
+def test_summary_display_after_scaling():
+    posterior = xr.Dataset(
+        {"rate": (("chain", "draw"), [[0.125, 0.375, 0.625, 0.875], [0.25, 0.5, 0.5, 0.75]])}
+    )
+    table = summary(posterior, kind="stats")[["mean"]]
+    assert "50.0" in (table * 100).to_string()
