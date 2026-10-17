@@ -177,15 +177,14 @@ def _pit_uniformity_check(
         )
         suspicious = (shapley > gamma) & (p_value < alpha)
         top_points = _top_points(pit, shapley, suspicious, max_points)
-        flagged = p_value < alpha
-        if flagged:
-            has_errors = True
+        has_errors = p_value < alpha
 
         diagnostics[var] = {
             "p_value": p_value,
             "alpha": alpha,
             "method": method,
             "n_obs": n_obs,
+            "has_errors": has_errors,
             "pit": pit,
             "shapley": shapley,
             "suspicious": suspicious,
@@ -193,7 +192,7 @@ def _pit_uniformity_check(
         }
 
         messages.append(f"p-value: {p_value:.4g}, alpha: {alpha:.4g}, observations: {n_obs}")
-        if not flagged:
+        if not has_errors:
             messages.append("No deviation from uniformity detected")
             continue
 
@@ -217,9 +216,9 @@ def _pit_uniformity_check(
         print("\n".join(messages), file=sys.stdout)
 
     if return_diagnostics:
-        return has_errors, diagnostics
+        return diagnostics
 
-    return has_errors
+    return None
 
 
 def get_suspicious_mask_ds(observed_dist, pit_dt, alpha, gamma, method):
@@ -367,13 +366,10 @@ def text_ppc_pit(
     show_diagnostics : bool, default True
         If True, print the diagnostic messages to stdout.
     return_diagnostics : bool, default False
-        If True, return a dictionary with detailed results in addition to the boolean
-        has_errors flag.
+        If True, return a dictionary with detailed results
 
     Returns
     -------
-    has_errors : bool
-        True if any variable has a p-value below alpha, False otherwise.
     diagnostics : dict, optional
         Only returned if ``return_diagnostics=True``. Mapping of variable name to a dict with:
 
@@ -381,6 +377,7 @@ def text_ppc_pit(
         - "alpha": float, significance level used to flag observations
         - "method": str, method used for the uniformity test
         - "n_obs": int, number of observations tested
+        - "has_errors": bool, True if any observation is flagged as suspicious, False otherwise
         - "pit": xarray.DataArray with the PIT values, on the observation dimensions
         - "shapley": xarray.DataArray with the unsorted Shapley contributions, on the
           observation dimensions
@@ -410,10 +407,10 @@ def text_ppc_pit(
 
     .. ipython::
 
-        In [2]: has_errors, diagnostics = azs.text_ppc_pit(
+        In [2]: diagnostics = azs.text_ppc_pit(
            ...:     data, var_names="obs", show_diagnostics=False, return_diagnostics=True
            ...: )
-           ...: has_errors, diagnostics["obs"]["p_value"]
+           ...: diagnostics["obs"]["p_value"]
 
     References
     ----------
@@ -493,8 +490,6 @@ def text_loo_pit(
 
     Returns
     -------
-    has_errors : bool
-        True if any variable has a p-value below alpha, False otherwise.
     diagnostics : dict, optional
         Only returned if ``return_diagnostics=True``. Same structure as the diagnostics
         returned by :func:`text_ppc_pit`.
@@ -519,7 +514,7 @@ def text_loo_pit(
 
     .. ipython::
 
-        In [2]: has_errors, diagnostics = azs.text_loo_pit(
+        In [2]: diagnostics = azs.text_loo_pit(
            ...:     data, show_diagnostics=False, return_diagnostics=True
            ...: )
            ...: diagnostics["obs"]["n_obs"]
