@@ -110,20 +110,30 @@ def test_thin_auto_factor(datatree):
     assert thinned.sizes["draw"] <= datatree.posterior.sizes["draw"]
 
 
-def test_thin_datatree_auto_factor_uses_group(centered_eight):
-    prior_factor = centered_eight.azstats.thin_factor(group="prior")
-    assert prior_factor != centered_eight.azstats.thin_factor(group="posterior")
-    thinned = thin(centered_eight, group="prior")
-    n_draws = centered_eight.prior.sizes["draw"]
-    assert thinned.sizes["draw"] == len(range(0, n_draws, prior_factor))
+def test_thin_datatree_auto_factor_unconstrained_posterior(centered_eight):
+    rng = np.random.default_rng(0)
+    posterior = centered_eight.posterior.dataset
+    unconstrained = posterior[["mu"]].copy(data={"mu": rng.normal(size=posterior["mu"].shape)})
+    dt = xr.DataTree.from_dict({"posterior": posterior, "unconstrained_posterior": unconstrained})
+    unconstrained_factor = dt.azstats.thin_factor(group="unconstrained_posterior")
+    assert unconstrained_factor != dt.azstats.thin_factor(group="posterior")
+    thinned = thin(dt, group="unconstrained_posterior")
+    n_draws = unconstrained.sizes["draw"]
+    assert thinned.sizes["draw"] == len(range(0, n_draws, unconstrained_factor))
 
 
-def test_thin_datatree_auto_factor_without_posterior(centered_eight):
+@pytest.mark.parametrize("group", ["prior", "posterior_predictive"])
+def test_thin_datatree_auto_factor_invalid_group(centered_eight, group):
+    with pytest.raises(ValueError, match="can only be used with the"):
+        thin(centered_eight, group=group)
+
+
+def test_thin_datatree_without_posterior(centered_eight):
     dt = xr.DataTree.from_dict({"prior": centered_eight.prior.dataset})
-    prior_factor = dt.azstats.thin_factor(group="prior")
-    thinned = thin(dt, group="prior")
-    n_draws = dt.prior.sizes["draw"]
-    assert thinned.sizes["draw"] == len(range(0, n_draws, prior_factor))
+    with pytest.raises(ValueError, match="explicit integer factor"):
+        thin(dt, group="prior")
+    thinned = thin(dt, group="prior", factor=5)
+    assert thinned.sizes["draw"] == len(range(0, dt.prior.sizes["draw"], 5))
 
 
 def test_thin_different_sample_dims(datatree):

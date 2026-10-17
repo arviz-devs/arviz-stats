@@ -589,6 +589,12 @@ class AzStatsDtAccessor(_BaseAccessor):
     def thin(self, sample_dims=None, group="posterior", **kwargs):
         """Perform thinning for all variables in a group of the DataTree."""
         if kwargs.get("factor", "auto") == "auto":
+            if group not in ("posterior", "unconstrained_posterior"):
+                raise ValueError(
+                    'factor="auto" can only be used with the "posterior" and '
+                    f'"unconstrained_posterior" groups, not with "{group}". '
+                    "Provide an explicit integer factor to thin other groups."
+                )
             kwargs["factor"] = self.thin_factor(group=group)
             sample_dims = "draw"
         return self._apply("thin", sample_dims=sample_dims, group=group, **kwargs)

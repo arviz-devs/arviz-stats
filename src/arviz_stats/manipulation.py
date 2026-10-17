@@ -48,7 +48,9 @@ def thin(
     factor : str or int, default "auto"
         The thinning factor. If "auto", the thinning factor is computed based on bulk and tail
         effective sample size as suggested by Säilynoja et al. (2022) [1]_.
-        If an integer, the thinning factor is set to that value.
+        For DataTree inputs, "auto" can only be used with the ``posterior`` and
+        ``unconstrained_posterior`` groups, and the factor is computed from the
+        requested `group`. If an integer, the thinning factor is set to that value.
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
