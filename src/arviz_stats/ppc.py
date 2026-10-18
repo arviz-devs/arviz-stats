@@ -382,7 +382,7 @@ def text_ppc_pit(
     .. ipython::
 
         In [2]: diagnostics = azs.text_ppc_pit(
-           ...:     data, var_names="obs", show_diagnostics=False, return_diagnostics=True
+           ...:     data, show_diagnostics=False, return_diagnostics=True
            ...: )
            ...: diagnostics["y"]["p_value"]
 
