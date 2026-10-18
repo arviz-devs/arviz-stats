@@ -54,7 +54,7 @@ def test_text_ppc_pit_calibrated(calibrated_ppc, capsys):
 
     assert "p-value: 0.1196" in output
     assert "alpha: 0.01" in output
-    assert "observations: 100" in output
+    assert "0 of 100 observations flagged" in output
     assert "No deviation from uniformity detected" in output
 
     assert diagnostics["y"]["has_errors"] is False
@@ -70,7 +70,7 @@ def test_text_ppc_pit_miscalibrated(miscalibrated_ppc, capsys):
 
     assert "p-value: 0" in output
     assert "alpha: 0.01" in output
-    assert "observations: 100" in output
+    assert "97 of 100 observations flagged" in output
     assert "Deviation from uniformity detected" in output
 
     assert diagnostics["y"]["has_errors"] is True
@@ -86,7 +86,7 @@ def test_text_loo_pit_calibrated(calibrated_ppc, capsys):
 
     assert "p-value: 0" in output
     assert "alpha: 0.01" in output
-    assert "observations: 100" in output
+    assert "0 of 100 observations flagged" in output
     assert "No deviation from uniformity detected" in output
 
     assert diagnostics["y"]["has_errors"] is False

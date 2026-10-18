@@ -79,30 +79,13 @@ def _top_points(pit, shapley, suspicious, max_points):
 
     indices = np.flatnonzero(flat_suspicious)
     if indices.size == 0:
-        return []
+        return [], []
     order = np.argsort(-flat_shapley[indices], kind="stable")
     if max_points is not None:
         order = order[:max_points]
     indices = indices[order]
 
-    top_points = []
-    for index in indices:
-        position = np.unravel_index(index, pit.shape)
-        coords = {}
-        for dim, i in zip(pit.dims, position, strict=True):
-            if dim in pit.coords:
-                value = pit.coords[dim].values[i]
-                coords[dim] = value.item() if isinstance(value, np.generic) else value
-            else:
-                coords[dim] = int(i)
-        top_points.append(
-            {
-                "coords": coords,
-                "pit": float(flat_pit[index]),
-                "shapley": float(flat_shapley[index]),
-            }
-        )
-    return top_points
+    return indices, flat_pit[indices]
 
 
 def _interpret_pit(pit_values):
@@ -125,22 +108,22 @@ def _interpret_pit(pit_values):
 
     if low > 0 and high > 0:
         return (
-            "the Δ-ECDF curve forms an inverted U (mostly above 0), so the observations lie "
-            "below most predictions (overprediction)."
+            "The Δ-ECDF curve forms an inverted U (mostly above 0).\n"
+            "The observations lie below most predictions (overprediction)."
         )
     if low < 0 and high < 0:
         return (
-            "the Δ-ECDF curve forms a U (mostly below 0), so the observations lie above "
-            "most predictions (underprediction)."
+            "The Δ-ECDF curve forms a U (mostly below 0).\n"
+            "The observations lie above most predictions (underprediction)."
         )
     if low < 0:
         return (
-            "the Δ-ECDF curve forms an S (below 0 first, then above 0), so the predictions "
-            "are too wide compared with the observations (underconfident)."
+            "The Δ-ECDF curve forms an S (below 0 first, then above 0).\n"
+            "The predictions are too wide compared with the observations (underconfident)."
         )
     return (
-        "the Δ-ECDF curve forms an S (above 0 first, then below 0), so the predictions "
-        "are too narrow compared with the observations (overconfident)."
+        "The Δ-ECDF curve forms an S (above 0 first, then below 0).\n"
+        "The predictions are too narrow compared with the observations (overconfident)."
     )
 
 
@@ -155,7 +138,7 @@ def _pit_uniformity_check(
     return_diagnostics,
 ):
     """Run the PIT uniformity test on all variables and build the textual report."""
-    messages = []
+    msg = []
     diagnostics = {}
     has_errors = False
 
@@ -172,7 +155,7 @@ def _pit_uniformity_check(
             name=var,
         )
         suspicious = (shapley > gamma) & (p_value < alpha)
-        top_points = _top_points(pit, shapley, suspicious, max_points)
+        obs_index, percentile = _top_points(pit, shapley, suspicious, max_points)
         has_errors = p_value < alpha
 
         diagnostics[var] = {
@@ -182,32 +165,32 @@ def _pit_uniformity_check(
             "n_obs": n_obs,
             "has_errors": has_errors,
             "suspicious": suspicious,
-            "top_points": top_points,
+            "top_points": {"obs_index": obs_index, "percentile": percentile},
         }
 
-        messages.append(f"p-value: {p_value:.4g}, alpha: {alpha:.4g}, observations: {n_obs}")
+        n_flagged = int(np.count_nonzero(np.asarray(suspicious)))
+        msg.append(f"Variable: {var}, p-value: {p_value:.4g}, alpha: {alpha:.4g}")
         if not has_errors:
-            messages.append("No deviation from uniformity detected")
+            msg.append(
+                "No deviation from uniformity detected."
+                f" {n_flagged} of {n_obs} observations flagged"
+            )
             continue
 
-        n_flagged = int(np.count_nonzero(np.asarray(suspicious)))
-        messages.append("Deviation from uniformity detected")
-        messages.append(f"{n_flagged} of {n_obs} observations flagged.")
-        messages.append(f"Interpretation: {_interpret_pit(np.asarray(pit))}")
-        if top_points:
-            messages.append("Top flagged observations:")
-            n_digits = len(str(n_obs))
-            for point in top_points:
-                coords_str = ", ".join(
-                    f"{key} = {value:0{n_digits}d}"
-                    if isinstance(value, int)
-                    else f"{key} = {value}"
-                    for key, value in point["coords"].items()
-                )
-                messages.append(f"  {coords_str}: percentile={point['pit']:>6.1%}")
+        msg.append(
+            f"Deviation from uniformity detected. {n_flagged} of {n_obs} observations flagged"
+        )
+        msg.append(f"Interpretation: {_interpret_pit(pit)}")
+        if n_flagged > max_points:
+            msg.append(f"Showing only top {max_points} flagged observations (index, percentile):")
+        else:
+            msg.append("Showing all flagged observations (index, percentile):")
+        n_digits = len(str(max(obs_index)))
+        for i, idx in enumerate(obs_index):
+            msg.append(f"  {idx:{n_digits}d} {percentile[i]:>6.1%}")
 
     if show_diagnostics:
-        print("\n".join(messages), file=sys.stdout)
+        print("\n".join(msg), file=sys.stdout)
 
     if return_diagnostics:
         return diagnostics
@@ -401,7 +384,7 @@ def text_ppc_pit(
         In [2]: diagnostics = azs.text_ppc_pit(
            ...:     data, var_names="obs", show_diagnostics=False, return_diagnostics=True
            ...: )
-           ...: diagnostics["obs"]["p_value"]
+           ...: diagnostics["y"]["p_value"]
 
     References
     ----------
@@ -530,7 +513,7 @@ def text_loo_pit(
         In [2]: diagnostics = azs.text_loo_pit(
            ...:     data, show_diagnostics=False, return_diagnostics=True
            ...: )
-           ...: diagnostics["obs"]["n_obs"]
+           ...: diagnostics["y"]["has_errors"]
 
     References
     ----------
