@@ -17,7 +17,7 @@ __all__ = ["text_loo_pit", "text_ppc_pit"]
 VALID_METHODS = {"pot_c", "prit_c", "piet_c"}
 
 
-def _validate_method(method):
+def validate_uni_test_method(method):
     """Raise an error if ``method`` is not one of the valid uniformity tests."""
     if method not in VALID_METHODS:
         raise ValueError(
@@ -198,43 +198,6 @@ def _pit_uniformity_check(
     return None
 
 
-def get_suspicious_mask_ds(observed_dist, pit_dt, alpha, gamma, method):
-    """Compute most suspicious observations based on PIT uniformity test results.
-
-    Parameters
-    ----------
-    observed_dist : xarray.Dataset
-        The observed data. Only used to select the variables to test.
-    pit_dt : xarray.DataTree
-        DataTree with an "ecdf_pit" group holding the PIT values, as returned by
-        :func:`ppc_pit`.
-    alpha : float
-        Significance level of the uniformity test. Observations are only flagged when the
-        p-value is below ``alpha``.
-    gamma : float
-        Minimum Shapley contribution for an observation to be flagged.
-    method : {"pot_c", "prit_c", "piet_c"}
-        Method used for the uniformity test.
-
-    Returns
-    -------
-    xarray.Dataset
-        Boolean mask, True for the observations flagged as suspicious.
-    """
-    pit_ds = pit_dt["ecdf_pit"].dataset[list(observed_dist.data_vars)]
-    p_values, _, shapley_vals = pit_ds.azstats.uniformity_test(dim=pit_ds.dims, method=method)
-
-    highlight = (shapley_vals > gamma) & (p_values < alpha)
-    return xr.Dataset(
-        {
-            var: highlight[var].rename(
-                {dim: next(iter(pit_ds[var].dims)) for dim in da.dims if "pit_dim" in dim}
-            )
-            for var, da in highlight.items()
-        }
-    )
-
-
 def get_ppc_pit(predictive_dist, observed_dist, sample_dims, method):
     """Compute PIT values, with optional Pareto tail refinement.
 
@@ -394,7 +357,7 @@ def text_ppc_pit(
         goodness-of-fit evaluation and multiple sample comparison*. Statistics and Computing
         32(32). (2022) https://doi.org/10.1007/s11222-022-10090-6
     """
-    _validate_method(method)
+    validate_uni_test_method(method)
     alpha = 1 - validate_or_use_rcparam(envelope_prob, "stats.envelope_prob")
 
     dt = convert_to_datatree(data)
@@ -534,7 +497,7 @@ def text_loo_pit(
         warnings.warn(
             "'sample_dims' is currently not supported in plot_loo_pit and will be ignored"
         )
-    _validate_method(method)
+    validate_uni_test_method(method)
     alpha = 1 - validate_or_use_rcparam(envelope_prob, "stats.envelope_prob")
     pareto_pit = method in ("pot_c", "piet_c")
 
