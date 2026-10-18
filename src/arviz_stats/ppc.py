@@ -1,4 +1,4 @@
-"""Textual interface for posterior predictive checks based on PIT uniformity."""
+"""Textual interface for predictive checks."""
 
 import sys
 import warnings
@@ -18,7 +18,7 @@ VALID_METHODS = {"pot_c", "prit_c", "piet_c"}
 
 
 def _validate_method(method):
-    """Raise an informative error if ``method`` is not one of the valid uniformity tests."""
+    """Raise an error if ``method`` is not one of the valid uniformity tests."""
     if method not in VALID_METHODS:
         raise ValueError(
             f"Method {method!r} not supported. Choose from 'pot_c', 'prit_c' or 'piet_c'."
@@ -47,7 +47,7 @@ def warn_if_prior_predictive(group):
     """Warn if group is prior_predictive."""
     if group == "prior_predictive":
         warnings.warn(
-            "This plot always uses the `observed_data` group."
+            "This diagnostic uses the `observed_data` group."
             "\nBe cautious when using it for prior predictive checks.",
             UserWarning,
             stacklevel=2,
@@ -73,11 +73,11 @@ def _process_groups(dt, group, var_names, filter_vars, coords):
 
 def _top_points(pit, shapley, suspicious, max_points):
     """Select the most suspicious observations, sorted by decreasing Shapley contribution."""
-    flat_mask = suspicious.values.ravel()
+    flat_suspicious = suspicious.values.ravel()
     flat_shapley = shapley.values.ravel()
     flat_pit = pit.values.ravel()
 
-    indices = np.flatnonzero(flat_mask)
+    indices = np.flatnonzero(flat_suspicious)
     if indices.size == 0:
         return []
     order = np.argsort(-flat_shapley[indices], kind="stable")
@@ -108,10 +108,6 @@ def _top_points(pit, shapley, suspicious, max_points):
 def _interpret_pit(pit_values):
     """Describe the deviation from uniformity through the shape of the Δ-ECDF curve.
 
-    The signs of Δ-ECDF(u) = ECDF(u) - u at u = 0.25 and u = 0.75 give the four canonical
-    shapes: both positive (inverted U), both negative (U), negative then positive (S below
-    0 first) and positive then negative (S above 0 first).
-
     Parameters
     ----------
     pit_values : array-like
@@ -120,7 +116,7 @@ def _interpret_pit(pit_values):
     Returns
     -------
     str
-        Short interpretation of the deviation.
+        Interpretation of the deviation.
     """
     pit_values = np.asarray(pit_values, dtype=float).ravel()
     n_obs = pit_values.size
@@ -185,8 +181,6 @@ def _pit_uniformity_check(
             "method": method,
             "n_obs": n_obs,
             "has_errors": has_errors,
-            "pit": pit,
-            "shapley": shapley,
             "suspicious": suspicious,
             "top_points": top_points,
         }
@@ -378,9 +372,6 @@ def text_ppc_pit(
         - "method": str, method used for the uniformity test
         - "n_obs": int, number of observations tested
         - "has_errors": bool, True if any observation is flagged as suspicious, False otherwise
-        - "pit": xarray.DataArray with the PIT values, on the observation dimensions
-        - "shapley": xarray.DataArray with the unsorted Shapley contributions, on the
-          observation dimensions
         - "suspicious": xarray.DataArray of bool, True for flagged observations
         - "top_points": list of dicts with "coords", "pit" and "shapley" of the most
           suspicious observations, sorted by decreasing Shapley contribution and limited
@@ -447,6 +438,10 @@ def text_loo_pit(
     data,
     *,
     var_names=None,
+    filter_vars=None,
+    coords=None,
+    sample_dims=None,
+    group="posterior_predictive",
     method="pot_c",
     envelope_prob=None,
     gamma=0,
@@ -472,6 +467,15 @@ def text_loo_pit(
         groups.
     var_names : str or list of str, optional
         Names of the variables to check. If None, all variables are checked.
+    filter_vars : {None, "like", "regex"}, default None
+        How to filter variable names. See :func:`filter_vars` for details.
+    coords : dict, optional
+        Coordinates to select a subset of the data.
+    sample_dims : iterable of hashable, optional
+        Dimensions to be considered sample dimensions.
+        Default from ``rcParams["data.sample_dims"]``.
+    group : str, default "posterior_predictive"
+        Group to compute the PIT values from. Only "posterior_predictive" is currently supported.
     method : {"pot_c", "prit_c", "piet_c"}, default "pot_c"
         Method used for the uniformity test. "pot_c" and "piet_c" compute the LOO-PIT
         values with Pareto tail refinement, "prit_c" without it.
@@ -491,8 +495,17 @@ def text_loo_pit(
     Returns
     -------
     diagnostics : dict, optional
-        Only returned if ``return_diagnostics=True``. Same structure as the diagnostics
-        returned by :func:`text_ppc_pit`.
+        Only returned if ``return_diagnostics=True``. Mapping of variable name to a dict with:
+
+        - "p_value": float, p-value of the uniformity test
+        - "alpha": float, significance level used to flag observations
+        - "method": str, method used for the uniformity test
+        - "n_obs": int, number of observations tested
+        - "has_errors": bool, True if any observation is flagged as suspicious, False otherwise
+        - "suspicious": xarray.DataArray of bool, True for flagged observations
+        - "top_points": list of dicts with "coords", "pit" and "shapley" of the most
+          suspicious observations, sorted by decreasing Shapley contribution and limited
+          to ``max_points`` entries
 
     See Also
     --------
@@ -530,16 +543,23 @@ def text_loo_pit(
 
     .. [3] Tesso et al. *LOO-PIT predictive model checking* arXiv:2603.02928 (2026).
     """
+    if group != "posterior_predictive":
+        raise ValueError(f"Group {group} not supported. Only 'posterior_predictive' is supported.")
+    if sample_dims is None:
+        sample_dims = ["chain", "draw"]
+    else:
+        warnings.warn(
+            "'sample_dims' is currently not supported in plot_loo_pit and will be ignored"
+        )
     _validate_method(method)
     alpha = 1 - validate_or_use_rcparam(envelope_prob, "stats.envelope_prob")
     pareto_pit = method in ("pot_c", "piet_c")
 
     dt = convert_to_datatree(data)
-    observed_dist = dt["observed_data"]
-    observed_dist = observed_dist.azstats.filter_vars(var_names=var_names).dataset
+    _, observed_dist = _process_groups(dt, group, var_names, filter_vars, coords)
     warn_if_binary(observed_dist, None)
 
-    pit_ds = loo_pit(data, var_names=var_names, pareto_pit=pareto_pit)
+    pit_ds = loo_pit(dt, var_names=var_names, pareto_pit=pareto_pit)
 
     return _pit_uniformity_check(
         pit_ds,
