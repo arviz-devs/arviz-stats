@@ -623,7 +623,6 @@ class _DensityBase(_CoreBase):
         grid_len: int, optional
             The number of intervals used to bin the data points
             i.e. the length of the grid used in the estimation. Defaults to 512.
-            Both even and odd grid lengths are supported.
         """
         # All values between -pi and pi
         x = self._normalize_angle(x)

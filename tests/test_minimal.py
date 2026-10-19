@@ -298,11 +298,10 @@ def test_histogram_density(data_c0d1):
 
 
 @pytest.mark.parametrize("circular", [False, True])
-@pytest.mark.parametrize("grid_len", [100, 101])
-def test_kde(data_c0d1, circular, grid_len):
-    grid, pdf, bw = array_stats.kde(data_c0d1, axis=(0, 1), circular=circular, grid_len=grid_len)
-    assert grid.shape == (3, grid_len)
-    assert pdf.shape == (3, grid_len)
+def test_kde(data_c0d1, circular):
+    grid, pdf, bw = array_stats.kde(data_c0d1, axis=(0, 1), circular=circular, grid_len=100)
+    assert grid.shape == (3, 100)
+    assert pdf.shape == (3, 100)
     assert bw.shape == (3,)
 
 

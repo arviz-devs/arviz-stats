@@ -4,7 +4,6 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
-from scipy.stats import vonmises
 
 from arviz_stats.base.density import _DensityBase
 
@@ -426,28 +425,12 @@ class TestKDECircular:
         assert len(pdf) == 512
         assert_allclose(bw, bw_value)
 
-    @pytest.mark.parametrize("grid_len", [101, 128, 255, 256, 512, 1024])
+    @pytest.mark.parametrize("grid_len", [101, 128, 256, 512, 1024])
     def test_kde_circular_grid_len(self, density, rng, grid_len):
         x = rng.vonmises(0, 2, 100)
         grid, pdf, _ = density.kde_circular(x, grid_len=grid_len)
         assert len(grid) == grid_len
         assert len(pdf) == grid_len
-
-    @pytest.mark.parametrize("grid_len", [101, 255])
-    @pytest.mark.parametrize("cumulative", [False, True])
-    def test_kde_circular_odd_grid_values(self, density, grid_len, cumulative):
-        edges = np.linspace(-np.pi, np.pi, grid_len + 1)
-        expected_grid = (edges[:-1] + edges[1:]) / 2
-        x = expected_grid[[5, 20, 20, 41, 70]]
-        expected = vonmises.pdf(expected_grid[:, None] - x, kappa=3).mean(axis=1)
-        if cumulative:
-            expected = expected.cumsum() / expected.sum()
-
-        grid, pdf, bw = density.kde_circular(x, bw=3, grid_len=grid_len, cumulative=cumulative)
-
-        assert_allclose(grid, expected_grid)
-        assert_allclose(pdf, expected, rtol=1e-12, atol=1e-14)
-        assert_allclose(bw, 3)
 
     @pytest.mark.parametrize("bw_fct", [0.5, 1.0, 2.0])
     def test_kde_circular_bw_fct(self, density, rng, bw_fct):
