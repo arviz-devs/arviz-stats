@@ -425,7 +425,7 @@ class TestKDECircular:
         assert len(pdf) == 512
         assert_allclose(bw, bw_value)
 
-    @pytest.mark.parametrize("grid_len", [128, 256, 512, 1024])
+    @pytest.mark.parametrize("grid_len", [101, 128, 256, 512, 1024])
     def test_kde_circular_grid_len(self, density, rng, grid_len):
         x = rng.vonmises(0, 2, 100)
         grid, pdf, _ = density.kde_circular(x, grid_len=grid_len)
