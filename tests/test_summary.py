@@ -692,3 +692,42 @@ def test_summary_display_after_scaling():
     )
     table = summary(posterior, kind="stats")[["mean"]]
     assert "50.0" in (table * 100).to_string()
+
+
+def test_summary_data_frame_display_after_column_selection():
+    data = {"mean": [0.123456, -1.987654], "r_hat": [1.001234, 1.056789]}
+    fmt_map = {
+        "mean": {"mu_1": "0.123", "tau": "-1.988"},
+        "r_hat": {"mu_1": "1.00", "tau": "1.06"},
+    }
+    sdf = SummaryDataFrame(data, index=["mu_1", "tau"], fmt_map=fmt_map)
+
+    # dropping formatted columns keeps the formatting of the remaining ones
+    selected = sdf[["r_hat"]]
+    out = selected.to_string()
+    assert "1.06" in out
+    assert "1.056789" not in out
+    assert "mean" not in out
+
+    # changing the values of a remaining column still reverts to pandas' default display
+    edited = selected.copy()
+    edited.loc["tau", "r_hat"] = 1.5
+    assert edited.to_string() == pd.DataFrame(edited).to_string()
+    assert "1.5" in edited.to_string()
+
+
+def test_summary_data_frame_display_unhashable_values():
+    data = {"mean": [0.123456, -1.987654], "r_hat": [1.001234, 1.056789]}
+    fmt_map = {
+        "mean": {"mu_1": "0.123", "tau": "-1.988"},
+        "r_hat": {"mu_1": "1.00", "tau": "1.06"},
+    }
+    sdf = SummaryDataFrame(data, index=["mu_1", "tau"], fmt_map=fmt_map)
+    sdf["mean"] = pd.Series([np.array([1, 2]), np.array([3, 4])], index=sdf.index, dtype=object)
+
+    # values that can't be hashed fall back to pandas' default display
+    plain = pd.DataFrame(sdf)
+    assert repr(sdf) == repr(plain)
+    assert sdf.to_string() == plain.to_string()
+    assert sdf.to_html() == plain.to_html()
+    assert "1.056789" in sdf.to_string()
