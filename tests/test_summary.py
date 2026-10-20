@@ -637,7 +637,7 @@ def test_summary_data_frame():
     assert "r_hat" in plain.to_latex()
 
 
-def test_summary_data_frame_display_tracks_values():
+def test_summary_data_frame_display_after_changes():
     data = {"mean": [0.123456, -1.987654], "r_hat": [1.001234, 1.056789]}
     fmt_map = {
         "mean": {"mu_1": "0.123", "tau": "-1.988"},
@@ -645,22 +645,45 @@ def test_summary_data_frame_display_tracks_values():
     }
     sdf = SummaryDataFrame(data, index=["mu_1", "tau"], fmt_map=fmt_map)
 
-    scaled = sdf[["mean"]] * 100
-    assert "12.3456" in scaled.to_string()
-    assert "0.123" not in scaled.to_string()
+    # adding columns keeps the formatting of the existing ones
+    added = sdf.assign(new=[0.111111, 0.222222])
+    sdf_inplace = sdf.copy()
+    sdf_inplace["new"] = [0.111111, 0.222222]
+    for frame in (added, sdf_inplace):
+        out = frame.to_string()
+        assert "0.123" in out
+        assert "0.123456" not in out
+        assert "1.06" in out
+        assert "0.111111" in out
+        assert "1.06" in frame.T.to_string()
+        assert "0.111111" in frame.T.to_string()
 
+    # row filtering and transposition keep the formatting
+    assert "-1.988" in sdf.loc[["tau"]].to_string()
+    assert "-1.987654" not in sdf.loc[["tau"]].to_string()
+    assert "-1.988" in sdf.T.to_string()
+    assert "-1.988" in sdf.T.T.to_string()
+
+    # changing values reverts to pandas' default display
+    scaled = sdf * 100
     edited = sdf.copy()
     edited.loc["tau", "mean"] = 75.0
-    for out in (repr(edited), edited.to_string(), edited.to_html(), edited.to_latex()):
-        assert "75.0" in out
-        assert "-1.988" not in out
-        # unchanged cells keep their formatting
-        assert "0.123" in out
-        assert "1.06" in out
+    edited_t = sdf.T
+    edited_t.loc["mean", "tau"] = 75.0
+    for frame in (scaled, edited, edited.T, edited_t, edited_t.T):
+        plain = pd.DataFrame(frame)
+        assert repr(frame) == repr(plain)
+        assert frame.to_string() == plain.to_string()
+        assert frame._repr_html_() == plain._repr_html_()
+        assert frame.to_html() == plain.to_html()
+        assert frame.to_latex() == plain.to_latex()
+    assert "12.3456" in scaled.to_string()
+    assert "75.0" in edited.to_string()
 
-    edited_t = edited.T
-    assert "75.0" in edited_t.to_string()
-    assert "1.06" in edited_t.to_string()
+    # new rows also revert to pandas' default display
+    extended = sdf.copy()
+    extended.loc["sigma"] = [0.5, 1.0]
+    assert extended.to_string() == pd.DataFrame(extended).to_string()
 
 
 def test_summary_display_after_scaling():

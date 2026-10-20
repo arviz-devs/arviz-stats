@@ -127,6 +127,11 @@ def summary(
     Formatting is only guaranteed to be preserved for basic view-altering DataFrame operations,
     like row filtering or slicing (e.g., ``df.loc[["mu", "tau"]]``) or Transposition.
 
+    New columns can be added (e.g., ``df["new"] = ...``) without changing the formatting
+    of the existing ones. Any change to the values of the formatted columns (e.g., ``df * 100``
+    or ``df.loc["mu", "mean"] = 0``) or new rows make the DataFrame revert to pandas' default
+    display.
+
     Formatting will be lost if the structure is modified via renaming, concatenating, merging,
     or if the DataFrame is converted to other objects like a ``pandas.Series``
     (e.g., ``df["r_hat"]``), NumPy arrays, or Xarray datasets.
@@ -376,20 +381,42 @@ def _build_fmt_map(summary_result, round_val):
 class SummaryDataFrame(pd.DataFrame):
     """A pandas DataFrame subclass displaying sensible default digits."""
 
-    _metadata = ["_fmt_map", "_fmt_values"]
+    _metadata = ["_fmt_map", "_fmt_hash"]
 
     def __init__(self, *args, fmt_map=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._fmt_map = fmt_map
-        # values the formatted strings were built from, so that cells changed
-        # afterwards (arithmetic, assignment) are displayed with their new value
-        self._fmt_values = None
-        if fmt_map is not None:
-            self._fmt_values = {
-                col: {idx: self.at[idx, col] for idx in idx_map if idx in self.index}
-                for col, idx_map in fmt_map.items()
-                if col in self.columns
-            }
+        self._fmt_hash = self._hash_fmt_columns() if fmt_map is not None else None
+
+    def _hash_fmt_columns(self):
+        """Hash the values of the formatted columns, row by row."""
+        return {
+            col: pd.util.hash_pandas_object(self[col], index=False)
+            for col in self._fmt_map
+            if col in self.columns
+        }
+
+    def _fmt_is_current(self):
+        """Check that the formatted columns hold the values the formatting was built for.
+
+        Added columns and row filtering keep the formatting, any change of values does not.
+        """
+        if self._fmt_map is None or self._fmt_hash is None:
+            return False
+        try:
+            for col, ref_hash in self._fmt_hash.items():
+                if col not in self.columns:
+                    continue
+                new_hash = pd.util.hash_pandas_object(self[col], index=False)
+                if not new_hash.index.equals(ref_hash.index):
+                    if not new_hash.index.isin(ref_hash.index).all():
+                        return False
+                    ref_hash = ref_hash.loc[new_hash.index]
+                if not np.array_equal(new_hash.to_numpy(), ref_hash.to_numpy()):
+                    return False
+        except (TypeError, ValueError, KeyError):
+            return False
+        return True
 
     @property
     def _constructor(self):
@@ -402,21 +429,14 @@ class SummaryDataFrame(pd.DataFrame):
     def transpose(self, *args, **kwargs):
         transposed_df = super().transpose(*args, **kwargs)
 
-        if self._fmt_map:
-            transposed_df._fmt_map = pd.DataFrame(self._fmt_map).T.to_dict()  # pylint: disable=protected-access
-        if self._fmt_values:
-            transposed_df._fmt_values = pd.DataFrame(self._fmt_values).T.to_dict()  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        if self._fmt_is_current():
+            transposed_df._fmt_map = pd.DataFrame(self._fmt_map).T.to_dict()
+            transposed_df._fmt_hash = transposed_df._hash_fmt_columns()
+        else:
+            transposed_df._fmt_map = None
+            transposed_df._fmt_hash = None
         return transposed_df
-
-    def _fmt_is_current(self, idx, col):
-        """Check if the formatted string of a cell still matches its value."""
-        if self._fmt_values is None:
-            return True
-        try:
-            old, new = self._fmt_values[col][idx], self.at[idx, col]
-            return bool(old == new or (pd.isna(old) and pd.isna(new)))
-        except (KeyError, TypeError, ValueError):
-            return False
 
     def _display_df(self):
         """Return a plain object-dtype DataFrame with formatted strings."""
@@ -426,28 +446,28 @@ class SummaryDataFrame(pd.DataFrame):
                 if col not in display.columns:
                     continue
                 for idx, fmt_val in idx_map.items():
-                    if idx in display.index and self._fmt_is_current(idx, col):
+                    if idx in display.index:
                         display.loc[idx, col] = fmt_val
         return display
 
     def _repr_html_(self):  # pylint: disable=overridden-final-method
-        if self._fmt_map is None:
+        if not self._fmt_is_current():
             return super()._repr_html_()
         return self._display_df().to_html()
 
     def to_html(self, *args, **kwargs):
-        if self._fmt_map is None:
+        if not self._fmt_is_current():
             return super().to_html(*args, **kwargs)
         return pd.DataFrame.to_html(self._display_df(), *args, **kwargs)
 
     def to_latex(self, *args, **kwargs):
-        if self._fmt_map is None:
+        if not self._fmt_is_current():
             return super().to_latex(*args, **kwargs)
         kwargs.setdefault("escape", True)
         return pd.DataFrame.to_latex(self._display_df(), *args, **kwargs)
 
     def __repr__(self):
-        if self._fmt_map is None:
+        if not self._fmt_is_current():
             return super().__repr__()
         return pd.DataFrame.to_string(self._display_df())
 
@@ -455,7 +475,7 @@ class SummaryDataFrame(pd.DataFrame):
         return self.__repr__()
 
     def to_string(self, *args, **kwargs):
-        if self._fmt_map is None:
+        if not self._fmt_is_current():
             return super().to_string(*args, **kwargs)
         return pd.DataFrame.to_string(self._display_df(), *args, **kwargs)
 
