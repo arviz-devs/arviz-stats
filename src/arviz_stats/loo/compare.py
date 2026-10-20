@@ -207,6 +207,38 @@ def compare(
     names = list(ics_dict.keys())
 
     has_subsampling = any(isinstance(elpd, ELPDDataLOOSubsample) for elpd in ics_dict.values())
+    if not has_subsampling and len(ics_dict) > 1:
+        reference_pointwise = next(iter(ics_dict.values())).elpd_i
+        for name, elpd_data in list(ics_dict.items())[1:]:
+            pointwise = elpd_data.elpd_i
+            if set(pointwise.dims) != set(reference_pointwise.dims):
+                raise ValueError(f"Model '{name}' has different observation dimensions.")
+            pointwise = pointwise.transpose(*reference_pointwise.dims)
+            if any(
+                pointwise.sizes[dim] != reference_pointwise.sizes[dim]
+                for dim in reference_pointwise.dims
+            ):
+                continue
+            for dim in reference_pointwise.dims:
+                reference_index = reference_pointwise.indexes.get(dim)
+                pointwise_index = pointwise.indexes.get(dim)
+                if reference_index is None and pointwise_index is None:
+                    continue
+                if reference_index is None or pointwise_index is None:
+                    raise ValueError(
+                        f"Model '{name}' has different observation coordinates for '{dim}'."
+                    )
+                if not reference_index.is_unique or not pointwise_index.is_unique:
+                    raise ValueError(f"Observation coordinates for '{dim}' must be unique.")
+                if (
+                    not reference_index.difference(pointwise_index).empty
+                    or not pointwise_index.difference(reference_index).empty
+                ):
+                    raise ValueError(
+                        f"Model '{name}' has different observation coordinates for '{dim}'."
+                    )
+                pointwise = pointwise.sel({dim: reference_pointwise[dim]})
+            elpd_data.elpd_i = pointwise
     if reference is not None:
         prob_direction = "p_better"
         sign = -1

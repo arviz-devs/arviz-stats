@@ -36,6 +36,34 @@ def test_compare_same(centered_eight, method):
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA", "pseudo-BMA"])
+def test_compare_aligns_reordered_observation_coordinates(centered_eight, method):
+    first = loo(centered_eight, pointwise=True)
+    second = copy.deepcopy(first)
+    obs_dim = first.elpd_i.dims[0]
+    second.elpd_i = second.elpd_i.isel({obs_dim: slice(None, None, -1)})
+
+    result = compare({"first": first, "second": second}, method=method, round_to="none")
+
+    assert_allclose(result.loc["second", "elpd_diff"], 0)
+    assert_allclose(result.loc["second", "dse"], 0)
+    assert_allclose(result["weight"], [0.5, 0.5], atol=1e-6)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_rejects_different_observation_coordinates(centered_eight):
+    first = loo(centered_eight, pointwise=True)
+    second = copy.deepcopy(first)
+    obs_dim = first.elpd_i.dims[0]
+    second.elpd_i = second.elpd_i.assign_coords(
+        {obs_dim: [f"other_{i}" for i in range(second.n_data_points)]}
+    )
+
+    with pytest.raises(ValueError, match="different observation coordinates"):
+        compare({"first": first, "second": second}, round_to="none")
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_compare_unknown_method(centered_eight, non_centered_eight):
     model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
     with pytest.raises(
