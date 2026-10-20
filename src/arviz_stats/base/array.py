@@ -482,9 +482,6 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         # TODO: improve handling of array_like bins
         x_min, x_max, width = get_bininfo_ufunc(ary, bins=bins)
-        if ary.dtype.kind == "i" and isinstance(bins, str):
-            # the last bin is closed, so without this the two largest integers share it
-            x_max = np.where(x_min == x_max, x_max, x_max + width)
         mask = np.isfinite(width) & (width > 0)
 
         valid_n_bins = np.ceil((x_max[mask] - x_min[mask]) / width[mask])
