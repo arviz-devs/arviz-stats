@@ -261,7 +261,9 @@ def compare(
 
     if method.lower() == "stacking":
         rows, cols, ic_i_val = _ic_matrix(ics)
-        exp_ic_i = np.exp(ic_i_val)
+        # Shifting each observation by its maximum keeps exp() finite; it scales each row of
+        # exp_ic_i by a constant, which leaves the optimal weights unchanged.
+        exp_ic_i = np.exp(ic_i_val - np.max(ic_i_val, axis=1, keepdims=True))
 
         def log_score(weights):
             return -np.sum(np.log(np.dot(exp_ic_i, weights)))
