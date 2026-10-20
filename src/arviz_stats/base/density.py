@@ -664,7 +664,9 @@ class _DensityBase(_CoreBase):
         grid = 0.5 * (bin_edges[1:] + bin_edges[:-1])
 
         kern = self._vonmises_pdf(x=grid, mu=0, kappa=bw)
-        pdf = np.fft.fftshift(np.fft.irfft(np.fft.rfft(kern) * np.fft.rfft(bin_counts)))
+        pdf = np.fft.ifftshift(
+            np.fft.irfft(np.fft.rfft(kern) * np.fft.rfft(bin_counts), n=grid_len)
+        )
         pdf /= len(x)
 
         if cumulative:

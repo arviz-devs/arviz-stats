@@ -219,7 +219,9 @@ def summary(
             summary=["median"]
         )
         mad_value = stats.median_abs_deviation(
-            dataset, dims=("chain", "draw"), nan_policy="omit" if skipna else "propagate"
+            dataset,
+            dims=validate_dims(sample_dims),
+            nan_policy="omit" if skipna else "propagate",
         ).expand_dims(summary=["mad"])
         ci = (
             dataset.azstats.eti(prob=ci_prob, dim=sample_dims, skipna=skipna)
