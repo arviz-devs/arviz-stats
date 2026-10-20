@@ -701,7 +701,22 @@ def _metrics(observed, predicted, kind, round_to):
     if kind not in valid_kind:
         raise ValueError(f"kind must be one of {valid_kind}")
 
-    predicted = predicted.transpose(*observed.dims).values.ravel()
+    predicted = predicted.transpose(*observed.dims)
+    for dim in observed.dims:
+        if observed.sizes[dim] != predicted.sizes[dim]:
+            raise ValueError("Observed and predicted observation shapes must match")
+        if dim in observed.indexes and dim in predicted.indexes:
+            observed_index = observed.indexes[dim]
+            predicted_index = predicted.indexes[dim]
+            if (
+                not observed_index.is_unique
+                or not predicted_index.is_unique
+                or not observed_index.difference(predicted_index).empty
+            ):
+                raise ValueError("Observed and predicted observation coordinates must match")
+            predicted = predicted.sel({dim: observed_index})
+
+    predicted = predicted.values.ravel()
     observed = observed.values.ravel()
 
     estimate = namedtuple(kind, ["mean", "se"])

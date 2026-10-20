@@ -284,6 +284,63 @@ def test_metrics_2d_observations(kind):
     assert_almost_equal(result.se, expected.se)
 
 
+@pytest.mark.parametrize("kind, expected", [("mae", 0.5), ("mse", 0.25), ("rmse", 0.5)])
+def test_metrics_reordered_observation_coordinates(kind, expected):
+    dt = azb.from_dict(
+        {
+            "observed_data": {"y": np.array([1.0, 10.0])},
+            "posterior_predictive": {"y": np.array([[[10.5, 1.5]]])},
+        }
+    )
+    dt["observed_data"] = dt["observed_data"].to_dataset().assign_coords(y_dim_0=["a", "b"])
+    dt["posterior_predictive"] = (
+        dt["posterior_predictive"].to_dataset().assign_coords(y_dim_0=["b", "a"])
+    )
+
+    result = metrics(dt, kind=kind, round_to="none")
+
+    assert result.mean == expected
+
+
+def test_metrics_reordered_multidimensional_observations():
+    observed = np.array([[1.0, 2.0], [3.0, 4.0]])
+    predicted = observed[::-1, ::-1][None, None, :, :] + 0.5
+    dt = azb.from_dict(
+        {
+            "observed_data": {"y": observed},
+            "posterior_predictive": {"y": predicted},
+        }
+    )
+    dt["observed_data"] = (
+        dt["observed_data"].to_dataset().assign_coords(y_dim_0=["a", "b"], y_dim_1=["x", "y"])
+    )
+    dt["posterior_predictive"] = (
+        dt["posterior_predictive"]
+        .to_dataset()
+        .assign_coords(y_dim_0=["b", "a"], y_dim_1=["y", "x"])
+    )
+
+    result = metrics(dt, kind="mae", round_to="none")
+
+    assert result.mean == 0.5
+
+
+def test_metrics_mismatched_observation_coordinates():
+    dt = azb.from_dict(
+        {
+            "observed_data": {"y": np.array([1.0, 10.0])},
+            "posterior_predictive": {"y": np.array([[[1.0, 10.0]]])},
+        }
+    )
+    dt["observed_data"] = dt["observed_data"].to_dataset().assign_coords(y_dim_0=["a", "b"])
+    dt["posterior_predictive"] = (
+        dt["posterior_predictive"].to_dataset().assign_coords(y_dim_0=["a", "c"])
+    )
+
+    with pytest.raises(ValueError, match="observation coordinates"):
+        metrics(dt, kind="mae", round_to="none")
+
+
 def test_metrics_invalid_kind(datatree):
     with pytest.raises(ValueError, match="kind must be one of"):
         metrics(datatree, kind="invalid_kind")
