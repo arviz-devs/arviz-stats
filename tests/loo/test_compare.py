@@ -206,6 +206,14 @@ def test_compare_lfo_with_raw_model_data(centered_eight, lfo_result_factory):
         compare(compare_dict)
 
 
+def test_compare_lfo_crps(lfo_result_factory):
+    crps_result = lfo_result_factory()
+    crps_result.score = "crps"
+
+    with pytest.raises(ValueError, match="not comparable with log score"):
+        compare({"m1": lfo_result_factory(), "m2": crps_result})
+
+
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
     loo_sub1 = loo_subsample(

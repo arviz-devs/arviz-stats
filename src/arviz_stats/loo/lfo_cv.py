@@ -3,11 +3,12 @@
 import warnings
 
 import numpy as np
-from arviz_base import rcParams
+from arviz_base import convert_to_datatree, rcParams
 
 from arviz_stats.loo.lfo_cv_helper import (
     _compute_lfo_approx,
     _compute_lfo_exact,
+    _compute_lfo_trajectory,
     _prepare_lfo_inputs,
 )
 from arviz_stats.utils import ELPDDataLFO
@@ -25,6 +26,7 @@ def lfo_cv(
     var_name=None,
     method="approx",
     k_threshold=0.7,
+    mode="chain_rule",
 ):
     """Compute leave-future-out cross-validation (LFO-CV) for time series models.
 
@@ -47,7 +49,8 @@ def lfo_cv(
     wrapper : SamplingWrapper
         An instance of :class:`~arviz_stats.SamplingWrapper` (or subclass) handling
         model refitting. Must implement ``sel_observations``, ``sample``,
-        ``get_inference_data``, and ``log_likelihood__i``. Following the same pattern as
+        ``get_inference_data``, and ``log_likelihood__i``, or ``posterior_predictive__i``
+        instead of ``log_likelihood__i`` when ``mode="trajectory"``. Following the same pattern as
         :func:`loo_kfold`, ``sel_observations`` receives an array of integer indices to
         exclude from training and returns ``(modified_observed_data, excluded_observed_data)``.
         The forecast window is selected from ``excluded_observed_data`` internally. Each refit
@@ -73,6 +76,12 @@ def lfo_cv(
     k_threshold : float, default=0.7
         Pareto k threshold for triggering refit. If k > k_threshold, refit the model.
         Recommended values: 0.6 (conservative) or 0.7 (default).
+    mode : {"chain_rule", "trajectory"}, default "chain_rule"
+        How each forecast block is scored, see Notes. ``"chain_rule"`` scores the block with
+        its joint log predictive density. ``"trajectory"`` scores forecast trajectories
+        simulated by the wrapper's ``posterior_predictive__i`` method with the continuous
+        ranked probability score (CRPS), and requires ``method="exact"`` and an
+        ``observed_data`` group in ``data``.
 
     Returns
     -------
@@ -86,6 +95,9 @@ def lfo_cv(
         - **n_samples**: number of posterior samples
         - **n_data_points**: number of forecast origins evaluated
         - **scale**: "log"
+        - **score**: "log", or "crps" if ``mode="trajectory"``. With "crps", **elpd** and
+          **elpd_i** hold the CRPS in negative orientation (higher is better), summed over
+          the steps of each forecast block, and **p** and **p_lfo_i** are NaN
         - **warning**: bool - True if more than half of the forecast origins required a
           refit (only if ``method="approx"``, otherwise False)
         - **good_k**: float - The k-threshold value used for refit decisions
@@ -109,18 +121,23 @@ def lfo_cv(
     likelihood depends on lagged values of the response, as in autoregressive models,
     there is more than one way to evaluate this joint density.
 
-    ``lfo_cv`` uses the chain rule factorization, where each observation in the block is
-    scored conditional on the observed values of the observations before it. This measures
-    how well the model predicts the block that actually occurred given the training data.
+    With ``mode="chain_rule"`` (the default), ``lfo_cv`` uses the chain rule factorization,
+    where each observation in the block is scored conditional on the observed values of the
+    observations before it. This measures how well the model predicts the block that actually
+    occurred given the training data.
 
     The alternative is to score each observation in the block against simulated values of
     its predecessors drawn from the model, letting predictive uncertainty accumulate across
     the horizon. This measures how well the model forecasts the block when the intermediate
     observations are never revealed, and is common in software oriented toward forecast
-    evaluation. The two approaches coincide when ``forecast_horizon=1`` and whenever the
-    likelihood does not depend on lagged values of the response. Otherwise they estimate
-    different quantities, so results computed one way should not be compared with results
-    computed the other way.
+    evaluation. The two predictive distributions coincide when ``forecast_horizon=1`` and
+    whenever the likelihood does not depend on lagged values of the response. Otherwise they
+    estimate different quantities.
+
+    ``mode="trajectory"`` implements the alternative. The wrapper's ``posterior_predictive__i``
+    simulates the trajectories and each step is scored with the CRPS, because simulated draws
+    do not provide a log predictive density. Results computed with one mode should not be
+    compared with results computed with the other, and :func:`compare` rejects CRPS results.
 
     See Also
     --------
@@ -152,11 +169,23 @@ def lfo_cv(
             "Use 'exact' for always refitting or 'approx' for PSIS approximation."
         )
 
+    if mode not in ("chain_rule", "trajectory"):
+        raise ValueError(f"mode must be 'chain_rule' or 'trajectory', got '{mode}'.")
+    if mode == "trajectory" and method != "exact":
+        raise ValueError("mode='trajectory' is only supported with method='exact'.")
+
+    pointwise_method = "log_likelihood__i" if mode == "chain_rule" else "posterior_predictive__i"
     lfo_inputs = _prepare_lfo_inputs(
-        data, var_name, wrapper, min_observations, forecast_horizon, time_dim
+        data, var_name, wrapper, min_observations, forecast_horizon, time_dim, pointwise_method
     )
 
-    if method == "exact":
+    if mode == "trajectory":
+        data = convert_to_datatree(data)
+        if "observed_data" not in data.children:
+            raise ValueError("mode='trajectory' requires an observed_data group in data.")
+        y_obs = data.observed_data[lfo_inputs.log_likelihood.name]
+        lfo_results = _compute_lfo_trajectory(lfo_inputs, wrapper, y_obs)
+    elif method == "exact":
         lfo_results = _compute_lfo_exact(lfo_inputs, wrapper)
     else:
         lfo_results = _compute_lfo_approx(lfo_inputs, wrapper, k_threshold)
@@ -190,4 +219,5 @@ def lfo_cv(
         refits=np.asarray(lfo_results.refits),
         n_refits=n_refits,
         p_lfo_i=lfo_results.p_lfo_i if pointwise else None,
+        score="crps" if mode == "trajectory" else "log",
     )

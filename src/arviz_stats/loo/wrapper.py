@@ -176,6 +176,37 @@ class SamplingWrapper:
         )
         return log_lik_idx
 
+    def posterior_predictive__i(self, excluded_obs, idata__i):  # pylint: disable=unused-argument
+        """Get posterior predictive samples of ``excluded_obs`` from the refit model.
+
+        **Not implemented**: This method must be implemented by the SamplingWrapper subclasses
+        that use it, such as :func:`lfo_cv` with ``mode="trajectory"``. It is documented here
+        to show its format and call signature.
+
+        Parameters
+        ----------
+        excluded_obs
+            Observations to predict. The second item from the tuple returned by
+            `sel_observations` is passed as this argument.
+        idata__i: datatree or InferenceData
+            Inference results of refitting the data excluding some observations. The
+            result of `get_inference_data` is used as this argument.
+
+        Returns
+        -------
+        posterior_predictive: xr.DataArray
+            Predictive draws of ``excluded_obs`` for each of the posterior samples stored in
+            ``idata__i``, with the same dimensions as the output of ``log_likelihood__i``.
+            For time series models with lagged responses, each observation must be simulated
+            conditional on the simulated, not the observed, values of the excluded
+            observations before it.
+        """
+        # The hook is optional. A bare raise would make pylint flag every subclass without it.
+        class_name = type(self).__name__
+        raise NotImplementedError(
+            f"posterior_predictive__i method is not implemented in {class_name}"
+        )
+
     def check_implemented_methods(self, methods):
         """Check that all methods listed are implemented.
 
@@ -197,6 +228,7 @@ class SamplingWrapper:
             "sample",
             "get_inference_data",
             "log_likelihood__i",
+            "posterior_predictive__i",
         )
         bad_methods = [method for method in methods if method not in supported_methods]
         if bad_methods:

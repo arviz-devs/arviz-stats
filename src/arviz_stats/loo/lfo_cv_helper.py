@@ -15,6 +15,7 @@ __all__ = [
     "_prepare_lfo_inputs",
     "_compute_lfo_exact",
     "_compute_lfo_approx",
+    "_compute_lfo_trajectory",
     "_validate_lfo_parameters",
 ]
 
@@ -38,14 +39,26 @@ LFOResults = namedtuple(
 )
 
 
-def _prepare_lfo_inputs(data, var_name, wrapper, min_observations, forecast_horizon, time_dim):
-    """Validate arguments and collect the quantities shared by every LFO-CV step."""
+def _prepare_lfo_inputs(
+    data,
+    var_name,
+    wrapper,
+    min_observations,
+    forecast_horizon,
+    time_dim,
+    pointwise_method="log_likelihood__i",
+):
+    """Validate arguments and collect the quantities shared by every LFO-CV step.
+
+    ``pointwise_method`` is the wrapper method evaluated on the excluded observations after
+    each refit, ``"log_likelihood__i"`` or ``"posterior_predictive__i"``.
+    """
     data = convert_to_datatree(data)
 
     if not isinstance(wrapper, SamplingWrapper):
         raise TypeError("wrapper must be an instance of SamplingWrapper")
 
-    required_methods = ["sel_observations", "sample", "get_inference_data", "log_likelihood__i"]
+    required_methods = ["sel_observations", "sample", "get_inference_data", pointwise_method]
     not_implemented = wrapper.check_implemented_methods(required_methods)
     if not_implemented:
         raise ValueError(
@@ -210,6 +223,54 @@ def _compute_lfo_approx(lfo_inputs, wrapper, k_threshold):
     return _assemble_results(lfo_inputs, origins, elpds, lpds, refits, pareto_ks)
 
 
+def _compute_lfo_trajectory(lfo_inputs, wrapper, y_obs):
+    """Compute LFO-CV scoring simulated forecast trajectories with CRPS.
+
+    For each origin ``i`` the model is refit on ``y[:i]``, ``posterior_predictive__i``
+    simulates the remaining observations and the first ``forecast_horizon`` steps are scored
+    against ``y[i:i + forecast_horizon]`` with the sample CRPS in negative orientation, so
+    higher is better. Each origin's score is the sum over the steps of the block.
+
+    Parameters
+    ----------
+    lfo_inputs : LFOInputs
+        Prepared inputs from ``_prepare_lfo_inputs``.
+    wrapper : SamplingWrapper
+        Wrapper instance handling model refitting.
+    y_obs : DataArray
+        Observed values along the time dimension.
+
+    Returns
+    -------
+    LFOResults
+        Same fields as ``_compute_lfo_exact`` with the CRPS in place of the elpd. ``p`` and
+        ``p_lfo_i`` are NaN because the effective number of parameters is only defined for
+        the log score.
+    """
+    time_dim = lfo_inputs.time_dim
+    horizon = lfo_inputs.forecast_horizon
+
+    origins = lfo_inputs.origins
+    scores = np.empty(len(origins))
+    for pos, cutoff in enumerate(origins):
+        y_pred, dims, _, _ = _refit_loglik(lfo_inputs, wrapper, cutoff, "posterior_predictive__i")
+        block = y_pred.isel({time_dim: slice(0, horizon)})
+        y_block = xr.DataArray(
+            y_obs.values[cutoff : cutoff + horizon],
+            dims=[time_dim],
+            coords=block[time_dim].coords,
+        )
+        # Uniform weights reduce the PSIS-weighted kernel of loo_score to the sample CRPS
+        crps, _ = block.azstats.loo_score(
+            y_obs=y_block, log_weights=xr.zeros_like(block), kind="crps", sample_dims=dims
+        )
+        scores[pos] = crps.sum(time_dim)
+
+    return _assemble_results(
+        lfo_inputs, origins, scores, np.full_like(scores, np.nan), origins, None
+    )
+
+
 def _psis_lfo_weights(log_ratios, sample_dims, r_eff):
     """Compute PSIS-LFO weights and flag invalid approximations for exact refitting.
 
@@ -245,7 +306,7 @@ def _psis_lfo_weights(log_ratios, sample_dims, r_eff):
     return log_weights, pareto_k
 
 
-def _refit_loglik(lfo_inputs, wrapper, cutoff):
+def _refit_loglik(lfo_inputs, wrapper, cutoff, pointwise_method="log_likelihood__i"):
     """Refit on ``y[:cutoff]`` and return the log likelihood of all remaining observations.
 
     The returned array is indexed so that position ``0`` corresponds to observation ``cutoff``,
@@ -260,6 +321,10 @@ def _refit_loglik(lfo_inputs, wrapper, cutoff):
         Wrapper instance handling model refitting.
     cutoff : int
         Number of leading observations to train on.
+    pointwise_method : str, default "log_likelihood__i"
+        Wrapper method evaluated on the remaining observations. With
+        ``"posterior_predictive__i"`` the returned array holds predictive draws instead of
+        log likelihood values.
 
     Returns
     -------
@@ -279,11 +344,11 @@ def _refit_loglik(lfo_inputs, wrapper, cutoff):
 
     # Approximate LFO reuses this fit at later origins, so it needs the likelihood of every
     # remaining observation, including those used to form subsequent importance ratios.
-    log_lik = wrapper.log_likelihood__i(excluded_data, idata)
+    log_lik = getattr(wrapper, pointwise_method)(excluded_data, idata)
     time_dim = lfo_inputs.time_dim
     if log_lik.sizes.get(time_dim) != len(exclude_idx):
         raise ValueError(
-            f"log_likelihood__i must return one value per excluded observation. Expected "
+            f"{pointwise_method} must return one value per excluded observation. Expected "
             f"size {len(exclude_idx)} along '{time_dim}', got "
             f"{log_lik.sizes.get(time_dim)} for cutoff {cutoff}."
         )

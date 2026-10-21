@@ -1,6 +1,6 @@
 """Tests for LFO-CV (leave-future-out cross-validation)."""
 
-# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name, unused-argument
 import numpy as np
 import pytest
 
@@ -32,6 +32,7 @@ def test_lfo_cv_constant_log_likelihood(constant_lfo_wrapper, lfo_constant_data,
 
     assert isinstance(result, ELPDDataLFO)
     assert result.kind == "lfo_cv"
+    assert result.score == "log"
     assert result.n_data_points == n_origins
     assert result.elpd_i.sizes["time"] == n_origins
     np.testing.assert_allclose(result.elpd_i.values, horizon * const)
@@ -322,4 +323,84 @@ def test_lfo_cv_invalid_parameters(constant_lfo_wrapper, lfo_constant_data):
             constant_lfo_wrapper,
             min_observations=0,
             forecast_horizon=2,
+        )
+
+
+@pytest.fixture
+def trajectory_lfo_wrapper(constant_lfo_wrapper):
+    class TrajectoryWrapper(type(constant_lfo_wrapper)):
+        def __init__(self, idata):
+            super().__init__(idata)
+            rng = np.random.default_rng(0)
+            self.draws = rng.normal(self.obs[:, None], 1.0, size=(self.n_time, 100))
+
+        def posterior_predictive__i(self, excluded_obs, idata__i):
+            idx = np.atleast_1d(excluded_obs.coords["time"].values)
+            return xr.DataArray(
+                self.draws[np.newaxis, idx, :],
+                dims=["chain", "time", "draw"],
+                coords={"time": idx},
+            )
+
+    return TrajectoryWrapper(constant_lfo_wrapper.idata_orig)
+
+
+def test_lfo_cv_trajectory_crps(trajectory_lfo_wrapper, lfo_constant_data):
+    min_obs, horizon = 5, 3
+    y = lfo_constant_data.observed_data["obs"].values
+    draws = trajectory_lfo_wrapper.draws
+    abs_error = np.abs(draws - y[:, None]).mean(axis=1)
+    spread = np.abs(draws[:, :, None] - draws[:, None, :]).mean(axis=(1, 2))
+    neg_crps = -(abs_error - 0.5 * spread)
+    expected = [neg_crps[i : i + horizon].sum() for i in range(min_obs, len(y) - horizon + 1)]
+
+    result = lfo_cv(
+        lfo_constant_data,
+        trajectory_lfo_wrapper,
+        min_observations=min_obs,
+        forecast_horizon=horizon,
+        method="exact",
+        pointwise=True,
+        mode="trajectory",
+    )
+
+    assert result.score == "crps"
+    np.testing.assert_allclose(result.elpd_i.values, expected)
+    assert np.isclose(result.elpd, np.sum(expected))
+    assert np.isnan(result.p)
+    assert "crps_lfo" in str(result)
+
+
+def test_lfo_cv_trajectory_missing_hook(constant_lfo_wrapper, lfo_constant_data):
+    with pytest.raises(ValueError, match="must be implemented.*posterior_predictive__i"):
+        lfo_cv(
+            lfo_constant_data,
+            constant_lfo_wrapper,
+            min_observations=5,
+            forecast_horizon=3,
+            method="exact",
+            mode="trajectory",
+        )
+
+
+def test_lfo_cv_trajectory_requires_exact(trajectory_lfo_wrapper, lfo_constant_data):
+    with pytest.raises(ValueError, match="only supported with method='exact'"):
+        lfo_cv(
+            lfo_constant_data,
+            trajectory_lfo_wrapper,
+            min_observations=5,
+            forecast_horizon=3,
+            method="approx",
+            mode="trajectory",
+        )
+
+
+def test_lfo_cv_invalid_mode(constant_lfo_wrapper, lfo_constant_data):
+    with pytest.raises(ValueError, match="mode must be 'chain_rule' or 'trajectory'"):
+        lfo_cv(
+            lfo_constant_data,
+            constant_lfo_wrapper,
+            min_observations=5,
+            forecast_horizon=3,
+            mode="bogus",
         )

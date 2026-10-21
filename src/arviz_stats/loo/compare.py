@@ -612,6 +612,16 @@ def _calculate_ics(
         for name, elpd_data in compare_dict.items()
         if isinstance(elpd_data, ELPDData)
     }
+    crps_names = [
+        name
+        for name, elpd_data in precomputed_elpds.items()
+        if getattr(elpd_data, "score", "log") == "crps"
+    ]
+    if crps_names:
+        raise ValueError(
+            f"Cannot compare CRPS results from lfo_cv(mode='trajectory') for models "
+            f"{crps_names}. CRPS is not comparable with log score ELPDs."
+        )
     raw_names = [name for name, result in compare_dict.items() if not isinstance(result, ELPDData)]
     if raw_names and any(result.kind == "lfo_cv" for result in precomputed_elpds.values()):
         raise ValueError(

@@ -427,6 +427,10 @@ class ELPDDataLFO(ELPDData):
         Number of refits performed.
     p_lfo_i : DataArray, optional
         Pointwise effective number of parameters, only when ``pointwise=True``.
+    score : str, default "log"
+        Scoring rule, ``"log"`` or ``"crps"``. With ``"crps"`` the ``elpd`` and ``elpd_i``
+        attributes hold the negatively oriented CRPS of simulated forecast trajectories,
+        which is not comparable with log score results.
     """
 
     _kind: ClassVar[str] = "lfo_cv"
@@ -437,6 +441,12 @@ class ELPDDataLFO(ELPDData):
     refits: np.ndarray
     n_refits: int
     p_lfo_i: DataArray = None
+    score: str = "log"
+
+    def _table(self):
+        if self.score == "log":
+            return super()._table()
+        return f"         Estimate       SE\ncrps_lfo {self.elpd:8.2f}  {self.se:7.2f}"
 
     def _header(self):
         origin_word = "origin" if self.n_data_points == 1 else "origins"
