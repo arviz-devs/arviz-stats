@@ -841,7 +841,7 @@ class _DiagnosticsBase(_CoreBase):
                 )
 
                 lpd_approx_sq_sum_all = np.nansum(approx_all**2)
-                mean_sq_diff = np.nanmean(elpd_valid**2 - approx_valid**2)
+                mean_sq_diff = np.nanmean(pointwise_diff * (elpd_valid + approx_valid))
                 scaled_mean_sq_diff = n_data_points * mean_sq_diff
 
                 total_variance_estimate = (
