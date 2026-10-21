@@ -210,7 +210,7 @@ def test_compare_lfo_crps(lfo_result_factory):
     crps_result = lfo_result_factory()
     crps_result.score = "crps"
 
-    with pytest.raises(ValueError, match="not comparable with log score"):
+    with pytest.raises(ValueError, match="only supports log score results"):
         compare({"m1": lfo_result_factory(), "m2": crps_result})
 
 

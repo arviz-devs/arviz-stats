@@ -81,7 +81,9 @@ def lfo_cv(
         its joint log predictive density. ``"trajectory"`` scores forecast trajectories
         simulated by the wrapper's ``posterior_predictive__i`` method with the continuous
         ranked probability score (CRPS), and requires ``method="exact"`` and an
-        ``observed_data`` group in ``data``.
+        ``observed_data`` group in ``data``. The observed variable must share the name of the
+        log likelihood variable and have ``time_dim`` as its only dimension. The
+        ``log_likelihood`` group is still required, for the sample counts and origin coordinates.
 
     Returns
     -------
@@ -183,7 +185,13 @@ def lfo_cv(
         data = convert_to_datatree(data)
         if "observed_data" not in data.children:
             raise ValueError("mode='trajectory' requires an observed_data group in data.")
-        y_obs = data.observed_data[lfo_inputs.log_likelihood.name]
+        obs_name = lfo_inputs.log_likelihood.name
+        if obs_name not in data.observed_data:
+            raise ValueError(
+                f"mode='trajectory' requires an observed_data variable named '{obs_name}', "
+                "matching the log likelihood variable."
+            )
+        y_obs = data.observed_data[obs_name]
         lfo_results = _compute_lfo_trajectory(lfo_inputs, wrapper, y_obs)
     elif method == "exact":
         lfo_results = _compute_lfo_exact(lfo_inputs, wrapper)

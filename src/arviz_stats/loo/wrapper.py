@@ -201,7 +201,9 @@ class SamplingWrapper:
             conditional on the simulated, not the observed, values of the excluded
             observations before it.
         """
-        # The hook is optional. A bare raise would make pylint flag every subclass without it.
+        # Not a bare raise: pylint treats a method whose first statement raises
+        # NotImplementedError as abstract and would warn on every subclass that omits this
+        # optional hook.
         class_name = type(self).__name__
         raise NotImplementedError(
             f"posterior_predictive__i method is not implemented in {class_name}"

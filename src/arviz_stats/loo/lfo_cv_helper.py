@@ -329,8 +329,8 @@ def _refit_loglik(lfo_inputs, wrapper, cutoff, pointwise_method="log_likelihood_
     Returns
     -------
     log_lik : DataArray
-        Log likelihood of observations ``cutoff`` onward, evaluated at the refit
-        posterior draws.
+        Log likelihood, or predictive draws when ``posterior_predictive__i`` is used, of
+        observations from ``cutoff`` onward, evaluated at the refit posterior draws.
     sample_dims : list of str
         Dimensions of ``log_lik`` other than the time dimension.
     n_samples : int

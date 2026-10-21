@@ -430,7 +430,7 @@ class ELPDDataLFO(ELPDData):
     score : str, default "log"
         Scoring rule, ``"log"`` or ``"crps"``. With ``"crps"`` the ``elpd`` and ``elpd_i``
         attributes hold the negatively oriented CRPS of simulated forecast trajectories,
-        which is not comparable with log score results.
+        which is not comparable with log score results, and ``scale`` has no meaning.
     """
 
     _kind: ClassVar[str] = "lfo_cv"

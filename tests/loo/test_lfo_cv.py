@@ -1,6 +1,6 @@
 """Tests for LFO-CV (leave-future-out cross-validation)."""
 
-# pylint: disable=redefined-outer-name, unused-argument
+# pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
 
@@ -334,7 +334,7 @@ def trajectory_lfo_wrapper(constant_lfo_wrapper):
             rng = np.random.default_rng(0)
             self.draws = rng.normal(self.obs[:, None], 1.0, size=(self.n_time, 100))
 
-        def posterior_predictive__i(self, excluded_obs, idata__i):
+        def posterior_predictive__i(self, excluded_obs, idata__i):  # pylint: disable=unused-argument
             idx = np.atleast_1d(excluded_obs.coords["time"].values)
             return xr.DataArray(
                 self.draws[np.newaxis, idx, :],
@@ -403,4 +403,18 @@ def test_lfo_cv_invalid_mode(constant_lfo_wrapper, lfo_constant_data):
             min_observations=5,
             forecast_horizon=3,
             mode="bogus",
+        )
+
+
+def test_lfo_cv_trajectory_missing_observed_variable(trajectory_lfo_wrapper, lfo_constant_data):
+    data = lfo_constant_data.copy()
+    data["observed_data"] = data.observed_data.to_dataset().rename_vars({"obs": "other"})
+    with pytest.raises(ValueError, match="observed_data variable named 'obs'"):
+        lfo_cv(
+            data,
+            trajectory_lfo_wrapper,
+            min_observations=5,
+            forecast_horizon=3,
+            method="exact",
+            mode="trajectory",
         )
