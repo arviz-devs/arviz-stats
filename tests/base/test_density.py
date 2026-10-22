@@ -4,6 +4,7 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
+from scipy.stats import gaussian_kde
 
 from arviz_stats.base.density import _DensityBase
 
@@ -548,6 +549,17 @@ class TestKDE2D:
             variance = np.sum(marginal * (coords - mean) ** 2)
             expected = sample.var() * (1 + n_samples ** (-1 / 3))
             assert_allclose(variance, expected, rtol=0.05)
+
+    def test_fast_kde_2d_matches_scipy(self, density, rng):
+        cov = [[1.0, 0.7], [0.7, 2.0]]
+        x, y = rng.multivariate_normal([0, 0], cov, size=3000).T
+        grid, xmin, xmax, ymin, ymax = density._fast_kde_2d(x, y, gridsize=(64, 128))
+
+        xs, ys = np.linspace(xmin, xmax, 64), np.linspace(ymin, ymax, 128)
+        pts = np.vstack([a.ravel() for a in np.meshgrid(xs, ys, indexing="ij")])
+        expected = gaussian_kde(np.vstack([x, y]))(pts).reshape(64, 128)
+
+        assert_allclose(grid, expected, atol=0.1 * expected.max())
 
 
 class TestHDIContours:
