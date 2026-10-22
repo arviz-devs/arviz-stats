@@ -12,6 +12,7 @@ sp = importorskip("scipy")
 np = importorskip("numpy")
 
 from arviz_stats import loo, loo_i
+from arviz_stats.base import array_stats
 from arviz_stats.utils import ELPDDataLOO
 
 
@@ -556,6 +557,21 @@ def test_loo_mixture(centered_eight):
     assert np.isfinite(result_mix.elpd)
     assert np.all(np.isfinite(result_mix.elpd_i.values))
     assert np.all(np.isfinite(result_mix.pareto_k.values))
+
+
+def test_loo_mixture_pareto_k_right_tail(centered_eight):
+    """Pareto k of mixture LOO must describe the right tail of the mixture weights."""
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        result_mix = loo(centered_eight, mixture=True, pointwise=True, reff=1.0)
+
+    log_lik = centered_eight.log_likelihood["obs"].stack(__sample__=("chain", "draw"))
+    log_lik = log_lik.transpose("school", "__sample__").values
+    # mixture log weights as in Silva and Zanella (2023), Appendix A.2
+    log_weights = -log_lik - sp.special.logsumexp(-log_lik, axis=0, keepdims=True)
+    weights = np.exp(log_weights - log_weights.max(axis=1, keepdims=True))
+
+    expected = [array_stats.pareto_khat(w[None, :], r_eff=1.0, tail="right") for w in weights]
+    assert_allclose(result_mix.pareto_k.values, expected)
 
 
 def test_loo_jax_arrays(centered_eight):
