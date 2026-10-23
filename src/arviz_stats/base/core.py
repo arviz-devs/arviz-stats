@@ -35,7 +35,7 @@ class _CoreBase:
         """
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocov.")
-        axis = axis if axis > 0 else len(ary.shape) + axis
+        axis = axis if axis >= 0 else len(ary.shape) + axis
         n = ary.shape[axis]
         m = next_fast_len(2 * n)
 
@@ -70,7 +70,7 @@ class _CoreBase:
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocorr.")
         corr = self.autocov(ary, axis=axis)
-        axis = axis = axis if axis > 0 else len(corr.shape) + axis
+        axis = axis if axis >= 0 else len(corr.shape) + axis
         norm = tuple(
             slice(None, None) if dim != axis else slice(None, 1) for dim, _ in enumerate(corr.shape)
         )
