@@ -200,6 +200,18 @@ class TestBinning:
         _, _, width = core._get_bininfo(x)
         assert width >= 1
 
+    def test_get_bininfo_discrete_upper_edge(self, core, rng):
+        x = rng.integers(0, 2, size=1000)
+        assert core._get_bininfo(x) == (0, 2, 1)
+
+    @pytest.mark.parametrize("high", [2, 10])
+    def test_histogram_discrete(self, core, rng, high):
+        x = rng.integers(-1, high, size=1000)
+        counts, edges = core._histogram(x, density=False)
+        values, expected = np.unique(x, return_counts=True)
+        assert_array_equal(edges[:-1], values)
+        assert_array_equal(counts, expected)
+
     def test_get_bins_sorted(self, core, rng):
         x = rng.normal(size=100)
         bins = core._get_bins(x)
