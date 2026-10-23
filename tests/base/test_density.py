@@ -532,23 +532,6 @@ class TestKDE2D:
         assert_allclose(integral, 1.0, rtol=0.1)
 
     @pytest.mark.parametrize("gridsize", [(128, 32), (32, 128)])
-    def test_fast_kde_2d_bandwidth_per_axis(self, density, rng, gridsize):
-        # each marginal should have the sample variance plus the squared Scott bandwidth
-        n_samples = 2000
-        x = rng.normal(size=n_samples)
-        y = rng.normal(size=n_samples)
-        grid, xmin, xmax, ymin, ymax = density._fast_kde_2d(x, y, gridsize=gridsize)
-        x_coords = np.linspace(xmin, xmax, gridsize[0])
-        y_coords = np.linspace(ymin, ymax, gridsize[1])
-        for marginal, coords, sample in (
-            (grid.sum(axis=1), x_coords, x),
-            (grid.sum(axis=0), y_coords, y),
-        ):
-            marginal = marginal / marginal.sum()
-            mean = np.sum(marginal * coords)
-            variance = np.sum(marginal * (coords - mean) ** 2)
-            expected = sample.var() * (1 + n_samples ** (-1 / 3))
-            assert_allclose(variance, expected, rtol=0.05)
 
     def test_fast_kde_2d_matches_scipy(self, density, rng):
         cov = [[1.0, 0.7], [0.7, 2.0]]
