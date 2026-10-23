@@ -391,6 +391,18 @@ class TestComputeRanks:
         assert result.ndim == ary.ndim
         assert result.max() == ary.shape[axis]
 
+    def test_compute_ranks_discrete_multiple_axes(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.poisson(3, size=(4, 50))
+        result = array_stats.compute_ranks(ary, axis=(0, 1))
+        assert result.shape == ary.shape
+        assert_array_equal(np.sort(result, axis=None), np.arange(1, 201))
+
+    def test_compute_ranks_discrete_constant(self, array_stats):
+        ary = np.full(10, 3)
+        result = array_stats.compute_ranks(ary)
+        assert_array_equal(np.sort(result), np.arange(1, 11))
+
 
 class TestBinning:
     def test_get_bins_basic(self, array_stats, rng):
