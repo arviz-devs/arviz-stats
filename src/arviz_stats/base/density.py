@@ -743,12 +743,13 @@ class _DensityBase(_CoreBase):
 
         x_x = np.arange(kern_nx) - kern_nx / 2
         y_y = np.arange(kern_ny) - kern_ny / 2
-        x_x, y_y = np.meshgrid(x_x, y_y)
+        # "ij" indexing so the kernel is laid out like the grid: x along rows, y along columns
+        x_x, y_y = np.meshgrid(x_x, y_y, indexing="ij")
 
         kernel = np.vstack((x_x.flatten(), y_y.flatten()))
         kernel = np.dot(inv_cov, kernel) * kernel
         kernel = np.exp(-kernel.sum(axis=0) / 2)
-        kernel = kernel.reshape((int(kern_ny), int(kern_nx)))
+        kernel = kernel.reshape((int(kern_nx), int(kern_ny)))
 
         boundary = "wrap" if circular else "symm"
 
