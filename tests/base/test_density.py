@@ -531,8 +531,6 @@ class TestKDE2D:
         integral = np.sum(grid * dx * dy)
         assert_allclose(integral, 1.0, rtol=0.1)
 
-    @pytest.mark.parametrize("gridsize", [(128, 32), (32, 128)])
-
     def test_fast_kde_2d_matches_scipy(self, density, rng):
         cov = [[1.0, 0.7], [0.7, 2.0]]
         x, y = rng.multivariate_normal([0, 0], cov, size=3000).T
