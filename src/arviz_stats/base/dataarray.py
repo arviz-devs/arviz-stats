@@ -637,15 +637,16 @@ class BaseDataArray:
 
         return da.sel({sample_dims: slice(None, None, factor)})
 
-    def pareto_min_ss(self, da, sample_dims=None):
+    def pareto_min_ss(self, da, sample_dims=None, prob=None):
         """Compute the minimum effective sample size."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        prob = validate_ci_prob(prob)
         return apply_ufunc(
             self.array_class.pareto_min_ss,
             da,
             input_core_dims=[dims],
             output_core_dims=[[]],
-            kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis},
+            kwargs={"chain_axis": chain_axis, "draw_axis": draw_axis, "prob": prob},
         )
 
     def psislw(self, da, r_eff=1, dim=None):
@@ -674,9 +675,12 @@ class BaseDataArray:
             },
         )
 
-    def pareto_khat(self, da, sample_dims=None, r_eff=None, tail="both", log_weights=False):
+    def pareto_khat(
+        self, da, sample_dims=None, r_eff=None, tail="both", log_weights=False, prob=None
+    ):
         """Compute Pareto k-hat diagnostic on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
+        prob = validate_ci_prob(prob)
         return apply_ufunc(
             self.array_class.pareto_khat,
             da,
@@ -688,6 +692,7 @@ class BaseDataArray:
                 "r_eff": r_eff,
                 "tail": tail,
                 "log_weights": log_weights,
+                "prob": prob,
             },
             dask="parallelized",
             output_dtypes=[float],
@@ -1184,16 +1189,17 @@ class BaseDataArray:
             random_state=random_state,
         )
 
-    def power_scale_lw(self, da, alpha=0, dim=None):
+    def power_scale_lw(self, da, alpha=0, dim=None, prob=None):
         """Compute log weights for power-scaling component by alpha."""
         dims = validate_dims(dim)
+        prob = validate_ci_prob(prob)
         return apply_ufunc(
             self.array_class.power_scale_lw,
             da,
             alpha,
             input_core_dims=[dims, []],
             output_core_dims=[dims, []],
-            kwargs={"axis": np.arange(-len(dims), 0, 1)},
+            kwargs={"axis": np.arange(-len(dims), 0, 1), "prob": prob},
         )
 
     def power_scale_sense(self, da, lower_w, upper_w, lower_alpha, upper_alpha, sample_dims=None):
