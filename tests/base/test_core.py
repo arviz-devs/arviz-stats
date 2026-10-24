@@ -65,6 +65,11 @@ class TestAutoCorrelation:
         )
         assert_allclose(result, expected, atol=1e-12)
 
+    def test_autocorr_axis_zero(self, core, rng):
+        x = rng.normal(size=(50, 3))
+        autocov = core.autocov(x, axis=0)
+        assert_allclose(core.autocorr(x, axis=0), autocov / autocov[0], atol=1e-12)
+
     @pytest.mark.parametrize("axis", [-1, 0, 1, 2])
     def test_autocorr_shape(self, core, rng, axis):
         x = rng.normal(size=(10, 20, 5))
