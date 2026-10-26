@@ -1744,9 +1744,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ----------
         ary : array-like
             Posterior or posterior predictive samples. It is broadcast against
-            `log_weights`, so for example posterior samples with shape
-            ``(chain, draw, 1)`` can be combined with log weights with shape
-            ``(chain, draw, n_obs)``.
+            `log_weights`, so, for example, posterior samples with shape
+            ``(chain, draw)`` can be combined with log weights with shape
+            ``(n_obs, chain, draw)``.
         log_weights : array-like
             Pre-computed PSIS log weights.
         kind : str, default "mean"
