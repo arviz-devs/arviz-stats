@@ -1647,7 +1647,7 @@ class TestLooInfluence:
         log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
         reff = _get_r_eff(centered_eight, log_lik.chain.size * log_lik.draw.size)
         log_weights, _ = log_lik.azstats.psislw(r_eff=reff)
-        return log_weights.transpose("chain", "draw", "school").values
+        return log_weights.transpose("school", "chain", "draw").values
 
     @pytest.mark.parametrize(
         "kind, kwargs",
@@ -1664,11 +1664,9 @@ class TestLooInfluence:
     def test_loo_influence_matches_xarray(
         self, array_stats, centered_eight, log_weights, kind, kwargs
     ):
-        y_pred = centered_eight.posterior_predictive["obs"].transpose("chain", "draw", "school")
+        y_pred = centered_eight.posterior_predictive["obs"].transpose("school", "chain", "draw")
 
-        influence = array_stats.loo_influence(
-            y_pred.values, log_weights, kind=kind, chain_axis=0, draw_axis=1, **kwargs
-        )
+        influence = array_stats.loo_influence(y_pred.values, log_weights, kind=kind, **kwargs)
 
         expected, _ = loo_influence(centered_eight, kind=kind, **kwargs)
         if isinstance(expected, xr.Dataset):
@@ -1677,25 +1675,15 @@ class TestLooInfluence:
         assert_allclose(influence, expected.transpose("school").values)
 
     def test_loo_influence_posterior(self, array_stats, centered_eight, log_weights):
-        mu = centered_eight.posterior["mu"].transpose("chain", "draw").values[..., None]
+        mu = centered_eight.posterior["mu"].transpose("chain", "draw").values
 
-        influence = array_stats.loo_influence(
-            mu, log_weights, kind="median", chain_axis=0, draw_axis=1
-        )
+        influence = array_stats.loo_influence(mu, log_weights, kind="median")
 
         expected, _ = loo_influence(
             centered_eight, kind="median", var_names="mu", group="posterior"
         )
         assert influence.shape == (8,)
         assert_allclose(influence, expected["mu"].transpose("school").values)
-
-    def test_loo_influence_ignores_probs_for_other_kinds(self, array_stats, rng):
-        ary = rng.normal(size=(2, 50, 3))
-        log_weights = rng.normal(size=(2, 50, 3))
-        assert_allclose(
-            array_stats.loo_influence(ary, log_weights, kind="mean", probs=[0.5]),
-            array_stats.loo_influence(ary, log_weights, kind="mean"),
-        )
 
     def test_loo_influence_invalid_kind(self, array_stats, rng):
         ary = rng.normal(size=(2, 50, 3))

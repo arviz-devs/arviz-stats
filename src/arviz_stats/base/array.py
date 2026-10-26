@@ -1750,14 +1750,16 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         log_weights : array-like
             Pre-computed PSIS log weights.
         kind : str, default "mean"
-            Summary to compare: "mean", "median", "sd", "var", "quantile" or "octiles".
+            Summary to compare. One of "mean", "median", "sd", "var", "quantile" or
+            "octiles". "octiles" averages the change over the seven octiles from 0.125
+            to 0.875.
         standardize : bool, default True
             Whether to divide the change by the standard deviation (``kind="mean"``),
             the MAD (``kind="median"``) or the summary itself (``kind="sd"`` and
             ``kind="var"``). Ignored for "quantile" and "octiles".
         probs : float or list of float, optional
             Quantile probabilities to use when `kind` is "quantile". The change is
-            averaged over them.
+            averaged over them. Ignored for the other kinds.
         chain_axis : int, default -2
             Axis for chains.
         draw_axis : int, default -1
