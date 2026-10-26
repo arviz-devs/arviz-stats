@@ -1734,11 +1734,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         chain_axis=-2,
         draw_axis=-1,
     ):
-        """Compute the influence of each observation from PSIS-LOO-CV expectations.
-
-        The influence is the absolute change in a summary of `ary` when the observation is
-        left out, i.e. the difference between the LOO weighted summary and the summary over
-        all the samples.
+        """Compute influential observations based on leave-one-out (LOO) expectations.
 
         Parameters
         ----------
