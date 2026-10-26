@@ -37,7 +37,9 @@ def warn_if_binary(observed_dist, predictive_dist):
         if binary_vars:
             warnings.warn(
                 f"Variables {', '.join(binary_vars)} in '{name}' look binary. "
-                "For binary outcomes, plot_ppc_pava may be more appropriate.",
+                "For binary outcomes, plot_ppc_pava may be more appropriate. "
+                "See https://arviz-devs.github.io/EABM/Chapters/"
+                "Prior_posterior_predictive_checks.html#posterior-predictive-checks-for-binary-data",
                 UserWarning,
                 stacklevel=2,
             )
