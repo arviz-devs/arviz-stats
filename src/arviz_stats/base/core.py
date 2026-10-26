@@ -118,6 +118,10 @@ class _CoreBase:
            "Sample quantiles in statistical packages,"
            The American Statistician, 50(4), pp. 361-365, 1996
         """
+        ary = np.asarray(ary)
+        if ary.dtype.kind == "b":
+            # numpy can't interpolate between boolean values
+            ary = ary.astype(float)
         if skipna:
             result = np.nanquantile(ary, quantile, axis=axis, method=method, weights=weights)
         else:

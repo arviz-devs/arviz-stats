@@ -79,6 +79,30 @@ def test_summary_focus_kind(datatree, params):
     assert_array_equal(summary_df.columns, metrics_names_)
 
 
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "all",
+        "stats",
+        "diagnostics",
+        "all_median",
+        "stats_median",
+        "diagnostics_median",
+        "mc_diagnostics",
+    ],
+)
+def test_summary_bool(kind):
+    rng = np.random.default_rng(0)
+    indicator = rng.uniform(size=(4, 100)) < 0.3
+    summary_bool = summary(
+        azb.from_dict({"posterior": {"x": indicator}}), kind=kind, round_to="none"
+    )
+    summary_float = summary(
+        azb.from_dict({"posterior": {"x": indicator.astype(float)}}), kind=kind, round_to="none"
+    )
+    assert_allclose(summary_bool.to_numpy(dtype=float), summary_float.to_numpy(dtype=float))
+
+
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_summary_nan(datatree):
     datatree = deepcopy(datatree)
