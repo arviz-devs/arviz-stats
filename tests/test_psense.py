@@ -18,8 +18,10 @@ uni_dt = azb.convert_to_datatree(file_path)
 
 
 def test_psense():
-    assert_almost_equal(psense(uni_dt, group="prior").to_array(), [0.404, 0.293], decimal=3)
-    assert_almost_equal(psense(uni_dt, group="likelihood").to_array(), [0.575, 0.535], decimal=3)
+    assert_almost_equal(psense(uni_dt, group="prior").to_dataarray(), [0.404, 0.293], decimal=3)
+    assert_almost_equal(
+        psense(uni_dt, group="likelihood").to_dataarray(), [0.575, 0.535], decimal=3
+    )
 
 
 def test_psense_var_names():
