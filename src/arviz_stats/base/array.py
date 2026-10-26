@@ -1790,10 +1790,11 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
                         ary, log_weights, prob, chain_axis=chain_axis, draw_axis=draw_axis
                     )
                     for prob in probs
-                ]
+                ],
+                axis=-1,
             )
-            full_values = np.quantile(ary, probs, axis=tuple(sample_axes))
-            return np.abs(loo_values - full_values).mean(axis=0)
+            full_values = self.quantile(ary, probs, axis=sample_axes)
+            return np.abs(loo_values - full_values).mean(axis=-1)
 
         summaries = {"mean": self.mean, "median": self.median, "sd": self.std, "var": self.var}
         scales = {"mean": self.std, "median": self.mad, "sd": self.std, "var": self.var}
