@@ -265,6 +265,7 @@ def loo(
             pareto_k=mix_pareto_k if pointwise else None,
             approx_posterior=False,
             log_weights=mix_log_weights,
+            data_hash=loo_inputs.data_hash,
         )
 
     if moment_match:
@@ -278,6 +279,7 @@ def loo(
             log_weights=log_weights,
             pareto_k=pareto_k,
             approx_posterior=False,
+            data_hash=loo_inputs.data_hash,
         )
         return loo_moment_match(
             data,
@@ -299,6 +301,7 @@ def loo(
         pareto_k=pareto_k,
         approx_posterior=False,
         log_jacobian=jacobian_da,
+        data_hash=loo_inputs.data_hash,
     )
 
 

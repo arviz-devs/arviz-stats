@@ -687,6 +687,19 @@ def _calculate_ics(
                 raise e.__class__(
                     f"Encountered error trying to compute ELPD from model {name}."
                 ) from e
+
+    hashes = {
+        name: elpd.data_hash
+        for name, elpd in new_compare_dict.items()
+        if getattr(elpd, "data_hash", None) is not None
+    }
+    if len(hashes) >= 2 and len(set(hashes.values())) > 1:
+        warnings.warn(
+            "The models being compared were not fit to the same observed data. "
+            "Comparing ELPD values across different datasets is not meaningful.",
+            UserWarning,
+        )
+
     return new_compare_dict
 
 

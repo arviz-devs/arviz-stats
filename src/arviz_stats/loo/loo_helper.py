@@ -1,5 +1,6 @@
 """Helper functions for PSIS-LOO-CV."""
 
+import hashlib
 import warnings
 from collections import namedtuple
 from collections.abc import Mapping
@@ -46,7 +47,15 @@ __all__ = [
 
 LooInputs = namedtuple(
     "LooInputs",
-    ["log_likelihood", "var_name", "sample_dims", "obs_dims", "n_samples", "n_data_points"],
+    [
+        "log_likelihood",
+        "var_name",
+        "sample_dims",
+        "obs_dims",
+        "n_samples",
+        "n_data_points",
+        "data_hash",
+    ],
 )
 
 SubsampleData = namedtuple(
@@ -85,6 +94,7 @@ def _compute_loo_results(
     approx_posterior=False,
     return_pointwise=False,
     log_jacobian=None,
+    data_hash=None,
 ):
     """Compute PSIS-LOO-CV results."""
     if isinstance(log_likelihood, xr.Dataset):
@@ -159,6 +169,7 @@ def _compute_loo_results(
         pareto_k=pareto_k if pointwise else None,
         approx_posterior=approx_posterior,
         log_weights=log_weights,
+        data_hash=data_hash,
     )
 
 
@@ -212,6 +223,12 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
     n_data_points = np.prod(
         [log_likelihood[dim].size for dim in log_likelihood.dims if dim not in sample_dims]
     )
+
+    data_hash = None
+    if hasattr(data, "observed_data") and var_name in data.observed_data:
+        obs_vals = np.ascontiguousarray(data.observed_data[var_name].values)
+        data_hash = hashlib.sha256(obs_vals.tobytes()).hexdigest()
+
     return LooInputs(
         log_likelihood,
         var_name,
@@ -219,6 +236,7 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
         obs_dims,
         n_samples,
         n_data_points,
+        data_hash,
     )
 
 

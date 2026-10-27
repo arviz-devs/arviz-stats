@@ -223,6 +223,7 @@ class ELPDData:
     good_k: float
     elpd_i: DataArray = None
     pareto_k: DataArray = None
+    data_hash: str | None = None
 
     _kind: ClassVar[str | None] = None
     _display_kind: ClassVar[str | None] = None

@@ -650,3 +650,29 @@ def test_compare_many_diff_models(centered_eight, rng):
     assert np.min(result["p_worse"].values[1:]) <= 1.0
     assert np.max(result["p_worse"].values[1:]) >= 0.0
     assert (result["diag_diff"] == "N < 100").sum() == 3
+
+
+def test_compare_warn_different_observed_data(centered_eight):
+    m1 = centered_eight
+    m2 = copy.deepcopy(centered_eight)
+    # Modify observed data in m2
+    m2.observed_data["obs"].values[0] += 999.0
+
+    with pytest.warns(
+        UserWarning,
+        match="The models being compared were not fit to the same observed data",
+    ):
+        compare({"m1": m1, "m2": m2})
+
+
+def test_compare_same_observed_data_no_warn(centered_eight, non_centered_eight):
+    # centered_eight and non_centered_eight have identical observed data
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        # Ensure no UserWarning about observed data is raised
+        try:
+            compare({"centered": centered_eight, "non_centered": non_centered_eight})
+        except UserWarning as e:
+            assert "The models being compared were not fit to the same observed data" not in str(e)
