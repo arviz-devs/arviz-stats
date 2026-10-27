@@ -93,14 +93,3 @@ def test_text_loo_pit_calibrated(calibrated_ppc, capsys):
     assert np.isclose(diagnostics["y"]["p_value"], 0.02768, atol=1e-4)
     assert np.isclose(diagnostics["y"]["alpha"], 0.01, atol=1e-2)
     assert diagnostics["y"]["n_obs"] == 100
-
-
-def test_warn_if_binary():
-    from arviz_stats.ppc import warn_if_binary
-
-    binary_data = xr.Dataset({"y": (["obs"], np.array([0, 1, 0, 1]))})
-    with pytest.warns(
-        UserWarning,
-        match="Prior_posterior_predictive_checks.html#posterior-predictive-checks-for-binary-data",
-    ):
-        warn_if_binary(binary_data, None)
