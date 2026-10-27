@@ -233,6 +233,8 @@ class _CoreBase:
         width = min(width_sturges, corr_fd)
         if dtype == "i":
             width = np.round(max(1, width)).astype(int)
+            if x_max > x_min:
+                x_max = x_min + ((x_max - x_min) // width + 1) * width
 
         return x_min, x_max, width
 
@@ -279,7 +281,7 @@ class _CoreBase:
         x_min, x_max, width = self._get_bininfo(values, bins)
 
         if dtype == "i":
-            bins = np.arange(x_min, x_max + width + 1, width)
+            bins = np.arange(x_min, values.max() + width + 1, width)
         else:
             if np.isclose(x_min, x_max):
                 width = 1e-3

@@ -469,6 +469,14 @@ class TestBinning:
         assert np.all(np.diff(edges, axis=-1) > 0)
         assert_allclose(np.sum(counts * np.diff(edges, axis=-1), axis=-1), 1.0)
 
+    @pytest.mark.parametrize("high", [2, 10])
+    def test_histogram_integer(self, array_stats, rng, high):
+        ary = rng.integers(-1, high, size=1000)
+        counts, edges = array_stats.histogram(ary, density=False)
+        values, expected = np.unique(ary, return_counts=True)
+        assert_array_equal(edges[:-1], values)
+        assert_array_equal(counts, expected)
+
     def test_histogram_density(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
         counts, edges = array_stats.histogram(ary, density=True)
