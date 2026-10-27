@@ -230,8 +230,6 @@ class _CoreBase:
         width = min(width_sturges, corr_fd)
         if dtype == "i":
             width = np.round(max(1, width)).astype(int)
-            # The last bin of np.histogram is closed, so it would hold both of the two
-            # largest integers. End the bins one width past them on the integer grid.
             if x_max > x_min:
                 x_max = x_min + ((x_max - x_min) // width + 1) * width
 
@@ -280,7 +278,6 @@ class _CoreBase:
         x_min, x_max, width = self._get_bininfo(values, bins)
 
         if dtype == "i":
-            # For the default rule `x_max` already ends the last bin, so step from the data max
             bins = np.arange(x_min, values.max() + width + 1, width)
         else:
             if np.isclose(x_min, x_max):
