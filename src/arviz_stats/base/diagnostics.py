@@ -324,6 +324,8 @@ class _DiagnosticsBase(_CoreBase):
     def _mcse_quantile(self, ary, prob, circular=False):
         """Compute the Markov Chain quantile error at quantile=prob."""
         ary = np.asarray(ary)
+        if ary.dtype.kind == "b":
+            ary = ary.astype(int)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
         ess = self._ess_quantile(ary, prob)
@@ -1180,7 +1182,10 @@ class _DiagnosticsBase(_CoreBase):
             because the input is degenerate or because the fit is undefined.
         """
         # JAX arrays are immutable; copy to a plain numpy array so in-place assignments work.
-        ary = np.asarray(ary).copy()
+        ary = np.asarray(ary)
+        if ary.dtype.kind == "b":
+            ary = ary.astype(int)
+        ary = ary.copy()
 
         if log_weights:
             ary = ary - np.max(ary)

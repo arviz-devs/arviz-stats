@@ -120,7 +120,6 @@ class _CoreBase:
         """
         ary = np.asarray(ary)
         if ary.dtype.kind == "b":
-            # numpy can't interpolate between boolean values
             ary = ary.astype(float)
         if skipna:
             result = np.nanquantile(ary, quantile, axis=axis, method=method, weights=weights)
@@ -609,7 +608,8 @@ class _CoreBase:
         if ary.size == 0:
             return np.nan
         if ary.size == 1:
-            return ary.item()
+            val = ary.item()
+            return round_num(val, round_to) if ary.dtype.kind == "f" else val
 
         if ary.dtype.kind == "f":
             # For continuous data, we use the half-sample mode algorithm.
@@ -722,6 +722,8 @@ class _CoreBase:
             ary = ary[~np.isnan(ary)]
         if ary.size == 0:
             return np.nan
+        if np.asarray(ary).dtype.kind == "b":
+            ary = np.asarray(ary, dtype=float)
         q1, q3 = np.quantile(ary, quantiles, axis=axis)
         iqr = q3 - q1
         return round_num(iqr, round_to)
