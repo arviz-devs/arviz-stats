@@ -1009,6 +1009,11 @@ def diagnose(
 
     if not has_errors:
         messages.append("\nProcessing complete, no problems detected.")
+    else:
+        messages.append(
+            "\nFor more information on how to interpret and address sampling issues, please check "
+            "https://arviz-devs.github.io/EABM/Chapters/MCMC_diagnostics.html"
+        )
 
     if show_diagnostics:
         print("\n".join(messages), file=sys.stdout)
