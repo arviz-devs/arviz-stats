@@ -155,6 +155,13 @@ class TestQuantile:
         else:
             assert np.isnan(result)
 
+    def test_quantile_bool(self, core, rng):
+        x = rng.uniform(size=(4, 100)) < 0.3
+        q = [0.1, 0.5, 0.75, 0.9]
+        result = core.quantile(x, q, axis=None)
+        expected = np.quantile(x.astype(float), q)
+        assert_allclose(result, expected)
+
     @pytest.mark.parametrize("prob", [0.5, 0.9, 0.95])
     def test_eti(self, core, prob):
         x = np.arange(1, 101, dtype=float)

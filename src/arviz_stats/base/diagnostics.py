@@ -338,7 +338,7 @@ class _DiagnosticsBase(_CoreBase):
         ppf_size = ppf * size - 1
         th1 = sorted_ary[int(np.floor(np.nanmax((ppf_size[0], 0))))]
         th2 = sorted_ary[int(np.ceil(np.nanmin((ppf_size[1], size - 1))))]
-        return (th2 - th1) / 2
+        return np.subtract(th2, th1, dtype=float) / 2
 
     def _pareto_min_ss(self, ary):
         """Compute the minimum effective sample size."""
@@ -1106,6 +1106,8 @@ class _DiagnosticsBase(_CoreBase):
             r_eff = self._ess_tail(ary, prob=0.05, relative=True)
 
         ary = ary.flatten()
+        if ary.dtype.kind == "b":
+            ary = ary.astype(float)
         n_draws = len(ary)
 
         n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail=tail)
