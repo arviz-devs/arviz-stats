@@ -1121,7 +1121,9 @@ class _DiagnosticsBase(_CoreBase):
             ]
             khat = np.nan if np.all(np.isnan(khat_both)) else np.nanmax(khat_both)
         else:
-            ary, khat = self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail)
+            ary, khat = self._ps_tail(
+                ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail, log_weights=log_weights
+            )
 
         return ary, khat
 
