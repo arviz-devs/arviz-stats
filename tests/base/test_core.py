@@ -162,6 +162,10 @@ class TestQuantile:
         expected = np.quantile(x.astype(float), q)
         assert_allclose(result, expected)
 
+        x = np.array([False, False, True, True, True], dtype=bool)
+        assert_allclose(core.quantile(x, 0.5), 1.0)
+        assert_allclose(core.eti(x, prob=0.5), [0.0, 1.0])
+
     @pytest.mark.parametrize("prob", [0.5, 0.9, 0.95])
     def test_eti(self, core, prob):
         x = np.arange(1, 101, dtype=float)
@@ -302,9 +306,11 @@ class TestMode:
         assert 3 < result < 7
 
     def test_mode_single_value(self, core):
-        x = np.array([5.0])
-        result = core._mode(x)
-        assert result == 5.0
+        x = np.array([5.1234])
+        assert core._mode(x) == 5.1234
+        assert core._mode(x, round_to=2) == 5.12
+        assert core._mode(np.array([5]), round_to=2) == 5
+        assert core._mode(np.array([True]), round_to=2) is True
 
     def test_mode_empty(self, core):
         x = np.array([])
@@ -430,3 +436,7 @@ class TestIQR:
         assert np.isnan(result)
         result = core._iqr(x, skipna=True)
         assert not np.isnan(result)
+
+    def test_iqr_bool(self, core):
+        x = np.array([False, False, True, True], dtype=bool)
+        assert_allclose(core._iqr(x), 1.0)

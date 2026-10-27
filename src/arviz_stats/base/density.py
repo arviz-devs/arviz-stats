@@ -1045,7 +1045,7 @@ class _DensityBase(_CoreBase):
             return np.array([]), np.nan
 
         qlist = np.linspace(1 / (2 * nquantiles), 1 - 1 / (2 * nquantiles), nquantiles)
-        qvalues = np.quantile(values, qlist)
+        qvalues = self.quantile(values, qlist)
 
         if binwidth is None:
             binwidth = ((qvalues[-1] - qvalues[0]) ** 2 / (2 * nquantiles * np.pi)) ** 0.5
