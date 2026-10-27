@@ -659,3 +659,99 @@ def test_summary_data_frame():
     plain = SummaryDataFrame(data, index=["mu_1", "tau"])
     assert "0.123456" in plain.to_latex()
     assert "r_hat" in plain.to_latex()
+
+
+def test_summary_data_frame_display_after_changes():
+    data = {"mean": [0.123456, -1.987654], "r_hat": [1.001234, 1.056789]}
+    fmt_map = {
+        "mean": {"mu_1": "0.123", "tau": "-1.988"},
+        "r_hat": {"mu_1": "1.00", "tau": "1.06"},
+    }
+    sdf = SummaryDataFrame(data, index=["mu_1", "tau"], fmt_map=fmt_map)
+
+    # adding columns keeps the formatting of the existing ones
+    added = sdf.assign(new=[0.111111, 0.222222])
+    sdf_inplace = sdf.copy()
+    sdf_inplace["new"] = [0.111111, 0.222222]
+    for frame in (added, sdf_inplace):
+        out = frame.to_string()
+        assert "0.123" in out
+        assert "0.123456" not in out
+        assert "1.06" in out
+        assert "0.111111" in out
+        assert "1.06" in frame.T.to_string()
+        assert "0.111111" in frame.T.to_string()
+
+    # row filtering and transposition keep the formatting
+    assert "-1.988" in sdf.loc[["tau"]].to_string()
+    assert "-1.987654" not in sdf.loc[["tau"]].to_string()
+    assert "-1.988" in sdf.T.to_string()
+    assert "-1.988" in sdf.T.T.to_string()
+
+    # changing values reverts to pandas' default display
+    scaled = sdf * 100
+    edited = sdf.copy()
+    edited.loc["tau", "mean"] = 75.0
+    edited_t = sdf.T
+    edited_t.loc["mean", "tau"] = 75.0
+    for frame in (scaled, edited, edited.T, edited_t, edited_t.T):
+        plain = pd.DataFrame(frame)
+        assert repr(frame) == repr(plain)
+        assert frame.to_string() == plain.to_string()
+        assert frame._repr_html_() == plain._repr_html_()
+        assert frame.to_html() == plain.to_html()
+        assert frame.to_latex() == plain.to_latex()
+    assert "12.3456" in scaled.to_string()
+    assert "75.0" in edited.to_string()
+
+    # new rows also revert to pandas' default display
+    extended = sdf.copy()
+    extended.loc["sigma"] = [0.5, 1.0]
+    assert extended.to_string() == pd.DataFrame(extended).to_string()
+
+
+def test_summary_display_after_scaling():
+    posterior = xr.Dataset(
+        {"rate": (("chain", "draw"), [[0.125, 0.375, 0.625, 0.875], [0.25, 0.5, 0.5, 0.75]])}
+    )
+    table = summary(posterior, kind="stats")[["mean"]]
+    assert "50.0" in (table * 100).to_string()
+
+
+def test_summary_data_frame_display_after_column_selection():
+    data = {"mean": [0.123456, -1.987654], "r_hat": [1.001234, 1.056789]}
+    fmt_map = {
+        "mean": {"mu_1": "0.123", "tau": "-1.988"},
+        "r_hat": {"mu_1": "1.00", "tau": "1.06"},
+    }
+    sdf = SummaryDataFrame(data, index=["mu_1", "tau"], fmt_map=fmt_map)
+
+    # dropping formatted columns keeps the formatting of the remaining ones
+    selected = sdf[["r_hat"]]
+    out = selected.to_string()
+    assert "1.06" in out
+    assert "1.056789" not in out
+    assert "mean" not in out
+
+    # changing the values of a remaining column still reverts to pandas' default display
+    edited = selected.copy()
+    edited.loc["tau", "r_hat"] = 1.5
+    assert edited.to_string() == pd.DataFrame(edited).to_string()
+    assert "1.5" in edited.to_string()
+
+
+def test_summary_data_frame_display_unhashable_values():
+    data = {"mean": [0.123456, -1.987654], "r_hat": [1.001234, 1.056789]}
+    fmt_map = {
+        "mean": {"mu_1": "0.123", "tau": "-1.988"},
+        "r_hat": {"mu_1": "1.00", "tau": "1.06"},
+    }
+    sdf = SummaryDataFrame(data, index=["mu_1", "tau"], fmt_map=fmt_map)
+    sdf["mean"] = pd.Series([np.array([1, 2]), np.array([3, 4])], index=sdf.index, dtype=object)
+
+    # values that can't be hashed fall back to pandas' default display
+    plain = pd.DataFrame(sdf)
+    assert repr(sdf) == repr(plain)
+    assert sdf.to_string() == plain.to_string()
+    assert sdf.to_html() == plain.to_html()
+    assert "1.056789" in sdf.to_string()
