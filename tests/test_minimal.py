@@ -191,6 +191,19 @@ def test_bfmi_datatree_returns_datatree():
 
 
 @pytest.mark.parametrize("axis", ["01", "20"])
+def test_bfmi_axes(axis, data_c0d1, data_c2d0):
+    if axis == "01":
+        bfmi = array_stats.bfmi(data_c0d1, chain_axis=0, draw_axis=1)
+        energy = np.moveaxis(data_c0d1, (0, 1), (-2, -1))
+    else:
+        bfmi = array_stats.bfmi(data_c2d0, chain_axis=2, draw_axis=0)
+        energy = np.moveaxis(data_c2d0, (2, 0), (-2, -1))
+    expected = np.square(np.diff(energy, axis=-1)).mean(axis=-1) / np.var(energy, axis=-1, ddof=1)
+    assert bfmi.shape == (3, 4)
+    np.testing.assert_allclose(bfmi, expected)
+
+
+@pytest.mark.parametrize("axis", ["01", "20"])
 def test_pareto_min_ss_axes(axis, data_c0d1, data_c2d0):
     if axis == "01":
         pareto_min_ss = array_stats.pareto_min_ss(data_c0d1, chain_axis=0, draw_axis=1)

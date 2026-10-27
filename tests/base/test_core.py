@@ -44,7 +44,7 @@ class TestFFT:
 
 
 class TestAutoCorrelation:
-    @pytest.mark.parametrize("axis", [-1, 1, 2])
+    @pytest.mark.parametrize("axis", [-1, 0, 1, 2])
     def test_autocov_shape(self, core, rng, axis):
         x = rng.normal(size=(10, 20, 5))
         result = core.autocov(x, axis=axis)
@@ -56,7 +56,21 @@ class TestAutoCorrelation:
         for i in range(x.shape[0]):
             assert_allclose(result[i, 0], np.var(x[i, :]), rtol=0.01)
 
-    @pytest.mark.parametrize("axis", [-1, 1, 2])
+    def test_autocov_axis_zero(self, core, rng):
+        x = rng.normal(size=(50, 3))
+        result = core.autocov(x, axis=0)
+        centered = x - x.mean(axis=0)
+        expected = np.stack(
+            [np.correlate(col, col, mode="full")[49:] / 50 for col in centered.T], axis=1
+        )
+        assert_allclose(result, expected, atol=1e-12)
+
+    def test_autocorr_axis_zero(self, core, rng):
+        x = rng.normal(size=(50, 3))
+        autocov = core.autocov(x, axis=0)
+        assert_allclose(core.autocorr(x, axis=0), autocov / autocov[0], atol=1e-12)
+
+    @pytest.mark.parametrize("axis", [-1, 0, 1, 2])
     def test_autocorr_shape(self, core, rng, axis):
         x = rng.normal(size=(10, 20, 5))
         result = core.autocorr(x, axis=axis)
@@ -141,6 +155,17 @@ class TestQuantile:
         else:
             assert np.isnan(result)
 
+    def test_quantile_bool(self, core, rng):
+        x = rng.uniform(size=(4, 100)) < 0.3
+        q = [0.1, 0.5, 0.75, 0.9]
+        result = core.quantile(x, q, axis=None)
+        expected = np.quantile(x.astype(float), q)
+        assert_allclose(result, expected)
+
+        x = np.array([False, False, True, True, True], dtype=bool)
+        assert_allclose(core.quantile(x, 0.5), 1.0)
+        assert_allclose(core.eti(x, prob=0.5), [0.0, 1.0])
+
     @pytest.mark.parametrize("prob", [0.5, 0.9, 0.95])
     def test_eti(self, core, prob):
         x = np.arange(1, 101, dtype=float)
@@ -199,6 +224,18 @@ class TestBinning:
         x = rng.integers(0, 50, size=100)
         _, _, width = core._get_bininfo(x)
         assert width >= 1
+
+    def test_get_bininfo_discrete_upper_edge(self, core, rng):
+        x = rng.integers(0, 2, size=1000)
+        assert core._get_bininfo(x) == (0, 2, 1)
+
+    @pytest.mark.parametrize("high", [2, 10])
+    def test_histogram_discrete(self, core, rng, high):
+        x = rng.integers(-1, high, size=1000)
+        counts, edges = core._histogram(x, density=False)
+        values, expected = np.unique(x, return_counts=True)
+        assert_array_equal(edges[:-1], values)
+        assert_array_equal(counts, expected)
 
     def test_get_bins_sorted(self, core, rng):
         x = rng.normal(size=100)
@@ -281,9 +318,11 @@ class TestMode:
         assert 3 < result < 7
 
     def test_mode_single_value(self, core):
-        x = np.array([5.0])
-        result = core._mode(x)
-        assert result == 5.0
+        x = np.array([5.1234])
+        assert core._mode(x) == 5.1234
+        assert core._mode(x, round_to=2) == 5.12
+        assert core._mode(np.array([5]), round_to=2) == 5
+        assert core._mode(np.array([True]), round_to=2) is True
 
     def test_mode_empty(self, core):
         x = np.array([])
@@ -409,3 +448,7 @@ class TestIQR:
         assert np.isnan(result)
         result = core._iqr(x, skipna=True)
         assert not np.isnan(result)
+
+    def test_iqr_bool(self, core):
+        x = np.array([False, False, True, True], dtype=bool)
+        assert_allclose(core._iqr(x), 1.0)

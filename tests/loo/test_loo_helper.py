@@ -269,13 +269,11 @@ def test_warn_pareto_k():
         assert len(record) == 0
 
     pareto_k_bad = np.array([0.1, 0.2, 0.8, 0.9])
-    with pytest.warns(
-        UserWarning, match="Estimated shape parameter of Pareto distribution is greater than"
-    ):
+    with pytest.warns(UserWarning, match="Model_comparison.html"):
         warn_flag, _ = _warn_pareto_k(pareto_k_bad, n_samples=1000)
         assert warn_flag
 
-    with pytest.warns(UserWarning, match="power-scaled posterior estimates"):
+    with pytest.warns(UserWarning, match="Sensitivity_checks.html"):
         warn_flag, _ = _warn_pareto_k(pareto_k_bad, n_samples=1000, usage="power_scale")
         assert warn_flag
 

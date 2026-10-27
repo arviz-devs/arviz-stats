@@ -374,7 +374,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=2,
             ravel=False,
         )
-        return bfmi_ufunc(ary, out_shape=(ary.shape[chain_axis],))
+        return bfmi_ufunc(ary, out_shape=(ary.shape[-2],))
 
     def pareto_khat(
         self, ary, chain_axis=-2, draw_axis=-1, r_eff=None, tail="both", log_weights=False
@@ -1715,6 +1715,86 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         loo_quantile_ufunc = make_ufunc(self._loo_quantile, n_output=1, n_input=2, n_dims=len(axes))
         return loo_quantile_ufunc(ary, log_weights, prob)
+
+    def loo_influence(
+        self,
+        ary,
+        log_weights,
+        kind="mean",
+        standardize=True,
+        probs=None,
+        chain_axis=-2,
+        draw_axis=-1,
+    ):
+        """Compute influential observations based on leave-one-out (LOO) expectations.
+
+        Parameters
+        ----------
+        ary : array-like
+            Posterior or posterior predictive samples. It is broadcast against
+            `log_weights`, so, for example, posterior samples with shape
+            ``(chain, draw)`` can be combined with log weights with shape
+            ``(n_obs, chain, draw)``.
+        log_weights : array-like
+            Pre-computed PSIS log weights.
+        kind : str, default "mean"
+            Summary to compare. One of "mean", "median", "sd", "var", "quantile" or
+            "octiles". "octiles" averages the change over the seven octiles from 0.125
+            to 0.875.
+        standardize : bool, default True
+            Whether to divide the change by the standard deviation (``kind="mean"``),
+            the MAD (``kind="median"``) or the summary itself (``kind="sd"`` and
+            ``kind="var"``). Ignored for "quantile" and "octiles".
+        probs : float or list of float, optional
+            Quantile probabilities to use when `kind` is "quantile". The change is
+            averaged over them. Ignored for the other kinds.
+        chain_axis : int, default -2
+            Axis for chains.
+        draw_axis : int, default -1
+            Axis for draws.
+
+        Returns
+        -------
+        influence : array-like
+            Influence of each observation.
+        """
+        valid_kinds = ("mean", "median", "sd", "var", "quantile", "octiles")
+        if kind not in valid_kinds:
+            raise ValueError(f"kind must be one of {valid_kinds}, got {kind}")
+        if kind == "octiles":
+            probs = [0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]
+        elif kind == "quantile" and probs is None:
+            raise ValueError("probs must be provided when kind is 'quantile'")
+
+        ary, log_weights = np.broadcast_arrays(ary, log_weights)
+        ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+            ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+        sample_axes = [chain_axis, draw_axis]
+
+        if kind in ("quantile", "octiles"):
+            probs = np.atleast_1d(probs)
+            loo_values = np.stack(
+                [
+                    self.loo_quantile(
+                        ary, log_weights, prob, chain_axis=chain_axis, draw_axis=draw_axis
+                    )
+                    for prob in probs
+                ],
+                axis=-1,
+            )
+            full_values = self.quantile(ary, probs, axis=sample_axes)
+            return np.abs(loo_values - full_values).mean(axis=-1)
+
+        summaries = {"mean": self.mean, "median": self.median, "sd": self.std, "var": self.var}
+        scales = {"mean": self.std, "median": self.mad, "sd": self.std, "var": self.var}
+        loo_values = self.loo_expectation(
+            ary, log_weights, kind=kind, chain_axis=chain_axis, draw_axis=draw_axis
+        )
+        influence = np.abs(loo_values - summaries[kind](ary, axis=sample_axes))
+        if standardize:
+            influence = influence / scales[kind](ary, axis=sample_axes)
+        return influence
 
     def loo_summary(self, elpd_i, p_loo_i):
         """Aggregate pointwise LOO values.

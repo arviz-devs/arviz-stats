@@ -371,8 +371,6 @@ def histogram(
     range : array-like, optional
     weights : array-like, optional
     density : bool, default True
-    **kwargs : any, optional
-        Forwarded to the array or dataarray interface for histogram.
 
     Returns
     -------

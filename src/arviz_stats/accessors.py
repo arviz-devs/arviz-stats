@@ -470,7 +470,7 @@ class AzStatsDsAccessor(_BaseAccessor):
     def thin_factor(self, **kwargs):
         """Get thinning factor for all the variables in the dataset."""
         reduce_func = kwargs.get("reduce_func", "mean")
-        thin_factors = self._apply("thin_factor", **kwargs).to_array()
+        thin_factors = self._apply("thin_factor", **kwargs).to_dataarray()
         if reduce_func == "mean":
             return int(np.floor(thin_factors.mean().item()))
         if reduce_func == "min":
@@ -577,7 +577,7 @@ class AzStatsDtAccessor(_BaseAccessor):
         if not isinstance(group, str):
             raise ValueError("Thin factor can only be applied over a single group.")
         reduce_func = kwargs.get("reduce_func", "mean")
-        thin_factors = self._apply("thin_factor", group=group, **kwargs).ds.to_array()
+        thin_factors = self._apply("thin_factor", group=group, **kwargs).ds.to_dataarray()
         if reduce_func == "mean":
             return int(np.floor(thin_factors.mean().item()))
         if reduce_func == "min":
