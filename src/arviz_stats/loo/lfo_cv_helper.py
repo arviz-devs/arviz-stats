@@ -199,11 +199,11 @@ def _forecast_origins(lfo_inputs, wrapper, method, k_threshold=None):
     k_threshold : float, optional
         Pareto k threshold above which the model is refit, only used by ``"approx"``.
 
-    Returns
-    -------
-    generator
-        Produces one ``LFOOrigin`` namedtuple per forecast origin, in order. Each refit
-        happens only when its origin is reached. Each namedtuple contains:
+    Yields
+    ------
+    LFOOrigin
+        One namedtuple per forecast origin, in order. Each refit happens only when its
+        origin is reached. Each namedtuple contains:
 
         - pos: Position of the origin within ``lfo_inputs.origins``
         - cutoff: The forecast origin, which is the number of leading observations the fit
