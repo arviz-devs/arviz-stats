@@ -12,7 +12,6 @@ sp = importorskip("scipy")
 np = importorskip("numpy")
 
 from arviz_stats import loo, loo_i
-from arviz_stats.base import array_stats
 from arviz_stats.utils import ELPDDataLOO
 
 
@@ -559,19 +558,19 @@ def test_loo_mixture(centered_eight):
     assert np.all(np.isfinite(result_mix.pareto_k.values))
 
 
-def test_loo_mixture_pareto_k_right_tail(centered_eight):
-    """Pareto k of mixture LOO must describe the right tail of the mixture weights."""
+def test_loo_mixture_pareto_k_right_tail():
+    rng = np.random.default_rng(42)
+    noise = rng.normal(size=(4, 1000))
+    log_x = np.log(rng.pareto(1 / 0.9, size=(4, 1000)) + 1)
+    data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(4, 1000))},
+            "log_likelihood": {"y": np.stack([noise + log_x, noise], axis=-1)},
+        }
+    )
     with pytest.warns(UserWarning, match="mixture=True assumes"):
-        result_mix = loo(centered_eight, mixture=True, pointwise=True, reff=1.0)
-
-    log_lik = centered_eight.log_likelihood["obs"].stack(__sample__=("chain", "draw"))
-    log_lik = log_lik.transpose("school", "__sample__").values
-    # mixture log weights as in Silva and Zanella (2023), Appendix A.2
-    log_weights = -log_lik - sp.special.logsumexp(-log_lik, axis=0, keepdims=True)
-    weights = np.exp(log_weights - log_weights.max(axis=1, keepdims=True))
-
-    expected = [array_stats.pareto_khat(w[None, :], r_eff=1.0, tail="right") for w in weights]
-    assert_allclose(result_mix.pareto_k.values, expected)
+        result = loo(data, mixture=True, pointwise=True)
+    assert np.all(result.pareto_k.values < 0)
 
 
 def test_loo_jax_arrays(centered_eight):

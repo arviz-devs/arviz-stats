@@ -246,8 +246,6 @@ def loo(
 
         elpd, elpd_se, p_loo, _ = elpd_i.azstats.loo_summary(p_loo_i)
 
-        # psislw negates its input (it expects the log likelihood), so pass the negated
-        # log weights to fit the right tail of the mixture importance weights
         _, mix_pareto_k = (-mix_log_weights).azstats.psislw(r_eff=reff, dim=sample_dims)
         warn_mg, good_k = _warn_pareto_k(mix_pareto_k, n_samples)
 
