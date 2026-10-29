@@ -230,7 +230,7 @@ def test_combine_fold_elpds():
     assert result["elpd_kfold"] == 10.0
     np.testing.assert_array_equal(result["pointwise"], [1.0, 2.0, 3.0, 4.0])
 
-    expected_se = np.sqrt(4 * np.var([1.0, 2.0, 3.0, 4.0]))
+    expected_se = np.sqrt(4 * np.var([1.0, 2.0, 3.0, 4.0], ddof=1))
     assert np.isclose(result["se_elpd_kfold"], expected_se)
 
 

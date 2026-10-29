@@ -144,7 +144,7 @@ def test_lfo_cv_elpd_and_se(varying_lfo_wrapper, lfo_varying_data):
 
     elpd_i = result.elpd_i.values
     assert np.isclose(elpd_i.sum(), result.elpd)
-    assert np.isclose(result.se, np.sqrt(result.n_data_points * np.var(elpd_i)))
+    assert np.isclose(result.se, np.sqrt(result.n_data_points * np.var(elpd_i, ddof=1)))
 
 
 def test_lfo_cv_p_nonzero(constant_lfo_wrapper, lfo_constant_data):
