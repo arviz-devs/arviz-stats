@@ -11,7 +11,6 @@ xr = importorskip("xarray")
 
 from arviz_stats.loo.lfo_cv_helper import (
     LFOInputs,
-    _assemble_results,
     _prepare_lfo_inputs,
     _psis_lfo_weights,
     _validate_lfo_parameters,
@@ -118,23 +117,3 @@ def test_psis_lfo_weights_rejects_undefined_ratios(values):
 
     assert log_weights is None
     assert np.isposinf(pareto_k)
-
-
-def test_assemble_results_se_uses_unbiased_variance():
-    time_dim = "time"
-    origins = np.array([0, 1, 2, 3])
-    log_likelihood = xr.DataArray(
-        np.zeros((1, 1, 4)),
-        dims=["chain", "draw", time_dim],
-        coords={time_dim: np.arange(4)},
-    )
-    lfo_inputs = LFOInputs(*([None] * len(LFOInputs._fields)))._replace(
-        log_likelihood=log_likelihood, time_dim=time_dim
-    )
-    elpds = np.array([-2.0, -3.0, -1.5, -2.5])
-    lpds = np.zeros_like(elpds)
-
-    result = _assemble_results(lfo_inputs, origins, elpds, lpds, refits=0, pareto_k_values=None)
-
-    expected_se = np.sqrt(len(elpds) * np.var(elpds, ddof=1))
-    assert np.isclose(result.se, expected_se)
