@@ -806,6 +806,15 @@ def custom_dim_lfo_wrapper(lfo_custom_dim_data):
                 coords={"week": np.atleast_1d(excluded_obs.coords["week"].values)},
             )
 
+        def posterior_predictive__i(self, excluded_obs, idata__i):
+            n_obs = excluded_obs.sizes["week"]
+            n_draws = idata__i.posterior.sizes["draw"]
+            return xr.DataArray(
+                np.full((1, n_obs, n_draws), 2.0),
+                dims=["chain", "week", "draw"],
+                coords={"week": np.atleast_1d(excluded_obs.coords["week"].values)},
+            )
+
     return WeekWrapper(lfo_custom_dim_data)
 
 
