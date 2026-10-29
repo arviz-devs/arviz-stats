@@ -100,6 +100,45 @@ def test_lfo_score_approx_weights_draws(varying_lfo_wrapper, lfo_varying_data, k
     np.testing.assert_allclose(result.pareto_k.values[1], khat.values)
 
 
+def test_lfo_score_forced_refit_matches_exact(varying_lfo_wrapper, lfo_varying_data):
+    exact = lfo_score(
+        lfo_varying_data,
+        varying_lfo_wrapper,
+        min_observations=20,
+        forecast_horizon=2,
+        method="exact",
+        pointwise=True,
+    )
+    with pytest.warns(UserWarning, match="refits"):
+        forced = lfo_score(
+            lfo_varying_data,
+            varying_lfo_wrapper,
+            min_observations=20,
+            forecast_horizon=2,
+            method="approx",
+            k_threshold=-100.0,
+            pointwise=True,
+        )
+
+    np.testing.assert_allclose(forced.pointwise.values, exact.pointwise.values)
+    np.testing.assert_array_equal(forced.refits, exact.refits[1:])
+
+
+def test_lfo_score_custom_time_dim(custom_dim_lfo_wrapper, lfo_custom_dim_data):
+    result = lfo_score(
+        lfo_custom_dim_data,
+        custom_dim_lfo_wrapper,
+        min_observations=5,
+        forecast_horizon=2,
+        time_dim="week",
+        method="exact",
+        pointwise=True,
+    )
+
+    assert result.pointwise.dims == ("week",)
+    np.testing.assert_array_equal(result.pointwise.coords["week"].values, np.arange(5, 11))
+
+
 def test_lfo_score_rejects_short_observed_data(varying_lfo_wrapper, lfo_varying_data):
     data = lfo_varying_data.copy()
     data["observed_data"] = lfo_varying_data.observed_data.to_dataset().isel(time=slice(0, -1))
@@ -110,15 +149,9 @@ def test_lfo_score_rejects_short_observed_data(varying_lfo_wrapper, lfo_varying_
     assert varying_lfo_wrapper.fit_count == 0
 
 
-def test_lfo_score_requires_posterior_predictive(custom_dim_lfo_wrapper, lfo_custom_dim_data):
+def test_lfo_score_requires_posterior_predictive(multichain_lfo_wrapper, lfo_varying_data):
     with pytest.raises(ValueError, match="posterior_predictive__i"):
-        lfo_score(
-            lfo_custom_dim_data,
-            custom_dim_lfo_wrapper,
-            min_observations=5,
-            forecast_horizon=2,
-            time_dim="week",
-        )
+        lfo_score(lfo_varying_data, multichain_lfo_wrapper, min_observations=20, forecast_horizon=2)
 
 
 def test_lfo_score_invalid_kind(constant_lfo_wrapper, lfo_constant_data):
