@@ -307,7 +307,7 @@ def _assemble_results(lfo_inputs, origins, elpds, lpds, refits, pareto_k_values)
         pareto_k = xr.DataArray(pareto_k_values, dims=[time_dim], coords={time_dim: origin_coord})
 
     n_data_points = len(elpds)
-    se = np.sqrt(n_data_points * np.var(elpds)) if n_data_points > 1 else 0.0
+    se = np.sqrt(n_data_points * np.var(elpds, ddof=1)) if n_data_points > 1 else 0.0
 
     return LFOResults(
         elpd=np.sum(elpds),
