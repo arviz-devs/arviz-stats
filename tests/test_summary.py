@@ -155,7 +155,7 @@ def test_point_stats_mixed_datatree_and_inputs(mixed_datatree, stat_name):
     assert res_dt["k"].shape == ()
     assert res_dt["z"].shape == ()
 
-    res_ds = stat(mixed_datatree.posterior.ds, round_to=None)
+    res_ds = stat(mixed_datatree.posterior.dataset, round_to=None)
     assert set(res_ds.data_vars) == {"mu", "theta", "k", "z"}
 
     res_da = stat(mixed_datatree.posterior["z"], round_to=2)
@@ -207,7 +207,7 @@ def test_point_stats_options(mixed_datatree):
     res_regex = mad(mixed_datatree, var_names=["^m"], filter_vars="regex")
     assert set(res_regex.data_vars) == {"mu"}
 
-    grouped = mixed_datatree.posterior.ds.groupby("chain")
+    grouped = mixed_datatree.posterior.dataset.groupby("chain")
     res_group = mean(grouped, var_names=["mu"])
     assert dict(res_group.sizes) == {"chain": 4}
 
@@ -307,7 +307,7 @@ def test_summary_nan_and_skipna(datatree):
 @pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
 def test_summary_ci_kind_and_prob(datatree, ci_kind):
     summary_df = summary(datatree, ci_kind=ci_kind, ci_prob=0.89, var_names=["mu"], round_to="none")
-    posterior = datatree.posterior.ds[["mu"]]
+    posterior = datatree.posterior.dataset[["mu"]]
     expected = getattr(posterior.azstats, ci_kind)(prob=0.89, dim=["chain", "draw"])
 
     assert_allclose(summary_df[f"{ci_kind}89_lb"].to_numpy(), np.asarray(expected["mu"]).ravel()[0])

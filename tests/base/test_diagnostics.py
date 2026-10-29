@@ -27,7 +27,7 @@ def idata():
 
 @pytest.fixture(scope="function")
 def data(idata):
-    return idata.ds
+    return idata.dataset
 
 
 @pytest.mark.skip(reason="from_cmdstan not yet ported to arviz_base.")
