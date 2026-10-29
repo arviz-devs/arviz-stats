@@ -118,10 +118,10 @@ def get_log_likelihood_dataset(idata, var_names=None):
             "Storing the log_likelihood in sample_stats groups has been deprecated",
             DeprecationWarning,
         )
-        log_lik_ds = idata.sample_stats.ds[["log_likelihood"]]
+        log_lik_ds = idata.sample_stats.dataset[["log_likelihood"]]
     if not hasattr(idata, "log_likelihood"):
         raise TypeError("log likelihood not found in inference data object")
-    log_lik_ds = idata.log_likelihood.ds
+    log_lik_ds = idata.log_likelihood.dataset
     if var_names is None:
         return log_lik_ds
     if isinstance(var_names, Hashable):
@@ -151,10 +151,10 @@ def get_log_prior(idata, var_names=None):
     if not hasattr(idata, "log_prior"):
         raise TypeError("log prior not found in inference data object")
     if var_names is None:
-        return idata.log_prior.ds
+        return idata.log_prior.dataset
     if isinstance(var_names, Hashable):
-        return idata.log_prior.ds[[var_names]]
-    return idata.log_prior.ds[var_names]
+        return idata.log_prior.dataset[[var_names]]
+    return idata.log_prior.dataset[var_names]
 
 
 BASE_HEADER_FMT = (

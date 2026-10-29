@@ -66,14 +66,14 @@ def test_kde_is_normalized(bound_correction, kde_kwargs):
 
 @pytest.mark.parametrize("func", ("eti", "hdi", "kde", "histogram"))
 def test_extra_kwargs_raise(centered_eight, func):
-    accessor = centered_eight.posterior.ds.azstats
+    accessor = centered_eight.posterior.dataset.azstats
     with pytest.raises(TypeError, match=".*unexpected keyword argument.*"):
         # 'dims' is not valid, to match xarray behaviour we use 'dim' only
         getattr(accessor, func)(dims="draw")
 
 
 def test_hdi_idata(centered_eight):
-    accessor = centered_eight.posterior.ds.azstats
+    accessor = centered_eight.posterior.dataset.azstats
     result = accessor.hdi()
     assert isinstance(result, xr.Dataset)
     assert result.sizes == {"school": 8, "ci_bound": 2}
@@ -84,7 +84,7 @@ def test_hdi_idata(centered_eight):
 
 
 def test_hdi_idata_varnames(centered_eight):
-    accessor = centered_eight.posterior.ds.azstats
+    accessor = centered_eight.posterior.dataset.azstats
     result = accessor.filter_vars(var_names=["mu", "theta"]).hdi()
     assert isinstance(result, xr.Dataset)
     assert result.sizes == {"ci_bound": 2, "school": 8}
@@ -102,7 +102,7 @@ def test_hdi_idata_group(centered_eight):
 
 
 def test_hdi_coords(centered_eight):
-    data = centered_eight.posterior.sel({"chain": [0, 1, 3]}).ds
+    data = centered_eight.posterior.sel({"chain": [0, 1, 3]}).dataset
     result = data.azstats.hdi(dim="draw")
     assert_array_equal(result.coords["chain"], [0, 1, 3])
 
@@ -251,7 +251,7 @@ def test_hdi_skipna():
 
 
 def test_ecdf(centered_eight):
-    accessor = centered_eight.posterior.ds.azstats
+    accessor = centered_eight.posterior.dataset.azstats
     result = accessor.ecdf()
     assert isinstance(result, xr.Dataset)
     assert result.sizes == {
@@ -264,7 +264,7 @@ def test_ecdf(centered_eight):
 
 
 def test_ecdf_idata_varnames(centered_eight):
-    accessor = centered_eight.posterior.ds.azstats
+    accessor = centered_eight.posterior.dataset.azstats
     result = accessor.filter_vars(var_names=["mu", "theta"]).ecdf()
     assert isinstance(result, xr.Dataset)
     assert result.sizes == {"plot_axis": 2, "ecdf_dim_mu": 200, "ecdf_dim_theta": 200, "school": 8}
@@ -272,7 +272,7 @@ def test_ecdf_idata_varnames(centered_eight):
 
 
 def test_ecdf_coords(centered_eight):
-    data = centered_eight.posterior.sel({"chain": [0, 1, 3]}).ds
+    data = centered_eight.posterior.sel({"chain": [0, 1, 3]}).dataset
     result = data.azstats.ecdf(dim="draw")
     assert_array_equal(result.coords["chain"], [0, 1, 3])
 

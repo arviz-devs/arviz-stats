@@ -249,8 +249,8 @@ def test_diagnose_no_sample_stats(centered_eight, capsys):
 def test_diagnose_no_chains(centered_eight):
     data_no_chains = xr.DataTree.from_dict(
         {
-            "posterior": centered_eight["posterior"].ds.rename({"chain": "not_a_chain"}),
-            "sample_stats": centered_eight["sample_stats"].ds.rename({"chain": "not_a_chain"}),
+            "posterior": centered_eight["posterior"].dataset.rename({"chain": "not_a_chain"}),
+            "sample_stats": centered_eight["sample_stats"].dataset.rename({"chain": "not_a_chain"}),
         }
     )
 
