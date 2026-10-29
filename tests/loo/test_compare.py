@@ -427,8 +427,8 @@ def test_compare_stacking_invariant_to_constant_shift(centered_eight, non_center
     shifted = {}
     for name, elpd_data in elpds.items():
         elpd_data = copy.deepcopy(elpd_data)
-        elpd_data.elpd_i = elpd_data.elpd_i + offset
-        elpd_data.elpd = elpd_data.elpd + offset * elpd_data.n_data_points
+        elpd_data.elpd_i[0] = elpd_data.elpd_i[0] + offset
+        elpd_data.elpd = elpd_data.elpd + offset
         shifted[name] = elpd_data
     weight = compare(shifted, method="stacking", round_to="none")["weight"]
 
