@@ -418,6 +418,24 @@ def test_compare_elpd_diff_consistency(centered_eight, non_centered_eight):
     assert_almost_equal(reported_diff, expected_diff, decimal=5)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize("offset", [1000.0, -1000.0])
+def test_compare_stacking_invariant_to_constant_shift(centered_eight, non_centered_eight, offset):
+    elpds = {"centered": loo(centered_eight), "non_centered": loo(non_centered_eight)}
+    expected = compare(elpds, method="stacking", round_to="none")["weight"]
+
+    shifted = {}
+    for name, elpd_data in elpds.items():
+        elpd_data = copy.deepcopy(elpd_data)
+        elpd_data.elpd_i[0] = elpd_data.elpd_i[0] + offset
+        elpd_data.elpd = elpd_data.elpd + offset
+        shifted[name] = elpd_data
+    weight = compare(shifted, method="stacking", round_to="none")["weight"]
+
+    assert np.all(np.isfinite(weight))
+    assert_allclose(weight[expected.index], expected, atol=1e-6)
+
+
 def test_compare_all_methods_produce_same_ranking(centered_eight, non_centered_eight):
     model_dict = {"centered": centered_eight, "non_centered": non_centered_eight}
 
