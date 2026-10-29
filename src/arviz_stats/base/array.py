@@ -320,7 +320,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         mcse_array = make_ufunc(mcse_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return mcse_array(ary, **func_kwargs)
 
-    def pareto_min_ss(self, ary, chain_axis=-2, draw_axis=-1):
+    def pareto_min_ss(self, ary, chain_axis=-2, draw_axis=-1, prob=0.89):
         """Compute minimum effective sample size.
 
         See docstring of :func:`arviz_stats.pareto_min_ss` for full description of computation
@@ -331,11 +331,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         chain_axis : int, default -2
         draw_axis : int, default -1
+        prob : float, default 0.89
+            Probability for the tail ESS used to compute the relative efficiency.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         pms_array = make_ufunc(self._pareto_min_ss, n_output=1, n_input=1, n_dims=2, ravel=False)
-        return pms_array(ary)
+        return pms_array(ary, prob=prob)
 
     def psislw(self, ary, r_eff=1, axis=-1):
         """Compute log weights for Pareto-smoothed importance sampling (PSIS) method.
@@ -377,7 +379,14 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return bfmi_ufunc(ary, out_shape=(ary.shape[-2],))
 
     def pareto_khat(
-        self, ary, chain_axis=-2, draw_axis=-1, r_eff=None, tail="both", log_weights=False
+        self,
+        ary,
+        chain_axis=-2,
+        draw_axis=-1,
+        r_eff=None,
+        tail="both",
+        log_weights=False,
+        prob=0.89,
     ):
         """Compute Pareto k-hat diagnostic.
 
@@ -389,19 +398,21 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         r_eff : float
         tail : str
         log_weights : bool
+        prob : float, default 0.89
+            Probability for the tail ESS used to compute `r_eff` when it is not given.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
 
         def _khat_wrapper(current_slice):
             return self._pareto_khat(
-                current_slice, r_eff=r_eff, tail=tail, log_weights=log_weights
+                current_slice, prob, r_eff=r_eff, tail=tail, log_weights=log_weights
             )[1]
 
         khat_ufunc = make_ufunc(_khat_wrapper, n_output=1, n_input=1, n_dims=2, ravel=False)
         return khat_ufunc(ary, out_shape=())
 
-    def power_scale_lw(self, ary, alpha=0, axis=-1):
+    def power_scale_lw(self, ary, alpha=0, axis=-1, prob=0.89):
         """Compute log weights for power-scaling component by alpha.
 
         Parameters
@@ -409,6 +420,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         alpha : float, default 0
         axis : int, sequence of int or None, default -1
+        prob : float, default 0.89
+            Probability for the tail ESS used to compute the relative efficiency.
         """
         ary, axes = process_ary_axes(ary, axis)
         sample_shape = tuple(ary.shape[i] for i in axes)
@@ -419,7 +432,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             n_dims=len(axes),
             ravel=False,
         )
-        return psl_ufunc(ary, out_shape=(sample_shape, ()), alpha=alpha)
+        return psl_ufunc(ary, out_shape=(sample_shape, ()), alpha=alpha, prob=prob)
 
     def power_scale_sense(
         self, ary, lower_w, upper_w, lower_alpha, upper_alpha, chain_axis=-2, draw_axis=-1
@@ -1101,7 +1114,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         )
         return metrics_ufunc(observed, predicted)
 
-    def thin_factor(self, ary, target_ess=None, reduce_func="mean", chain_axis=-2, draw_axis=-1):
+    def thin_factor(
+        self, ary, target_ess=None, reduce_func="mean", chain_axis=-2, draw_axis=-1, prob=0.89
+    ):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
 
         Parameters
@@ -1114,6 +1129,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         reduce_func : {"mean", "min"}, default "mean"
         chain_axis : int, default -2
         draw_axis : int, default -1
+        prob : float, default 0.89
+            Probability for the tail ESS.
 
         Returns
         -------
@@ -1125,7 +1142,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
 
         bulk_ess = self.ess(ary, chain_axis=chain_axis, draw_axis=draw_axis, method="bulk")
         tail_ess = self.ess(
-            ary, chain_axis=chain_axis, draw_axis=draw_axis, method="tail", prob=0.95
+            ary, chain_axis=chain_axis, draw_axis=draw_axis, method="tail", prob=prob
         )
         ess = np.minimum(bulk_ess, tail_ess)
 
