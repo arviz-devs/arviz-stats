@@ -148,7 +148,7 @@ def loo_score(
 
     n_pts = int(np.prod([pointwise_scores.sizes[d] for d in pointwise_scores.dims]))
     mean = pointwise_scores.mean().values.item()
-    se = (pointwise_scores.std(ddof=0).values / (n_pts**0.5)).item()
+    se = (pointwise_scores.std(ddof=1).values / (n_pts**0.5)).item()
     name = "SCRPS" if kind == "scrps" else "CRPS"
 
     if pointwise:
