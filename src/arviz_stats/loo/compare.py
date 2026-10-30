@@ -434,7 +434,7 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
             return _compute_naive_diff(elpd_a, elpd_b)
 
         elpd_diff = np.nansum(valid)
-        se_diff = np.sqrt(valid.size * np.nanvar(valid))
+        se_diff = np.sqrt(valid.size * np.nanvar(valid, ddof=1))
         result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
         combined = _subsampling_dse(elpd_a, elpd_b)
         if combined:

@@ -418,6 +418,14 @@ def test_compare_elpd_diff_consistency(centered_eight, non_centered_eight):
     assert_almost_equal(reported_diff, expected_diff, decimal=5)
 
 
+def test_compare_dse(centered_eight, non_centered_eight):
+    elpds = {"centered": loo(centered_eight), "non_centered": loo(non_centered_eight)}
+    result = compare(elpds, round_to="none")
+    best, other = result.index
+    diff = elpds[best].elpd_i.values - elpds[other].elpd_i.values
+    assert_allclose(result.loc[other, "dse"], np.sqrt(diff.size * np.var(diff, ddof=1)))
+
+
 @pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.parametrize("offset", [1000.0, -1000.0])
 def test_compare_stacking_invariant_to_constant_shift(centered_eight, non_centered_eight, offset):
