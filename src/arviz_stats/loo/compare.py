@@ -120,6 +120,8 @@ def compare(
           If ``K k_psis > threshold`` is shown, there may be significant bias in ELPD differences
           favoring models with a large number of high Pareto k values.
           The ``threshold`` is the ``good_k`` attribute in the input ELPD results.
+          It is always empty for LFO-CV results, because every forecast origin whose
+          Pareto k exceeds the threshold is refit exactly.
         - **p**: pIC, Estimated effective number of parameters.
         - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`). For LFO-CV inputs, this
           contains the corresponding LFO-CV ELPD.
@@ -342,7 +344,11 @@ def compare(
                 diag_diff = "|elpd_diff| < 4" if abs(d_ic) > 0 and abs(d_ic) < 4 else ""
 
             diag_elpd = ""
-            if current_elpd_data.pareto_k is not None and current_elpd_data.good_k is not None:
+            if (
+                current_elpd_data.pareto_k is not None
+                and current_elpd_data.good_k is not None
+                and not isinstance(current_elpd_data, ELPDDataLFO)
+            ):
                 k_vals = current_elpd_data.pareto_k.values
                 khat_threshold = current_elpd_data.good_k
                 n_k_exceed = np.sum(k_vals > khat_threshold)

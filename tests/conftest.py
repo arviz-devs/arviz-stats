@@ -1,6 +1,6 @@
 """Common fixtures for tests."""
 
-# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name,abstract-method
 import numpy as np
 import pytest
 
@@ -622,7 +622,7 @@ def lfo_constant_data():
             "observed_data": {"obs": np.arange(n_time, dtype=float)},
         },
         dims={"obs": ["time"]},
-        coords={"time": np.arange(n_time)},
+        coords={"time": np.arange(n_time) + 2000},
     )
 
 
@@ -635,6 +635,7 @@ def constant_lfo_wrapper(lfo_constant_data):
 
     class ConstantLFOWrapper(SamplingWrapper):
         const = -1.0
+        pred = 2.0
 
         def __init__(self, idata):
             super().__init__(model=None, idata_orig=idata)
@@ -662,6 +663,16 @@ def constant_lfo_wrapper(lfo_constant_data):
             n_obs = excluded_obs.sizes["time"]
             n_draws = idata__i.posterior.sizes["draw"]
             values = np.full((1, n_obs, n_draws), self.const)
+            return xr.DataArray(
+                values,
+                dims=["chain", "time", "draw"],
+                coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
+            )
+
+        def posterior_predictive__i(self, excluded_obs, idata__i):
+            n_obs = excluded_obs.sizes["time"]
+            n_draws = idata__i.posterior.sizes["draw"]
+            values = np.full((1, n_obs, n_draws), self.pred)
             return xr.DataArray(
                 values,
                 dims=["chain", "time", "draw"],
@@ -730,6 +741,17 @@ def varying_lfo_wrapper(lfo_varying_data):
                 coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
             )
 
+        def posterior_predictive__i(self, excluded_obs, idata__i):
+            mu = idata__i.posterior["mu"].values.flatten()
+            n_obs = excluded_obs.sizes["time"]
+            local = np.random.default_rng(int(excluded_obs.coords["time"].values[0]))
+            draws = mu[:, None] + local.normal(0, 1.0, (mu.size, n_obs))
+            return xr.DataArray(
+                draws.T[np.newaxis, :, :],
+                dims=["chain", "time", "draw"],
+                coords={"time": np.atleast_1d(excluded_obs.coords["time"].values)},
+            )
+
     return VaryingLFOWrapper(lfo_varying_data)
 
 
@@ -780,6 +802,15 @@ def custom_dim_lfo_wrapper(lfo_custom_dim_data):
             n_draws = idata__i.posterior.sizes["draw"]
             return xr.DataArray(
                 np.full((1, n_obs, n_draws), -1.0),
+                dims=["chain", "week", "draw"],
+                coords={"week": np.atleast_1d(excluded_obs.coords["week"].values)},
+            )
+
+        def posterior_predictive__i(self, excluded_obs, idata__i):
+            n_obs = excluded_obs.sizes["week"]
+            n_draws = idata__i.posterior.sizes["draw"]
+            return xr.DataArray(
+                np.full((1, n_obs, n_draws), 2.0),
                 dims=["chain", "week", "draw"],
                 coords={"week": np.atleast_1d(excluded_obs.coords["week"].values)},
             )
