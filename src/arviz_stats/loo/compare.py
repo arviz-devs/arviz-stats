@@ -56,6 +56,8 @@ def compare(
         - 'pseudo-BMA': pseudo-Bayesian Model averaging using Akaike-type
           weighting, without Bootstrap stabilization (not recommended).
 
+        Results from :func:`~arviz_stats.loo_subsample` only support 'pseudo-BMA', since the
+        other methods need pointwise values for every observation.
         For more information read https://arxiv.org/abs/1704.02030
     var_name: str, optional
         If there is more than a single observed variable in the ``InferenceData``, which
@@ -160,7 +162,7 @@ def compare(
            ...: data2 = load_arviz_data("centered_eight")
            ...: loo_sub1 = loo_subsample(data1, observations=6, pointwise=True, seed=42)
            ...: loo_sub2 = loo_subsample(data2, observations=6, pointwise=True, seed=42)
-           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2})
+           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2}, method="pseudo-BMA")
 
     When using subsampled LOO, the ``subsampling_dse`` column quantifies the additional
     uncertainty from using subsamples instead of all observations. The ``elpd_diff`` values
@@ -239,6 +241,13 @@ def compare(
             f"Available methods: {', '.join(available_methods)}. "
             f"Use 'stacking' for robust model averaging as recommended in the original paper "
             f"https://doi.org/10.1214/17-BA1091."
+        )
+
+    if has_subsampling and method.lower() != "pseudo-bma":
+        raise ValueError(
+            "Results from loo_subsample only support method='pseudo-BMA', because stacking and "
+            "BB-pseudo-BMA need pointwise values for all observations and a subsampled result "
+            "only has them for its subsample. Use loo for all observations instead."
         )
 
     if reference is not None and reference not in names:

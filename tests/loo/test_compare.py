@@ -251,18 +251,20 @@ def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
 
     loo_full = loo(centered_eight, pointwise=True)
 
-    comparison_subsampled = compare({"model1": loo_sub1, "model2": loo_sub2})
+    comparison_subsampled = compare({"model1": loo_sub1, "model2": loo_sub2}, method="pseudo-BMA")
     assert "subsampling_dse" in comparison_subsampled.columns
     assert np.isfinite(comparison_subsampled["subsampling_dse"].values).all()
     assert np.isfinite(comparison_subsampled["dse"].values).all()
     assert_almost_equal(comparison_subsampled["elpd_diff"].iloc[0], 0.0, decimal=4)
 
-    comparison_updated = compare({"model1": loo_sub1, "model2": loo_updated})
+    comparison_updated = compare({"model1": loo_sub1, "model2": loo_updated}, method="pseudo-BMA")
     assert "subsampling_dse" in comparison_updated.columns
     assert np.isfinite(comparison_updated["subsampling_dse"].values).all()
 
     with pytest.warns(UserWarning, match="Different subsamples used in 'model_a' and 'model_b'"):
-        comparison_diff_subsample = compare({"model_a": loo_sub1, "model_b": loo_sub3}, round_to=1)
+        comparison_diff_subsample = compare(
+            {"model_a": loo_sub1, "model_b": loo_sub3}, method="pseudo-BMA", round_to=1
+        )
     assert "subsampling_dse" in comparison_diff_subsample.columns
     assert np.isfinite(comparison_diff_subsample["subsampling_dse"].values).all()
     assert_allclose(comparison_diff_subsample["subsampling_dse"].to_numpy(), [0.0, 0.4])
@@ -287,11 +289,28 @@ def test_compare_subsampled_with_full_loo(centered_eight_with_sigma):
     loo_full = loo(centered_eight_with_sigma, pointwise=True, var_name="obs")
 
     with pytest.warns(UserWarning, match="observations included in loo calculations"):
-        result = compare({"sub": loo_sub, "full": loo_full})
+        result = compare({"sub": loo_sub, "full": loo_full}, method="pseudo-BMA")
 
     assert "subsampling_dse" in result.columns
     assert np.isfinite(result["subsampling_dse"].values).all()
     assert_allclose(result["weight"].sum(), 1.0)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA"])
+def test_compare_subsampled_needs_pseudo_bma(centered_eight_with_sigma, method):
+    loo_sub = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 1, 2, 3]),
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        pointwise=True,
+    )
+    loo_full = loo(centered_eight_with_sigma, pointwise=True, var_name="obs")
+    with pytest.raises(ValueError, match="pseudo-BMA"):
+        compare({"sub": loo_sub, "full": loo_full}, method=method)
 
 
 @pytest.mark.parametrize("method", ["BB-pseudo-BMA", "pseudo-BMA"])
@@ -602,10 +621,10 @@ def test_compare_order_stat_check_subsampling(centered_eight_with_sigma, rng):
         loo_sub = copy.deepcopy(base_loo_sub)
         shift = rng.normal(0, 0.1, size=loo_sub.elpd_i.shape)
         loo_sub.elpd_i = loo_sub.elpd_i + shift
-        loo_sub.elpd = np.sum(loo_sub.elpd_i)
+        loo_sub.elpd = loo_sub.elpd_i.sum().item()
         models[f"model_{i}"] = loo_sub
 
-    result = compare(models)
+    result = compare(models, method="pseudo-BMA")
     assert len(result) == 12
     assert "subsampling_dse" in result.columns
 
