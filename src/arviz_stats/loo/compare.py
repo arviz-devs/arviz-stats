@@ -427,7 +427,7 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
         if pointwise_a is None or pointwise_b is None:
             return _compute_naive_diff(elpd_a, elpd_b)
 
-        diff = (np.asarray(pointwise_a) - np.asarray(pointwise_b)).reshape(-1)
+        diff = np.ravel(pointwise_a) - np.ravel(pointwise_b)
         valid = diff[np.isfinite(diff)]
 
         if valid.size == 0:

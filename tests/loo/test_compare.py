@@ -426,6 +426,22 @@ def test_compare_dse(centered_eight, non_centered_eight):
     assert_allclose(result.loc[other, "dse"], np.sqrt(diff.size * np.var(diff, ddof=1)))
 
 
+@pytest.mark.parametrize("extra_dim_model", ["a", "b"])
+def test_compare_elpd_i_extra_dim(centered_eight, extra_dim_model):
+    delta = 0.1 * np.arange(1, 9)
+    log_lik = centered_eight.log_likelihood["obs"]
+    log_liks = {"a": log_lik, "b": log_lik - log_lik.school.copy(data=delta)}
+    log_liks[extra_dim_model] = log_liks[extra_dim_model].expand_dims(extra=1, axis=-1)
+    elpds = {}
+    for name, model_log_lik in log_liks.items():
+        data = centered_eight.copy()
+        data["log_likelihood"] = data["log_likelihood"].to_dataset().assign(obs=model_log_lik)
+        elpds[name] = loo(data)
+    result = compare(elpds, round_to="none")
+    assert_allclose(result.loc["b", "elpd_diff"], -delta.sum())
+    assert_allclose(result.loc["b", "dse"], np.sqrt(delta.size) * delta.std(ddof=1))
+
+
 @pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.parametrize("offset", [1000.0, -1000.0])
 def test_compare_stacking_invariant_to_constant_shift(centered_eight, non_centered_eight, offset):
