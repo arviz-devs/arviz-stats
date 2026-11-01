@@ -1751,14 +1751,15 @@ class _DiagnosticsBase(_CoreBase):
         std_error: float
             Standard error of the balanced accuracy.
         """
-        n_obs = len(observed)
         yhat = predicted > 0.5
         mask = observed == 0
+        n_neg = np.count_nonzero(mask)
+        n_pos = len(observed) - n_neg
         true_neg = np.mean(yhat[mask] == observed[mask])
         true_pos = np.mean(yhat[~mask] == observed[~mask])
         mean = (true_pos + true_neg) / 2
-        # This approximation has quite large bias for small samples
-        bls_acc_var = (true_pos * (1 - true_pos) + true_neg * (1 - true_neg)) / 4
-        std_error = (bls_acc_var / n_obs) ** 0.5
+        # Each class rate is a proportion, so its variance uses that class count
+        bls_acc_var = (true_pos * (1 - true_pos) / n_pos + true_neg * (1 - true_neg) / n_neg) / 4
+        std_error = bls_acc_var**0.5
 
         return mean, std_error
