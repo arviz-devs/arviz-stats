@@ -582,6 +582,44 @@ def test_update_subsample_repeated_obs_labels():
     assert_allclose(updated.subsampling_se, expected.subsampling_se)
 
 
+def test_update_subsample_log_weights():
+    rng = np.random.default_rng(0)
+    idata = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 200))},
+            "log_likelihood": {"y": rng.normal(-1, 0.3, size=(2, 200, 6))},
+        },
+        dims={"y": ["match"]},
+    )
+
+    initial = loo_subsample(idata, observations=np.array([0, 3]), pointwise=True, var_name="y")
+    updated = update_subsample(initial, idata, observations=np.array([1, 4]), var_name="y")
+    expected = loo_subsample(
+        idata, observations=np.array([0, 1, 3, 4]), pointwise=True, var_name="y"
+    )
+
+    assert_allclose(updated.log_weights["y"].sortby("match"), expected.log_weights["y"])
+
+
+def test_update_subsample_multidim_obs():
+    rng = np.random.default_rng(0)
+    idata = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 200))},
+            "log_likelihood": {"y": rng.normal(-1, 0.3, size=(2, 200, 2, 3))},
+        },
+        dims={"y": ["row", "col"]},
+    )
+
+    initial = loo_subsample(idata, observations=np.array([0, 4]), pointwise=True, var_name="y")
+    updated = update_subsample(initial, idata, observations=np.array([1, 5]), var_name="y")
+    expected = loo_subsample(idata, observations=np.array([0, 1, 4, 5]), var_name="y")
+
+    assert_allclose(updated.elpd, expected.elpd)
+    assert_allclose(updated.se, expected.se)
+    assert_allclose(updated.subsampling_se, expected.subsampling_se)
+
+
 def test_update_subsample_observations_none(centered_eight_with_sigma):
     initial = loo_subsample(
         centered_eight_with_sigma,

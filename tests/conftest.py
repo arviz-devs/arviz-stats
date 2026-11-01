@@ -185,40 +185,6 @@ def log_likelihood_dataset(centered_eight):
 
 
 @pytest.fixture(scope="module")
-def elpd_data(centered_eight):
-    from arviz_stats.utils import ELPDDataLOO, get_log_likelihood_dataset
-
-    xr = importorskip("xarray")
-    log_likelihood = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
-    n_samples = log_likelihood.chain.size * log_likelihood.draw.size
-    n_data_points = log_likelihood.school.size
-
-    rng = np.random.default_rng(42)
-    elpd_values = rng.normal(size=n_data_points)
-    pareto_k_values = rng.uniform(0, 0.7, size=n_data_points)
-
-    elpd_i = xr.DataArray(elpd_values, dims=["school"], coords={"school": log_likelihood.school})
-
-    pareto_k = xr.DataArray(
-        pareto_k_values, dims=["school"], coords={"school": log_likelihood.school}
-    )
-
-    mock_elpd = ELPDDataLOO(
-        elpd=float(elpd_values.sum()),
-        se=1.0,
-        p=2.0,
-        good_k=0.7,
-        n_samples=n_samples,
-        n_data_points=n_data_points,
-        warning=False,
-        elpd_i=elpd_i,
-        pareto_k=pareto_k,
-        scale="log",
-    )
-    return mock_elpd
-
-
-@pytest.fixture(scope="module")
 def log_densities(centered_eight):
     from arviz_stats.utils import get_log_likelihood_dataset
 

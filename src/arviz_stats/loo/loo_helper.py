@@ -26,7 +26,6 @@ __all__ = [
     "_get_r_eff",
     "_get_r_eff_i",
     "_prepare_loo_inputs",
-    "_extract_loo_data",
     "_check_log_density",
     "_check_log_jacobian",
     "_warn_pointwise_loo",
@@ -298,45 +297,6 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
     n_samples = log_lik_i.sizes["chain"] * log_lik_i.sizes["draw"]
 
     return log_lik_i, sample_dims, obs_dims, n_samples
-
-
-def _extract_loo_data(loo_orig):
-    """Extract pointwise DataArrays from original PSIS-LOO-CV object."""
-    elpd_values = loo_orig.elpd_i
-    pareto_values = loo_orig.pareto_k
-
-    valid_mask = ~np.isnan(elpd_values.values.flatten())
-    valid_indices = np.where(valid_mask)[0]
-
-    sample_dims = ["chain", "draw"]
-    obs_dims = [dim for dim in elpd_values.dims if dim not in sample_dims]
-    stacked_obs_dim = "__pareto_obs_stacked__"
-
-    if len(obs_dims) == 1:
-        obs_dim = obs_dims[0]
-        extracted_elpd = elpd_values.isel({obs_dim: valid_indices})
-    else:
-        is_already_stacked = stacked_obs_dim in elpd_values.dims
-        stacked_elpd = (
-            elpd_values if is_already_stacked else elpd_values.stack({stacked_obs_dim: obs_dims})
-        )
-        extracted_elpd = stacked_elpd.isel({stacked_obs_dim: valid_indices})
-
-    if pareto_values is not None:
-        if len(obs_dims) == 1:
-            obs_dim = obs_dims[0]
-            extracted_pareto = pareto_values.isel({obs_dim: valid_indices})
-        else:
-            is_already_stacked = stacked_obs_dim in pareto_values.dims
-            stacked_pareto = (
-                pareto_values
-                if is_already_stacked
-                else pareto_values.stack({stacked_obs_dim: obs_dims})
-            )
-            extracted_pareto = stacked_pareto.isel({stacked_obs_dim: valid_indices})
-    else:
-        extracted_pareto = xr.full_like(extracted_elpd, np.nan)
-    return extracted_elpd, extracted_pareto
 
 
 def _shift(upars, lwi):
@@ -622,11 +582,16 @@ def _prepare_update_subsample(
 ):
     """Prepare inputs for updating PSIS-LOO-CV with additional observations."""
     loo_inputs = _prepare_loo_inputs(data, var_name, thin_factor)
-    old_elpd_i_da, old_pareto_k_da = _extract_loo_data(loo_orig)
+    old_indices = np.where(~np.isnan(loo_orig.elpd_i.values.flatten()))[0]
+    old_elpd_i_da = _select_obs_by_indices(
+        loo_orig.elpd_i, old_indices, loo_inputs.obs_dims, "__obs__"
+    )
+    old_pareto_k_da = _select_obs_by_indices(
+        loo_orig.pareto_k, old_indices, loo_inputs.obs_dims, "__obs__"
+    )
 
     log_likelihood = loo_inputs.log_likelihood
     concat_dim = old_elpd_i_da.dims[0]
-    old_indices = np.where(~np.isnan(loo_orig.elpd_i.values.flatten()))[0]
 
     if isinstance(observations, int):
         # Filter out existing indices before generating new ones
