@@ -1187,6 +1187,9 @@ class _DiagnosticsBase(_CoreBase):
         ary = np.asarray(ary)
         if ary.dtype.kind == "b":
             ary = ary.astype(int)
+        elif ary.dtype.kind == "u":
+            # unsigned values wrap around when negated to fit the left tail
+            ary = ary.astype(float)
         ary = ary.copy()
 
         if log_weights:
