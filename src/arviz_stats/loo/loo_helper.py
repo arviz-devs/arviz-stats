@@ -33,7 +33,6 @@ __all__ = [
     "_prepare_subsample",
     "_prepare_update_subsample",
     "_select_obs_by_indices",
-    "_select_obs_by_coords",
     "_prepare_full_arrays",
     "_align_data_to_obs",
     "_validate_crps_input",
@@ -1147,14 +1146,6 @@ def _select_obs_by_indices(data_array, indices, dims, dim_name):
     indexers = {dim: xr.DataArray(idx, dims=dim_name) for dim, idx in zip(dims, multi_indices)}
 
     return data_array.isel(indexers)
-
-
-def _select_obs_by_coords(data_array, coord_array, dims, dim_name):
-    """Select a sub-sample from a DataArray based on coordinate values."""
-    if len(dims) > 1:
-        stacked_data = data_array.stack({dim_name: dims})
-        return stacked_data.sel({dim_name: coord_array[dim_name]})
-    return data_array.sel({dims[0]: coord_array[dims[0]]})
 
 
 def _warn_pointwise_loo(elpd, elpd_i_values):
