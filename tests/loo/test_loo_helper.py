@@ -19,7 +19,6 @@ from arviz_stats.loo.loo_helper import (
     _check_log_jacobian,
     _compute_loo_approximation,
     _diff_srs_estimator,
-    _extract_loo_data,
     _generate_subsample_indices,
     _get_log_likelihood_i,
     _get_r_eff,
@@ -29,7 +28,6 @@ from arviz_stats.loo.loo_helper import (
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
-    _select_obs_by_coords,
     _select_obs_by_indices,
     _shift,
     _shift_and_cov,
@@ -206,18 +204,6 @@ def test_get_weights_and_k_i(centered_eight):
         assert pareto_k_i.sizes[dim] == 1
 
 
-def test_extract_loo_data(elpd_data):
-    elpd_i_extracted, pareto_k_extracted = _extract_loo_data(elpd_data)
-
-    assert isinstance(elpd_i_extracted, xr.DataArray)
-    assert isinstance(pareto_k_extracted, xr.DataArray)
-    assert elpd_i_extracted.dims == pareto_k_extracted.dims
-    assert elpd_i_extracted.shape == pareto_k_extracted.shape
-
-    xr.testing.assert_allclose(elpd_i_extracted, elpd_data.elpd_i)
-    xr.testing.assert_allclose(pareto_k_extracted, elpd_data.pareto_k)
-
-
 def test_check_log_density(log_likelihood_dataset):
     log_likelihood = log_likelihood_dataset["obs"]
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
@@ -269,13 +255,11 @@ def test_warn_pareto_k():
         assert len(record) == 0
 
     pareto_k_bad = np.array([0.1, 0.2, 0.8, 0.9])
-    with pytest.warns(
-        UserWarning, match="Estimated shape parameter of Pareto distribution is greater than"
-    ):
+    with pytest.warns(UserWarning, match="Model_comparison.html"):
         warn_flag, _ = _warn_pareto_k(pareto_k_bad, n_samples=1000)
         assert warn_flag
 
-    with pytest.warns(UserWarning, match="power-scaled posterior estimates"):
+    with pytest.warns(UserWarning, match="Sensitivity_checks.html"):
         warn_flag, _ = _warn_pareto_k(pareto_k_bad, n_samples=1000, usage="power_scale")
         assert warn_flag
 
@@ -333,16 +317,6 @@ def test_select_obs_by_indices():
 
     assert result.shape == (3,)
     assert_allclose(result.values, np.array([1, 3, 5]))
-
-
-def test_select_obs_by_coords():
-    data = xr.DataArray(np.arange(10), dims=["x"], coords={"x": np.arange(10)})
-
-    coord_array = xr.DataArray([5, 7, 9], dims=["x"], coords={"x": [5, 7, 9]})
-    result = _select_obs_by_coords(data, coord_array, dims=["x"], dim_name="x")
-
-    assert result.shape == (3,)
-    assert_allclose(result.values, np.array([5, 7, 9]))
 
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])

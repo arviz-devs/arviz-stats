@@ -181,7 +181,14 @@ def test_bfmi_dataset_returns_dataset(centered_eight):
 def test_diagnose_stdout(centered_eight, capsys):
     diagnose(centered_eight, show_diagnostics=True)
     output = capsys.readouterr().out
-    for keyword in ["ESS", "R-hat", "Divergences", "Treedepth", "E-BFMI"]:
+    for keyword in [
+        "ESS",
+        "R-hat",
+        "Divergences",
+        "Treedepth",
+        "E-BFMI",
+        "https://arviz-devs.github.io/EABM/Chapters/MCMC_diagnostics.html",
+    ]:
         assert keyword in output
 
     diagnose(centered_eight, show_diagnostics=False)
@@ -242,8 +249,8 @@ def test_diagnose_no_sample_stats(centered_eight, capsys):
 def test_diagnose_no_chains(centered_eight):
     data_no_chains = xr.DataTree.from_dict(
         {
-            "posterior": centered_eight["posterior"].ds.rename({"chain": "not_a_chain"}),
-            "sample_stats": centered_eight["sample_stats"].ds.rename({"chain": "not_a_chain"}),
+            "posterior": centered_eight["posterior"].dataset.rename({"chain": "not_a_chain"}),
+            "sample_stats": centered_eight["sample_stats"].dataset.rename({"chain": "not_a_chain"}),
         }
     )
 

@@ -118,10 +118,10 @@ def get_log_likelihood_dataset(idata, var_names=None):
             "Storing the log_likelihood in sample_stats groups has been deprecated",
             DeprecationWarning,
         )
-        log_lik_ds = idata.sample_stats.ds[["log_likelihood"]]
+        log_lik_ds = idata.sample_stats.dataset[["log_likelihood"]]
     if not hasattr(idata, "log_likelihood"):
         raise TypeError("log likelihood not found in inference data object")
-    log_lik_ds = idata.log_likelihood.ds
+    log_lik_ds = idata.log_likelihood.dataset
     if var_names is None:
         return log_lik_ds
     if isinstance(var_names, Hashable):
@@ -151,10 +151,10 @@ def get_log_prior(idata, var_names=None):
     if not hasattr(idata, "log_prior"):
         raise TypeError("log prior not found in inference data object")
     if var_names is None:
-        return idata.log_prior.ds
+        return idata.log_prior.dataset
     if isinstance(var_names, Hashable):
-        return idata.log_prior.ds[[var_names]]
-    return idata.log_prior.ds[var_names]
+        return idata.log_prior.dataset[[var_names]]
+    return idata.log_prior.dataset[var_names]
 
 
 BASE_HEADER_FMT = (
@@ -550,14 +550,18 @@ def _warn_pareto_k(pareto_k_values, n_samples, suppress=False, usage="loo"):
                     " more robust model, this is because importance sampling is less likely "
                     "to work well if the marginal posterior and LOO posterior are very different. "
                     "This is more likely to happen with a non-robust model and highly influential "
-                    "observations."
+                    "observations. For more information on how to interpret the results and "
+                    "troubleshoot high Pareto k values, please check "
+                    "https://arviz-devs.github.io/EABM/Chapters/Model_comparison.html"
                 )
             elif usage == "power_scale":
                 warnings.warn(
                     "Estimated shape parameter of Pareto distribution is greater than "
                     f"{good_k:.2f} for the tail of the importance weights for "
                     "one or more power-scaled posterior estimates. This means that the posterior "
-                    "is shifting more than can be reliably estimated by importance sampling."
+                    "is shifting more than can be reliably estimated by importance sampling. "
+                    "For more information on how to interpret the results, please check "
+                    "https://arviz-devs.github.io/EABM/Chapters/Sensitivity_checks.html"
                 )
         warn_mg = True
     return warn_mg, good_k

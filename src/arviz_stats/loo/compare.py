@@ -56,6 +56,8 @@ def compare(
         - 'pseudo-BMA': pseudo-Bayesian Model averaging using Akaike-type
           weighting, without Bootstrap stabilization (not recommended).
 
+        Results from :func:`~arviz_stats.loo_subsample` only support 'pseudo-BMA', since the
+        other methods need pointwise values for every observation.
         For more information read https://arxiv.org/abs/1704.02030
     var_name: str, optional
         If there is more than a single observed variable in the ``InferenceData``, which
@@ -160,7 +162,7 @@ def compare(
            ...: data2 = load_arviz_data("centered_eight")
            ...: loo_sub1 = loo_subsample(data1, observations=6, pointwise=True, seed=42)
            ...: loo_sub2 = loo_subsample(data2, observations=6, pointwise=True, seed=42)
-           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2})
+           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2}, method="pseudo-BMA")
 
     When using subsampled LOO, the ``subsampling_dse`` column quantifies the additional
     uncertainty from using subsamples instead of all observations. The ``elpd_diff`` values
@@ -241,6 +243,13 @@ def compare(
             f"https://doi.org/10.1214/17-BA1091."
         )
 
+    if has_subsampling and method.lower() != "pseudo-bma":
+        raise ValueError(
+            "Results from loo_subsample only support method='pseudo-BMA', because stacking and "
+            "BB-pseudo-BMA need pointwise values for all observations and a subsampled result "
+            "only has them for its subsample. Use loo for all observations instead."
+        )
+
     if reference is not None and reference not in names:
         raise ValueError(
             f"Reference model '{reference}' not found in compare_dict. "
@@ -261,7 +270,7 @@ def compare(
 
     if method.lower() == "stacking":
         rows, cols, ic_i_val = _ic_matrix(ics)
-        exp_ic_i = np.exp(ic_i_val)
+        exp_ic_i = np.exp(ic_i_val - np.max(ic_i_val, axis=1, keepdims=True))
 
         def log_score(weights):
             return -np.sum(np.log(np.dot(exp_ic_i, weights)))
@@ -427,14 +436,14 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
         if pointwise_a is None or pointwise_b is None:
             return _compute_naive_diff(elpd_a, elpd_b)
 
-        diff = (np.asarray(pointwise_a) - np.asarray(pointwise_b)).reshape(-1)
+        diff = np.ravel(pointwise_a) - np.ravel(pointwise_b)
         valid = diff[np.isfinite(diff)]
 
         if valid.size == 0:
             return _compute_naive_diff(elpd_a, elpd_b)
 
         elpd_diff = np.nansum(valid)
-        se_diff = np.sqrt(valid.size * np.nanvar(valid))
+        se_diff = np.sqrt(valid.size * np.nanvar(valid, ddof=1))
         result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
         combined = _subsampling_dse(elpd_a, elpd_b)
         if combined:

@@ -18,7 +18,7 @@ xr = importorskip("xarray")
 
 from numpy.testing import assert_allclose, assert_array_equal
 
-from arviz_stats import loo, loo_approximate_posterior, loo_pit, loo_score
+from arviz_stats import loo, loo_approximate_posterior, loo_influence, loo_pit, loo_score
 from arviz_stats.loo.loo_helper import _get_r_eff, _prepare_loo_inputs
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -391,6 +391,18 @@ class TestComputeRanks:
         assert result.ndim == ary.ndim
         assert result.max() == ary.shape[axis]
 
+    def test_compute_ranks_discrete_multiple_axes(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.poisson(3, size=(4, 50))
+        result = array_stats.compute_ranks(ary, axis=(0, 1))
+        assert result.shape == ary.shape
+        assert_array_equal(np.sort(result, axis=None), np.arange(1, 201))
+
+    def test_compute_ranks_discrete_constant(self, array_stats):
+        ary = np.full(10, 3)
+        result = array_stats.compute_ranks(ary)
+        assert_array_equal(np.sort(result), np.arange(1, 11))
+
 
 class TestBinning:
     def test_get_bins_basic(self, array_stats, rng):
@@ -456,6 +468,14 @@ class TestBinning:
             counts, edges = array_stats.histogram(ary)
         assert np.all(np.diff(edges, axis=-1) > 0)
         assert_allclose(np.sum(counts * np.diff(edges, axis=-1), axis=-1), 1.0)
+
+    @pytest.mark.parametrize("high", [2, 10])
+    def test_histogram_integer(self, array_stats, rng, high):
+        ary = rng.integers(-1, high, size=1000)
+        counts, edges = array_stats.histogram(ary, density=False)
+        values, expected = np.unique(ary, return_counts=True)
+        assert_array_equal(edges[:-1], values)
+        assert_array_equal(counts, expected)
 
     def test_histogram_density(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
@@ -1665,3 +1685,55 @@ class TestLooQuantile:
 
         assert quantile.shape == (8,)
         assert np.all(np.isfinite(quantile))
+
+
+class TestLooInfluence:
+    @pytest.fixture
+    def log_weights(self, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        reff = _get_r_eff(centered_eight, log_lik.chain.size * log_lik.draw.size)
+        log_weights, _ = log_lik.azstats.psislw(r_eff=reff)
+        return log_weights.transpose("school", "chain", "draw").values
+
+    @pytest.mark.parametrize(
+        "kind, kwargs",
+        [
+            ("mean", {}),
+            ("mean", {"standardize": False}),
+            ("median", {}),
+            ("sd", {}),
+            ("var", {}),
+            ("quantile", {"probs": [0.25, 0.75]}),
+            ("octiles", {}),
+        ],
+    )
+    def test_loo_influence_matches_xarray(
+        self, array_stats, centered_eight, log_weights, kind, kwargs
+    ):
+        y_pred = centered_eight.posterior_predictive["obs"].transpose("school", "chain", "draw")
+
+        influence = array_stats.loo_influence(y_pred.values, log_weights, kind=kind, **kwargs)
+
+        expected, _ = loo_influence(centered_eight, kind=kind, **kwargs)
+        if isinstance(expected, xr.Dataset):
+            expected = expected["obs"]
+        assert influence.shape == (8,)
+        assert_allclose(influence, expected.transpose("school").values)
+
+    def test_loo_influence_posterior(self, array_stats, centered_eight, log_weights):
+        mu = centered_eight.posterior["mu"].transpose("chain", "draw").values
+
+        influence = array_stats.loo_influence(mu, log_weights, kind="median")
+
+        expected, _ = loo_influence(
+            centered_eight, kind="median", var_names="mu", group="posterior"
+        )
+        assert influence.shape == (8,)
+        assert_allclose(influence, expected["mu"].transpose("school").values)
+
+    def test_loo_influence_invalid_kind(self, array_stats, rng):
+        ary = rng.normal(size=(2, 50, 3))
+        with pytest.raises(ValueError, match="kind must be one of"):
+            array_stats.loo_influence(ary, ary, kind="mode")
+        with pytest.raises(ValueError, match="probs must be provided"):
+            array_stats.loo_influence(ary, ary, kind="quantile")

@@ -79,7 +79,7 @@ def test_loo_score_pointwise(centered_eight, kind, pointwise):
         assert_almost_equal(result.mean, result.pointwise.values.mean(), decimal=14)
         assert_almost_equal(
             result.se,
-            result.pointwise.values.std(ddof=0) / result.pointwise.size**0.5,
+            result.pointwise.values.std(ddof=1) / result.pointwise.size**0.5,
             decimal=14,
         )
         if kind == "crps":

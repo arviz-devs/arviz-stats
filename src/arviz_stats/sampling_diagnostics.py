@@ -947,7 +947,9 @@ def diagnose(
 
     if ess_threshold is not None:
         below_minimum_params = [
-            var for var in ess_bulk.ds.data_vars if (ess_bulk.ds[var] < ess_threshold).any()
+            var
+            for var in ess_bulk.dataset.data_vars
+            if (ess_bulk.dataset[var] < ess_threshold).any()
         ]
 
         if below_minimum_params:
@@ -1009,6 +1011,11 @@ def diagnose(
 
     if not has_errors:
         messages.append("\nProcessing complete, no problems detected.")
+    else:
+        messages.append(
+            "\nFor more information on how to interpret and address sampling issues, please check "
+            "https://arviz-devs.github.io/EABM/Chapters/MCMC_diagnostics.html"
+        )
 
     if show_diagnostics:
         print("\n".join(messages), file=sys.stdout)

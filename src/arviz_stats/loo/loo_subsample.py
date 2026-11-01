@@ -14,7 +14,6 @@ from arviz_stats.loo.loo_helper import (
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
-    _select_obs_by_coords,
     _select_obs_by_indices,
     _warn_pareto_k,
 )
@@ -374,7 +373,6 @@ def update_subsample(
     observations=None,
     var_name=None,
     reff=None,
-    log_weights=None,
     seed=315,
     method="lpd",
     log_lik_fn=None,
@@ -412,13 +410,6 @@ def update_subsample(
     reff : float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
-    log_weights : DataArray or ELPDDataLOO, optional
-        Smoothed log weights. Can be either:
-
-        - A :class:`~xarray.DataArray` with the same shape as the log likelihood data
-        - An ELPDDataLOO object from a previous :func:`arviz_stats.loo` call.
-
-        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     seed : int, optional
         Seed for random sampling.
     method: str, optional
@@ -550,27 +541,10 @@ def update_subsample(
     log_p = loo_orig.log_p
     log_q = loo_orig.log_q
 
-    log_weights_new = None
-    if log_weights is None:
-        log_weights = loo_orig.log_weights
-
-    if log_weights is not None:
-        if isinstance(log_weights, ELPDData):
-            if not isinstance(log_weights, ELPDDataLOO) or log_weights.log_weights is None:
-                raise ValueError("ELPDData object does not contain log_weights")
-            log_weights = log_weights.log_weights
-            if loo_inputs.var_name in log_weights:
-                log_weights = log_weights[loo_inputs.var_name]
-
-        log_weights_new = _select_obs_by_indices(
-            log_weights, update_data.new_indices, loo_inputs.obs_dims, "__obs__"
-        )
-
-    if log_weights_new is None:
-        log_weights_new_ds, _ = update_data.log_likelihood_new.azstats.psislw(
-            r_eff=reff, dim=loo_inputs.sample_dims
-        )
-        log_weights_new = log_weights_new_ds[loo_inputs.var_name]
+    log_weights_new_ds, _ = update_data.log_likelihood_new.azstats.psislw(
+        r_eff=reff, dim=loo_inputs.sample_dims
+    )
+    log_weights_new = log_weights_new_ds[loo_inputs.var_name]
 
     jacobian_new = None
     if jacobian_da is not None:
@@ -616,8 +590,8 @@ def update_subsample(
     good_k = loo_orig.good_k
     warn_mg, _ = _warn_pareto_k(combined_pareto_k_da, loo_inputs.n_samples)
 
-    lpd_approx_sample_da = _select_obs_by_coords(
-        lpd_approx_all, combined_elpd_i_da, loo_inputs.obs_dims, "__obs__"
+    lpd_approx_sample_da = _select_obs_by_indices(
+        lpd_approx_all, combined_indices, loo_inputs.obs_dims, "__obs__"
     )
 
     elpd_loo_hat, subsampling_se, se = combined_elpd_i_da.azstats.diff_srs_estimator(
@@ -656,13 +630,11 @@ def update_subsample(
         elpd_loo_hat,
     )
 
-    if loo_orig.log_weights is not None and log_weights_new is not None:
+    if loo_orig.log_weights is not None:
         old_log_weights = loo_orig.log_weights
         if isinstance(old_log_weights, xr.Dataset):
             old_log_weights = old_log_weights[loo_inputs.var_name]
 
-        if isinstance(log_weights_new, xr.Dataset):
-            log_weights_new = log_weights_new[loo_inputs.var_name]
         combined_log_weights = xr.concat(
             [old_log_weights, log_weights_new], dim=update_data.concat_dim
         )

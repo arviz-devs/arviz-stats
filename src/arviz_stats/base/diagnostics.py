@@ -324,6 +324,8 @@ class _DiagnosticsBase(_CoreBase):
     def _mcse_quantile(self, ary, prob, circular=False):
         """Compute the Markov Chain quantile error at quantile=prob."""
         ary = np.asarray(ary)
+        if ary.dtype.kind == "b":
+            ary = ary.astype(int)
         if _not_valid(ary, shape_kwargs={"min_draws": 4, "min_chains": 1}):
             return np.nan
         ess = self._ess_quantile(ary, prob)
@@ -338,7 +340,7 @@ class _DiagnosticsBase(_CoreBase):
         ppf_size = ppf * size - 1
         th1 = sorted_ary[int(np.floor(np.nanmax((ppf_size[0], 0))))]
         th2 = sorted_ary[int(np.ceil(np.nanmin((ppf_size[1], size - 1))))]
-        return (th2 - th1) / 2
+        return np.subtract(th2, th1, dtype=float) / 2
 
     def _pareto_min_ss(self, ary, prob):
         """Compute the minimum effective sample size."""
@@ -841,7 +843,7 @@ class _DiagnosticsBase(_CoreBase):
                 )
 
                 lpd_approx_sq_sum_all = np.nansum(approx_all**2)
-                mean_sq_diff = np.nanmean(elpd_valid**2 - approx_valid**2)
+                mean_sq_diff = np.nanmean(pointwise_diff * (elpd_valid + approx_valid))
                 scaled_mean_sq_diff = n_data_points * mean_sq_diff
 
                 total_variance_estimate = (
@@ -1108,6 +1110,8 @@ class _DiagnosticsBase(_CoreBase):
             r_eff = self._ess_tail(ary, prob=prob, relative=True)
 
         ary = ary.flatten()
+        if ary.dtype.kind == "b":
+            ary = ary.astype(float)
         n_draws = len(ary)
 
         n_draws_tail = self._get_ps_tails(n_draws, r_eff, tail=tail)
@@ -1119,7 +1123,9 @@ class _DiagnosticsBase(_CoreBase):
             ]
             khat = np.nan if np.all(np.isnan(khat_both)) else np.nanmax(khat_both)
         else:
-            ary, khat = self._ps_tail(ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail)
+            ary, khat = self._ps_tail(
+                ary, n_draws, n_draws_tail, smooth_draws=False, tail=tail, log_weights=log_weights
+            )
 
         return ary, khat
 
@@ -1180,7 +1186,10 @@ class _DiagnosticsBase(_CoreBase):
             because the input is degenerate or because the fit is undefined.
         """
         # JAX arrays are immutable; copy to a plain numpy array so in-place assignments work.
-        ary = np.asarray(ary).copy()
+        ary = np.asarray(ary)
+        if ary.dtype.kind == "b":
+            ary = ary.astype(int)
+        ary = ary.copy()
 
         if log_weights:
             ary = ary - np.max(ary)

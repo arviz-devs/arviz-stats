@@ -35,7 +35,7 @@ class _CoreBase:
         """
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocov.")
-        axis = axis if axis > 0 else len(ary.shape) + axis
+        axis = axis if axis >= 0 else len(ary.shape) + axis
         n = ary.shape[axis]
         m = next_fast_len(2 * n)
 
@@ -70,7 +70,7 @@ class _CoreBase:
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocorr.")
         corr = self.autocov(ary, axis=axis)
-        axis = axis = axis if axis > 0 else len(corr.shape) + axis
+        axis = axis if axis >= 0 else len(corr.shape) + axis
         norm = tuple(
             slice(None, None) if dim != axis else slice(None, 1) for dim, _ in enumerate(corr.shape)
         )
@@ -118,6 +118,9 @@ class _CoreBase:
            "Sample quantiles in statistical packages,"
            The American Statistician, 50(4), pp. 361-365, 1996
         """
+        ary = np.asarray(ary)
+        if ary.dtype.kind == "b":
+            ary = ary.astype(float)
         if skipna:
             result = np.nanquantile(ary, quantile, axis=axis, method=method, weights=weights)
         else:
@@ -167,11 +170,11 @@ class _CoreBase:
         """Compute ranks for continuous and discrete variables."""
         ary_shape = ary.shape
         ary = ary.flatten()
-        if ary.dtype.kind == "i":
+        if ary.dtype.kind == "i" and ary.min() < ary.max():
             min_ary, max_ary = min(ary), max(ary)
             x = np.linspace(min_ary, max_ary, len(ary))
             csi = CubicSpline(x, ary)
-            ary = csi(np.linspace(min_ary + 0.001, max_ary - 0.001, len(ary))).reshape(ary_shape)
+            ary = csi(np.linspace(min_ary + 0.001, max_ary - 0.001, len(ary)))
         out = self._float_rankdata(ary).reshape(ary_shape)
         if relative:
             return out / out.size
@@ -230,6 +233,8 @@ class _CoreBase:
         width = min(width_sturges, corr_fd)
         if dtype == "i":
             width = np.round(max(1, width)).astype(int)
+            if x_max > x_min:
+                x_max = x_min + ((x_max - x_min) // width + 1) * width
 
         return x_min, x_max, width
 
@@ -276,7 +281,7 @@ class _CoreBase:
         x_min, x_max, width = self._get_bininfo(values, bins)
 
         if dtype == "i":
-            bins = np.arange(x_min, x_max + width + 1, width)
+            bins = np.arange(x_min, values.max() + width + 1, width)
         else:
             if np.isclose(x_min, x_max):
                 width = 1e-3
@@ -605,7 +610,8 @@ class _CoreBase:
         if ary.size == 0:
             return np.nan
         if ary.size == 1:
-            return ary.item()
+            val = ary.item()
+            return round_num(val, round_to) if ary.dtype.kind == "f" else val
 
         if ary.dtype.kind == "f":
             # For continuous data, we use the half-sample mode algorithm.
@@ -718,6 +724,8 @@ class _CoreBase:
             ary = ary[~np.isnan(ary)]
         if ary.size == 0:
             return np.nan
+        if np.asarray(ary).dtype.kind == "b":
+            ary = np.asarray(ary, dtype=float)
         q1, q3 = np.quantile(ary, quantiles, axis=axis)
         iqr = q3 - q1
         return round_num(iqr, round_to)

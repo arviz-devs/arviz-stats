@@ -41,7 +41,7 @@ def check_var_name_subset(obj, var_name):
     if isinstance(obj, xr.Dataset):
         return obj[var_name]
     if isinstance(obj, xr.DataTree):
-        return obj.ds[var_name]
+        return obj.dataset[var_name]
     return obj
 
 
@@ -470,7 +470,7 @@ class AzStatsDsAccessor(_BaseAccessor):
     def thin_factor(self, **kwargs):
         """Get thinning factor for all the variables in the dataset."""
         reduce_func = kwargs.get("reduce_func", "mean")
-        thin_factors = self._apply("thin_factor", **kwargs).to_array()
+        thin_factors = self._apply("thin_factor", **kwargs).to_dataarray()
         if reduce_func == "mean":
             return int(np.floor(thin_factors.mean().item()))
         if reduce_func == "min":
@@ -577,7 +577,7 @@ class AzStatsDtAccessor(_BaseAccessor):
         if not isinstance(group, str):
             raise ValueError("Thin factor can only be applied over a single group.")
         reduce_func = kwargs.get("reduce_func", "mean")
-        thin_factors = self._apply("thin_factor", group=group, **kwargs).ds.to_array()
+        thin_factors = self._apply("thin_factor", group=group, **kwargs).dataset.to_dataarray()
         if reduce_func == "mean":
             return int(np.floor(thin_factors.mean().item()))
         if reduce_func == "min":
@@ -589,6 +589,12 @@ class AzStatsDtAccessor(_BaseAccessor):
     def thin(self, sample_dims=None, group="posterior", **kwargs):
         """Perform thinning for all variables in a group of the DataTree."""
         if kwargs.get("factor", "auto") == "auto":
-            kwargs["factor"] = self.thin_factor()
+            if group not in ("posterior", "unconstrained_posterior"):
+                raise ValueError(
+                    'factor="auto" can only be used with the "posterior" and '
+                    f'"unconstrained_posterior" groups, not with "{group}". '
+                    "Provide an explicit integer factor to thin other groups."
+                )
+            kwargs["factor"] = self.thin_factor(group=group)
             sample_dims = "draw"
         return self._apply("thin", sample_dims=sample_dims, group=group, **kwargs)

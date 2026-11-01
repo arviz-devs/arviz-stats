@@ -558,6 +558,21 @@ def test_loo_mixture(centered_eight):
     assert np.all(np.isfinite(result_mix.pareto_k.values))
 
 
+def test_loo_mixture_pareto_k_right_tail():
+    rng = np.random.default_rng(42)
+    noise = rng.normal(size=(4, 1000))
+    log_x = np.log(rng.pareto(1 / 0.9, size=(4, 1000)) + 1)
+    data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(4, 1000))},
+            "log_likelihood": {"y": np.stack([noise + log_x, noise], axis=-1)},
+        }
+    )
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        result = loo(data, mixture=True, pointwise=True)
+    assert np.all(result.pareto_k.values < 0)
+
+
 def test_loo_jax_arrays(centered_eight):
     """loo() must not raise when log_likelihood contains JAX arrays (immutability regression)."""
     jnp = importorskip("jax.numpy")
