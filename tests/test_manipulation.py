@@ -40,6 +40,12 @@ def test_thin_numpy_tuple():
     assert thinned.shape == (2, 2)
 
 
+def test_thin_ndarray_ci_prob():
+    da = azb.load_arviz_data("centered_eight").posterior["mu"]
+    with azb.rc_context(rc={"stats.ci_prob": 0.8}):
+        assert thin(da.values).shape == da.azstats.thin().shape
+
+
 @pytest.mark.parametrize("factor", [2, 5, 10])
 def test_thin_dataarray(datatree, factor):
     data = datatree.posterior.theta

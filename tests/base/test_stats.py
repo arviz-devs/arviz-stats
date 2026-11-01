@@ -12,6 +12,7 @@ azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
 import arviz_stats.accessors  # noqa: F401  # pylint: disable=unused-import
+from arviz_stats.base import array_stats
 
 
 @pytest.fixture(scope="module")
@@ -358,3 +359,44 @@ def test_ecdf_boundary_values(centered_eight):
     y_vals = result.sel(plot_axis="y")
     assert np.all(y_vals >= 0)
     assert np.all(y_vals <= 1)
+
+
+def test_pareto_khat_tail_ess_prob(centered_eight):
+    da = centered_eight.posterior["mu"]
+    with azb.rc_context(rc={"stats.ci_prob": 0.8}):
+        khat = da.azstats.pareto_khat()
+        r_eff = da.azstats.ess(method="tail", relative=True).item()
+    assert_array_almost_equal(khat, da.azstats.pareto_khat(r_eff=r_eff))
+
+
+def test_pareto_min_ss_ci_prob(centered_eight):
+    da = centered_eight.posterior["theta"]
+    with azb.rc_context(rc={"stats.ci_prob": 0.8}):
+        result = da.azstats.pareto_min_ss()
+    expected = array_stats.pareto_min_ss(da.values, chain_axis=0, draw_axis=1, prob=0.8)
+    other = array_stats.pareto_min_ss(da.values, chain_axis=0, draw_axis=1, prob=0.6)
+    assert_array_almost_equal(result, expected)
+    assert not np.allclose(result, other)
+
+
+def test_power_scale_lw_ci_prob(centered_eight):
+    da = centered_eight.posterior["mu"]
+    with azb.rc_context(rc={"stats.ci_prob": 0.8}):
+        _, khat = da.azstats.power_scale_lw(alpha=0.5, dim=["chain", "draw"])
+    _, expected = array_stats.power_scale_lw(da.values, alpha=0.5, axis=(0, 1), prob=0.8)
+    _, other = array_stats.power_scale_lw(da.values, alpha=0.5, axis=(0, 1), prob=0.6)
+    assert_array_almost_equal(khat, expected)
+    assert not np.allclose(khat, other)
+
+
+@pytest.mark.parametrize("func", ["pareto_khat", "pareto_min_ss", "thin_factor"])
+def test_array_tail_ess_prob_required(centered_eight, func):
+    ary = centered_eight.posterior["mu"].values
+    with pytest.raises(TypeError):
+        getattr(array_stats, func)(ary, chain_axis=0, draw_axis=1)
+
+
+def test_ess_tail_prob_not_defined(centered_eight):
+    ary = centered_eight.posterior["mu"].values
+    with pytest.raises(TypeError, match="Prob not defined"):
+        array_stats._ess_tail(ary, prob=None)  # pylint: disable=protected-access
