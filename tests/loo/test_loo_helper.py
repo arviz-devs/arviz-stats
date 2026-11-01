@@ -29,7 +29,6 @@ from arviz_stats.loo.loo_helper import (
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
-    _select_obs_by_coords,
     _select_obs_by_indices,
     _shift,
     _shift_and_cov,
@@ -331,16 +330,6 @@ def test_select_obs_by_indices():
 
     assert result.shape == (3,)
     assert_allclose(result.values, np.array([1, 3, 5]))
-
-
-def test_select_obs_by_coords():
-    data = xr.DataArray(np.arange(10), dims=["x"], coords={"x": np.arange(10)})
-
-    coord_array = xr.DataArray([5, 7, 9], dims=["x"], coords={"x": [5, 7, 9]})
-    result = _select_obs_by_coords(data, coord_array, dims=["x"], dim_name="x")
-
-    assert result.shape == (3,)
-    assert_allclose(result.values, np.array([5, 7, 9]))
 
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])

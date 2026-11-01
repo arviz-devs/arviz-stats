@@ -14,7 +14,6 @@ from arviz_stats.loo.loo_helper import (
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
-    _select_obs_by_coords,
     _select_obs_by_indices,
     _warn_pareto_k,
 )
@@ -616,8 +615,8 @@ def update_subsample(
     good_k = loo_orig.good_k
     warn_mg, _ = _warn_pareto_k(combined_pareto_k_da, loo_inputs.n_samples)
 
-    lpd_approx_sample_da = _select_obs_by_coords(
-        lpd_approx_all, combined_elpd_i_da, loo_inputs.obs_dims, "__obs__"
+    lpd_approx_sample_da = _select_obs_by_indices(
+        lpd_approx_all, combined_indices, loo_inputs.obs_dims, "__obs__"
     )
 
     elpd_loo_hat, subsampling_se, se = combined_elpd_i_da.azstats.diff_srs_estimator(
