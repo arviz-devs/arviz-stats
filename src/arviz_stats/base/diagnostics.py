@@ -202,6 +202,8 @@ class _DiagnosticsBase(_CoreBase):
 
         If `prob` defined, ess = min(qess(prob), qess(1-prob))
         """
+        if prob is None:
+            raise TypeError("Prob not defined.")
         if not isinstance(prob, Sequence):
             prob = sorted((prob, 1 - prob))
 

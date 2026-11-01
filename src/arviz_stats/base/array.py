@@ -320,7 +320,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         mcse_array = make_ufunc(mcse_func, n_output=1, n_input=1, n_dims=2, ravel=False)
         return mcse_array(ary, **func_kwargs)
 
-    def pareto_min_ss(self, ary, chain_axis=-2, draw_axis=-1, prob=0.89):
+    def pareto_min_ss(self, ary, chain_axis=-2, draw_axis=-1, prob=None):
         """Compute minimum effective sample size.
 
         See docstring of :func:`arviz_stats.pareto_min_ss` for full description of computation
@@ -331,8 +331,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         chain_axis : int, default -2
         draw_axis : int, default -1
-        prob : float, default 0.89
+        prob : float
             Probability for the tail ESS used to compute the relative efficiency.
+            Required argument.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -386,7 +387,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         r_eff=None,
         tail="both",
         log_weights=False,
-        prob=0.89,
+        prob=None,
     ):
         """Compute Pareto k-hat diagnostic.
 
@@ -398,8 +399,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         r_eff : float
         tail : str
         log_weights : bool
-        prob : float, default 0.89
-            Probability for the tail ESS used to compute `r_eff` when it is not given.
+        prob : float, optional
+            Probability for the tail ESS used to compute `r_eff`.
+            Required when `r_eff` is not given.
         """
         ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
@@ -412,7 +414,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         khat_ufunc = make_ufunc(_khat_wrapper, n_output=1, n_input=1, n_dims=2, ravel=False)
         return khat_ufunc(ary, out_shape=())
 
-    def power_scale_lw(self, ary, alpha=0, axis=-1, prob=0.89):
+    def power_scale_lw(self, ary, alpha=0, axis=-1, prob=None):
         """Compute log weights for power-scaling component by alpha.
 
         Parameters
@@ -420,8 +422,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         ary : array-like
         alpha : float, default 0
         axis : int, sequence of int or None, default -1
-        prob : float, default 0.89
+        prob : float
             Probability for the tail ESS used to compute the relative efficiency.
+            Required argument.
         """
         ary, axes = process_ary_axes(ary, axis)
         sample_shape = tuple(ary.shape[i] for i in axes)
@@ -1115,7 +1118,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return metrics_ufunc(observed, predicted)
 
     def thin_factor(
-        self, ary, target_ess=None, reduce_func="mean", chain_axis=-2, draw_axis=-1, prob=0.89
+        self, ary, target_ess=None, reduce_func="mean", chain_axis=-2, draw_axis=-1, prob=None
     ):
         """Get thinning factor over draw dimension to preserve ESS in samples or target a given ESS.
 
@@ -1129,8 +1132,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         reduce_func : {"mean", "min"}, default "mean"
         chain_axis : int, default -2
         draw_axis : int, default -1
-        prob : float, default 0.89
-            Probability for the tail ESS.
+        prob : float
+            Probability for the tail ESS. Required argument.
 
         Returns
         -------
@@ -1168,7 +1171,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             return int(np.floor(n_samples / target_ess))
         return int(np.ceil(n_samples / target_ess))
 
-    def thin(self, ary, factor="auto", chain_axis=-2, draw_axis=-1):
+    def thin(self, ary, factor="auto", chain_axis=-2, draw_axis=-1, prob=None):
         """Perform thinning on array input.
 
         Parameters
@@ -1179,6 +1182,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             effective sample size. If an integer, the thinning factor is set to that value.
         chain_axis : int, default -2
         draw_axis : int, default -1
+        prob : float, optional
+            Probability for the tail ESS. Required when `factor` is "auto".
 
         Returns
         -------
@@ -1186,7 +1191,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             Thinned array
         """
         if factor == "auto":
-            factor = self.thin_factor(ary, chain_axis=chain_axis, draw_axis=draw_axis)
+            factor = self.thin_factor(ary, chain_axis=chain_axis, draw_axis=draw_axis, prob=prob)
 
         elif isinstance(factor, (float | int)):
             factor = int(factor)

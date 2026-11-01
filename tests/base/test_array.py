@@ -279,7 +279,7 @@ class TestParetoFunctions:
     def test_pareto_min_ss(self, array_stats):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(4, 100))
-        result = array_stats.pareto_min_ss(ary)
+        result = array_stats.pareto_min_ss(ary, prob=0.89)
         assert result.shape == ()
         assert result > 0
 
@@ -300,13 +300,13 @@ class TestParetoFunctions:
     def test_pareto_khat(self, array_stats):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(4, 100))
-        result = array_stats.pareto_khat(ary)
+        result = array_stats.pareto_khat(ary, prob=0.89)
         assert result.shape == ()
 
     def test_pareto_min_ss_chain_draw_axis(self, array_stats):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(5, 4, 10, 100))
-        result = array_stats.pareto_min_ss(ary, chain_axis=1, draw_axis=3)
+        result = array_stats.pareto_min_ss(ary, chain_axis=1, draw_axis=3, prob=0.89)
         assert result.shape == (5, 10)
         assert result.min() > 0
 
@@ -328,14 +328,14 @@ class TestParetoFunctions:
     def test_pareto_khat_chain_draw_axis(self, array_stats):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(5, 4, 10, 100))
-        result = array_stats.pareto_khat(ary, chain_axis=1, draw_axis=3)
+        result = array_stats.pareto_khat(ary, chain_axis=1, draw_axis=3, prob=0.89)
         assert result.shape == (5, 10)
 
 
 class TestPowerScale:
     def test_power_scale_lw(self, array_stats, rng):
         ary = rng.normal(size=(100,))
-        result, khat = array_stats.power_scale_lw(ary, alpha=0.5)
+        result, khat = array_stats.power_scale_lw(ary, alpha=0.5, prob=0.89)
         assert result.shape == (100,)
         assert khat.shape == ()
 
@@ -343,7 +343,7 @@ class TestPowerScale:
     @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
     def test_power_scale_lw_axis(self, array_stats, rng, axis):
         ary = rng.normal(size=(10, 20, 30))
-        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=axis)
+        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=axis, prob=0.89)
         assert result.ndim == ary.ndim
         expected_shape = {
             0: (20, 30, 10),
@@ -356,7 +356,7 @@ class TestPowerScale:
     @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
     def test_power_scale_lw_axis_list(self, array_stats, rng):
         ary = rng.normal(size=(10, 20, 30, 40))
-        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=[1, 3])
+        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=[1, 3], prob=0.89)
         assert result.ndim == ary.ndim
         assert result.shape == (10, 30, 20, 40)
 
@@ -680,14 +680,14 @@ class TestThinning:
     def test_thin_factor_basic(self, array_stats):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(4, 100))
-        factor = array_stats.thin_factor(ary)
+        factor = array_stats.thin_factor(ary, prob=0.89)
         assert isinstance(factor, int)
         assert factor >= 1
 
     def test_thin_factor_target_ess(self, array_stats):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(4, 1000))
-        factor = array_stats.thin_factor(ary, target_ess=100)
+        factor = array_stats.thin_factor(ary, target_ess=100, prob=0.89)
         assert isinstance(factor, int)
         assert factor >= 1
 
@@ -695,19 +695,19 @@ class TestThinning:
     def test_thin_factor_reduce_func(self, array_stats, reduce_func):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(4, 100))
-        factor = array_stats.thin_factor(ary, reduce_func=reduce_func)
+        factor = array_stats.thin_factor(ary, reduce_func=reduce_func, prob=0.89)
         assert isinstance(factor, int)
         assert factor >= 1
 
     def test_thin_factor_invalid_reduce_func(self, array_stats):
         ary = np.empty((4, 100))
         with pytest.raises(ValueError, match="not recognized"):
-            array_stats.thin_factor(ary, reduce_func="invalid")
+            array_stats.thin_factor(ary, reduce_func="invalid", prob=0.89)
 
     def test_thin_auto(self, array_stats):
         rng = np.random.default_rng(42)
         ary = rng.normal(size=(4, 1000))
-        result = array_stats.thin(ary, factor="auto")
+        result = array_stats.thin(ary, factor="auto", prob=0.89)
         assert result.ndim == ary.ndim
         assert result.shape[0] == ary.shape[0]
         assert result.shape[1] <= ary.shape[1]

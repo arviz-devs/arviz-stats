@@ -13,7 +13,6 @@ xr = importorskip("xarray")
 
 import arviz_stats.accessors  # noqa: F401  # pylint: disable=unused-import
 from arviz_stats.base import array_stats
-from arviz_stats.base.dataarray import dataarray_stats
 
 
 @pytest.fixture(scope="module")
@@ -362,13 +361,22 @@ def test_ecdf_boundary_values(centered_eight):
     assert np.all(y_vals <= 1)
 
 
-@pytest.mark.parametrize("func", ["pareto_khat", "pareto_min_ss"])
-def test_pareto_ci_prob(centered_eight, func):
+def test_pareto_khat_tail_ess_prob(centered_eight):
+    da = centered_eight.posterior["mu"]
+    with azb.rc_context(rc={"stats.ci_prob": 0.8}):
+        khat = da.azstats.pareto_khat()
+        r_eff = da.azstats.ess(method="tail", relative=True).item()
+    assert_array_almost_equal(khat, da.azstats.pareto_khat(r_eff=r_eff))
+
+
+def test_pareto_min_ss_ci_prob(centered_eight):
     da = centered_eight.posterior["theta"]
     with azb.rc_context(rc={"stats.ci_prob": 0.8}):
-        result = getattr(da.azstats, func)()
-    expected = getattr(array_stats, func)(da.values, chain_axis=0, draw_axis=1, prob=0.8)
+        result = da.azstats.pareto_min_ss()
+    expected = array_stats.pareto_min_ss(da.values, chain_axis=0, draw_axis=1, prob=0.8)
+    other = array_stats.pareto_min_ss(da.values, chain_axis=0, draw_axis=1, prob=0.6)
     assert_array_almost_equal(result, expected)
+    assert not np.allclose(result, other)
 
 
 def test_power_scale_lw_ci_prob(centered_eight):
@@ -376,9 +384,19 @@ def test_power_scale_lw_ci_prob(centered_eight):
     with azb.rc_context(rc={"stats.ci_prob": 0.8}):
         _, khat = da.azstats.power_scale_lw(alpha=0.5, dim=["chain", "draw"])
     _, expected = array_stats.power_scale_lw(da.values, alpha=0.5, axis=(0, 1), prob=0.8)
+    _, other = array_stats.power_scale_lw(da.values, alpha=0.5, axis=(0, 1), prob=0.6)
     assert_array_almost_equal(khat, expected)
+    assert not np.allclose(khat, other)
 
 
-def test_thin_factor_array_dataarray(centered_eight):
-    da = centered_eight.posterior["mu"]
-    assert dataarray_stats.thin_factor(da) == array_stats.thin_factor(da.values)
+@pytest.mark.parametrize("func", ["pareto_khat", "pareto_min_ss", "thin_factor"])
+def test_array_tail_ess_prob_required(centered_eight, func):
+    ary = centered_eight.posterior["mu"].values
+    with pytest.raises(TypeError):
+        getattr(array_stats, func)(ary, chain_axis=0, draw_axis=1)
+
+
+def test_ess_tail_prob_not_defined(centered_eight):
+    ary = centered_eight.posterior["mu"].values
+    with pytest.raises(TypeError, match="Prob not defined"):
+        array_stats._ess_tail(ary, prob=None)  # pylint: disable=protected-access
