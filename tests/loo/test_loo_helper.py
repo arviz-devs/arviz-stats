@@ -19,7 +19,6 @@ from arviz_stats.loo.loo_helper import (
     _check_log_jacobian,
     _compute_loo_approximation,
     _diff_srs_estimator,
-    _extract_loo_data,
     _generate_subsample_indices,
     _get_log_likelihood_i,
     _get_r_eff,
@@ -203,18 +202,6 @@ def test_get_weights_and_k_i(centered_eight):
 
     for dim in pareto_k_i.dims:
         assert pareto_k_i.sizes[dim] == 1
-
-
-def test_extract_loo_data(elpd_data):
-    elpd_i_extracted, pareto_k_extracted = _extract_loo_data(elpd_data)
-
-    assert isinstance(elpd_i_extracted, xr.DataArray)
-    assert isinstance(pareto_k_extracted, xr.DataArray)
-    assert elpd_i_extracted.dims == pareto_k_extracted.dims
-    assert elpd_i_extracted.shape == pareto_k_extracted.shape
-
-    xr.testing.assert_allclose(elpd_i_extracted, elpd_data.elpd_i)
-    xr.testing.assert_allclose(pareto_k_extracted, elpd_data.pareto_k)
 
 
 def test_check_log_density(log_likelihood_dataset):
