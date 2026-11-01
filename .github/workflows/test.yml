@@ -15,7 +15,7 @@ jobs:
         job: ["minimal", "xarray", "full"]
         python-version: ["3.12", "3.13", "3.14"]
         include:
-          - job: "min-deps"
+          - job: "min_deps"
             python-version: "3.12"
           - job: "nightlies"
             python-version: "3.13"
