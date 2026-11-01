@@ -1759,9 +1759,7 @@ class _DiagnosticsBase(_CoreBase):
         true_pos = np.mean(yhat[~mask] == observed[~mask])
         mean = (true_pos + true_neg) / 2
         # Each class rate is a proportion, so its variance uses that class count
-        bls_acc_var = (
-            true_pos * (1 - true_pos) / n_pos + true_neg * (1 - true_neg) / n_neg
-        ) / 4
+        bls_acc_var = (true_pos * (1 - true_pos) / n_pos + true_neg * (1 - true_neg) / n_neg) / 4
         std_error = bls_acc_var**0.5
 
         return mean, std_error
