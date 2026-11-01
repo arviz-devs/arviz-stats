@@ -362,8 +362,16 @@ def rhat_nested(
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
-    superchain_ids : list
-        List of length ``chains`` specifying which superchain each chain belongs to.
+    superchain_ids : list, 1D array-like, str, or None, default None
+        Specifies which superchain each chain belongs to:
+
+        - If array-like or list: sequence of length ``chains`` specifying the superchain
+          each chain belongs to.
+        - If str: name of the dimension or coordinate indicating superchain membership.
+          If a dimension name is given, that dimension and the chain dimension are stacked.
+        - If None (default): when using xarray objects, the coordinates of the chain dimension
+          are used as superchain IDs. For array-like inputs, this must be provided explicitly.
+
         There should be equal numbers of chains in each superchain. All chains within
         the same superchain are assumed to have been initialized at the same point.
     chain_axis, draw_axis : int, optional

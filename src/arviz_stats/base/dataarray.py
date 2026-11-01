@@ -119,11 +119,33 @@ class BaseDataArray:
             kwargs={"method": method, "chain_axis": -2, "draw_axis": -1},
         )
 
-    def rhat_nested(self, da, superchain_ids, sample_dims=None, method="rank"):
+    def rhat_nested(self, da, superchain_ids=None, sample_dims=None, method="rank"):
         """Compute nested rhat on DataArray input."""
         dims = validate_dims(sample_dims)
         if len(dims) != 2:
             raise ValueError("dims must be of length 2 for rhat computation")
+        chain_dim, draw_dim = dims[0], dims[1]
+
+        if isinstance(superchain_ids, str):
+            if superchain_ids in da.dims:
+                da = da.stack(__chain__=(superchain_ids, chain_dim))
+                superchain_ids = da.coords[superchain_ids].values
+                dims = ["__chain__", draw_dim]
+            elif superchain_ids in da.coords:
+                superchain_ids = da.coords[superchain_ids].values
+            else:
+                raise ValueError(
+                    f"superchain_ids '{superchain_ids}' not found in DataArray "
+                    "dimensions or coordinates"
+                )
+        elif superchain_ids is None:
+            if chain_dim in da.coords:
+                superchain_ids = da.coords[chain_dim].values
+            else:
+                raise ValueError(
+                    f"superchain_ids is None and coordinate '{chain_dim}' not found in DataArray"
+                )
+
         return apply_ufunc(
             self.array_class.rhat_nested,
             da,
