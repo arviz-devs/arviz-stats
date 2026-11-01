@@ -573,6 +573,30 @@ def test_loo_mixture_pareto_k_right_tail():
     assert np.all(result.pareto_k.values < 0)
 
 
+def test_loo_mixture_observation_dim_order():
+    rng = np.random.default_rng(0)
+    log_lik = rng.normal(-1.0, 0.3, size=(4, 100, 8))
+    mu = rng.normal(size=(4, 100))
+    dt_standard = azb.from_dict(
+        {"posterior": {"mu": mu}, "log_likelihood": {"y": log_lik}},
+        dims={"y": ["school"]},
+    )
+    dt_transposed = azb.from_dict(
+        {"posterior": {"mu": mu}, "log_likelihood": {"y": np.moveaxis(log_lik, -1, 0)}},
+        dims={"y": ["school", "chain", "draw"]},
+    )
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        res_standard = loo(dt_standard, mixture=True, pointwise=True)
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        res_transposed = loo(dt_transposed, mixture=True, pointwise=True)
+
+    assert_almost_equal(res_standard.elpd, res_transposed.elpd, decimal=10)
+    assert_almost_equal(res_standard.se, res_transposed.se, decimal=10)
+    assert_almost_equal(res_standard.p, res_transposed.p, decimal=10)
+    assert_almost_equal(res_standard.elpd_i.values, res_transposed.elpd_i.values, decimal=10)
+    assert_almost_equal(res_standard.pareto_k.values, res_transposed.pareto_k.values, decimal=10)
+
+
 def test_loo_jax_arrays(centered_eight):
     """loo() must not raise when log_likelihood contains JAX arrays (immutability regression)."""
     jnp = importorskip("jax.numpy")
