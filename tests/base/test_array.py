@@ -477,6 +477,13 @@ class TestBinning:
         assert_array_equal(edges[:-1], values)
         assert_array_equal(counts, expected)
 
+    @pytest.mark.parametrize("dtype, high", [(bool, 2), (np.uint8, 2), (np.uint8, 7)])
+    def test_histogram_bool_and_unsigned(self, array_stats, rng, dtype, high):
+        ary = rng.integers(0, high, size=1000).astype(dtype)
+        counts, edges = array_stats.histogram(ary, density=False)
+        assert_array_equal(edges, np.arange(high + 1))
+        assert_array_equal(counts, np.bincount(ary.astype(int)))
+
     def test_histogram_density(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
         counts, edges = array_stats.histogram(ary, density=True)
