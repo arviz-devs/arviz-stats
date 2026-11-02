@@ -334,7 +334,6 @@ class TestParetoFunctions:
     @pytest.mark.parametrize("tail", ["both", "left"])
     def test_pareto_khat_unsigned_int(self, array_stats, tail):
         rng = np.random.default_rng(3)
-        # left skewed counts that include zeros
         ary = np.clip(np.round(200 - rng.pareto(1.5, size=(4, 500)) * 10), 0, None)
         expected = array_stats.pareto_khat(ary.astype(np.int64), tail=tail)
         result = array_stats.pareto_khat(ary.astype(np.uint8), tail=tail)
