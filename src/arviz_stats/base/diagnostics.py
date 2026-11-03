@@ -1185,8 +1185,8 @@ class _DiagnosticsBase(_CoreBase):
         """
         # JAX arrays are immutable; copy to a plain numpy array so in-place assignments work.
         ary = np.asarray(ary)
-        if ary.dtype.kind == "b":
-            ary = ary.astype(int)
+        if ary.dtype.kind in "bu":
+            ary = ary.astype(float)
         ary = ary.copy()
 
         if log_weights:
