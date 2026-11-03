@@ -106,6 +106,15 @@ def test_ess_no_chain(data_c0d1):
     assert np.all(ess > 150)
 
 
+@pytest.mark.parametrize("method", ["bulk", "identity", "mean"])
+def test_ess_constant_relative(method):
+    constant = np.full((4, 200), 3.14)
+    absolute = array_stats.ess(constant, method=method, chain_axis=0, draw_axis=1)
+    relative = array_stats.ess(constant, method=method, chain_axis=0, draw_axis=1, relative=True)
+    assert absolute == constant.size
+    assert relative == 1.0
+
+
 @pytest.mark.parametrize("axis", ["01", "20"])
 def test_rhat_axes(axis, data_c0d1, data_c2d0):
     if axis == "01":
