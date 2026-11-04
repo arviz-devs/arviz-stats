@@ -718,9 +718,8 @@ class _DiagnosticsBase(_CoreBase):
 
         l_common = logsumexp(-ary, axis=obs_axes, keepdims=True)
         mix_log_weights = -ary - l_common
-        l_common_squeezed = l_common.squeeze(axis=obs_axes)
 
-        log_norm = logsumexp(-l_common_squeezed, axis=sample_axes)
+        log_norm = logsumexp(-l_common, axis=sample_axes)
         elpd_i = log_norm - logsumexp(mix_log_weights, axis=sample_axes)
         lppd_i = logsumexp(ary, axis=sample_axes, b=1 / n_samples)
 
