@@ -139,3 +139,31 @@ def test_weight_predictions_preserves_coords():
     # ---- posterior_predictive ----
     for coord in dt.posterior_predictive.coords:
         assert coord in out.posterior_predictive.coords
+
+
+@pytest.mark.parametrize(
+    ("sample_dims", "shape", "out_dim"),
+    [
+        (["iteration", "walker"], (4, 25), "sample"),
+        (["draw"], (100,), "draw"),
+        (["sample"], (100,), "sample"),
+    ],
+)
+def test_weight_predictions_sample_dims(sample_dims, shape, out_dim):
+    dts = [
+        xr.DataTree.from_dict(
+            {
+                "posterior_predictive": xr.Dataset(
+                    {"y": ([*sample_dims, "obs"], np.full((*shape, 3), value, dtype=float))}
+                ),
+                "observed_data": xr.Dataset({"y": ("obs", np.zeros(3))}),
+            }
+        )
+        for value in (0, 1)
+    ]
+
+    out = weight_predictions(dts, weights=[0.25, 0.75], sample_dims=sample_dims, random_seed=0)
+
+    y = out.posterior_predictive["y"]
+    assert dict(y.sizes) == {out_dim: 100, "obs": 3}
+    assert y.mean().item() == pytest.approx(0.75)
