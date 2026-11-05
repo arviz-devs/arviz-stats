@@ -117,7 +117,7 @@ def ess(
 
     if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
         # Make sure the grouped dimension is added as one of the dimensions to be reduced
-        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
+        sample_dims = list(dict.fromkeys([*validate_dims(sample_dims), *data.group1d.dims]))
         return data.map(
             ess,
             sample_dims=sample_dims,
@@ -271,7 +271,7 @@ def rhat(
 
     if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
         # Make sure the grouped dimension is added as one of the dimensions to be reduced
-        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
+        sample_dims = list(dict.fromkeys([*validate_dims(sample_dims), *data.group1d.dims]))
         return data.map(
             rhat,
             sample_dims=sample_dims,
@@ -423,7 +423,7 @@ def rhat_nested(
 
     if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
         # Make sure the grouped dimension is added as one of the dimensions to be reduced
-        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
+        sample_dims = list(dict.fromkeys([*validate_dims(sample_dims), *data.group1d.dims]))
         return data.map(
             rhat_nested,
             sample_dims=sample_dims,
@@ -554,7 +554,7 @@ def mcse(
 
     if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
         # Make sure the grouped dimension is added as one of the dimensions to be reduced
-        sample_dims = list(set(validate_dims(sample_dims)).union(data.group1d.dims))
+        sample_dims = list(dict.fromkeys([*validate_dims(sample_dims), *data.group1d.dims]))
         return data.map(
             mcse,
             sample_dims=sample_dims,
