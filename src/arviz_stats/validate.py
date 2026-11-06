@@ -60,6 +60,22 @@ def validate_ci_prob(prob):
     return validate_prob(prob)
 
 
+def validate_tail_prob(prob):
+    """Validate `prob` for the tail ESS.
+
+    If `prob` is None, use the lower end of the ``stats.ci_prob`` central interval,
+    so the tail ESS is computed at the same quantiles as :func:`~arviz_stats.eti`.
+
+    Returns
+    -------
+    float
+    """
+    if prob is None:
+        prob = (1 - validate_prob(rcParams["stats.ci_prob"])) / 2
+    # 0 is allowed: it gives the same quantiles as 1
+    return validate_prob(prob, allow_0=True)
+
+
 def validate_prob(prob, allow_0=False):
     """Validate required `prob` argument."""
     if allow_0 and not 1 >= prob >= 0:

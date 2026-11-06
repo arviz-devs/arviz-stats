@@ -304,6 +304,23 @@ def test_summary_nan_and_skipna(datatree):
     assert theta_null[4:].all()
 
 
+@pytest.mark.parametrize("kind", ["diagnostics", "diagnostics_median"])
+def test_summary_ess_tail_ci_prob(datatree, kind):
+    summary_df = summary(datatree, kind=kind, ci_prob=0.5, var_names=["mu"], round_to="none")
+    posterior = datatree.posterior.dataset["mu"]
+    expected = posterior.azstats.ess(method="tail", prob=(0.25, 0.75))
+    assert_allclose(summary_df["ess_tail"].to_numpy(), float(expected))
+
+
+def test_summary_min_ss_ci_prob(datatree):
+    summary_df = summary(
+        datatree, kind="mc_diagnostics", ci_prob=0.5, var_names=["mu"], round_to="none"
+    )
+    posterior = datatree.posterior.dataset["mu"]
+    expected = posterior.azstats.pareto_min_ss(prob=0.25)
+    assert_allclose(summary_df["min_ss"].to_numpy(), float(expected))
+
+
 @pytest.mark.parametrize("ci_kind", ["hdi", "eti"])
 def test_summary_ci_kind_and_prob(datatree, ci_kind):
     summary_df = summary(datatree, ci_kind=ci_kind, ci_prob=0.89, var_names=["mu"], round_to="none")
