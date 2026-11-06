@@ -42,7 +42,7 @@ def test_thin_numpy_tuple():
 
 def test_thin_ndarray_ci_prob():
     da = azb.load_arviz_data("centered_eight").posterior["mu"]
-    with azb.rc_context(rc={"stats.ci_prob": 0.8}):
+    with azb.rc_context(rc={"stats.ci_prob": 0.7}):
         assert thin(da.values).shape == da.azstats.thin().shape
 
 

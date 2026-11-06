@@ -17,6 +17,7 @@ from arviz_stats.validate import (
     validate_dims,
     validate_dims_chain_draw_axis,
     validate_prob,
+    validate_tail_prob,
 )
 
 
@@ -79,7 +80,9 @@ class BaseDataArray:
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
         if method in ("tail", "local") and isinstance(prob, Sequence):
             prob = (validate_prob(prob[0], allow_0=True), validate_prob(prob[1]))
-        elif method in ("tail", "quantile"):
+        elif method == "tail":
+            prob = validate_tail_prob(prob)
+        elif method == "quantile":
             prob = validate_ci_prob(prob)
         return apply_ufunc(
             self.array_class.ess,
@@ -640,7 +643,7 @@ class BaseDataArray:
     def pareto_min_ss(self, da, sample_dims=None, prob=None):
         """Compute the minimum effective sample size."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
-        prob = validate_ci_prob(prob)
+        prob = validate_tail_prob(prob)
         return apply_ufunc(
             self.array_class.pareto_min_ss,
             da,
@@ -680,7 +683,7 @@ class BaseDataArray:
     ):
         """Compute Pareto k-hat diagnostic on DataArray input."""
         dims, chain_axis, draw_axis = validate_dims_chain_draw_axis(sample_dims)
-        prob = validate_ci_prob(prob)
+        prob = validate_tail_prob(prob)
         return apply_ufunc(
             self.array_class.pareto_khat,
             da,
@@ -1192,7 +1195,7 @@ class BaseDataArray:
     def power_scale_lw(self, da, alpha=0, dim=None, prob=None):
         """Compute log weights for power-scaling component by alpha."""
         dims = validate_dims(dim)
-        prob = validate_ci_prob(prob)
+        prob = validate_tail_prob(prob)
         return apply_ufunc(
             self.array_class.power_scale_lw,
             da,

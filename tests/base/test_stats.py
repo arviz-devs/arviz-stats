@@ -369,11 +369,18 @@ def test_pareto_khat_tail_ess_prob(centered_eight):
     assert_array_almost_equal(khat, da.azstats.pareto_khat(r_eff=r_eff))
 
 
+def test_ess_tail_ci_prob_interval_ends(centered_eight):
+    da = centered_eight.posterior["mu"]
+    with azb.rc_context(rc={"stats.ci_prob": 0.8}):
+        result = da.azstats.ess(method="tail")
+    assert_array_almost_equal(result, da.azstats.ess(method="tail", prob=(0.1, 0.9)))
+
+
 def test_pareto_min_ss_ci_prob(centered_eight):
     da = centered_eight.posterior["theta"]
     with azb.rc_context(rc={"stats.ci_prob": 0.8}):
         result = da.azstats.pareto_min_ss()
-    expected = array_stats.pareto_min_ss(da.values, chain_axis=0, draw_axis=1, prob=0.8)
+    expected = array_stats.pareto_min_ss(da.values, chain_axis=0, draw_axis=1, prob=0.1)
     other = array_stats.pareto_min_ss(da.values, chain_axis=0, draw_axis=1, prob=0.6)
     assert_array_almost_equal(result, expected)
     assert not np.allclose(result, other)
@@ -383,7 +390,7 @@ def test_power_scale_lw_ci_prob(centered_eight):
     da = centered_eight.posterior["mu"]
     with azb.rc_context(rc={"stats.ci_prob": 0.8}):
         _, khat = da.azstats.power_scale_lw(alpha=0.5, dim=["chain", "draw"])
-    _, expected = array_stats.power_scale_lw(da.values, alpha=0.5, axis=(0, 1), prob=0.8)
+    _, expected = array_stats.power_scale_lw(da.values, alpha=0.5, axis=(0, 1), prob=0.1)
     _, other = array_stats.power_scale_lw(da.values, alpha=0.5, axis=(0, 1), prob=0.6)
     assert_array_almost_equal(khat, expected)
     assert not np.allclose(khat, other)
