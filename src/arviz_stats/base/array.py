@@ -565,6 +565,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         range : (float, float), optional
         weights : array-like, optional
         axis : int, sequence of int or None, default -1
+            Axis or axes along which to reduce. If None, reduce over all axes.
         density : bool, default True
 
         Returns
@@ -574,6 +575,8 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             plus an extra dimension of length ``nbins``, same for `bin_edges` with
             the difference the extra dimension has length ``nbins+1``.
         """
+        if axis is None:
+            axis = np.arange(ary.ndim)
         if isinstance(axis, int):
             axis = [axis]
         axes = [ax if ax >= 0 else ary.ndim + ax for ax in axis]
