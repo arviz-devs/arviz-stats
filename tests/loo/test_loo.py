@@ -573,6 +573,21 @@ def test_loo_mixture_pareto_k_right_tail():
     assert np.all(result.pareto_k.values < 0)
 
 
+@pytest.mark.parametrize("dim_order", [("school", "chain", "draw"), ("chain", "school", "draw")])
+def test_loo_mixture_dim_order(centered_eight, dim_order):
+    data = centered_eight.copy()
+    data["log_likelihood"] = data.log_likelihood.dataset.transpose(*dim_order)
+
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        expected = loo(centered_eight, mixture=True, pointwise=True)
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        result = loo(data, mixture=True, pointwise=True)
+
+    assert_almost_equal(result.elpd, expected.elpd)
+    assert_almost_equal(result.p, expected.p)
+    assert_allclose(result.elpd_i.values, expected.elpd_i.values)
+
+
 def test_loo_jax_arrays(centered_eight):
     """loo() must not raise when log_likelihood contains JAX arrays (immutability regression)."""
     jnp = importorskip("jax.numpy")

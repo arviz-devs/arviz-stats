@@ -720,9 +720,8 @@ class _DiagnosticsBase(_CoreBase):
 
         l_common = logsumexp(-ary, axis=obs_axes, keepdims=True)
         mix_log_weights = -ary - l_common
-        l_common_squeezed = l_common.squeeze(axis=obs_axes)
 
-        log_norm = logsumexp(-l_common_squeezed, axis=sample_axes)
+        log_norm = logsumexp(-l_common, axis=sample_axes)
         elpd_i = log_norm - logsumexp(mix_log_weights, axis=sample_axes)
         lppd_i = logsumexp(ary, axis=sample_axes, b=1 / n_samples)
 
@@ -1189,8 +1188,8 @@ class _DiagnosticsBase(_CoreBase):
         """
         # JAX arrays are immutable; copy to a plain numpy array so in-place assignments work.
         ary = np.asarray(ary)
-        if ary.dtype.kind == "b":
-            ary = ary.astype(int)
+        if ary.dtype.kind in "bu":
+            ary = ary.astype(float)
         ary = ary.copy()
 
         if log_weights:
