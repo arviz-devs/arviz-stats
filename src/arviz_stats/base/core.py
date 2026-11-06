@@ -206,7 +206,7 @@ class _CoreBase:
         if not values.size:
             return np.nan, np.nan, np.nan
 
-        if dtype == "i":
+        if dtype in "iub":
             x_min = values.min().astype(int)
             x_max = values.max().astype(int)
         else:
@@ -215,7 +215,7 @@ class _CoreBase:
 
         if isinstance(bins, int):
             width = (x_max - x_min) / bins
-            if dtype == "i":
+            if dtype in "iub":
                 width = max(1, width)
             return x_min, x_max, width
 
@@ -231,7 +231,7 @@ class _CoreBase:
         corr_fd = max(width_fd, width_sqrt / 2)
 
         width = min(width_sturges, corr_fd)
-        if dtype == "i":
+        if dtype in "iub":
             width = np.round(max(1, width)).astype(int)
             if x_max > x_min:
                 x_max = x_min + ((x_max - x_min) // width + 1) * width
@@ -280,7 +280,7 @@ class _CoreBase:
 
         x_min, x_max, width = self._get_bininfo(values, bins)
 
-        if dtype == "i":
+        if dtype in "iub":
             bins = np.arange(x_min, values.max() + width + 1, width)
         else:
             if np.isclose(x_min, x_max):
@@ -293,6 +293,8 @@ class _CoreBase:
     def _histogram(self, ary, bins=None, range=None, weights=None, density=True):
         if bins is None:
             bins = self._get_bins(ary)
+        if ary.dtype == bool:  # np.histogram warns on boolean input
+            ary = ary.astype(np.uint8)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
 
     def _histogram2d(self, x, y, bins=10, range=None, weights=None, density=True):
