@@ -443,6 +443,28 @@ def test_logsumexp_loo_dtype(rng, dtype):
     assert result.dtype == dtype
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [np.uint8, np.uint16, np.uint32, np.uint64, bool],
+)
+def test_logsumexp_unsigned_and_bool_dtypes(dtype):
+    ary = np.array([1, 2, 3], dtype=dtype)
+    scipy_result = logsumexp(ary)
+    arviz_result = _logsumexp(ary)
+
+    assert_array_almost_equal(scipy_result, arviz_result, decimal=10)
+    assert isinstance(arviz_result, (float, np.floating))
+
+
+def test_logsumexp_unsigned_multidim():
+    ary = np.array([[1, 2, 3], [0, 1, 0]], dtype=np.uint32)
+    scipy_result = logsumexp(ary, axis=1)
+    arviz_result = _logsumexp(ary, axis=1)
+
+    assert_array_almost_equal(scipy_result, arviz_result, decimal=10)
+    assert arviz_result.shape == (2,)
+
+
 def test_logsumexp_loo_constant():
     n_chains, n_draws, n_obs = 4, 500, 10
 
