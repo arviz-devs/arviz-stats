@@ -126,6 +126,56 @@ def test_rhat_nested_dataset_single_draw():
     assert np.all(np.isnan(rank["b"]))
 
 
+def test_rhat_nested_chain_coordinates():
+    rng = np.random.default_rng(42)
+    da = xr.DataArray(
+        rng.normal(size=(4, 20)),
+        dims=["chain", "draw"],
+        coords={"chain": [0, 0, 1, 1], "draw": np.arange(20)},
+    )
+    result_default = rhat_nested(da)
+    result_explicit = rhat_nested(da, superchain_ids=[0, 0, 1, 1])
+    assert isinstance(result_default, xr.DataArray)
+    assert np.isclose(result_default.values, result_explicit.values)
+
+
+def test_rhat_nested_dimension_string():
+    rng = np.random.default_rng(42)
+    data = rng.normal(size=(2, 3, 20))
+    da_3d = xr.DataArray(
+        data,
+        dims=["subchain", "chain", "draw"],
+        coords={"subchain": [0, 1], "chain": [0, 1, 2], "draw": np.arange(20)},
+    )
+    result_dim = rhat_nested(da_3d, superchain_ids="subchain")
+    assert isinstance(result_dim, xr.DataArray)
+
+    # Compare with equivalent 2D representation
+    da_2d = xr.DataArray(
+        data.reshape(6, 20),
+        dims=["chain", "draw"],
+        coords={"chain": [0, 0, 0, 1, 1, 1], "draw": np.arange(20)},
+    )
+    result_2d = rhat_nested(da_2d)
+    assert np.isclose(result_dim.values, result_2d.values)
+
+
+def test_rhat_nested_invalid_superchain_str():
+    da = xr.DataArray(
+        np.zeros((4, 20)),
+        dims=["chain", "draw"],
+        coords={"chain": [0, 1, 2, 3], "draw": np.arange(20)},
+    )
+    with pytest.raises(ValueError, match="not found in DataArray dimensions or coordinates"):
+        rhat_nested(da, superchain_ids="nonexistent")
+
+
+def test_rhat_nested_missing_chain_coord():
+    da = xr.DataArray(np.zeros((4, 20)), dims=["chain", "draw"])
+    with pytest.raises(ValueError, match="coordinate 'chain' not found in DataArray"):
+        rhat_nested(da)
+
+
 def test_mcse_datatree_returns_datatree(centered_eight):
     result = mcse(centered_eight, group="posterior")
     assert isinstance(result, xr.DataTree)
