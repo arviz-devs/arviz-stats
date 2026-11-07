@@ -3,6 +3,7 @@
 # pylint: disable=redefined-outer-name
 import numpy as np
 import pytest
+from numpy.testing import assert_allclose
 
 from .helpers import importorskip
 
@@ -210,6 +211,23 @@ def test_point_interval_unique_multiple_vars(categorical_datatree):
     assert "y" in result.data_vars
     unique_values = result["y"].values[0]
     assert len(unique_values) > 1
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize("obs_shape, obs_dims", [((), []), ((5,), ["obs"]), ((2, 3), ["a", "b"])])
+def test_point_interval_unique_counts_per_draw(obs_shape, obs_dims):
+    rng = np.random.default_rng(0)
+    posterior_pred = rng.integers(0, 3, (2, 10, *obs_shape))
+    dt = azb.from_dict({"posterior_predictive": {"y": posterior_pred}}, dims={"y": obs_dims})
+    result = point_interval_unique(
+        dt.posterior_predictive.dataset,
+        ci_prob=0.94,
+        point_estimate="mean",
+    )
+    draws = posterior_pred.reshape(20, -1)
+    expected = [np.mean(np.sum(draws == value, axis=1)) for value in range(3)]
+    assert_allclose(result["y"].sel(plot_axis="x").values, [0, 1, 2])
+    assert_allclose(result["y"].sel(plot_axis="y").values, expected)
 
 
 def test_point_unique(binary_datatree):
