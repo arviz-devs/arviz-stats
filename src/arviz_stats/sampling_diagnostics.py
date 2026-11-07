@@ -647,6 +647,7 @@ def diagnose(
     bfmi_threshold=0.3,
     show_diagnostics=True,
     return_diagnostics=False,
+    stats=None,
 ):
     """Run comprehensive diagnostic checks for MCMC sampling.
 
@@ -697,6 +698,9 @@ def diagnose(
     return_diagnostics : bool, default False
         If True, return a dictionary with detailed diagnostic results in addition
         to the boolean has_errors flag.
+    stats : dict, optional
+        Dictionary of pre-computed diagnostics. Can contain keys "bfmi", "ess",
+        and "rhat". If a key is provided, the corresponding diagnostic will not be computed.
 
     Returns
     -------
@@ -818,7 +822,12 @@ def diagnose(
 
     # Check E-BFMI
     if sample_stats_available and "energy" in sample_stats:
-        bfmi_values = bfmi(dt, sample_dims=sample_dims)["energy"]
+        if stats is not None and "bfmi" in stats:
+            bfmi_values = stats["bfmi"]
+            if hasattr(bfmi_values, "dataset"):
+                bfmi_values = bfmi_values.dataset["energy"]
+        else:
+            bfmi_values = bfmi(dt, sample_dims=sample_dims)["energy"]
 
         low_bfmi = bfmi_values < bfmi_threshold
         chain_dim = low_bfmi.dims[0]
@@ -845,26 +854,30 @@ def diagnose(
             messages.append("E-BFMI satisfactory for all chains.")
 
     # Check ESS
-    ess_bulk = ess(
-        dt,
-        sample_dims=sample_dims,
-        group=group,
-        var_names=var_names,
-        filter_vars=filter_vars,
-        coords=coords,
-        method="bulk",
-    )
-    ess_tail = ess(
-        dt,
-        sample_dims=sample_dims,
-        group=group,
-        var_names=var_names,
-        filter_vars=filter_vars,
-        coords=coords,
-        method="tail",
-    )
-
-    ess_min = np.minimum(ess_bulk.dataset, ess_tail.dataset)
+    if stats is not None and "ess" in stats:
+        ess_min = stats["ess"]
+        if hasattr(ess_min, "dataset"):
+            ess_min = ess_min.dataset
+    else:
+        ess_bulk = ess(
+            dt,
+            sample_dims=sample_dims,
+            group=group,
+            var_names=var_names,
+            filter_vars=filter_vars,
+            coords=coords,
+            method="bulk",
+        )
+        ess_tail = ess(
+            dt,
+            sample_dims=sample_dims,
+            group=group,
+            var_names=var_names,
+            filter_vars=filter_vars,
+            coords=coords,
+            method="tail",
+        )
+        ess_min = np.minimum(ess_bulk.dataset, ess_tail.dataset)
     ess_ratio = ess_min / total_samples
     bad_ess_params = [var for var in ess_ratio.data_vars if (ess_ratio[var] < ess_min_ratio).any()]
 
@@ -916,26 +929,30 @@ def diagnose(
             messages.append("Effective sample size satisfactory for all parameters.")
 
     # Check R-hat
-    rhat_rank = rhat(
-        dt,
-        sample_dims=sample_dims,
-        group=group,
-        var_names=var_names,
-        filter_vars=filter_vars,
-        coords=coords,
-        method="rank",
-    )
-    rhat_folded = rhat(
-        dt,
-        sample_dims=sample_dims,
-        group=group,
-        var_names=var_names,
-        filter_vars=filter_vars,
-        coords=coords,
-        method="folded",
-    )
-
-    rhat_max_vals = np.maximum(rhat_rank.dataset, rhat_folded.dataset)
+    if stats is not None and "rhat" in stats:
+        rhat_max_vals = stats["rhat"]
+        if hasattr(rhat_max_vals, "dataset"):
+            rhat_max_vals = rhat_max_vals.dataset
+    else:
+        rhat_rank = rhat(
+            dt,
+            sample_dims=sample_dims,
+            group=group,
+            var_names=var_names,
+            filter_vars=filter_vars,
+            coords=coords,
+            method="rank",
+        )
+        rhat_folded = rhat(
+            dt,
+            sample_dims=sample_dims,
+            group=group,
+            var_names=var_names,
+            filter_vars=filter_vars,
+            coords=coords,
+            method="folded",
+        )
+        rhat_max_vals = np.maximum(rhat_rank.dataset, rhat_folded.dataset)
     bad_rhat_params = [
         var for var in rhat_max_vals.data_vars if (rhat_max_vals[var] > rhat_max).any()
     ]
