@@ -265,3 +265,24 @@ def test_diagnose_no_chains(centered_eight):
             show_diagnostics=False,
             return_diagnostics=True,
         )
+
+def test_diagnose_with_precomputed_stats():
+    from arviz_base import load_arviz_data
+    import arviz_stats as azs
+    
+    data = load_arviz_data("centered_eight")
+    
+    # Compute a custom rhat to pass in
+    custom_rhat = azs.rhat(data, method="identity")
+    
+    # Run diagnose with the custom stats
+    _, diagnostics = azs.diagnose(
+        data, 
+        stats={"rhat": custom_rhat}, 
+        return_diagnostics=True, 
+        show_diagnostics=False
+    )
+    
+    # Assert that the custom rhat was used
+    assert "rhat" in diagnostics
+    assert diagnostics["rhat"]["rhat_values"] is not None
