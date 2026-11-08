@@ -141,7 +141,7 @@ class _DiagnosticsBase(_CoreBase):
         """Compute the effective sample size for a 2D array."""
         ary = np.asarray(ary, dtype=float)
         if (np.max(ary) - np.min(ary)) < np.finfo(float).resolution:  # pylint: disable=no-member
-            return ary.size
+            return 1.0 if relative else ary.size
         n_chain, n_draw = ary.shape
         acov = self.autocov(ary, axis=1)
         chain_mean = ary.mean(axis=1)

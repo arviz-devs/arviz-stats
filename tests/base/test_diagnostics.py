@@ -333,6 +333,7 @@ def test_ess_too_many_probs(rng):
 
 def test_ess_constant():
     assert array_stats.ess(np.ones((4, 100))) == 400
+    assert array_stats.ess(np.ones((4, 100)), relative=True) == 1
 
 
 def test_ess_bad_method(rng):
