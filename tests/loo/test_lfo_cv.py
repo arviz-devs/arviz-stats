@@ -241,21 +241,21 @@ def test_lfo_cv_approx_skips_refits(varying_lfo_wrapper, lfo_varying_data):
     result = lfo_cv(
         lfo_varying_data,
         varying_lfo_wrapper,
-        min_observations=8,
+        min_observations=3,
         forecast_horizon=2,
         method="approx",
-        k_threshold=0.7,
+        k_threshold=0.5,
         pointwise=True,
     )
 
-    assert result.n_refits < result.n_data_points
+    assert 0 < result.n_refits < result.n_data_points
     assert result.pareto_k.sizes["time"] == result.n_data_points
     np.testing.assert_array_equal(
         result.pareto_k.coords["time"].values, result.elpd_i.coords["time"].values
     )
-    finite_k = result.pareto_k.values[np.isfinite(result.pareto_k.values)]
-    assert finite_k.size > 0
-    assert np.all(finite_k <= 0.7)
+    assert np.isnan(result.pareto_k.values[0])
+    above = result.pareto_k.coords["time"].values[result.pareto_k.values > 0.5]
+    np.testing.assert_array_equal(above, result.refits)
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
