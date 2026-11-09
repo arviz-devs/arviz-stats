@@ -206,13 +206,15 @@ def weight_predictions(
     new_samples = (np.min(len_data) * weights).astype(int)
 
     new_idatas = [
-        extract(dt, group=group, num_samples=samples, random_seed=random_seed).reset_coords()
+        extract(
+            dt, group=group, sample_dims=sample_dims, num_samples=samples, random_seed=random_seed
+        ).reset_coords()
         for samples, dt in zip(new_samples, dts)
     ]
 
     weighted_samples = xr.DataTree.from_dict(
         {
-            group: xr.concat(new_idatas, dim="sample"),
+            group: xr.concat(new_idatas, dim="sample" if len(sample_dims) > 1 else sample_dims[0]),
             "observed_data": dts[0].observed_data,
         }
     )
