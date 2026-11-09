@@ -265,3 +265,13 @@ def test_diagnose_no_chains(centered_eight):
             show_diagnostics=False,
             return_diagnostics=True,
         )
+
+
+@pytest.mark.parametrize("func", [ess, rhat, mcse])
+def test_groupby_keeps_sample_dims_order(centered_eight, func):
+    # the chain/draw order must not depend on PYTHONHASHSEED
+    da = centered_eight.posterior["mu"]
+    da = da.assign_coords(run=("chain", ["a", "a", "b", "b"]))
+    result = func(da.groupby("run"))
+    expected = [func(da.isel(chain=chains)) for chains in ([0, 1], [2, 3])]
+    np.testing.assert_allclose(result.values, expected)

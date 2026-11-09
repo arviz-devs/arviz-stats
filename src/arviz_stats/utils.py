@@ -491,7 +491,7 @@ def _apply_multi_input_function(
     dims = validate_dims(dims)
     if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):
         # Make sure the grouped dimension is added as one of the dimensions to be reduced
-        dims = list(set(dims).union(data.group1d.dims))
+        dims = list(dict.fromkeys([*dims, *data.group1d.dims]))
 
         if isinstance(data, xr.core.groupby.DataArrayGroupBy):
 
