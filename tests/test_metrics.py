@@ -346,3 +346,52 @@ def test_kl_divergence_custom_seed(fake_dt):
 def test_kl_divergence_not_shared_vars(fake_dt):
     with pytest.raises(ValueError, match="No shared variable names found"):
         kl_divergence(fake_dt.posterior["a"], fake_dt.posterior["b"], num_samples=100)
+
+
+@pytest.mark.parametrize(
+    ("metric", "draws"),
+    [(kl_divergence, (7, 12)), (wasserstein, (7, 12)), (kl_divergence, (270, 310))],
+)
+def test_distribution_distance_defaults_to_available_samples(metric, draws):
+    """Use the smaller sample count when the default cap cannot be reached."""
+    rng = np.random.default_rng(554)
+    data1 = azb.from_dict({"posterior": {"mu": rng.normal(size=(2, draws[0]))}})
+    data2 = azb.from_dict({"posterior": {"mu": rng.normal(0.5, size=(2, draws[1]))}})
+    expected = metric(data1, data2, num_samples=min(500, 2 * min(draws)), round_to="none")
+
+    assert np.isfinite(expected)
+    assert_almost_equal(metric(data1, data2, round_to="none"), expected)
+    assert_almost_equal(metric(data1, data2, num_samples=None, round_to="none"), expected)
+
+
+@pytest.mark.parametrize("metric", [kl_divergence, wasserstein])
+def test_distribution_distance_rejects_explicit_oversampling(metric):
+    """An explicit sample count is not silently clamped."""
+    data1 = azb.from_dict({"posterior": {"mu": np.arange(12.0).reshape(2, 6)}})
+    data2 = azb.from_dict({"posterior": {"mu": np.arange(16.0).reshape(2, 8)}})
+
+    with pytest.raises(ValueError, match="larger sample than population"):
+        metric(data1, data2, num_samples=13)
+
+
+@pytest.mark.parametrize("metric", [kl_divergence, wasserstein])
+def test_distribution_distance_default_samples_with_custom_group_and_dims(metric):
+    """Count samples from the requested group and sample dimensions."""
+    dims = ["replica", "iteration"]
+    rng = np.random.default_rng(555)
+    data1 = azb.from_dict({"prior": {"mu": rng.normal(size=(2, 6))}}, sample_dims=dims)
+    data2 = azb.from_dict({"prior": {"mu": rng.normal(0.5, size=(2, 8))}}, sample_dims=dims)
+    options = {"group": "prior", "sample_dims": dims, "round_to": "none"}
+
+    expected = metric(data1, data2, num_samples=12, **options)
+    assert_almost_equal(metric(data1, data2, **options), expected)
+
+
+def test_distribution_distance_single_available_sample():
+    """Wasserstein can use one sample, while KL needs a second neighbor."""
+    data1 = azb.from_dict({"posterior": {"mu": np.array([[0.0]])}})
+    data2 = azb.from_dict({"posterior": {"mu": np.array([[1.0]])}})
+
+    assert_almost_equal(wasserstein(data1, data2, round_to="none"), 1.0)
+    with pytest.raises(ValueError, match="KL divergence requires at least two samples"):
+        kl_divergence(data1, data2)

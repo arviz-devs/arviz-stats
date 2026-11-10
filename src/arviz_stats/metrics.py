@@ -1,9 +1,17 @@
 """Collection of metrics for evaluating the performance of probabilistic models."""
 
 from collections import namedtuple
+from math import prod
 
 import numpy as np
-from arviz_base import convert_to_datatree, dataset_to_dataarray, extract, rcParams
+from arviz_base import (
+    convert_to_dataset,
+    convert_to_datatree,
+    dataset_to_dataarray,
+    extract,
+    rcParams,
+)
+from arviz_base.validate import validate_sample_dims
 from scipy.spatial import cKDTree
 from scipy.stats import wasserstein_distance, wasserstein_distance_nd
 
@@ -382,7 +390,7 @@ def kl_divergence(
     group="posterior",
     var_names=None,
     sample_dims=None,
-    num_samples=500,
+    num_samples=None,
     round_to=None,
     random_seed=212480,
 ):
@@ -405,8 +413,9 @@ def kl_divergence(
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
-    num_samples : int
-        Number of samples to use for the distance calculation. Default is 500.
+    num_samples : int or None, optional
+        Number of samples to use from each input. If None, use up to 500 samples
+        from each input, limited by the smaller of the two available sample counts.
     round_to: int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
@@ -453,6 +462,8 @@ def kl_divergence(
         random_seed=random_seed,
     )
 
+    if dist1.shape[0] < 2:
+        raise ValueError("KL divergence requires at least two samples per input.")
     kl_d = _kld(dist1, dist2)
 
     return round_num(kl_d, round_to)
@@ -465,7 +476,7 @@ def wasserstein(
     var_names=None,
     sample_dims=None,
     joint=True,
-    num_samples=500,
+    num_samples=None,
     round_to=None,
     random_seed=212480,
 ):
@@ -487,8 +498,9 @@ def wasserstein(
     joint : bool, default True
         Whether to compute Wasserstein distance for the joint distribution (True)
         or over the marginals (False)
-    num_samples : int
-        Number of samples to use for the distance calculation. Default is 500.
+    num_samples : int or None, optional
+        Number of samples to use from each input. If None, use up to 500 samples
+        from each input, limited by the smaller of the two available sample counts.
     round_to: int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
@@ -558,8 +570,14 @@ def _prepare_distribution_pair(
     """Prepare the distribution pair for metric calculations."""
     data1 = convert_to_datatree(data1)
     data2 = convert_to_datatree(data2)
-    if sample_dims is None:
-        sample_dims = rcParams["data.sample_dims"]
+    sample_dims = validate_sample_dims(sample_dims)
+    if num_samples is None:
+        available = []
+        for data in (data1, data2):
+            dataset = convert_to_dataset(data, group=group)
+            dims = validate_sample_dims(sample_dims, data=dataset)
+            available.append(prod(dataset.sizes[dim] for dim in dims))
+        num_samples = min(500, *available)
 
     dist1 = _extract_and_reindex(
         data1,
