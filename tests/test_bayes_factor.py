@@ -141,3 +141,13 @@ def test_bayes_factor_narrow_distribution():
         result = bayes_factor(data=data, var_names=["narrow_var"], ref_vals=[0])
         assert result["narrow_var"].sel(bf_type="BF10") > 0
         assert result["narrow_var"].sel(bf_type="BF01") > 0
+
+
+@pytest.mark.parametrize(
+    "ref_vals", [np.int64(1), np.float32(1), np.array([1, 1]), [np.int32(1), np.float32(1)]]
+)
+def test_bayes_factor_numpy_ref_vals(fake_dt, ref_vals):
+    result = bayes_factor(data=fake_dt, var_names=["a", "b"], ref_vals=ref_vals)
+    expected = bayes_factor(data=fake_dt, var_names=["a", "b"], ref_vals=1)
+    for var in ["a", "b"]:
+        np.testing.assert_allclose(result[var].values, expected[var].values)
