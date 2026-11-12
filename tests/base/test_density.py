@@ -96,6 +96,17 @@ class TestBandwidthEstimators:
         bw = density.get_bw(x, bw_value)
         assert bw == bw_value
 
+    @pytest.mark.parametrize("bw_value", [np.float32(0.5), np.int64(1), np.float16(2.0)])
+    def test_get_bw_numpy_scalar(self, density, rng, bw_value):
+        x = rng.normal(size=100)
+        bw = density.get_bw(x, bw_value)
+        assert bw == bw_value
+
+    def test_get_bw_negative_numpy_scalar(self, density, rng):
+        x = rng.normal(size=100)
+        with pytest.raises(ValueError, match="Numeric `bw` must be positive"):
+            density.get_bw(x, np.float32(-0.5))
+
     def test_get_bw_invalid_bool(self, density, rng):
         x = rng.normal(size=100)
         with pytest.raises(ValueError, match="must not be of type `bool`"):
@@ -458,6 +469,11 @@ class TestKDECircular:
         x = rng.vonmises(0, 2, 100)
         with pytest.raises(ValueError, match="must be positive"):
             density.kde_circular(x, bw=-1.0)
+
+    def test_kde_circular_negative_numpy_scalar_bw(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
+        with pytest.raises(ValueError, match="Numeric `bw` must be positive"):
+            density.kde_circular(x, bw=np.float32(-1.0))
 
     def test_kde_circular_invalid_bw_string(self, density, rng):
         x = rng.vonmises(0, 2, 100)
