@@ -382,7 +382,7 @@ def kl_divergence(
     group="posterior",
     var_names=None,
     sample_dims=None,
-    num_samples=500,
+    num_samples=None,
     round_to=None,
     random_seed=212480,
 ):
@@ -405,8 +405,9 @@ def kl_divergence(
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
-    num_samples : int
-        Number of samples to use for the distance calculation. Default is 500.
+    num_samples : int or None, optional
+        Number of samples to use for the distance calculation. Default is None, which will use
+        all available samples.
     round_to: int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
@@ -597,33 +598,34 @@ def _prepare_distribution_pair(
 
 
 def _extract_and_reindex(data, group, var_names, sample_dims, num_samples, random_seed):
+    extracted = extract(
+        data,
+        group=group,
+        sample_dims=sample_dims,
+        var_names=var_names,
+        num_samples=num_samples,
+        random_seed=random_seed,
+        keep_dataset=True,
+    )
+    n_samples = extracted.sizes["sample"]
     return (
-        extract(
-            data,
-            group=group,
-            sample_dims=sample_dims,
-            var_names=var_names,
-            num_samples=num_samples,
-            random_seed=random_seed,
-            keep_dataset=True,
-        )
-        .reset_index("sample")
+        extracted.reset_index("sample")
         .drop_vars(sample_dims)
-        .assign_coords(sample=range(num_samples))
+        .assign_coords(sample=range(n_samples))
     )
 
 
 def _kld(ary0, ary1):
     """Kullback-Leibler divergence approximation.
 
-    Compute KL-divergence using equation 14 from [1]_. Assumes both arrays
-    are of the same shape.
+    Compute KL-divergence using equation 14 from [1]_.
 
     Parameters
     ----------
-    ary0, ary1 : (N, M) array-like
-        Samples of the input distributions. ``N`` represents the number of samples (e.g. posterior
-        samples) and ``M`` the number of outputs (e.g. number of variables in the posterior)
+    ary0, ary1 : (N, M) and (K, M) array-like
+        Samples of the input distributions. ``N`` and ``K`` represent the number of samples
+        (e.g. posterior samples) and ``M`` the number of outputs (e.g. number of variables
+        in the posterior).
 
     Returns
     -------
@@ -639,14 +641,14 @@ def _kld(ary0, ary1):
         preprint https://www.tsc.uc3m.es/~fernando/bare_conf3.pdf
 
     """
-    # for discrete data we need to smooth the samples to avoid numerical errors
-    # here we are adding a small noise to all samples, differences should be negligible
-    # but we may want to do something more sophisticated in the future
     rng = np.random.default_rng(0)
-    ary0 = ary0 + rng.normal(0, ary0.std(axis=0) / 1e6, size=ary0.shape)
-    ary1 = ary1 + rng.normal(0, ary1.std(axis=0) / 1e6, size=ary1.shape)
+    ss_0, dim = ary0.shape
+    ss_1 = ary1.shape[0]
 
-    samples, dim = ary0.shape
+    # For exact ties (discrete data or MCMC draws) we need to smooth the samples to avoid numerical
+    # errors. The jitter depends on the standard deviation and the sample size.
+    ary0 = ary0 + rng.normal(0, (ary0.std(axis=0) * ss_0 ** (-0.25)), size=ary0.shape)
+    ary1 = ary1 + rng.normal(0, (ary1.std(axis=0) * ss_1 ** (-0.25)), size=ary1.shape)
 
     # Build KD-trees for X and Y
     kd_tree_ary0 = cKDTree(ary0)
@@ -659,7 +661,7 @@ def _kld(ary0, ary1):
     # we skip the trivial first nearest neighbour distance
     s_k = kd_tree_ary0.query(ary0, k=2)[0][:, 1]
 
-    kl_div = (dim / samples) * np.sum(np.log(r_k / s_k)) + np.log(samples / (samples - 1))
+    kl_div = (dim / ss_0) * np.sum(np.log(r_k / s_k)) + np.log(ss_1 / (ss_0 - 1))
     # Due to numerical errors and for very similar samples we can get negative values
     kl_div = max(0.0, kl_div.item())
 

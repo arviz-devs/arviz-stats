@@ -323,26 +323,34 @@ def test_wasserstein_not_shared_vars(fake_dt):
 
 
 def test_kl_divergence(fake_dt):
-    result = kl_divergence(fake_dt, fake_dt, num_samples=100)
+    result = kl_divergence(fake_dt, fake_dt)
     assert_array_almost_equal(result, 0.0, decimal=5)
 
 
 def test_kl_divergence_var_names(fake_dt):
-    result = kl_divergence(fake_dt, fake_dt, var_names="a", num_samples=100)
+    result = kl_divergence(fake_dt, fake_dt, var_names="a")
     assert_array_almost_equal(result, 0.0, decimal=5)
 
 
 def test_kl_divergence_no_rounding(fake_dt):
-    result = kl_divergence(fake_dt, fake_dt, num_samples=100, round_to="None")
+    result = kl_divergence(fake_dt, fake_dt, round_to="None")
     assert isinstance(result, float)
 
 
 def test_kl_divergence_custom_seed(fake_dt):
-    result1 = kl_divergence(fake_dt, fake_dt, num_samples=100, random_seed=42)
-    result2 = kl_divergence(fake_dt, fake_dt, num_samples=100, random_seed=42)
+    result1 = kl_divergence(fake_dt, fake_dt, random_seed=42)
+    result2 = kl_divergence(fake_dt, fake_dt, random_seed=42)
     assert_almost_equal(result1, result2)
 
 
 def test_kl_divergence_not_shared_vars(fake_dt):
     with pytest.raises(ValueError, match="No shared variable names found"):
-        kl_divergence(fake_dt.posterior["a"], fake_dt.posterior["b"], num_samples=100)
+        kl_divergence(fake_dt.posterior["a"], fake_dt.posterior["b"])
+
+
+def test_kl_divergence_repeated_draws():
+    rng = np.random.default_rng(0)
+    draws = np.repeat(rng.normal(size=(4, 250)), 2, axis=1)
+    repeated = azb.from_dict({"posterior": {"mu": draws}})
+    reference = azb.from_dict({"posterior": {"mu": rng.normal(size=(4, 500))}})
+    assert kl_divergence(repeated, reference) < 0.1
