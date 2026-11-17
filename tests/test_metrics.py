@@ -346,3 +346,11 @@ def test_kl_divergence_custom_seed(fake_dt):
 def test_kl_divergence_not_shared_vars(fake_dt):
     with pytest.raises(ValueError, match="No shared variable names found"):
         kl_divergence(fake_dt.posterior["a"], fake_dt.posterior["b"])
+
+
+def test_kl_divergence_repeated_draws():
+    rng = np.random.default_rng(0)
+    draws = np.repeat(rng.normal(size=(4, 250)), 2, axis=1)
+    repeated = azb.from_dict({"posterior": {"mu": draws}})
+    reference = azb.from_dict({"posterior": {"mu": rng.normal(size=(4, 500))}})
+    assert kl_divergence(repeated, reference) < 0.1

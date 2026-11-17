@@ -650,8 +650,6 @@ def _kld(ary0, ary1):
     ary0 = ary0 + rng.normal(0, (ary0.std(axis=0) * ss_0 ** (-0.25)), size=ary0.shape)
     ary1 = ary1 + rng.normal(0, (ary1.std(axis=0) * ss_1 ** (-0.25)), size=ary1.shape)
 
-    ss_0, dim = ary0.shape
-
     # Build KD-trees for X and Y
     kd_tree_ary0 = cKDTree(ary0)
     kd_tree_ary1 = cKDTree(ary1)
