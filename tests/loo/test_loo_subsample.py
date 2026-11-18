@@ -620,6 +620,36 @@ def test_update_subsample_multidim_obs():
     assert_allclose(updated.subsampling_se, expected.subsampling_se)
 
 
+def test_update_subsample_reuses_approximation(centered_eight_with_sigma):
+    log_jacobian = -np.log1p(np.abs(centered_eight_with_sigma.observed_data["obs"]))
+    initial = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 3]),
+        var_name="obs",
+        pointwise=True,
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        log_jacobian=log_jacobian,
+    )
+    updated = update_subsample(
+        initial, centered_eight_with_sigma, observations=np.array([1, 5]), var_name="obs"
+    )
+    expected = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 1, 3, 5]),
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        log_jacobian=log_jacobian,
+    )
+
+    assert_allclose(updated.elpd, expected.elpd)
+    assert_allclose(updated.se, expected.se)
+    assert_allclose(updated.subsampling_se, expected.subsampling_se)
+
+
 def test_update_subsample_observations_none(centered_eight_with_sigma):
     initial = loo_subsample(
         centered_eight_with_sigma,

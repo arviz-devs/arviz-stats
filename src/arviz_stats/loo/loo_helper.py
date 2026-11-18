@@ -612,7 +612,9 @@ def _prepare_update_subsample(
         if len(overlap) > 0:
             raise ValueError(f"New indices {overlap} overlap with existing indices.")
 
-    if method == "lpd":
+    if method is None:
+        lpd_approx_all = None
+    elif method == "lpd":
         if log_lik_fn is None and model is None:
             lpd_approx_all = logsumexp(
                 log_likelihood, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
