@@ -434,9 +434,9 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         chain_axis : int, default -2
         draw_axis : int, default -1
         """
-        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
-        lower_w, _, _ = process_chain_none(lower_w, chain_axis, draw_axis)
-        upper_w, _, _ = process_chain_none(upper_w, chain_axis, draw_axis)
+        ary, lower_w, upper_w, chain_axis, draw_axis = process_chain_none_multi(
+            ary, lower_w, upper_w, chain_axis=chain_axis, draw_axis=draw_axis
+        )
         ary, _ = process_ary_axes(ary, [chain_axis, draw_axis])
         lower_w, _ = process_ary_axes(lower_w, [chain_axis, draw_axis])
         upper_w, _ = process_ary_axes(upper_w, [chain_axis, draw_axis])

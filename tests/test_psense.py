@@ -200,6 +200,20 @@ def test_psense_sample_dims():
     assert "sigma" in result.data_vars
 
 
+@pytest.mark.parametrize("group", ["prior", "likelihood"])
+def test_psense_single_sample_dim(group):
+    stacked_dt = uni_dt.copy()
+    for group_name in ("posterior", "log_prior", "log_likelihood"):
+        stacked_dt[group_name] = (
+            uni_dt[group_name]
+            .dataset.stack(sample=("chain", "draw"))
+            .reset_index("sample", drop=True)
+        )
+    result = psense(stacked_dt, group=group, sample_dims="sample")
+    expected = psense(uni_dt, group=group)
+    assert_almost_equal(result.to_dataarray().values, expected.to_dataarray().values)
+
+
 def test_psense_summary_alphas():
     psense_df = psense_summary(uni_dt, alphas=(0.95, 1.05))
     assert "prior" in psense_df.columns

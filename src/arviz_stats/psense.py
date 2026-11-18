@@ -85,6 +85,7 @@ def psense(
         var_names=var_names,
         filter_vars=filter_vars,
         group="posterior",
+        sample_dims=sample_dims,
         combined=False,
         keep_dataset=True,
     )
