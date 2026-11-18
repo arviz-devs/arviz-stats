@@ -374,7 +374,7 @@ def update_subsample(
     var_name=None,
     reff=None,
     seed=315,
-    method="lpd",
+    method=None,
     log_lik_fn=None,
     param_names=None,
     log=True,
@@ -415,11 +415,14 @@ def update_subsample(
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
-        - ``lpd``: Use standard log predictive density approximation (default). The stored
+        - ``lpd``: Use standard log predictive density approximation. The stored
           log likelihood values are used unless ``log_lik_fn`` or ``model`` is provided,
           in which case the approximation is recomputed from it.
         - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``
           or a ``model`` from which one is built.
+
+        Defaults to None, which reuses the approximation stored in ``loo_orig``, so
+        ``log_lik_fn`` and ``model`` are only used when a method is given.
     log_lik_fn : callable, optional
         Custom log-likelihood function. The signature must be ``log_lik_fn(observed, data)``
         where ``observed`` is a :class:`~xarray.DataArray` containing one or more observations
@@ -508,7 +511,7 @@ def update_subsample(
         )
     if loo_orig.elpd_i is None:
         raise ValueError("Original loo_subsample result must have pointwise=True")
-    if method not in ["lpd", "plpd"]:
+    if method not in [None, "lpd", "plpd"]:
         raise ValueError("Method must be either 'lpd' or 'plpd'")
 
     thin = loo_orig.thin_factor
@@ -535,7 +538,9 @@ def update_subsample(
     jacobian_da = _check_log_jacobian(log_jacobian, loo_inputs.obs_dims)
 
     lpd_approx_all = update_data.lpd_approx_all
-    if jacobian_da is not None:
+    if lpd_approx_all is None:
+        lpd_approx_all = loo_orig.elpd_loo_approx
+    elif jacobian_da is not None:
         lpd_approx_all = lpd_approx_all + jacobian_da
 
     log_p = loo_orig.log_p
