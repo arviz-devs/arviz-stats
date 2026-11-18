@@ -442,6 +442,6 @@ def _warn_lfo_refits(method, n_refits, n_data_points):
         "origins. The importance sampling approximation may be unreliable. "
         "Consider method='exact'.",
         UserWarning,
-        stacklevel=2,
+        stacklevel=3,
     )
     return True

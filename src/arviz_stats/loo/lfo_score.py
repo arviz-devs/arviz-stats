@@ -4,7 +4,7 @@ from collections import namedtuple
 
 import numpy as np
 import xarray as xr
-from arviz_base import convert_to_datatree, rcParams
+from arviz_base import convert_to_datatree
 
 from arviz_stats.base.stats_utils import round_num
 from arviz_stats.loo.lfo_cv_helper import (
@@ -27,7 +27,7 @@ def lfo_score(
     forecast_horizon,
     kind="crps",
     time_dim="time",
-    pointwise=None,
+    pointwise=False,
     var_name=None,
     method="approx",
     k_threshold=0.7,
@@ -81,9 +81,8 @@ def lfo_score(
         - 'scrps': scale-invariant continuous ranked probability score.
     time_dim : str, default="time"
         Name of the time dimension in the data.
-    pointwise : bool, optional
-        If True, include per-origin score values in the return object. Defaults to
-        ``rcParams["stats.ic_pointwise"]``.
+    pointwise : bool, default False
+        If True, include per-origin score values in the return object.
     var_name : str, optional
         The name of the variable in log_likelihood group storing the pointwise log
         likelihood data to use for computation. The same name is used to retrieve the
@@ -144,8 +143,6 @@ def lfo_score(
     """
     if kind not in {"crps", "scrps"}:
         raise ValueError(f"kind must be either 'crps' or 'scrps'. Got {kind}")
-
-    pointwise = rcParams["stats.ic_pointwise"] if pointwise is None else pointwise
 
     method = _validate_lfo_method(method)
 
