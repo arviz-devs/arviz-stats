@@ -36,7 +36,7 @@ def test_lfo_score_constant_draws(constant_lfo_wrapper, lfo_constant_data, horiz
     np.testing.assert_array_equal(result.pointwise.coords["time"].values, origins + 2000)
     np.testing.assert_allclose(result.pointwise.values, expected)
     np.testing.assert_allclose(result.mean, expected.mean())
-    np.testing.assert_allclose(result.se, expected.std() / np.sqrt(len(expected)))
+    np.testing.assert_allclose(result.se, expected.std(ddof=1) / np.sqrt(len(expected)))
     assert result.pareto_k is None
     np.testing.assert_array_equal(result.refits, origins)
     assert result.n_refits == len(origins)

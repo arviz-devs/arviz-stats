@@ -190,7 +190,8 @@ def lfo_score(
     _warn_lfo_refits(method, n_refits, len(origins))
 
     mean = round_num(scores.mean(), round_to)
-    se = round_num(scores.std() / np.sqrt(len(scores)), round_to)
+    se = scores.std(ddof=1) / np.sqrt(len(scores)) if len(scores) > 1 else 0.0
+    se = round_num(se, round_to)
     name = "SCRPS" if kind == "scrps" else "CRPS"
 
     if not pointwise:
