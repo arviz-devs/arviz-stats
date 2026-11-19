@@ -958,3 +958,13 @@ def test_shift_and_scale_large_offset():
     expected = _shift_and_scale(upars, lwi).scaling
     result = _shift_and_scale(upars + 1e8, lwi).scaling
     assert_allclose(result, expected)
+
+
+def test_shift_and_scale_small_scale():
+    rng = np.random.default_rng(42)
+    upars = xr.DataArray(rng.normal(size=(1, 100, 2)), dims=["chain", "draw", "param"])
+    log_weights = rng.normal(size=(1, 100))
+    lwi = xr.DataArray(log_weights - sp.special.logsumexp(log_weights), dims=["chain", "draw"])
+    expected = _shift_and_scale(upars, lwi).scaling
+    result = _shift_and_scale(upars * 1e-6, lwi).scaling
+    assert_allclose(result, expected)
