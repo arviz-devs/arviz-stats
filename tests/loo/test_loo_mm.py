@@ -541,6 +541,48 @@ def test_influence_pareto_k(roaches_r_example):
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.parametrize("max_iters", [0, 30])
+def test_moment_match_log_jacobian(roaches_r_example, max_iters):
+    example = roaches_r_example
+    data = example["data_tree"]
+    log_jacobian = xr.DataArray(
+        np.linspace(0.5, 1.5, 262), dims="obs", coords={"obs": data.log_likelihood.obs}
+    )
+    loo_orig = loo(data, pointwise=True, var_name="log_lik")
+    loo_orig_jacobian = loo(data, pointwise=True, var_name="log_lik", log_jacobian=log_jacobian)
+
+    result = loo_moment_match(
+        data,
+        loo_orig,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=example["upars"],
+        var_name="log_lik",
+        k_threshold=2.0,
+        max_iters=max_iters,
+        pointwise=True,
+    )
+    result_jacobian = loo_moment_match(
+        data,
+        loo_orig_jacobian,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=example["upars"],
+        var_name="log_lik",
+        k_threshold=2.0,
+        max_iters=max_iters,
+        pointwise=True,
+    )
+
+    expected = result.elpd_i + log_jacobian
+    np.testing.assert_allclose(result_jacobian.elpd_i, expected)
+    np.testing.assert_allclose(result_jacobian.elpd, expected.sum())
+    np.testing.assert_allclose(result_jacobian.se, np.sqrt(262 * expected.var(ddof=1)))
+    np.testing.assert_allclose(result_jacobian.p, result.p)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 @pytest.mark.parametrize(
     "provided",
     [{}, {"log_prob_upars_fn": "log_prob_fn"}, {"log_lik_i_upars_fn": "log_lik_i_fn"}],
