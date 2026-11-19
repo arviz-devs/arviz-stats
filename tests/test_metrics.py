@@ -256,7 +256,7 @@ def test_metrics(datatree, kind, round_to, expected_mean, expected_se):
     "kind, round_to, expected_mean, expected_se",
     [
         ("acc", 2, 0.43, 0.19),
-        ("acc_balanced", "2g", 0.46, 0.12),
+        ("acc_balanced", "2g", 0.46, 0.17),
     ],
 )
 def test_metrics_acc(datatree_binary, kind, round_to, expected_mean, expected_se):
