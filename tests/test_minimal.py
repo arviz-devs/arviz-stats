@@ -310,6 +310,40 @@ def test_histogram(data_c0d1, bins):
     assert edges.shape[1] == hist.shape[1] + 1
 
 
+@pytest.mark.parametrize("shape", [(6,), (2, 3), (2, 2, 3)])
+@pytest.mark.parametrize("bins", [3, np.array([0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0])])
+@pytest.mark.parametrize("weighted", [False, True])
+@pytest.mark.parametrize("density", [False, True])
+def test_histogram_axis_none(shape, bins, weighted, density):
+    ary = np.arange(np.prod(shape), dtype=float).reshape(shape)
+    weights = np.arange(1, ary.size + 1, dtype=float).reshape(shape) if weighted else None
+
+    hist, edges = array_stats.histogram(ary, bins=bins, weights=weights, axis=None, density=density)
+    expected_hist, expected_edges = np.histogram(
+        ary.ravel(),
+        bins=bins,
+        weights=weights.ravel() if weighted else None,
+        density=density,
+    )
+
+    assert hist.ndim == edges.ndim == 1
+    np.testing.assert_allclose(hist, expected_hist)
+    np.testing.assert_allclose(edges, expected_edges)
+
+
+@pytest.mark.parametrize("bins", [None, "auto"])
+def test_histogram_axis_none_auto_bins(bins):
+    ary = np.arange(12.0).reshape(2, 2, 3)
+
+    hist, edges = array_stats.histogram(ary, bins=bins, axis=None, density=False)
+
+    assert hist.ndim == edges.ndim == 1
+    assert edges.size == hist.size + 1
+    assert hist.sum() == ary.size
+    expected_hist, _ = np.histogram(ary.ravel(), bins=edges)
+    np.testing.assert_array_equal(hist, expected_hist)
+
+
 def test_histogram_density(data_c0d1):
     hist, edges = array_stats.histogram(data_c0d1, bins=20, density=True, axis=(0, 1))
     assert hist.shape[0] == 3
