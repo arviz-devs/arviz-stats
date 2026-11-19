@@ -206,23 +206,23 @@ def test_bfmi_axes(axis, data_c0d1, data_c2d0):
 @pytest.mark.parametrize("axis", ["01", "20"])
 def test_pareto_min_ss_axes(axis, data_c0d1, data_c2d0):
     if axis == "01":
-        pareto_min_ss = array_stats.pareto_min_ss(data_c0d1, chain_axis=0, draw_axis=1)
+        pareto_min_ss = array_stats.pareto_min_ss(data_c0d1, chain_axis=0, draw_axis=1, prob=0.89)
     else:
-        pareto_min_ss = array_stats.pareto_min_ss(data_c2d0, chain_axis=2, draw_axis=0)
+        pareto_min_ss = array_stats.pareto_min_ss(data_c2d0, chain_axis=2, draw_axis=0, prob=0.89)
     assert pareto_min_ss.shape == (3,)
     assert np.all(pareto_min_ss > 9.9)
     assert np.all(pareto_min_ss < 13)
 
 
 def test_pareto_min_ss_no_chain(data_c0d1):
-    pareto_min_ss = array_stats.pareto_min_ss(data_c0d1, chain_axis=None, draw_axis=1)
+    pareto_min_ss = array_stats.pareto_min_ss(data_c0d1, chain_axis=None, draw_axis=1, prob=0.89)
     assert pareto_min_ss.shape == (4, 3)
     assert np.all(pareto_min_ss > 9.9)
     assert np.all(pareto_min_ss < 15)
 
 
 def test_thin(data_c0d1):
-    thinned = array_stats.thin(data_c0d1, chain_axis=0, draw_axis=1)
+    thinned = array_stats.thin(data_c0d1, chain_axis=0, draw_axis=1, prob=0.89)
     assert thinned.shape == (4, 100, 3)
     thinned = array_stats.thin(data_c0d1, chain_axis=0, draw_axis=1, factor=10)
     assert thinned.shape == (4, 20, 3)
@@ -230,16 +230,22 @@ def test_thin(data_c0d1):
 
 def test_pareto_khat():
     norm = np.random.normal(size=(4, 1000, 200))
-    np.testing.assert_almost_equal(array_stats.pareto_khat(norm, tail="both").mean(), 0, decimal=0)
+    np.testing.assert_almost_equal(
+        array_stats.pareto_khat(norm, tail="both", prob=0.89).mean(), 0, decimal=0
+    )
     t1 = np.random.standard_t(df=1, size=(4, 500, 200))
-    np.testing.assert_almost_equal(array_stats.pareto_khat(t1, tail="both").mean(), 1, decimal=0)
+    np.testing.assert_almost_equal(
+        array_stats.pareto_khat(t1, tail="both", prob=0.89).mean(), 1, decimal=0
+    )
     t2 = np.random.standard_t(df=2, size=(4, 500, 200))
-    np.testing.assert_almost_equal(array_stats.pareto_khat(t2, tail="both").mean(), 0.5, decimal=1)
+    np.testing.assert_almost_equal(
+        array_stats.pareto_khat(t2, tail="both", prob=0.89).mean(), 0.5, decimal=1
+    )
 
 
 @pytest.mark.parametrize("tail", ["both", "left", "right"])
 def test_pareto_khat_tails(data_c0d1, tail):
-    khat = array_stats.pareto_khat(data_c0d1, tail=tail, chain_axis=0, draw_axis=1)
+    khat = array_stats.pareto_khat(data_c0d1, tail=tail, chain_axis=0, draw_axis=1, prob=0.89)
     assert khat.shape == (3,)
     assert np.all(khat < 0.7)
 
@@ -269,7 +275,7 @@ def test_psislw_r_eff(data_c0d1, r_eff):
 def test_power_scale_lw(alpha):
     rng = np.random.default_rng(42)
     log_lik = rng.uniform(-10, -1, size=(4, 200))
-    scaled_lw, khat = array_stats.power_scale_lw(log_lik, alpha=alpha, axis=(0, 1))
+    scaled_lw, khat = array_stats.power_scale_lw(log_lik, alpha=alpha, axis=(0, 1), prob=0.89)
     assert scaled_lw.shape == (4, 200)
     assert khat.shape == ()
 
@@ -279,8 +285,8 @@ def test_power_scale_sense():
     rng = np.random.default_rng(42)
     log_lik = rng.uniform(-10, -1, size=(4, 200, 3))
     data = rng.normal(size=(4, 200, 3))
-    lower_w, _ = array_stats.power_scale_lw(log_lik, alpha=0.8, axis=-1)
-    upper_w, _ = array_stats.power_scale_lw(log_lik, alpha=0.9, axis=-1)
+    lower_w, _ = array_stats.power_scale_lw(log_lik, alpha=0.8, axis=-1, prob=0.89)
+    upper_w, _ = array_stats.power_scale_lw(log_lik, alpha=0.9, axis=-1, prob=0.89)
     sense = array_stats.power_scale_sense(
         data, lower_w, upper_w, lower_alpha=0.8, upper_alpha=0.9, chain_axis=0, draw_axis=1
     )
@@ -367,20 +373,24 @@ def test_residual_r2():
 
 
 def test_thin_factor(data_c0d1):
-    factor = array_stats.thin_factor(data_c0d1, chain_axis=0, draw_axis=1)
+    factor = array_stats.thin_factor(data_c0d1, chain_axis=0, draw_axis=1, prob=0.89)
     assert isinstance(factor, int)
     assert factor >= 1
 
 
 @pytest.mark.parametrize("reduce_func", ["mean", "min"])
 def test_thin_factor_reduce(data_c0d1, reduce_func):
-    factor = array_stats.thin_factor(data_c0d1, reduce_func=reduce_func, chain_axis=0, draw_axis=1)
+    factor = array_stats.thin_factor(
+        data_c0d1, reduce_func=reduce_func, chain_axis=0, draw_axis=1, prob=0.89
+    )
     assert isinstance(factor, int)
     assert factor >= 1
 
 
 def test_thin_factor_target_ess(data_c0d1):
-    factor = array_stats.thin_factor(data_c0d1, target_ess=100, chain_axis=0, draw_axis=1)
+    factor = array_stats.thin_factor(
+        data_c0d1, target_ess=100, chain_axis=0, draw_axis=1, prob=0.89
+    )
     assert isinstance(factor, int)
     assert factor >= 1
 

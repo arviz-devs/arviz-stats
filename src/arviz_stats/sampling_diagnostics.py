@@ -65,6 +65,10 @@ def ess(
         Return relative ess ``ress = ess / n``
     prob : float, or tuple of two floats, optional
         Probability value for "tail", "quantile" or "local" ess functions.
+        For "tail", a float ``p`` uses the ``p`` and ``1 - p`` quantiles.
+        If not given for labeled data, "tail" uses the ends of the
+        ``rcParams["stats.ci_prob"]`` central interval, the same quantiles as
+        :func:`~arviz_stats.eti`.
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.

@@ -92,6 +92,7 @@ def thin(
             factor=factor,
             chain_axis=chain_axis,
             draw_axis=draw_axis,
+            prob=(1 - rcParams["stats.ci_prob"]) / 2,
         )
 
     if isinstance(data, xr.core.groupby.DataArrayGroupBy | xr.core.groupby.DatasetGroupBy):

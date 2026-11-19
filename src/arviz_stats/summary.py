@@ -204,9 +204,9 @@ def summary(
         ess_bulk = dataset.azstats.ess(sample_dims=sample_dims, method="bulk").expand_dims(
             summary=["ess_bulk"]
         )
-        ess_tail = dataset.azstats.ess(sample_dims=sample_dims, method="tail").expand_dims(
-            summary=["ess_tail"]
-        )
+        ess_tail = dataset.azstats.ess(
+            sample_dims=sample_dims, method="tail", prob=(1 - ci_prob) / 2
+        ).expand_dims(summary=["ess_tail"])
         rhat = dataset.azstats.rhat(sample_dims=sample_dims).expand_dims(summary=["r_hat"])
         mcse_mean = dataset.azstats.mcse(sample_dims=sample_dims, method="mean").expand_dims(
             summary=["mcse_mean"]
@@ -238,9 +238,9 @@ def summary(
         ess_median = dataset.azstats.ess(sample_dims=sample_dims, method="median").expand_dims(
             summary=["ess_median"]
         )
-        ess_tail = dataset.azstats.ess(sample_dims=sample_dims, method="tail").expand_dims(
-            summary=["ess_tail"]
-        )
+        ess_tail = dataset.azstats.ess(
+            sample_dims=sample_dims, method="tail", prob=(1 - ci_prob) / 2
+        ).expand_dims(summary=["ess_tail"])
         rhat = dataset.azstats.rhat(sample_dims=sample_dims).expand_dims(summary=["r_hat"])
         mcse_median = dataset.azstats.mcse(sample_dims=sample_dims, method="median").expand_dims(
             summary=["mcse_median"]
@@ -255,9 +255,9 @@ def summary(
         ess_mean = dataset.azstats.ess(sample_dims=sample_dims, method="mean").expand_dims(
             summary=["ess_mean"]
         )
-        min_ss = dataset.azstats.pareto_min_ss(sample_dims=sample_dims).expand_dims(
-            summary=["min_ss"]
-        )
+        min_ss = dataset.azstats.pareto_min_ss(
+            sample_dims=sample_dims, prob=(1 - ci_prob) / 2
+        ).expand_dims(summary=["min_ss"])
 
         to_concat.extend((mcse_mean, ess_mean, min_ss))
 
