@@ -563,6 +563,7 @@ class _DiagnosticsBase(_CoreBase):
             else:
                 urvs = rng.uniform(size=pit_lower.shape)
                 pit = pit_lower + urvs * pit_at_obs
+            pit = np.minimum(pit, 1)
 
         if obs_shape:
             return pit.reshape(obs_shape)

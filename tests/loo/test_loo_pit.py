@@ -117,6 +117,21 @@ def test_loo_pit_multidimensional():
     assert np.all(result["y"].values <= 1)
 
 
+def test_loo_pit_obs_above_all_draws(rng):
+    data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 50))},
+            "posterior_predictive": {"y": rng.normal(size=(2, 50, 8))},
+            "log_likelihood": {"y": rng.normal(size=(2, 50, 8))},
+            "observed_data": {"y": np.full(8, 10.0)},
+        }
+    )
+
+    result = loo_pit(data)
+
+    assert result["y"].values.max() <= 1
+
+
 def test_loo_pit_precomputed_weights(centered_eight):
     result_auto = loo_pit(centered_eight)
 
