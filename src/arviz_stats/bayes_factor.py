@@ -36,7 +36,7 @@ def bayes_factor(data, var_names, ref_vals=0, return_ref_vals=False, prior=None,
         non-sample coordinates of the original variable (e.g. ``school``).
     If `return_ref_vals` is True, returns a tuple of two elements:
         - xr.Dataset with Bayes factors as described above.
-        - dict with reference density values for the posterior and prior for each variable.
+        - xr.Dataset with reference density values for the posterior and prior for each variable.
 
     References
     ----------
