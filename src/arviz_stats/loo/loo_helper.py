@@ -348,7 +348,7 @@ def _shift_and_scale(upars, lwi):
     var_original = np.var(upars_values, axis=0, ddof=1)
 
     scaling_vec = np.ones_like(mean_original)
-    valid_mask = (var_original > 1e-9) & (mii > 1e-9)
+    valid_mask = (var_original > 0) & (mii > 0)
     scaling_vec[valid_mask] = np.sqrt(mii[valid_mask] / var_original[valid_mask])
 
     upars_new_values = upars_values - mean_original[None, :]
