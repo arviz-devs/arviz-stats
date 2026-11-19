@@ -353,3 +353,22 @@ def test_reloo_loo_orig_size_mismatch(mock_wrapper_reloo, high_k_loo_data):
 
     with pytest.raises(ValueError, match="do not match"):
         reloo(wrapper, loo_orig=high_k_loo_data, k_threshold=0.7)
+
+
+def test_reloo_log_jacobian(mock_wrapper_reloo, non_centered_eight):
+    log_jacobian = xr.DataArray(
+        np.linspace(0.5, 1.5, 8),
+        dims="school",
+        coords={"school": non_centered_eight.observed_data.school},
+    )
+    loo_orig = loo(non_centered_eight, pointwise=True)
+    loo_orig_jacobian = loo(non_centered_eight, pointwise=True, log_jacobian=log_jacobian)
+
+    result = reloo(mock_wrapper_reloo, loo_orig=loo_orig, k_threshold=0.6)
+    result_jacobian = reloo(mock_wrapper_reloo, loo_orig=loo_orig_jacobian, k_threshold=0.6)
+
+    expected = result.elpd_i + log_jacobian
+    assert_allclose(result_jacobian.elpd_i, expected)
+    assert_allclose(result_jacobian.elpd, expected.sum())
+    assert_allclose(result_jacobian.se, np.sqrt(8 * expected.var(ddof=1)))
+    assert_allclose(result_jacobian.p, result.p)

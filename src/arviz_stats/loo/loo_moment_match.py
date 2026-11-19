@@ -283,6 +283,11 @@ def loo_moment_match(
             loo_data.n_eff_i = None
         return loo_data
 
+    log_jacobian = loo_orig.log_jacobian
+    if log_jacobian is not None:
+        loo_data.elpd_i = loo_data.elpd_i - log_jacobian
+        loo_data.elpd = np.nansum(loo_data.elpd_i.values)
+
     lpd = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
     loo_data.p_loo_i = lpd - loo_data.elpd_i
     kfs = np.zeros(n_data_points)
@@ -374,6 +379,11 @@ def loo_moment_match(
 
     elpd_raw = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).sum().values
     loo_data.p = elpd_raw - loo_data.elpd
+
+    if log_jacobian is not None:
+        loo_data.elpd_i = loo_data.elpd_i + log_jacobian
+        loo_data.elpd = np.nansum(loo_data.elpd_i.values)
+        loo_data.se = np.sqrt(n_data_points * np.nanvar(loo_data.elpd_i.values, ddof=1))
 
     if not pointwise:
         loo_data.elpd_i = None

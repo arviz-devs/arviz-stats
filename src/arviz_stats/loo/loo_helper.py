@@ -157,6 +157,7 @@ def _compute_loo_results(
         pareto_k=pareto_k if pointwise else None,
         approx_posterior=approx_posterior,
         log_weights=log_weights,
+        log_jacobian=log_jacobian,
     )
 
 

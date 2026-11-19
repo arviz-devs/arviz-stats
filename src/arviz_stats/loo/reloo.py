@@ -221,6 +221,10 @@ def reloo(
             loo_refitted.pareto_k = None
         return loo_refitted
 
+    log_jacobian = loo_orig.log_jacobian
+    if log_jacobian is not None:
+        loo_refitted.elpd_i = loo_refitted.elpd_i - log_jacobian
+
     if loo_refitted.p_loo_i is None:
         loo_refitted.p_loo_i = xr.full_like(loo_refitted.elpd_i, np.nan)
         lpd_i = logsumexp(log_likelihood, b=1 / n_samples, dims=sample_dims)
@@ -274,6 +278,9 @@ def reloo(
         loo_refitted.pareto_k.loc[obs_idx_dict] = 0.0
         loo_refitted.p_loo_i.loc[obs_idx_dict] = hat_lpd_i - elpd_loo_i
         refitted_obs.append(obs_idx_dict)
+
+    if log_jacobian is not None:
+        loo_refitted.elpd_i = loo_refitted.elpd_i + log_jacobian
 
     loo_refitted.elpd = np.sum(loo_refitted.elpd_i.values)
     loo_refitted.se = np.sqrt(n_data_points * np.var(loo_refitted.elpd_i.values, ddof=1))
