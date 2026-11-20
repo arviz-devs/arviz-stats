@@ -213,9 +213,10 @@ def point_interval_unique(ds, ci_prob, point_estimate):
         unique_values = np.unique(pp[var])
 
         counts_array = np.zeros((n_samples, len(unique_values)), dtype=int)
+        obs_dims = [dim for dim in pp[var].dims if dim != "sample"]
         for i, y in enumerate(unique_values):
             mask = pp[var] == y
-            counts_array[:, i] = mask.sum(axis=0).values
+            counts_array[:, i] = mask.sum(dim=obs_dims).transpose("sample").values
 
         lb = (1 - ci_prob) / 2 * 100
         ci = np.percentile(counts_array, [lb, 100 - lb], axis=0)
