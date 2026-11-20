@@ -193,7 +193,7 @@ class _DensityBase(_CoreBase):
                 "Expected a positive numeric or one of the following strings:\n"
                 f"{self.bw_methods_linear}."
             )
-        if isinstance(bw, int | float):
+        if isinstance(bw, int | float | np.integer | np.floating):
             if bw < 0:
                 raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
         elif isinstance(bw, str):
@@ -639,7 +639,7 @@ class _DensityBase(_CoreBase):
             raise ValueError(
                 "`bw` can't be of type `bool`.\nExpected a positive numeric or 'taylor'"
             )
-        if isinstance(bw, int | float) and bw < 0:
+        if isinstance(bw, int | float | np.integer | np.floating) and bw < 0:
             raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
         if isinstance(bw, str):
             if bw == "taylor":
