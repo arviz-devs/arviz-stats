@@ -1016,10 +1016,12 @@ def _generate_subsample_indices(n_data_points, observations, seed):
     return indices, subsample_size
 
 
-def _get_r_eff(data, n_samples):
+def _get_r_eff(data, n_samples, draw=None):
     if not hasattr(data, "posterior"):
         raise TypeError("Must be able to extract a posterior group from data.")
     posterior = data.posterior
+    if draw is not None:
+        posterior = posterior.sel(draw=draw)
     n_chains = len(posterior.chain)
     if n_chains == 1:
         reff = 1.0

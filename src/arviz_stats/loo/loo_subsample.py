@@ -205,7 +205,7 @@ def loo_subsample(
 
     log_likelihood = loo_inputs.log_likelihood
     if reff is None:
-        reff = _get_r_eff(data, loo_inputs.n_samples)
+        reff = _get_r_eff(data, loo_inputs.n_samples, log_likelihood.draw)
 
     jacobian_da = _check_log_jacobian(log_jacobian, loo_inputs.obs_dims)
 
@@ -518,7 +518,7 @@ def update_subsample(
     loo_inputs = _prepare_loo_inputs(data, var_name, thin)
 
     if reff is None:
-        reff = _get_r_eff(data, loo_inputs.n_samples)
+        reff = _get_r_eff(data, loo_inputs.n_samples, loo_inputs.log_likelihood.draw)
 
     update_data = _prepare_update_subsample(
         loo_orig,

@@ -187,6 +187,36 @@ def test_loo_subsample_thin_parameter(centered_eight_with_sigma, thin):
         assert result.thin_factor == thin
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_subsample_thin_r_eff(centered_eight):
+    thinned = centered_eight.isel(draw=slice(None, None, 5), missing_dims="ignore")
+    expected = loo_subsample(thinned, observations=8, var_name="obs", pointwise=True)
+
+    result = loo_subsample(centered_eight, observations=8, var_name="obs", thin=5, pointwise=True)
+
+    assert_allclose(result.pareto_k, expected.pareto_k)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_update_subsample_thin_r_eff(centered_eight):
+    thinned = centered_eight.isel(draw=slice(None, None, 5), missing_dims="ignore")
+    expected = update_subsample(
+        loo_subsample(thinned, observations=4, var_name="obs", pointwise=True),
+        thinned,
+        observations=4,
+        var_name="obs",
+    )
+
+    result = update_subsample(
+        loo_subsample(centered_eight, observations=4, var_name="obs", thin=5, pointwise=True),
+        centered_eight,
+        observations=4,
+        var_name="obs",
+    )
+
+    assert_allclose(result.pareto_k, expected.pareto_k)
+
+
 def test_loo_subsample_validation_errors(centered_eight_with_sigma):
     with pytest.raises(ValueError, match="Number of observations must be between 1 and"):
         loo_subsample(centered_eight_with_sigma, observations=0, var_name="obs")
