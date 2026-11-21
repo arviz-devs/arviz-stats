@@ -292,6 +292,37 @@ def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_subsampled_partial_overlap(centered_eight, non_centered_eight):
+    loo_a = loo_subsample(
+        centered_eight, observations=np.array([0, 1, 2, 3, 4]), var_name="obs", pointwise=True
+    )
+    loo_b = loo_subsample(
+        non_centered_eight, observations=np.array([2, 3, 4, 5, 6]), var_name="obs", pointwise=True
+    )
+
+    with pytest.warns(UserWarning, match="Naive diff SE is used"):
+        result = compare({"a": loo_a, "b": loo_b}, method="pseudo-BMA", round_to="none")
+
+    assert_allclose(result["elpd_diff"].iloc[1], -abs(loo_a.elpd - loo_b.elpd))
+    assert_allclose(result["dse"].iloc[1], np.sqrt(loo_a.se**2 + loo_b.se**2))
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_subsampled_nested(centered_eight, non_centered_eight):
+    loo_a = loo_subsample(
+        centered_eight, observations=np.array([0, 1, 2, 3, 4, 5]), var_name="obs", pointwise=True
+    )
+    loo_b = loo_subsample(
+        non_centered_eight, observations=np.array([0, 1, 2, 3]), var_name="obs", pointwise=True
+    )
+
+    with pytest.warns(UserWarning, match="observations included in loo calculations") as record:
+        compare({"a": loo_a, "b": loo_b}, method="pseudo-BMA")
+
+    assert not any("Naive diff SE" in str(warning.message) for warning in record)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_compare_subsampled_with_full_loo(centered_eight_with_sigma):
     loo_sub = loo_subsample(
         centered_eight_with_sigma,
