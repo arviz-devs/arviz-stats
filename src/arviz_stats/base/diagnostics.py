@@ -1130,9 +1130,9 @@ class _DiagnosticsBase(_CoreBase):
     @staticmethod
     def _get_ps_tails(n_draws, r_eff, tail):
         if n_draws * r_eff > 225:
-            n_draws_tail = np.floor(3 * (n_draws / r_eff) ** 0.5)
+            n_draws_tail = np.ceil(3 * (n_draws / r_eff) ** 0.5)
         else:
-            n_draws_tail = np.floor(n_draws / 5)
+            n_draws_tail = np.ceil(n_draws / 5)
 
         if n_draws_tail < 5:
             warnings.warn("Number of tail draws cannot be less than 5. Changing to 5.")

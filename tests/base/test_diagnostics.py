@@ -640,3 +640,29 @@ def test_pareto_pit_avoid_boundary_values():
     assert not np.any(pit == 0.5)
     assert not np.any(pit == 0.0)
     assert not np.any(pit == 1.0)
+
+
+def test_pareto_tail_length_matches_posterior_and_loo():
+    """The tail length is rounded up, as in posterior and loo.
+
+    R code (posterior 1.6.1, loo 2.9.0):
+    ```
+    x <- qlnorm((1:1000 - 0.5) / 1000)
+    posterior::pareto_khat(x, tail = "right", r_eff = 1)
+    posterior::pareto_khat(x, tail = "left", r_eff = 1)
+    loo::psis(-x, r_eff = 1)$diagnostics$pareto_k
+    loo::psis(-x, r_eff = 0.5)$diagnostics$pareto_k
+    ```
+    """
+    from scipy.stats import lognorm
+
+    ary = lognorm.ppf((np.arange(1, 1001) - 0.5) / 1000, 1)
+    khat_right = array_stats.pareto_khat(ary[None], tail="right", r_eff=1)
+    khat_left = array_stats.pareto_khat(ary[None], tail="left", r_eff=1)
+    _, khat_psis = array_stats.psislw(ary, r_eff=1)
+    _, khat_psis_r_eff = array_stats.psislw(ary, r_eff=0.5)
+
+    np.testing.assert_allclose(khat_right, 0.2907530244755978, rtol=1e-10)
+    np.testing.assert_allclose(khat_left, -0.4361829553228012, rtol=1e-10)
+    np.testing.assert_allclose(khat_psis, -0.3851099188734569, rtol=1e-10)
+    np.testing.assert_allclose(khat_psis_r_eff, -0.4397107168209783, rtol=1e-10)

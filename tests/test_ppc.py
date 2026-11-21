@@ -52,14 +52,14 @@ def test_text_ppc_pit_calibrated(calibrated_ppc, capsys):
     diagnostics = text_ppc_pit(calibrated_ppc, return_diagnostics=True)
     output = capsys.readouterr().out
 
-    assert "p-value: 0.1196" in output
+    assert "p-value: 0.1194" in output
     assert "alpha: 0.01" in output
     assert "0 of 100 observations flagged" in output
     assert "No deviation from uniformity detected" in output
 
     assert diagnostics["y"]["has_errors"] is False
     assert diagnostics["z"]["has_errors"] is False
-    assert np.isclose(diagnostics["y"]["p_value"], 0.1196, atol=1e-4)
+    assert np.isclose(diagnostics["y"]["p_value"], 0.1194, atol=1e-4)
     assert np.isclose(diagnostics["y"]["alpha"], 0.01, atol=1e-2)
     assert diagnostics["y"]["n_obs"] == 100
 
@@ -90,6 +90,6 @@ def test_text_loo_pit_calibrated(calibrated_ppc, capsys):
     assert "No deviation from uniformity detected" in output
 
     assert diagnostics["y"]["has_errors"] is False
-    assert np.isclose(diagnostics["y"]["p_value"], 0.02768, atol=1e-4)
+    assert np.isclose(diagnostics["y"]["p_value"], 0.02744, atol=1e-4)
     assert np.isclose(diagnostics["y"]["alpha"], 0.01, atol=1e-2)
     assert diagnostics["y"]["n_obs"] == 100
