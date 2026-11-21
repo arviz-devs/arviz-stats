@@ -7,7 +7,6 @@ import warnings
 from collections.abc import Sequence
 
 import numpy as np
-from arviz_base import rcParams
 from xarray import DataArray, Dataset, apply_ufunc, broadcast, concat
 from xarray_einstats.stats import _apply_nonreduce_func
 
@@ -514,8 +513,8 @@ class BaseDataArray:
 
         elif isinstance(factor, (float | int)):
             if sample_dims is None:
-                sample_dims = rcParams["data.sample_dims"]
-            if not isinstance(sample_dims, str):
+                sample_dims = "draw"
+            elif not isinstance(sample_dims, str):
                 if len(sample_dims) >= 2:
                     raise ValueError("dims must be of length 1")
                 if len(sample_dims) == 1:
