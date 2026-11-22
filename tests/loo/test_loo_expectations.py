@@ -183,6 +183,36 @@ def test_loo_metrics(centered_eight, kind):
     assert isinstance(result.se, int | float | str)
 
 
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter of Pareto distribution:UserWarning")
+@pytest.mark.parametrize("kind", ["mae", "mse", "rmse"])
+def test_loo_metrics_2d_observations(kind):
+    rng = np.random.default_rng(0)
+    y = rng.normal(size=(4, 5))
+    y_pred = y + rng.normal(scale=0.5, size=(2, 50, 4, 5))
+    log_lik = rng.normal(size=(2, 50, 4, 5)) - 1
+    mu = rng.normal(size=(2, 50))
+    dt_2d = azb.from_dict(
+        {
+            "posterior": {"mu": mu},
+            "posterior_predictive": {"y": y_pred},
+            "log_likelihood": {"y": log_lik},
+            "observed_data": {"y": y},
+        }
+    )
+    dt_1d = azb.from_dict(
+        {
+            "posterior": {"mu": mu},
+            "posterior_predictive": {"y": y_pred.reshape(2, 50, 20)},
+            "log_likelihood": {"y": log_lik.reshape(2, 50, 20)},
+            "observed_data": {"y": y.ravel()},
+        }
+    )
+    result = loo_metrics(dt_2d, kind=kind, round_to="None")
+    expected = loo_metrics(dt_1d, kind=kind, round_to="None")
+    assert_almost_equal(result.mean, expected.mean)
+    assert_almost_equal(result.se, expected.se)
+
+
 def test_loo_metrics_explicit_var_name(centered_eight):
     result = loo_metrics(centered_eight, var_name="obs", kind="mae", round_to=2)
 
@@ -216,7 +246,7 @@ def test_loo_r2_array(datatree_regression):
     assert result.shape == (n_sims,)
 
 
-@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+@pytest.mark.parametrize("point_estimate", ["mean", "median", "mode"])
 @pytest.mark.filterwarnings("ignore:Estimated shape parameter of Pareto distribution:UserWarning")
 def test_loo_r2_point_estimate(datatree_regression, point_estimate):
     result = loo_r2(datatree_regression, var_name="y", summary=True, point_estimate=point_estimate)

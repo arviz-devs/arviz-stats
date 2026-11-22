@@ -15,9 +15,14 @@ def kaplan_meier(
     Parameters
     ----------
     dt: DataTree
-        DataTree with "posterior_predictive" and "observed_data" groups
+        DataTree with "constant_data" and "observed_data" groups
     var_names : str or list of str
-        The variables to compute the unique values.
+        The variables for which to compute the Kaplan-Meier survival curves.
+
+    Returns
+    -------
+    xarray.Dataset
+        Kaplan-Meier survival curves for the specified variables.
     """
     if isinstance(var_names, str):
         var_names = [var_names]
@@ -61,7 +66,7 @@ def kaplan_meier(
 
         current_prob = 1.0
         unique_times = np.unique(sorted_times)
-        survival_probs = np.empty_like(unique_times)
+        survival_probs = np.empty_like(unique_times, dtype=float)
         for i, t in enumerate(unique_times):
             n_events = np.sum((sorted_times == t) & (sorted_status == 1))
             n_at_risk_t = np.sum(sorted_times >= t)
@@ -97,6 +102,7 @@ def generate_survival_curves(
         Group containing the predictive samples.
     num_samples : int, optional
         Number of samples to draw from the predictive distribution.
+        If None, all available samples are used.
     extrapolation_factor : float, default 1.2
         Factor by which to limit the survival curves beyond the maximum observed time.
         Set to None to show the unaffected posterior predictive draws.
@@ -122,8 +128,9 @@ def generate_survival_curves(
         max_points = 0
         sample_data_list = []
 
-        for i in range(num_samples):
+        for i in range(pp.sizes["sample"]):
             times = pp[var_name].isel(sample=i)
+            n_times = times.size
 
             # Filter times based on extrapolation factor
             if extrapolation_factor is not None:
@@ -135,21 +142,23 @@ def generate_survival_curves(
 
             unique_times = np.unique(np.sort(times))
             max_points = max(max_points, len(unique_times))
-            sample_data_list.append((i, times))
+            sample_data_list.append((n_times, times))
 
         # Now create aligned arrays
         n_valid_samples = len(sample_data_list)
         times_array = np.full((n_valid_samples, max_points), np.nan)
         probs_array = np.full((n_valid_samples, max_points), np.nan)
 
-        for idx, (_, times) in enumerate(sample_data_list):
+        for idx, (n_times, times) in enumerate(sample_data_list):
             # Create empirical survival function for this sample
             sorted_times = np.sort(times)
             unique_times = np.unique(sorted_times)
+            # share of all times above t, counting ties and times past the limit
+            n_events = np.searchsorted(sorted_times, unique_times, side="right")
 
             for j, t in enumerate(unique_times):
                 times_array[idx, j] = t
-                probs_array[idx, j] = 1 - (j + 1) / len(unique_times)
+                probs_array[idx, j] = 1 - n_events[j] / n_times
 
         dictio[var_name] = np.stack([times_array, probs_array], axis=0)
 

@@ -8,7 +8,7 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy.signal import convolve, convolve2d
 from scipy.signal.windows import gaussian
-from scipy.sparse import coo_matrix
+from scipy.sparse import coo_array
 from scipy.special import betainc, ive  # pylint: disable=no-name-in-module
 from scipy.stats import binom, hypergeom
 
@@ -175,6 +175,12 @@ class _DensityBase(_CoreBase):
         bw: int, float or str
             If numeric, indicates the bandwidth and must be positive.
             If str, indicates the method to estimate the bandwidth.
+        grid_counts : array-like, optional
+            Precomputed histogram counts for the data `x`.
+        x_std : float, optional
+            Standard deviation of the data `x`.
+        grid_range : float, optional
+            Range of the grid used for histogram.
 
         Returns
         -------
@@ -187,7 +193,7 @@ class _DensityBase(_CoreBase):
                 "Expected a positive numeric or one of the following strings:\n"
                 f"{self.bw_methods_linear}."
             )
-        if isinstance(bw, int | float):
+        if isinstance(bw, int | float | np.integer | np.floating):
             if bw < 0:
                 raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
         elif isinstance(bw, str):
@@ -200,7 +206,7 @@ class _DensityBase(_CoreBase):
                     f"Expected one of: {self.bw_methods_linear}."
                 )
 
-            bw_fun = getattr(self, f"bw_{bw}")
+            bw_fun = getattr(self, f"bw_{bw_lower}")
             bw = bw_fun(x, grid_counts=grid_counts, x_std=x_std, grid_range=grid_range)
         else:
             raise ValueError(
@@ -281,7 +287,8 @@ class _DensityBase(_CoreBase):
 
         Returns
         -------
-        None: Object of type None
+        list
+            Validated custom limits as a list of two numeric values.
         """
         if not isinstance(custom_lims, list | tuple):
             raise TypeError(
@@ -357,12 +364,12 @@ class _DensityBase(_CoreBase):
 
         Returns
         -------
-        grid_len: int
-            Number of bins
         grid_min: float
-            Minimum value of the grid
+            Minimum value of the grid.
         grid_max: float
-            Maximum value of the grid
+            Maximum value of the grid.
+        grid_len: int
+            Number of bins.
         """
         # Set up number of bins.
         grid_len = max(int(grid_len), 100)
@@ -420,7 +427,7 @@ class _DensityBase(_CoreBase):
             Defaults to True.
         extend_fct: float, optional
             Number of standard deviations used to widen the lower and upper bounds of `x`.
-            Defaults to 0.5.
+            Defaults to 0.
         bw_fct: float, optional
             A value that multiplies `bw` which enables tuning smoothness by hand.
             Must be positive. Values below 1 decrease smoothness while values above 1 decrease it.
@@ -632,7 +639,7 @@ class _DensityBase(_CoreBase):
             raise ValueError(
                 "`bw` can't be of type `bool`.\nExpected a positive numeric or 'taylor'"
             )
-        if isinstance(bw, int | float) and bw < 0:
+        if isinstance(bw, int | float | np.integer | np.floating) and bw < 0:
             raise ValueError(f"Numeric `bw` must be positive.\nInput: {bw:.4f}.")
         if isinstance(bw, str):
             if bw == "taylor":
@@ -643,7 +650,7 @@ class _DensityBase(_CoreBase):
 
         # Determine grid
         if custom_lims is not None:
-            custom_lims = self._check_custom_lims(custom_lims, x.min(), x.max())
+            custom_lims = self.check_custom_lims(custom_lims, x.min(), x.max())
             grid_min = custom_lims[0]
             grid_max = custom_lims[1]
             assert grid_min >= -np.pi, "Lower limit can't be smaller than -pi"
@@ -657,7 +664,9 @@ class _DensityBase(_CoreBase):
         grid = 0.5 * (bin_edges[1:] + bin_edges[:-1])
 
         kern = self._vonmises_pdf(x=grid, mu=0, kappa=bw)
-        pdf = np.fft.fftshift(np.fft.irfft(np.fft.rfft(kern) * np.fft.rfft(bin_counts)))
+        pdf = np.fft.ifftshift(
+            np.fft.irfft(np.fft.rfft(kern) * np.fft.rfft(bin_counts), n=grid_len)
+        )
         pdf /= len(x)
 
         if cumulative:
@@ -734,16 +743,17 @@ class _DensityBase(_CoreBase):
 
         x_x = np.arange(kern_nx) - kern_nx / 2
         y_y = np.arange(kern_ny) - kern_ny / 2
-        x_x, y_y = np.meshgrid(x_x, y_y)
+        # "ij" indexing so the kernel is laid out like the grid: x along rows, y along columns
+        x_x, y_y = np.meshgrid(x_x, y_y, indexing="ij")
 
         kernel = np.vstack((x_x.flatten(), y_y.flatten()))
         kernel = np.dot(inv_cov, kernel) * kernel
         kernel = np.exp(-kernel.sum(axis=0) / 2)
-        kernel = kernel.reshape((int(kern_ny), int(kern_nx)))
+        kernel = kernel.reshape((int(kern_nx), int(kern_ny)))
 
         boundary = "wrap" if circular else "symm"
 
-        grid = coo_matrix((weights, xyi), shape=(n_x, n_y)).toarray()
+        grid = coo_array((weights, xyi), shape=(n_x, n_y)).toarray()
         grid = convolve2d(grid, kernel, mode="same", boundary=boundary)
 
         norm_factor = np.linalg.det(2 * np.pi * cov * scotts_factor**2)
@@ -789,7 +799,8 @@ class _DensityBase(_CoreBase):
         x = x[np.isfinite(x)]
         qvalues, binwidth = self._compute_quantiles_and_binwidth(x, nquantiles, binwidth)
 
-        if np.isnan(binwidth):
+        # also catches a zero width (e.g. constant data), for which stacking never ends
+        if not binwidth > 0:
             return np.full(nquantiles, np.nan), np.full(nquantiles, np.nan), np.nan
 
         stack_locs, stack_counts = self._wilkinson_algorithm(qvalues, binwidth)
@@ -818,13 +829,15 @@ class _DensityBase(_CoreBase):
             ecdf = np.full(npoints, np.nan)
             return eval_points, ecdf
 
-        eval_points = np.linspace(np.min(ary), np.max(ary), npoints)
+        if pit:
+            eval_points = np.linspace(0, 1, npoints)
+        else:
+            eval_points = np.linspace(np.min(ary), np.max(ary), npoints)
 
         ary = np.sort(ary)
         ecdf = np.searchsorted(ary, eval_points, side="right") / total_points
 
         if pit:
-            eval_points = eval_points / eval_points.max()
             ecdf -= eval_points
         return eval_points, ecdf
 
@@ -985,14 +998,16 @@ class _DensityBase(_CoreBase):
         return p_value, b_shapley_vals, w_shapley_vals
 
     def _cauchy_combination(self, ps, cauchy_vals, truncate):
-        """Combine p-values using the Cauchy combination method."""
+        """Combine p-values using the Cauchy combination method.
+
+        With ``truncate=True`` this is the truncated Cauchy combination test:
+        terms with p >= 0.5 are zeroed out but the denominator remains the
+        total number of terms, following Eq. (24) of Tesso and Vehtari (2026),
+        https://arxiv.org/abs/2603.02928. An input with no p-values below 0.5
+        therefore yields a statistic of 0 and a p-value of 0.5.
+        """
         if truncate:
-            idx = ps < 0.5
-            if not np.any(idx):
-                raise ValueError(
-                    "Cannot compute truncated Cauchy combination test. No p-values below 0.5 found."
-                )
-            cauchy_mean = np.mean(cauchy_vals[idx])
+            cauchy_mean = np.mean(np.where(ps < 0.5, cauchy_vals, 0.0))
         else:
             cauchy_mean = np.mean(cauchy_vals)
         return 0.5 - np.arctan(cauchy_mean) / np.pi
@@ -1030,7 +1045,7 @@ class _DensityBase(_CoreBase):
             return np.array([]), np.nan
 
         qlist = np.linspace(1 / (2 * nquantiles), 1 - 1 / (2 * nquantiles), nquantiles)
-        qvalues = np.quantile(values, qlist)
+        qvalues = self.quantile(values, qlist)
 
         if binwidth is None:
             binwidth = ((qvalues[-1] - qvalues[0]) ** 2 / (2 * nquantiles * np.pi)) ** 0.5

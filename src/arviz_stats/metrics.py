@@ -54,7 +54,7 @@ def bayesian_r2(
     Parameters
     ----------
     data : DataTree or InferenceData
-        Input data. It should contain the posterior and posterior_predictive groups.
+        Input data. It should contain the posterior or the group indicated by the `group` parameter.
     pred_mean : str
         Name of the variable representing the predicted mean.
     scale : str or None
@@ -150,11 +150,13 @@ def bayesian_r2(
     if round_to is None:
         round_to = rcParams["stats.round_to"]
 
-    mu_pred = extract(data, group=group, var_names=pred_mean).values.T
+    mu_pred = extract(data, group=group, var_names=pred_mean)
     if scale is not None:
-        scale = extract(data, group=group, var_names=scale).values.T
+        scale = extract(data, group=group, var_names=scale)
 
-    r_squared = array_stats.bayesian_r2(mu_pred, scale, scale_kind, circular)
+    r_squared = mu_pred.azstats.bayesian_r2(
+        scale=scale, sample_dims="sample", scale_kind=scale_kind, circular=circular
+    ).values
 
     if summary:
         return _summary_r2("bayesian", r_squared, point_estimate, ci_kind, ci_prob, round_to)
@@ -203,7 +205,7 @@ def residual_r2(
     Parameters
     ----------
     data : DataTree or InferenceData
-        Input data. It should contain the posterior_predictive and observed_data groups.
+        Input data. It should contain the posterior or the group indicated by the `group` parameter.
     pred_mean : str
         Name of the variable representing the predicted mean.
     obs_name : str, optional
@@ -212,7 +214,7 @@ def residual_r2(
         Whether to return a summary (default) or an array of :math:`R^2` samples.
         The summary is a named tuple with a point estimate and a credible interval
     group : str, optional
-        Group from which to obtain the predicted means (`pred_name`). Defaults to "posterior".
+        Group from which to obtain the predicted means (`pred_mean`). Defaults to "posterior".
     point_estimate: str
         The point estimate to compute. If None, the default value is used.
         Defaults values are defined in rcParams["stats.point_estimate"]. Ignored if
@@ -286,10 +288,12 @@ def residual_r2(
 
     y_true = extract(
         data, group="observed_data", var_names=obs_name, combined=False, sample_dims=[]
-    ).values
-    mu_pred = extract(data, group=group, var_names=pred_mean).values.T
+    )
+    mu_pred = extract(data, group=group, var_names=pred_mean)
 
-    r_squared = array_stats.residual_r2(y_true, mu_pred, circular)
+    r_squared = mu_pred.azstats.residual_r2(
+        y_obs=y_true, sample_dims="sample", circular=circular
+    ).values
 
     if summary:
         return _summary_r2("residual", r_squared, point_estimate, ci_kind, ci_prob, round_to)
@@ -378,7 +382,7 @@ def kl_divergence(
     group="posterior",
     var_names=None,
     sample_dims=None,
-    num_samples=500,
+    num_samples=None,
     round_to=None,
     random_seed=212480,
 ):
@@ -401,8 +405,9 @@ def kl_divergence(
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
-    num_samples : int
-        Number of samples to use for the distance calculation. Default is 500.
+    num_samples : int or None, optional
+        Number of samples to use for the distance calculation. Default is None, which will use
+        all available samples.
     round_to: int or str or None, optional
      If integer, number of decimal places to round the result. Integers can be negative.
         If string of the form '2g' number of significant digits to round the result.
@@ -593,33 +598,34 @@ def _prepare_distribution_pair(
 
 
 def _extract_and_reindex(data, group, var_names, sample_dims, num_samples, random_seed):
+    extracted = extract(
+        data,
+        group=group,
+        sample_dims=sample_dims,
+        var_names=var_names,
+        num_samples=num_samples,
+        random_seed=random_seed,
+        keep_dataset=True,
+    )
+    n_samples = extracted.sizes["sample"]
     return (
-        extract(
-            data,
-            group=group,
-            sample_dims=sample_dims,
-            var_names=var_names,
-            num_samples=num_samples,
-            random_seed=random_seed,
-            keep_dataset=True,
-        )
-        .reset_index("sample")
+        extracted.reset_index("sample")
         .drop_vars(sample_dims)
-        .assign_coords(sample=range(num_samples))
+        .assign_coords(sample=range(n_samples))
     )
 
 
 def _kld(ary0, ary1):
     """Kullback-Leibler divergence approximation.
 
-    Compute KL-divergence using equation 14 from [1]_. Assumes both arrays
-    are of the same shape.
+    Compute KL-divergence using equation 14 from [1]_.
 
     Parameters
     ----------
-    ary0, ary1 : (N, M) array-like
-        Samples of the input distributions. ``N`` represents the number of samples (e.g. posterior
-        samples) and ``M`` the number of outputs (e.g. number of variables in the posterior)
+    ary0, ary1 : (N, M) and (K, M) array-like
+        Samples of the input distributions. ``N`` and ``K`` represent the number of samples
+        (e.g. posterior samples) and ``M`` the number of outputs (e.g. number of variables
+        in the posterior).
 
     Returns
     -------
@@ -635,14 +641,14 @@ def _kld(ary0, ary1):
         preprint https://www.tsc.uc3m.es/~fernando/bare_conf3.pdf
 
     """
-    # for discrete data we need to smooth the samples to avoid numerical errors
-    # here we are adding a small noise to all samples, differences should be negligible
-    # but we may want to do something more sophisticated in the future
     rng = np.random.default_rng(0)
-    ary0 = ary0 + rng.normal(0, ary0.std(axis=0) / 1e6, size=ary0.shape)
-    ary1 = ary1 + rng.normal(0, ary1.std(axis=0) / 1e6, size=ary1.shape)
+    ss_0, dim = ary0.shape
+    ss_1 = ary1.shape[0]
 
-    samples, dim = ary0.shape
+    # For exact ties (discrete data or MCMC draws) we need to smooth the samples to avoid numerical
+    # errors. The jitter depends on the standard deviation and the sample size.
+    ary0 = ary0 + rng.normal(0, (ary0.std(axis=0) * ss_0 ** (-0.25)), size=ary0.shape)
+    ary1 = ary1 + rng.normal(0, (ary1.std(axis=0) * ss_1 ** (-0.25)), size=ary1.shape)
 
     # Build KD-trees for X and Y
     kd_tree_ary0 = cKDTree(ary0)
@@ -655,7 +661,7 @@ def _kld(ary0, ary1):
     # we skip the trivial first nearest neighbour distance
     s_k = kd_tree_ary0.query(ary0, k=2)[0][:, 1]
 
-    kl_div = (dim / samples) * np.sum(np.log(r_k / s_k)) + np.log(samples / (samples - 1))
+    kl_div = (dim / ss_0) * np.sum(np.log(r_k / s_k)) + np.log(ss_1 / (ss_0 - 1))
     # Due to numerical errors and for very similar samples we can get negative values
     kl_div = max(0.0, kl_div.item())
 
@@ -697,6 +703,9 @@ def _metrics(observed, predicted, kind, round_to):
     if kind not in valid_kind:
         raise ValueError(f"kind must be one of {valid_kind}")
 
+    predicted = predicted.transpose(*observed.dims).values.ravel()
+    observed = observed.values.ravel()
+
     estimate = namedtuple(kind, ["mean", "se"])
     mean, std_error = array_stats.metrics(observed, predicted, kind=kind)
 
@@ -704,7 +713,7 @@ def _metrics(observed, predicted, kind, round_to):
 
 
 def _summary_r2(name, r_squared, point_estimate, ci_kind, ci_prob, round_to):
-    estimate = getattr(np, point_estimate)(r_squared).item()
+    estimate = getattr(array_stats, point_estimate)(r_squared).item()
     c_i = getattr(array_stats, ci_kind)(r_squared, ci_prob)
 
     r2_summary = namedtuple(f"{name}_R2", [point_estimate, f"{ci_kind}_lb", f"{ci_kind}_ub"])

@@ -35,7 +35,7 @@ def idata():
 
 def test_accessors_available(idata):
     assert hasattr(idata, "azstats")
-    assert hasattr(idata.posterior.ds, "azstats")
+    assert hasattr(idata.posterior.dataset, "azstats")
     assert hasattr(idata.posterior["a"], "azstats")
 
 
@@ -55,7 +55,7 @@ def test_datatree_multiple_groups(idata):
 
 
 def test_dataset_accessor(idata):
-    out = idata.posterior.ds.azstats.ess()
+    out = idata.posterior.dataset.azstats.ess()
     assert isinstance(out, xr.Dataset)
     assert "a" in out.data_vars
     assert "b" in out.data_vars
@@ -76,7 +76,7 @@ def test_accessor_methods(idata, method):
 
 @pytest.mark.parametrize("filter_vars", [None, "like", "regex"])
 def test_dataset_filter_vars(idata, filter_vars):
-    ds = idata.posterior.ds
+    ds = idata.posterior.dataset
     if filter_vars == "like":
         filtered = ds.azstats.filter_vars(var_names=["a"], filter_vars=filter_vars)
         assert "a" in filtered.ds.data_vars
@@ -95,46 +95,46 @@ def test_datatree_filter_vars(idata, filter_vars):
         filtered = idata.azstats.filter_vars(
             group="posterior", var_names=["a"], filter_vars=filter_vars
         )
-        assert "a" in filtered.datatree.ds.data_vars
+        assert "a" in filtered.datatree.dataset.data_vars
     elif filter_vars == "regex":
         filtered = idata.azstats.filter_vars(
             group="posterior", var_names=["^a"], filter_vars=filter_vars
         )
-        assert "a" in filtered.datatree.ds.data_vars
+        assert "a" in filtered.datatree.dataset.data_vars
     else:
         filtered = idata.azstats.filter_vars(
             group="posterior", var_names=["a"], filter_vars=filter_vars
         )
-        assert "a" in filtered.datatree.ds.data_vars
-        assert "b" not in filtered.datatree.ds.data_vars
+        assert "a" in filtered.datatree.dataset.data_vars
+        assert "b" not in filtered.datatree.dataset.data_vars
 
 
 def test_datatree_filter_vars_none(idata):
     filtered = idata.azstats.filter_vars(group="posterior", var_names=None)
     assert filtered.datatree is idata
-    assert "a" in idata.posterior.ds.data_vars
+    assert "a" in idata.posterior.dataset.data_vars
 
 
 def test_datatree_filter_vars_multiple_groups(idata):
     filtered = idata.azstats.filter_vars(group=["posterior"], var_names=["a"])
     assert isinstance(filtered.datatree, xr.DataTree)
-    assert "a" in filtered.datatree["posterior"].ds.data_vars
+    assert "a" in filtered.datatree["posterior"].dataset.data_vars
 
 
 def test_dataset_thin_factor(idata):
-    factor = idata.posterior.ds.azstats.thin_factor()
+    factor = idata.posterior.dataset.azstats.thin_factor()
     assert isinstance(factor, int)
     assert factor >= 1
 
 
 def test_dataset_thin(idata):
-    thinned = idata.posterior.ds.azstats.thin(sample_dims="draw", factor=2)
+    thinned = idata.posterior.dataset.azstats.thin(sample_dims="draw", factor=2)
     assert isinstance(thinned, xr.Dataset)
     assert thinned["a"].sizes["draw"] == 50
 
 
 def test_dataset_thin_auto(idata):
-    thinned = idata.posterior.ds.azstats.thin(factor="auto")
+    thinned = idata.posterior.dataset.azstats.thin(factor="auto")
     assert isinstance(thinned, xr.Dataset)
 
 
@@ -158,7 +158,7 @@ def test_datatree_thin_factor_invalid_group(idata):
 def test_datatree_thin(idata):
     thinned = idata.azstats.thin(group="posterior", sample_dims="draw", factor=2)
     assert isinstance(thinned, xr.DataTree)
-    assert thinned.ds["a"].sizes["draw"] == 50
+    assert thinned.dataset["a"].sizes["draw"] == 50
 
 
 def test_datatree_ecdf_not_implemented(idata):
@@ -176,14 +176,14 @@ def test_datatree_ecdf_not_implemented(idata):
     ],
 )
 def test_accessor_method_parameters(idata, method, kwargs):
-    out = getattr(idata.posterior.ds.azstats, method)(**kwargs)
+    out = getattr(idata.posterior.dataset.azstats, method)(**kwargs)
     assert isinstance(out, xr.Dataset)
 
 
 def test_dataset_ds_property(idata):
-    accessor = idata.posterior.ds.azstats
-    assert accessor.ds.equals(idata.posterior.ds)
-    assert accessor.dataset.equals(idata.posterior.ds)
+    accessor = idata.posterior.dataset.azstats
+    assert accessor.ds.equals(idata.posterior.dataset)
+    assert accessor.dataset.equals(idata.posterior.dataset)
 
 
 def test_datatree_datatree_property(idata):
@@ -239,13 +239,13 @@ def test_datatree_group_warning(idata):
     ],
 )
 def test_dataset_statistical_methods(idata, method):
-    out = getattr(idata.posterior.ds.azstats, method)()
+    out = getattr(idata.posterior.dataset.azstats, method)()
     assert isinstance(out, xr.Dataset | tuple)
 
 
 def test_rhat_nested_dataset(idata):
     superchain_ids = np.array([0, 0, 1, 1])
-    out = idata.posterior.ds.azstats.rhat_nested(superchain_ids=superchain_ids)
+    out = idata.posterior.dataset.azstats.rhat_nested(superchain_ids=superchain_ids)
     assert isinstance(out, xr.Dataset)
     assert "a" in out.data_vars
     assert "b" in out.data_vars
@@ -268,16 +268,16 @@ def test_rhat_nested_dataarray(idata):
 @pytest.mark.parametrize("method", ["rank", "split", "folded"])
 def test_rhat_nested_method(idata, method):
     superchain_ids = np.array([0, 0, 1, 1])
-    out = idata.posterior.ds.azstats.rhat_nested(superchain_ids=superchain_ids, method=method)
+    out = idata.posterior.dataset.azstats.rhat_nested(superchain_ids=superchain_ids, method=method)
     assert isinstance(out, xr.Dataset)
     assert "a" in out.data_vars
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_power_scale_sense_dataset(idata):
-    lower_w = idata.posterior.ds["a"]
-    upper_w = idata.posterior.ds["a"]
-    out = idata.posterior.ds.azstats.power_scale_sense(
+    lower_w = idata.posterior.dataset["a"]
+    upper_w = idata.posterior.dataset["a"]
+    out = idata.posterior.dataset.azstats.power_scale_sense(
         lower_w=lower_w, upper_w=upper_w, lower_alpha=0.8, upper_alpha=0.9
     )
     assert isinstance(out, xr.Dataset)
@@ -292,7 +292,7 @@ def test_power_scale_sense_dataarray(idata):
 
 @pytest.mark.parametrize("reduce_func", ["mean", "min"])
 def test_dataset_thin_factor_reduce_func(idata, reduce_func):
-    factor = idata.posterior.ds.azstats.thin_factor(reduce_func=reduce_func)
+    factor = idata.posterior.dataset.azstats.thin_factor(reduce_func=reduce_func)
     assert isinstance(factor, int)
     assert factor >= 1
 
@@ -306,7 +306,7 @@ def test_datatree_thin_factor_reduce_func(idata, reduce_func):
 
 def test_dataset_thin_factor_invalid_reduce_func(idata):
     with pytest.raises(ValueError, match="not recognized"):
-        idata.posterior.ds.azstats.thin_factor(reduce_func="invalid")
+        idata.posterior.dataset.azstats.thin_factor(reduce_func="invalid")
 
 
 def test_datatree_thin_factor_invalid_reduce_func(idata):
@@ -315,7 +315,7 @@ def test_datatree_thin_factor_invalid_reduce_func(idata):
 
 
 def test_check_var_name_subset_dataset(idata):
-    result = check_var_name_subset(idata.posterior.ds, "a")
+    result = check_var_name_subset(idata.posterior.dataset, "a")
     assert isinstance(result, xr.DataArray)
     assert result.name == "a"
 
@@ -344,7 +344,9 @@ def test_dataarray_mchain_uniformity_test(idata):
 
 
 def test_dataset_mchain_uniformity_test(idata):
-    p_value, b_shapley_vals, w_shapley_vals = idata.posterior.ds.azstats.mchain_uniformity_test()
+    p_value, b_shapley_vals, w_shapley_vals = (
+        idata.posterior.dataset.azstats.mchain_uniformity_test()
+    )
     assert isinstance(p_value, xr.Dataset)
     assert "a" in p_value.data_vars
     assert "b" in p_value.data_vars

@@ -7,12 +7,15 @@ from arviz_stats.loo.loo_influence import loo_influence
 from arviz_stats.loo.loo_score import loo_score
 from arviz_stats.loo.loo_pit import loo_pit
 from arviz_stats.loo.loo_subsample import loo_subsample, update_subsample
+from arviz_stats.loo.loo_subsample_helper import ll_from_pymc
 from arviz_stats.loo.loo_moment_match import loo_moment_match
 from arviz_stats.loo.loo_moment_match_helper import mm_from_pymc
 from arviz_stats.loo.reloo import reloo
 from arviz_stats.loo.wrapper import SamplingWrapper
 from arviz_stats.loo.compare import compare, _calculate_ics
 from arviz_stats.loo.loo_kfold import loo_kfold
+from arviz_stats.loo.lfo_cv import lfo_cv
+from arviz_stats.loo.lfo_score import lfo_score
 
 __all__ = [
     "loo",
@@ -31,4 +34,6 @@ __all__ = [
     "SamplingWrapper",
     "compare",
     "loo_kfold",
+    "lfo_cv",
+    "lfo_score",
 ]

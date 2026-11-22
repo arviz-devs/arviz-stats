@@ -4,6 +4,7 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
+from scipy.stats import gaussian_kde
 
 from arviz_stats.base.density import _DensityBase
 
@@ -94,6 +95,17 @@ class TestBandwidthEstimators:
         x = rng.normal(size=100)
         bw = density.get_bw(x, bw_value)
         assert bw == bw_value
+
+    @pytest.mark.parametrize("bw_value", [np.float32(0.5), np.int64(1), np.float16(2.0)])
+    def test_get_bw_numpy_scalar(self, density, rng, bw_value):
+        x = rng.normal(size=100)
+        bw = density.get_bw(x, bw_value)
+        assert bw == bw_value
+
+    def test_get_bw_negative_numpy_scalar(self, density, rng):
+        x = rng.normal(size=100)
+        with pytest.raises(ValueError, match="Numeric `bw` must be positive"):
+            density.get_bw(x, np.float32(-0.5))
 
     def test_get_bw_invalid_bool(self, density, rng):
         x = rng.normal(size=100)
@@ -405,6 +417,13 @@ class TestKDECircular:
         integral = np.sum(pdf * dx)
         assert_allclose(integral, 1.0, rtol=0.01)
 
+    def test_kde_circular_custom_lims(self, density, rng):
+        x = rng.uniform(-1, 1, size=100)
+        custom_lims = [-1.5, 1.5]
+        grid, _, _ = density.kde_circular(x, custom_lims=custom_lims)
+        assert grid.min() >= custom_lims[0]
+        assert grid.max() <= custom_lims[1]
+
     def test_kde_circular_cumulative(self, density, rng):
         x = rng.vonmises(0, 2, 100)
         _, pdf, _ = density.kde_circular(x, cumulative=True)
@@ -418,7 +437,7 @@ class TestKDECircular:
         assert len(pdf) == 512
         assert_allclose(bw, bw_value)
 
-    @pytest.mark.parametrize("grid_len", [128, 256, 512, 1024])
+    @pytest.mark.parametrize("grid_len", [101, 128, 256, 512, 1024])
     def test_kde_circular_grid_len(self, density, rng, grid_len):
         x = rng.vonmises(0, 2, 100)
         grid, pdf, _ = density.kde_circular(x, grid_len=grid_len)
@@ -450,6 +469,11 @@ class TestKDECircular:
         x = rng.vonmises(0, 2, 100)
         with pytest.raises(ValueError, match="must be positive"):
             density.kde_circular(x, bw=-1.0)
+
+    def test_kde_circular_negative_numpy_scalar_bw(self, density, rng):
+        x = rng.vonmises(0, 2, 100)
+        with pytest.raises(ValueError, match="Numeric `bw` must be positive"):
+            density.kde_circular(x, bw=np.float32(-1.0))
 
     def test_kde_circular_invalid_bw_string(self, density, rng):
         x = rng.vonmises(0, 2, 100)
@@ -522,6 +546,17 @@ class TestKDE2D:
         dy = (ymax - ymin) / (grid.shape[1] - 1)
         integral = np.sum(grid * dx * dy)
         assert_allclose(integral, 1.0, rtol=0.1)
+
+    def test_fast_kde_2d_matches_scipy(self, density, rng):
+        cov = [[1.0, 0.7], [0.7, 2.0]]
+        x, y = rng.multivariate_normal([0, 0], cov, size=3000).T
+        grid, xmin, xmax, ymin, ymax = density._fast_kde_2d(x, y, gridsize=(64, 128))
+
+        xs, ys = np.linspace(xmin, xmax, 64), np.linspace(ymin, ymax, 128)
+        pts = np.vstack([a.ravel() for a in np.meshgrid(xs, ys, indexing="ij")])
+        expected = gaussian_kde(np.vstack([x, y]))(pts).reshape(64, 128)
+
+        assert_allclose(grid, expected, atol=0.1 * expected.max())
 
 
 class TestHDIContours:
@@ -598,6 +633,23 @@ class TestQuantileDots:
         non_nan_count = np.sum(~np.isnan(x_out))
         assert non_nan_count > 0
         assert non_nan_count <= 20
+
+    @pytest.mark.parametrize(
+        "x, binwidth", [([1.5, 1.5, 1.5], None), ([1.5], None), ([0.0, 1.0, 2.0], 0)]
+    )
+    def test_qds_zero_binwidth(self, density, x, binwidth):
+        x_out, y_out, radius = density._qds(
+            np.array(x),
+            nquantiles=len(x),
+            binwidth=binwidth,
+            dotsize=1,
+            stackratio=1,
+            top_only=False,
+        )
+        expected = np.full(len(x), np.nan)
+        assert_allclose(x_out, expected)
+        assert_allclose(y_out, expected)
+        assert np.isnan(radius)
 
     def test_compute_quantiles_and_binwidth(self, density, rng):
         x = rng.normal(size=100)
@@ -695,6 +747,18 @@ class TestECDF:
         eval_points, ecdf = density._ecdf(x, npoints=50, pit=True)
         assert len(eval_points) == 50
         assert len(ecdf) == 50
+        assert eval_points[0] == 0
+        assert eval_points[-1] == 1
+        expected = np.searchsorted(np.sort(x), eval_points, side="right") / len(x) - eval_points
+        np.testing.assert_allclose(ecdf, expected)
+
+    def test_ecdf_pit_clustered_values(self, density):
+        x = np.linspace(0.4, 0.6, 100)
+        eval_points, ecdf = density._ecdf(x, npoints=101, pit=True)
+        below = eval_points < 0.4
+        above = eval_points > 0.6
+        np.testing.assert_allclose(ecdf[below], -eval_points[below])
+        np.testing.assert_allclose(ecdf[above], 1 - eval_points[above])
 
     @pytest.mark.parametrize("npoints", [10, 50, 100, 200])
     def test_ecdf_npoints(self, density, rng, npoints):

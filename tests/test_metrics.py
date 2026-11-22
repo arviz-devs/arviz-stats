@@ -56,7 +56,7 @@ def test_residual_r2_circular_array(datatree_regression):
     assert result.shape == (mu_pred.shape[0],)
 
 
-@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+@pytest.mark.parametrize("point_estimate", ["mean", "median", "mode"])
 def test_residual_r2_point_estimate(datatree_regression, point_estimate):
     result = residual_r2(
         datatree_regression,
@@ -90,6 +90,35 @@ def test_residual_r2_no_rounding(datatree_regression):
         datatree_regression, pred_mean="mu", obs_name="y", summary=True, round_to="None"
     )
     assert isinstance(result.mean, float)
+
+
+def test_residual_r2_2d_observations():
+    rng = np.random.default_rng(42)
+    mu = rng.normal(size=(4, 50, 5, 6))
+    y = rng.normal(size=(5, 6))
+    dt_2d = azb.from_dict(
+        {"posterior": {"mu": mu}, "observed_data": {"y": y.T}},
+        dims={"mu": ["a", "b"], "y": ["b", "a"]},
+    )
+    dt_1d = azb.from_dict(
+        {"posterior": {"mu": mu.reshape(4, 50, 30)}, "observed_data": {"y": y.ravel()}},
+        dims={"mu": ["obs"], "y": ["obs"]},
+    )
+    result = residual_r2(dt_2d, pred_mean="mu", obs_name="y", summary=False)
+    expected = residual_r2(dt_1d, pred_mean="mu", obs_name="y", summary=False)
+    assert_array_almost_equal(result, expected)
+
+
+def test_residual_r2_mismatched_dims():
+    rng = np.random.default_rng(42)
+    dt = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(4, 50, 10))},
+            "observed_data": {"y": rng.normal(size=10)},
+        }
+    )
+    with pytest.raises(ValueError, match="must match"):
+        residual_r2(dt, pred_mean="mu", obs_name="y")
 
 
 def test_residual_r2_invalid_shapes():
@@ -160,7 +189,7 @@ def test_bayesian_r2_circular_array(datatree_regression):
     assert result.shape == (mu_pred.shape[0],)
 
 
-@pytest.mark.parametrize("point_estimate", ["mean", "median"])
+@pytest.mark.parametrize("point_estimate", ["mean", "median", "mode"])
 def test_bayesian_r2_point_estimate(datatree_regression, point_estimate):
     result = bayesian_r2(
         datatree_regression,
@@ -198,12 +227,23 @@ def test_bayesian_r2_ci_prob(datatree_regression, ci_prob):
     assert hasattr(result, "_fields")
 
 
+def test_bayesian_r2_2d_observations():
+    rng = np.random.default_rng(42)
+    mu = rng.normal(size=(4, 50, 5, 6))
+    sigma = rng.uniform(0.5, 1.5, size=(4, 50))
+    dt_2d = azb.from_dict({"posterior": {"mu": mu, "sigma": sigma}})
+    dt_1d = azb.from_dict({"posterior": {"mu": mu.reshape(4, 50, 30), "sigma": sigma}})
+    result = bayesian_r2(dt_2d, pred_mean="mu", scale="sigma", summary=False)
+    expected = bayesian_r2(dt_1d, pred_mean="mu", scale="sigma", summary=False)
+    assert_array_almost_equal(result, expected)
+
+
 @pytest.mark.parametrize(
     "kind, round_to, expected_mean, expected_se",
     [
-        ("mae", 2, 2.64, 0.38),
-        ("mse", "2g", 11.0, 2.6),
-        ("rmse", "None", 3.3379, 0.3967),
+        ("mae", 2, 2.64, 0.39),
+        ("mse", "2g", 11.0, 2.7),
+        ("rmse", "None", 3.3379, 0.4037),
     ],
 )
 def test_metrics(datatree, kind, round_to, expected_mean, expected_se):
@@ -216,13 +256,32 @@ def test_metrics(datatree, kind, round_to, expected_mean, expected_se):
     "kind, round_to, expected_mean, expected_se",
     [
         ("acc", 2, 0.43, 0.19),
-        ("acc_balanced", "2g", 0.46, 0.039),
+        ("acc_balanced", "2g", 0.46, 0.12),
     ],
 )
 def test_metrics_acc(datatree_binary, kind, round_to, expected_mean, expected_se):
     result = metrics(datatree_binary, kind=kind, round_to=round_to)
     assert_almost_equal(result.mean, expected_mean, decimal=4)
     assert_almost_equal(result.se, expected_se, decimal=4)
+
+
+@pytest.mark.parametrize("kind", ["mae", "mse", "rmse"])
+def test_metrics_2d_observations(kind):
+    rng = np.random.default_rng(0)
+    y = rng.normal(size=(4, 5))
+    y_pred = y + rng.normal(scale=0.5, size=(2, 50, 4, 5))
+    dt_2d = azb.from_dict({"posterior_predictive": {"y": y_pred}, "observed_data": {"y": y}})
+    dt_2d["observed_data"] = dt_2d["observed_data"].to_dataset().transpose()
+    dt_1d = azb.from_dict(
+        {
+            "posterior_predictive": {"y": y_pred.reshape(2, 50, 20)},
+            "observed_data": {"y": y.ravel()},
+        }
+    )
+    result = metrics(dt_2d, kind=kind, round_to="None")
+    expected = metrics(dt_1d, kind=kind, round_to="None")
+    assert_almost_equal(result.mean, expected.mean)
+    assert_almost_equal(result.se, expected.se)
 
 
 def test_metrics_invalid_kind(datatree):
@@ -264,26 +323,34 @@ def test_wasserstein_not_shared_vars(fake_dt):
 
 
 def test_kl_divergence(fake_dt):
-    result = kl_divergence(fake_dt, fake_dt, num_samples=100)
+    result = kl_divergence(fake_dt, fake_dt)
     assert_array_almost_equal(result, 0.0, decimal=5)
 
 
 def test_kl_divergence_var_names(fake_dt):
-    result = kl_divergence(fake_dt, fake_dt, var_names="a", num_samples=100)
+    result = kl_divergence(fake_dt, fake_dt, var_names="a")
     assert_array_almost_equal(result, 0.0, decimal=5)
 
 
 def test_kl_divergence_no_rounding(fake_dt):
-    result = kl_divergence(fake_dt, fake_dt, num_samples=100, round_to="None")
+    result = kl_divergence(fake_dt, fake_dt, round_to="None")
     assert isinstance(result, float)
 
 
 def test_kl_divergence_custom_seed(fake_dt):
-    result1 = kl_divergence(fake_dt, fake_dt, num_samples=100, random_seed=42)
-    result2 = kl_divergence(fake_dt, fake_dt, num_samples=100, random_seed=42)
+    result1 = kl_divergence(fake_dt, fake_dt, random_seed=42)
+    result2 = kl_divergence(fake_dt, fake_dt, random_seed=42)
     assert_almost_equal(result1, result2)
 
 
 def test_kl_divergence_not_shared_vars(fake_dt):
     with pytest.raises(ValueError, match="No shared variable names found"):
-        kl_divergence(fake_dt.posterior["a"], fake_dt.posterior["b"], num_samples=100)
+        kl_divergence(fake_dt.posterior["a"], fake_dt.posterior["b"])
+
+
+def test_kl_divergence_repeated_draws():
+    rng = np.random.default_rng(0)
+    draws = np.repeat(rng.normal(size=(4, 250)), 2, axis=1)
+    repeated = azb.from_dict({"posterior": {"mu": draws}})
+    reference = azb.from_dict({"posterior": {"mu": rng.normal(size=(4, 500))}})
+    assert kl_divergence(repeated, reference) < 0.1

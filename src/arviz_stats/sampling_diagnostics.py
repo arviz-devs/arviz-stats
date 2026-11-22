@@ -189,7 +189,7 @@ def rhat(
         Dimensions to be considered sample dimensions and are to be reduced.
         Default ``rcParams["data.sample_dims"]``.
     group : hashable, default "posterior"
-        Group on which to compute the ESS.
+        Group on which to compute the R-hat.
     var_names : str or list of str, optional
         Names of the variables for which the Rhat should be computed.
     filter_vars : {None, "like", "regex"}, default None
@@ -333,8 +333,12 @@ def rhat_nested(
         - xarray object: apply dimension aware function to all relevant subsets
         - others: passed to :func:`arviz_base.convert_to_dataset`
 
-        At least 2 posterior chains are needed to compute this diagnostic of one or more
-        stochastic parameters.
+        At least 2 superchains are needed to compute this diagnostic. Each superchain
+        must contain at least 2 chains, or each chain must have at least 2 draws, so that
+        the within-superchain variance can be estimated. The split-based methods ("rank",
+        "split", "folded", "z_scale") split each chain in two and therefore need at least
+        2 draws per chain. ``method="identity"`` works with a single draw per chain and is
+        the estimator exactly as defined in Margossian et al. (2024) [1]_.
 
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
@@ -352,6 +356,9 @@ def rhat_nested(
         - "folded"
         - "z_scale"
         - "identity"
+
+        ``"identity"`` matches the definition in [1]_ and the ``posterior`` R package;
+        the other methods first apply the split/rank/fold transformations of [2]_.
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
         of the data for which to perform the computation.
@@ -363,11 +370,37 @@ def rhat_nested(
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
 
+    Returns
+    -------
+    xarray.DataArray or xarray.Dataset
+        R-hat values for the specified variables and groups.
+
     See Also
     --------
     rhat : Compute split R-hat convergence diagnostic
     ess : Estimate the effective sample size (ess).
     plot_forest : Forest plot to compare HDI intervals from a number of distributions.
+
+    Examples
+    --------
+    Calculate nested R-hat with two superchains of two chains each:
+
+    .. ipython::
+
+        In [1]: from arviz_base import load_arviz_data
+           ...: import arviz_stats as azs
+           ...: data = load_arviz_data('centered_eight')
+           ...: azs.rhat_nested(data, superchain_ids=[0, 0, 1, 1])
+
+    With a single draw per chain the split-based methods return nan; use
+    ``method="identity"``:
+
+    .. ipython::
+
+        In [1]: import numpy as np
+           ...: rng = np.random.default_rng(0)
+           ...: samples = rng.normal(size=(8, 1))
+           ...: azs.rhat_nested(samples, superchain_ids=[0, 0, 0, 0, 1, 1, 1, 1], method="identity")
 
     References
     ----------
@@ -785,12 +818,27 @@ def diagnose(
         if n_divergent > 0:
             has_errors = True
             pct = diagnostics_results["divergent"]["pct"]
+            inference_library = dt.attrs.get("inference_library", "").lower()
+
+            param_mapping = {
+                "pymc": "target_accept",
+                "stan": "adapt_delta",
+                "cmdstanpy": "adapt_delta",
+                "numpyro": "adapt_step_size",
+                "pyro": "adapt_step_size",
+                "blackjax": "target_acceptance_rate",
+                "tensorflow_probability": "target_accept_prob",
+                "tfp": "target_accept_prob",
+            }
+
+            param_name = param_mapping.get(inference_library, "target acceptance rate")
+
             messages.append(
                 f"{n_divergent} of {total_samples} ({pct:.2f}%) transitions ended with a "
                 "divergence.\n"
                 "These divergent transitions indicate that HMC is not fully able to explore "
                 "the posterior distribution.\n"
-                "Try increasing adapt delta closer to 1.\n"
+                f"Try increasing the {param_name} parameter closer to 1.\n"
                 "If this doesn't remove all divergences, try to reparameterize the model."
             )
         else:
@@ -912,8 +960,12 @@ def diagnose(
 
     if ess_threshold is not None:
         below_minimum_params = [
-            var for var in ess_min.data_vars if (ess_min[var] < ess_threshold).any()
-        ]
+    feature-diagnose-stats
+        var for var in ess_min.data_vars if (ess_min[var] < ess_threshold).any()
+        for var in ess_bulk.dataset.data_vars
+        if (ess_bulk.dataset[var] < ess_threshold).any()
+        main
+        
 
         if below_minimum_params:
             has_errors = True
@@ -978,6 +1030,11 @@ def diagnose(
 
     if not has_errors:
         messages.append("\nProcessing complete, no problems detected.")
+    else:
+        messages.append(
+            "\nFor more information on how to interpret and address sampling issues, please check "
+            "https://arviz-devs.github.io/EABM/Chapters/MCMC_diagnostics.html"
+        )
 
     if show_diagnostics:
         print("\n".join(messages), file=sys.stdout)

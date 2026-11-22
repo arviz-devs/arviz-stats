@@ -18,7 +18,7 @@ xr = importorskip("xarray")
 
 from numpy.testing import assert_allclose, assert_array_equal
 
-from arviz_stats import loo, loo_approximate_posterior, loo_pit, loo_score
+from arviz_stats import loo, loo_approximate_posterior, loo_influence, loo_pit, loo_score
 from arviz_stats.loo.loo_helper import _get_r_eff, _prepare_loo_inputs
 from arviz_stats.utils import get_log_likelihood_dataset
 
@@ -49,6 +49,13 @@ class TestHelperFunctions:
         assert ary_out.shape == (1, 100, 50)
         assert chain_axis == 0
         assert draw_axis == -2
+
+    def test_process_chain_none_draw_axis_zero(self):
+        ary = np.empty((100, 50))
+        ary_out, chain_axis, draw_axis = process_chain_none(ary, None, 0)
+        assert ary_out.shape == (1, 100, 50)
+        assert chain_axis == 0
+        assert draw_axis == 1
 
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     def test_process_ary_axes_single_axis(self, axis):
@@ -92,6 +99,12 @@ class TestHDI:
             assert result.shape[-1] == 2
         else:
             assert result.shape == (2,)
+
+    def test_hdi_prob_one(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(100,))
+        result = array_stats.hdi(ary, prob=1)
+        np.testing.assert_array_equal(result, [ary.min(), ary.max()])
 
     def test_hdi_invalid_prob(self, array_stats):
         ary = np.empty((100,))
@@ -178,6 +191,13 @@ class TestESS:
         result = array_stats.ess(ary, chain_axis=1, draw_axis=3)
         assert result.shape == (5, 10)
         assert result.min() > 0
+
+    def test_ess_chain_none_draw_axis_zero(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(100, 3))
+        result = array_stats.ess(ary, chain_axis=None, draw_axis=0)
+        expected = array_stats.ess(ary.T, chain_axis=None, draw_axis=-1)
+        assert_allclose(result, expected)
 
 
 class TestRhat:
@@ -311,18 +331,27 @@ class TestParetoFunctions:
         result = array_stats.pareto_khat(ary, chain_axis=1, draw_axis=3)
         assert result.shape == (5, 10)
 
+    @pytest.mark.parametrize("tail", ["both", "left"])
+    def test_pareto_khat_unsigned_int(self, array_stats, tail):
+        rng = np.random.default_rng(3)
+        ary = np.clip(np.round(200 - rng.pareto(1.5, size=(4, 500)) * 10), 0, None)
+        expected = array_stats.pareto_khat(ary.astype(np.int64), tail=tail)
+        result = array_stats.pareto_khat(ary.astype(np.uint8), tail=tail)
+        assert_allclose(result, expected)
+
 
 class TestPowerScale:
     def test_power_scale_lw(self, array_stats, rng):
         ary = rng.normal(size=(100,))
-        result = array_stats.power_scale_lw(ary, alpha=0.5)
+        result, khat = array_stats.power_scale_lw(ary, alpha=0.5)
         assert result.shape == (100,)
+        assert khat.shape == ()
 
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
     def test_power_scale_lw_axis(self, array_stats, rng, axis):
         ary = rng.normal(size=(10, 20, 30))
-        result = array_stats.power_scale_lw(ary, alpha=0.5, axis=axis)
+        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=axis)
         assert result.ndim == ary.ndim
         expected_shape = {
             0: (20, 30, 10),
@@ -335,7 +364,7 @@ class TestPowerScale:
     @pytest.mark.filterwarnings("ignore:Number of tail draws cannot be less than 5:UserWarning")
     def test_power_scale_lw_axis_list(self, array_stats, rng):
         ary = rng.normal(size=(10, 20, 30, 40))
-        result = array_stats.power_scale_lw(ary, alpha=0.5, axis=[1, 3])
+        result, _ = array_stats.power_scale_lw(ary, alpha=0.5, axis=[1, 3])
         assert result.ndim == ary.ndim
         assert result.shape == (10, 30, 20, 40)
 
@@ -369,6 +398,18 @@ class TestComputeRanks:
         result = array_stats.compute_ranks(ary, axis=axis)
         assert result.ndim == ary.ndim
         assert result.max() == ary.shape[axis]
+
+    def test_compute_ranks_discrete_multiple_axes(self, array_stats):
+        rng = np.random.default_rng(42)
+        ary = rng.poisson(3, size=(4, 50))
+        result = array_stats.compute_ranks(ary, axis=(0, 1))
+        assert result.shape == ary.shape
+        assert_array_equal(np.sort(result, axis=None), np.arange(1, 201))
+
+    def test_compute_ranks_discrete_constant(self, array_stats):
+        ary = np.full(10, 3)
+        result = array_stats.compute_ranks(ary)
+        assert_array_equal(np.sort(result), np.arange(1, 11))
 
 
 class TestBinning:
@@ -410,6 +451,46 @@ class TestBinning:
         ary = rng.normal(size=(1000,))
         counts, _ = array_stats.histogram(ary, bins=bins)
         assert len(counts) == bins
+
+    def test_histogram_bin_edges(self, array_stats, rng):
+        ary = rng.normal(size=(1000,))
+        bins = np.linspace(-4, 4, 9)
+        counts, edges = array_stats.histogram(ary, bins=bins)
+        expected_counts, expected_edges = np.histogram(ary, bins=bins, density=True)
+        np.testing.assert_allclose(counts, expected_counts)
+        np.testing.assert_allclose(edges, expected_edges)
+
+    @pytest.mark.parametrize("value", [2.0, 3])
+    def test_histogram_constant(self, array_stats, value):
+        ary = np.full(100, value)
+        with pytest.warns(UserWarning, match="single value"):
+            counts, edges = array_stats.histogram(ary, density=False)
+        assert counts.sum() == 100
+        assert edges[0] < value < edges[-1]
+        assert_allclose(edges[[0, -1]], value, rtol=1e-5)
+
+    def test_histogram_constant_slice(self, array_stats, rng):
+        ary = rng.normal(size=(3, 100))
+        ary[1] = 2.0
+        with pytest.warns(UserWarning, match="single value"):
+            counts, edges = array_stats.histogram(ary)
+        assert np.all(np.diff(edges, axis=-1) > 0)
+        assert_allclose(np.sum(counts * np.diff(edges, axis=-1), axis=-1), 1.0)
+
+    @pytest.mark.parametrize("high", [2, 10])
+    def test_histogram_integer(self, array_stats, rng, high):
+        ary = rng.integers(-1, high, size=1000)
+        counts, edges = array_stats.histogram(ary, density=False)
+        values, expected = np.unique(ary, return_counts=True)
+        assert_array_equal(edges[:-1], values)
+        assert_array_equal(counts, expected)
+
+    @pytest.mark.parametrize("dtype, high", [(bool, 2), (np.uint8, 2), (np.uint8, 7)])
+    def test_histogram_bool_and_unsigned(self, array_stats, rng, dtype, high):
+        ary = rng.integers(0, high, size=1000).astype(dtype)
+        counts, edges = array_stats.histogram(ary, density=False)
+        assert_array_equal(edges, np.arange(high + 1))
+        assert_array_equal(counts, np.bincount(ary.astype(int)))
 
     def test_histogram_density(self, array_stats, rng):
         ary = rng.normal(size=(1000,))
@@ -591,6 +672,10 @@ class TestECDF:
         x, y = array_stats.ecdf(ary, npoints=50, pit=True)
         assert len(x) == 50
         assert len(y) == 50
+        assert x[0] == 0
+        assert x[-1] == 1
+        expected = np.searchsorted(np.sort(ary), x, side="right") / ary.size - x
+        np.testing.assert_allclose(y, expected)
 
     @pytest.mark.parametrize("axis", [0, 1, -1, -2])
     def test_ecdf_axis(self, array_stats, rng, axis):
@@ -654,6 +739,13 @@ class TestThinning:
         ary = rng.normal(size=(4, 100))
         result = array_stats.thin(ary, factor=1)
         assert_array_equal(result, ary)
+
+    @pytest.mark.parametrize("factor", [1, 2])
+    def test_thin_chain_axis_none(self, array_stats, factor):
+        rng = np.random.default_rng(42)
+        ary = rng.normal(size=(1000, 3))
+        result = array_stats.thin(ary, factor=factor, chain_axis=None, draw_axis=0)
+        assert_array_equal(result, ary[::factor])
 
     def test_thin_invalid_factor(self, array_stats):
         ary = np.empty((4, 100))
@@ -749,6 +841,24 @@ class TestMetrics:
         result = array_stats.residual_r2(y_true, y_pred)
         assert result.shape == (4,)
 
+    def test_residual_r2_batched(self, array_stats):
+        rng = np.random.default_rng(42)
+        y_true = rng.normal(size=100)
+        y_pred = rng.normal(size=(2, 4, 100))
+        result = array_stats.residual_r2(y_true, y_pred)
+        expected = array_stats.residual_r2(y_true, y_pred.reshape(8, 100))
+        assert_allclose(result, expected.reshape(2, 4))
+
+    def test_bayesian_r2_batched(self, array_stats):
+        rng = np.random.default_rng(42)
+        mu_pred = rng.normal(size=(100, 2, 4))
+        scale = rng.uniform(0.5, 1.5, size=(2, 4))
+        result = array_stats.bayesian_r2(mu_pred, scale, axis=0)
+        expected = array_stats.bayesian_r2(
+            np.moveaxis(mu_pred, 0, -1).reshape(8, 100), scale.ravel()
+        )
+        assert_allclose(result, expected.reshape(2, 4))
+
 
 class TestLOO:
     def test_loo_basic(self, array_stats, rng):
@@ -806,6 +916,21 @@ class TestLOO:
 
         with pytest.raises(ValueError, match="pareto_k must also be provided"):
             array_stats.loo(ary, log_weights=log_weights)
+
+    def test_loo_few_draws_fallback(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(1, 20, 5))
+
+        with pytest.warns(UserWarning, match="Number of tail draws cannot be less than 5"):
+            elpd_i, pareto_k, p_loo_i = array_stats.loo(ary, chain_axis=0, draw_axis=1)
+
+        log_lik = ary[0]
+        log_ratios = -log_lik
+        lw = log_ratios - np.logaddexp.reduce(log_ratios, axis=0)
+        expected = np.logaddexp.reduce(lw + log_lik, axis=0)
+
+        assert_allclose(elpd_i, expected)
+        assert np.all(np.isnan(pareto_k))
+        assert np.all(np.isfinite(p_loo_i))
 
     def test_loo_matches_xarray(self, array_stats, centered_eight):
         log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
@@ -1575,3 +1700,55 @@ class TestLooQuantile:
 
         assert quantile.shape == (8,)
         assert np.all(np.isfinite(quantile))
+
+
+class TestLooInfluence:
+    @pytest.fixture
+    def log_weights(self, centered_eight):
+        log_lik = get_log_likelihood_dataset(centered_eight, var_names="obs")["obs"]
+        reff = _get_r_eff(centered_eight, log_lik.chain.size * log_lik.draw.size)
+        log_weights, _ = log_lik.azstats.psislw(r_eff=reff)
+        return log_weights.transpose("school", "chain", "draw").values
+
+    @pytest.mark.parametrize(
+        "kind, kwargs",
+        [
+            ("mean", {}),
+            ("mean", {"standardize": False}),
+            ("median", {}),
+            ("sd", {}),
+            ("var", {}),
+            ("quantile", {"probs": [0.25, 0.75]}),
+            ("octiles", {}),
+        ],
+    )
+    def test_loo_influence_matches_xarray(
+        self, array_stats, centered_eight, log_weights, kind, kwargs
+    ):
+        y_pred = centered_eight.posterior_predictive["obs"].transpose("school", "chain", "draw")
+
+        influence = array_stats.loo_influence(y_pred.values, log_weights, kind=kind, **kwargs)
+
+        expected, _ = loo_influence(centered_eight, kind=kind, **kwargs)
+        if isinstance(expected, xr.Dataset):
+            expected = expected["obs"]
+        assert influence.shape == (8,)
+        assert_allclose(influence, expected.transpose("school").values)
+
+    def test_loo_influence_posterior(self, array_stats, centered_eight, log_weights):
+        mu = centered_eight.posterior["mu"].transpose("chain", "draw").values
+
+        influence = array_stats.loo_influence(mu, log_weights, kind="median")
+
+        expected, _ = loo_influence(
+            centered_eight, kind="median", var_names="mu", group="posterior"
+        )
+        assert influence.shape == (8,)
+        assert_allclose(influence, expected["mu"].transpose("school").values)
+
+    def test_loo_influence_invalid_kind(self, array_stats, rng):
+        ary = rng.normal(size=(2, 50, 3))
+        with pytest.raises(ValueError, match="kind must be one of"):
+            array_stats.loo_influence(ary, ary, kind="mode")
+        with pytest.raises(ValueError, match="probs must be provided"):
+            array_stats.loo_influence(ary, ary, kind="quantile")

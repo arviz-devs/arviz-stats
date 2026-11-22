@@ -21,8 +21,7 @@ from arviz_stats.loo.loo_helper import (
     _shift_and_scale,
     _warn_pareto_k,
 )
-from arviz_stats.sampling_diagnostics import ess
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDDataLOO
 
 SplitMomentMatch = namedtuple("SplitMomentMatch", ["lwi", "lwfi", "log_liki", "reff"])
 UpdateQuantities = namedtuple("UpdateQuantities", ["lwi", "lwfi", "ki", "kfi", "log_liki"])
@@ -65,8 +64,8 @@ def loo_moment_match(
     ----------
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
-    loo_orig : ELPDData
-        An existing ELPDData object from a previous `loo` result. Must contain
+    loo_orig : ELPDDataLOO
+        An existing ELPDDataLOO object from a previous `loo` result. Must contain
         pointwise Pareto k values (`pointwise=True` must have been used).
     log_prob_upars_fn : callable, optional
         Function that computes the log probability density of the full posterior
@@ -119,7 +118,7 @@ def loo_moment_match(
 
     Returns
     -------
-    ELPDData
+    ELPDDataLOO
         Object with the following attributes:
 
         - **kind**: "loo"
@@ -137,6 +136,8 @@ def loo_moment_match(
           ``pointwise=True``.
         - **pareto_k**: :class:`~xarray.DataArray` with moment-matched Pareto shape values, only if
           ``pointwise=True``.
+        - **p_loo_i**: :class:`~xarray.DataArray` with pointwise effective number of parameters,
+          only if ``pointwise=True``.
         - **approx_posterior**: False (not used for standard LOO)
         - **log_weights**: class:`~xarray.DataArray` with smoothed log weights
           (updated for successfully moment-matched observations).
@@ -164,8 +165,8 @@ def loo_moment_match(
         Journal of Machine Learning Research, 25(72) (2024) https://jmlr.org/papers/v25/19-556.html
         arXiv preprint https://arxiv.org/abs/1507.02646
     """
-    if not isinstance(loo_orig, ELPDData):
-        raise TypeError("loo_orig must be an ELPDData object.")
+    if not isinstance(loo_orig, ELPDDataLOO):
+        raise TypeError("loo_orig must be an ELPDDataLOO object.")
     if loo_orig.pareto_k is None or loo_orig.elpd_i is None:
         raise ValueError(
             "Moment matching requires pointwise LOO results with Pareto k values. "
@@ -278,17 +279,19 @@ def loo_moment_match(
             loo_data.elpd_i = None
             loo_data.pareto_k = None
             loo_data.influence_pareto_k = None
-            if hasattr(loo_data, "p_loo_i"):
-                loo_data.p_loo_i = None
-            if hasattr(loo_data, "n_eff_i"):
-                loo_data.n_eff_i = None
+            loo_data.p_loo_i = None
+            loo_data.n_eff_i = None
         return loo_data
+
+    log_jacobian = loo_orig.log_jacobian
+    if log_jacobian is not None:
+        loo_data.elpd_i = loo_data.elpd_i - log_jacobian
+        loo_data.elpd = np.nansum(loo_data.elpd_i.values)
 
     lpd = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
     loo_data.p_loo_i = lpd - loo_data.elpd_i
     kfs = np.zeros(n_data_points)
-    log_weights = getattr(loo_data, "log_weights", None)
-    r_eff_data = getattr(loo_data, "r_eff", reff)
+    log_weights = loo_data.log_weights
 
     # Moment matching algorithm
     for i in bad_obs_indices:
@@ -306,7 +309,7 @@ def loo_moment_match(
             ks=ks,
             log_weights=log_weights,
             pareto_k=loo_data.pareto_k,
-            r_eff=r_eff_data,
+            r_eff=reff,
             sample_dims=sample_dims,
             obs_dims=obs_dims,
             n_samples=n_samples,
@@ -344,7 +347,7 @@ def loo_moment_match(
                 UserWarning,
                 stacklevel=2,
             )
-            if hasattr(loo_orig, "p_loo_i") and loo_orig.p_loo_i is not None:
+            if loo_orig.p_loo_i is not None:
                 if len(obs_dims) == 1:
                     idx_dict = {obs_dims[0]: i}
                 else:
@@ -377,14 +380,17 @@ def loo_moment_match(
     elpd_raw = logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples).sum().values
     loo_data.p = elpd_raw - loo_data.elpd
 
+    if log_jacobian is not None:
+        loo_data.elpd_i = loo_data.elpd_i + log_jacobian
+        loo_data.elpd = np.nansum(loo_data.elpd_i.values)
+        loo_data.se = np.sqrt(n_data_points * np.nanvar(loo_data.elpd_i.values, ddof=1))
+
     if not pointwise:
         loo_data.elpd_i = None
         loo_data.pareto_k = None
         loo_data.influence_pareto_k = None
-        if hasattr(loo_data, "p_loo_i"):
-            loo_data.p_loo_i = None
-        if hasattr(loo_data, "n_eff_i"):
-            loo_data.n_eff_i = None
+        loo_data.p_loo_i = None
+        loo_data.n_eff_i = None
     return loo_data
 
 
@@ -497,7 +503,7 @@ def _split_moment_match(
 
     # Inverse Transformation
     upars_trans = upars_trans + (xr.DataArray(total_shift, dims=param_dim) + mean_original)
-    upars_trans_inv = upars_stacked - (xr.DataArray(total_shift, dims=param_dim) + mean_original)
+    upars_trans_inv = upars_stacked - mean_original
 
     if cov and dim > 0:
         try:
@@ -666,19 +672,15 @@ def _loo_moment_match_i(
     var_name,
 ):
     """Compute moment matching for a single observation."""
-    n_chains = upars.sizes["chain"]
-    n_draws = upars.sizes["draw"]
-
-    log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims).squeeze(drop=True)
+    log_liki = _get_log_likelihood_i(log_likelihood, i, obs_dims)
+    log_liki = log_liki.squeeze([dim for dim in obs_dims if dim in log_liki.dims], drop=True)
 
     if isinstance(r_eff, xr.DataArray):
         reff_i = _get_r_eff_i(r_eff, i, obs_dims)
     elif r_eff is not None:
         reff_i = r_eff
     else:
-        liki = np.exp(log_liki)
-        liki_reshaped = liki.values.reshape(n_chains, n_draws).T
-        ess_val = ess(liki_reshaped, method="mean").item()
+        ess_val = np.exp(log_liki).azstats.ess(method="mean")
         reff_i = ess_val / n_samples if n_samples > 0 else 1.0
 
     original_ki = ks[i]
@@ -696,7 +698,8 @@ def _loo_moment_match_i(
             log_lik_i=log_liki,
             var_name=var_name,
         )
-        lwi = log_weights_i.squeeze(drop=True).transpose(*sample_dims).astype(np.float64)
+        squeeze_dims = [dim for dim in obs_dims if dim in log_weights_i.dims]
+        lwi = log_weights_i.squeeze(squeeze_dims, drop=True).transpose(*sample_dims)
     else:
         log_ratio_i_init = -log_liki
         lwi, ki = _wrap__psislw(log_ratio_i_init, sample_dims, reff_i)
@@ -716,11 +719,10 @@ def _loo_moment_match_i(
         if iterind == max_iters:
             warnings.warn(
                 f"Maximum number of moment matching iterations ({max_iters}) reached "
-                f"for observation {i}. Final Pareto k is {ki:.2f}.",
+                f"for observation {i}. Increasing max_iters may improve accuracy.",
                 UserWarning,
                 stacklevel=2,
             )
-            break
 
         # Try Mean Shift
         try:
@@ -863,9 +865,7 @@ def _loo_moment_match_i(
         final_lwfi = lwfi
         final_ki = ki
 
-        liki_final = np.exp(final_log_liki)
-        liki_final_reshaped = liki_final.values.reshape(n_chains, n_draws).T
-        ess_val_final = ess(liki_final_reshaped, method="mean").item()
+        ess_val_final = np.exp(final_log_liki).azstats.ess(method="mean")
         reff_i = ess_val_final / n_samples if n_samples > 0 else 1.0
 
     lwi_vals = final_lwi.values.flatten()
@@ -917,13 +917,13 @@ def _update_loo_data_i(
     loo_data.elpd_i[idx_dict] = new_elpd_i
     loo_data.pareto_k[idx_dict] = new_pareto_k
 
-    if getattr(loo_data, "p_loo_i", None) is None:
+    if loo_data.p_loo_i is None:
         loo_data.p_loo_i = xr.full_like(loo_data.elpd_i, np.nan)
 
     loo_data.p_loo_i[idx_dict] = p_loo_i
 
     if n_eff_i is not None:
-        if getattr(loo_data, "n_eff_i", None) is None:
+        if loo_data.n_eff_i is None:
             loo_data.n_eff_i = xr.full_like(loo_data.elpd_i, np.nan)
         loo_data.n_eff_i[idx_dict] = n_eff_i
 
@@ -992,18 +992,7 @@ def _wrap__psislw(log_weights, sample_dims, r_eff):
     stacked = log_weights.stack(__sample__=sample_dims)
     stacked_for_psis = -stacked
 
-    try:
-        lw_stacked, k = stacked_for_psis.azstats.psislw(dim="__sample__", r_eff=r_eff)
-    except ValueError as err:
-        err_message = str(err)
-        fallback_errors = ("All tail values are the same", "n_draws_tail must be at least 5")
-        if not any(msg in err_message for msg in fallback_errors):
-            raise
-
-        log_norm = logsumexp(stacked, dims="__sample__")
-        lw_stacked = stacked - log_norm
-
-        k = np.inf
+    lw_stacked, k = stacked_for_psis.azstats.psislw(dim="__sample__", r_eff=r_eff)
 
     lw = lw_stacked.unstack("__sample__").transpose(*log_weights.dims)
 

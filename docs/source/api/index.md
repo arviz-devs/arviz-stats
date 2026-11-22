@@ -36,6 +36,8 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.psense_summary
    arviz_stats.rhat
    arviz_stats.rhat_nested
+   arviz_stats.text_loo_pit
+   arviz_stats.text_ppc_pit
 ```
 
 ### Statistical summaries
@@ -51,7 +53,9 @@ you should jump to {ref}`array_stats_api` and read forward.
    arviz_stats.eti
    arviz_stats.iqr
    arviz_stats.hdi
+   arviz_stats.hexbin
    arviz_stats.histogram
+   arviz_stats.histogram2d
    arviz_stats.kde
    arviz_stats.kl_divergence
    arviz_stats.loo_expectations
@@ -79,14 +83,30 @@ you should jump to {ref}`array_stats_api` and read forward.
    :toctree: generated/
 
    arviz_stats.compare
+   arviz_stats.lfo_cv
+   arviz_stats.lfo_score
    arviz_stats.loo
-   arviz_stats.loo_i
    arviz_stats.loo_approximate_posterior
+   arviz_stats.loo_i
    arviz_stats.loo_kfold
    arviz_stats.loo_moment_match
    arviz_stats.loo_subsample
    arviz_stats.reloo
    arviz_stats.update_subsample
+   arviz_stats.weight_predictions
+```
+
+### ELPD data
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   arviz_stats.ELPDData
+   arviz_stats.ELPDDataLOO
+   arviz_stats.ELPDDataLOOSubsample
+   arviz_stats.ELPDDataLOOKFold
+   arviz_stats.ELPDDataLFO
 ```
 
 ### Other
@@ -147,6 +167,8 @@ In addition, many functions are also available via accessors:
    arviz_stats.base.dataarray_stats.rhat_nested
    arviz_stats.base.dataarray_stats.mcse
    arviz_stats.base.dataarray_stats.histogram
+   arviz_stats.base.dataarray_stats.histogram2d
+   arviz_stats.base.dataarray_stats.hexbin
    arviz_stats.base.dataarray_stats.kde
    arviz_stats.base.dataarray_stats.autocorr
 ```
@@ -197,6 +219,8 @@ refer you to other pages for the full argument or algorithm descriptions.
    arviz_stats.base.array_stats.eti
    arviz_stats.base.array_stats.hdi
    arviz_stats.base.array_stats.histogram
+   arviz_stats.base.array_stats.histogram2d
+   arviz_stats.base.array_stats.hexbin
    arviz_stats.base.array_stats.kde
    arviz_stats.base.array_stats.quantile
 ```
@@ -209,6 +233,7 @@ refer you to other pages for the full argument or algorithm descriptions.
    arviz_stats.base.array_stats.loo
    arviz_stats.base.array_stats.loo_approximate_posterior
    arviz_stats.base.array_stats.loo_expectation
+   arviz_stats.base.array_stats.loo_influence
    arviz_stats.base.array_stats.loo_mixture
    arviz_stats.base.array_stats.loo_pit
    arviz_stats.base.array_stats.loo_quantile

@@ -27,7 +27,7 @@ def idata():
 
 @pytest.fixture(scope="function")
 def data(idata):
-    return idata.ds
+    return idata.dataset
 
 
 @pytest.mark.skip(reason="from_cmdstan not yet ported to arviz_base.")
@@ -202,6 +202,79 @@ def test_rhat_bad_method(rng):
     ary = rng.normal(size=(4, 100))
     with pytest.raises(ValueError):
         array_stats.rhat(ary, method="wrong_method")
+
+
+@pytest.mark.parametrize("method", ("rank", "split", "folded", "z_scale", "identity"))
+@pytest.mark.parametrize("draw", (1, 2, 3, 4))
+def test_rhat_nested_min_draws_by_method(rng, method, draw):
+    """Nested R-hat needs at least two draws per chain except for the identity method."""
+    ary = rng.normal(size=(4, draw))
+    rhat_data = array_stats.rhat_nested(ary, superchain_ids=[0, 0, 1, 1], method=method)
+    if method == "identity" or draw >= 2:
+        assert not np.isnan(rhat_data)
+    else:
+        assert np.isnan(rhat_data)
+
+
+def test_rhat_nested_single_draw_per_chain(rng):
+    """Single draw per chain with an extra dimension returns finite values."""
+    ary = rng.normal(size=(4, 1, 2))
+    rhat_data = array_stats.rhat_nested(
+        ary, superchain_ids=(0, 0, 1, 1), method="identity", chain_axis=0, draw_axis=1
+    )
+    assert rhat_data.shape == (2,)
+    assert np.all(np.isfinite(rhat_data))
+    assert np.all(rhat_data >= 1)
+
+
+def test_rhat_nested_undefined_returns_nan(rng):
+    """Nested R-hat is undefined without variation within and between superchains."""
+    assert np.isnan(array_stats.rhat_nested(rng.normal(size=(2, 1)), superchain_ids=[0, 1]))
+    assert np.isnan(array_stats.rhat_nested(rng.normal(size=(4, 10)), superchain_ids=[0, 0, 0, 0]))
+    assert np.isnan(array_stats.rhat_nested(rng.normal(size=(1, 10)), superchain_ids=[0]))
+
+
+@pytest.mark.parametrize("draw", (1, 5))
+def test_rhat_nested_identity_matches_formula(rng, draw):
+    ary = rng.normal(size=(4, draw))
+    superchain_ids = np.array([0, 0, 1, 1])
+
+    chain_mean = ary.mean(axis=1)
+    chain_var = ary.var(axis=1, ddof=1) if draw > 1 else np.zeros(ary.shape[0])
+
+    superchain_means = []
+    between_var = []
+    within_var = []
+    for label in np.unique(superchain_ids):
+        mask = superchain_ids == label
+        means = chain_mean[mask]
+        superchain_means.append(means.mean())
+        between_var.append(means.var(ddof=1) if means.size > 1 else 0.0)
+        within_var.append(chain_var[mask].mean())
+
+    var_between = np.var(superchain_means, ddof=1)
+    var_within = np.mean(np.asarray(within_var) + np.asarray(between_var))
+    expected = np.sqrt(1 + var_between / var_within)
+
+    result = array_stats.rhat_nested(ary, superchain_ids=superchain_ids, method="identity")
+    np.testing.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize("method", ("identity", "rank"))
+def test_rhat_nested_noncontiguous_ids(rng, method):
+    ary = rng.normal(size=(4, 100))
+    contiguous = array_stats.rhat_nested(ary, superchain_ids=[0, 0, 1, 1], method=method)
+    noncontiguous = array_stats.rhat_nested(ary, superchain_ids=[0, 0, 5, 5], method=method)
+    np.testing.assert_allclose(contiguous, noncontiguous)
+
+
+@pytest.mark.parametrize("method", ("rank", "split", "folded", "z_scale", "identity"))
+def test_rhat_nested_nan(rng, method):
+    """Confirm nested R-hat statistic returns nan."""
+    data = rng.normal(size=(4, 100))
+    data[0, 0] = np.nan  #  pylint: disable=unsupported-assignment-operation
+    rhat_data = array_stats.rhat_nested(data, superchain_ids=[0, 0, 1, 1], method=method)
+    assert np.isnan(rhat_data)
 
 
 @pytest.mark.parametrize(
@@ -388,7 +461,8 @@ def test_split_chain_dims(rng, chains, draws):
     assert split_data.shape == (chains * 2, draws // 2)
 
 
-def _pareto_pit_vec_test(draws, y_obs, log_weights=None, rng=None):
+def _pareto_pit_vec_test(draws, y_obs, log_weights=None):
+    rng = np.random.default_rng(124)
     draws = np.atleast_2d(np.asarray(draws, dtype=float))
     y_obs = np.atleast_1d(np.asarray(y_obs, dtype=float))
     if log_weights is not None:
@@ -412,7 +486,7 @@ def test_pareto_pit_bulk_values_match_raw_pit():
     draws = rng.normal(size=(3, 1000))
     y_obs = np.array([0.0, 0.1, -0.1])
 
-    refined = _pareto_pit_vec_test(draws, y_obs, rng=rng)
+    refined = _pareto_pit_vec_test(draws, y_obs)
     raw = np.mean(draws < y_obs[:, None], axis=1)
 
     np.testing.assert_allclose(refined, raw, atol=0.05)
@@ -494,25 +568,11 @@ def test_pareto_pit_extreme_tail_more_varied_than_ecdf():
     assert len(set(np.round(refined_vals, 6))) > len(set(np.round(raw_vals, 6)))
 
 
-def test_pareto_pit_discrete_randomization():
-    """With discrete observations matching draws, randomization should produce variation."""
-    draws = np.repeat([0, 1, 2, 3], 250).astype(float)
-    y_obs = 2.0
-
-    results = []
-    for seed in range(100):
-        rng = np.random.default_rng(seed)
-        results.append(_pareto_pit_vec_test(draws, y_obs, rng=rng))
-
-    assert np.std(results) > 0
-    assert all(0 <= r <= 1 for r in results)
-
-
 def test_pareto_pit_constant_draws():
     """Constant draws should not error; falls back to raw PIT."""
     draws = np.full(200, 5.0)
     y_obs = 5.0
-    result = _pareto_pit_vec_test(draws, y_obs, rng=np.random.default_rng(203))
+    result = _pareto_pit_vec_test(draws, y_obs)
     assert isinstance(result, float)
     assert 0 <= result <= 1
 
@@ -522,7 +582,7 @@ def test_pareto_pit_non_finite_draws_fallback():
     draws = np.arange(1, 100, dtype=float)
     draws = np.append(draws, np.nan)
     y_obs = 50.0
-    result = _pareto_pit_vec_test(draws, y_obs, rng=np.random.default_rng(203))
+    result = _pareto_pit_vec_test(draws, y_obs)
     assert isinstance(result, float)
     assert 0 <= result <= 1
 
@@ -564,3 +624,19 @@ def test_pareto_pit_with_log_weights():
     # Uniform weights should give similar results to no weights
     np.testing.assert_allclose(result_weighted, result_unweighted, atol=0.05)
     assert np.all((0 <= result_weighted) & (result_weighted <= 1))
+
+
+def test_pareto_pit_avoid_boundary_values():
+    """Randomized PIT must never equal 0, 0.5 or 1 exactly."""
+    rng = np.random.default_rng(7)
+    n_obs, n_draws = 500, 1000
+    draws = rng.normal(size=(n_obs, n_draws))
+    y_obs = rng.normal(size=n_obs)
+    for i in range(0, n_obs, 10):
+        s = np.sort(draws[i])
+        y_obs[i] = 0.5 * (s[n_draws // 2 - 1] + s[n_draws // 2])
+
+    pit = array_stats._pareto_pit_vec(draws, y_obs, rng=rng)
+    assert not np.any(pit == 0.5)
+    assert not np.any(pit == 0.0)
+    assert not np.any(pit == 1.0)

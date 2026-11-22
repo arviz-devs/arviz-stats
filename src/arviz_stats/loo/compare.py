@@ -12,7 +12,7 @@ from scipy.stats import dirichlet, norm
 from arviz_stats.base.stats_utils import get_decimal_places_from_se, round_num
 from arviz_stats.loo import loo
 from arviz_stats.loo.loo_helper import _diff_srs_estimator
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDData, ELPDDataLFO, ELPDDataLOOSubsample
 
 
 def compare(
@@ -29,6 +29,10 @@ def compare(
     The method is described in [1]_ and [2]_.
     By default, the weights are estimated using ``"stacking"`` as described in [3]_.
 
+    Precomputed pointwise LFO-CV results can also be compared, but only with other LFO-CV
+    results that use the same ``forecast_horizon`` and ``min_observations``. Raw model data
+    are evaluated with PSIS-LOO-CV and therefore cannot be mixed with LFO-CV results.
+
     If more than 11 models are compared, a diagnostic check for selection bias
     is performed [4]_. If detected, avoid LOO-based selection and use model averaging/stacking
     or `projection predictive inference <https://kulprit.readthedocs.io/en/latest/index.html>`_.
@@ -41,7 +45,8 @@ def compare(
     Parameters
     ----------
     compare_dict: dict of {str: DataTree or ELPDData}
-        A dictionary of model names and :class:`xr.DataTree` or ``ELPDData``.
+        A dictionary of model names and :class:`xr.DataTree` or ``ELPDData``. LFO-CV inputs
+        must be precomputed with ``pointwise=True``.
     method: str, optional
         Method used to estimate the weights for each model. Available options are:
 
@@ -51,6 +56,8 @@ def compare(
         - 'pseudo-BMA': pseudo-Bayesian Model averaging using Akaike-type
           weighting, without Bootstrap stabilization (not recommended).
 
+        Results from :func:`~arviz_stats.loo_subsample` only support 'pseudo-BMA', since the
+        other methods need pointwise values for every observation.
         For more information read https://arxiv.org/abs/1704.02030
     var_name: str, optional
         If there is more than a single observed variable in the ``InferenceData``, which
@@ -69,7 +76,8 @@ def compare(
 
         * ``elpd`` and ``elpd_diff`` are rounded based on ``se`` and ``dse`` respectively,
             using the same rule as ``summary`` stat/se pairs.
-        * ``se`` and ``dse`` are rounded based on ``rcParams["stats.round_to"]``.
+        * ``se``, ``dse`` and ``subsampling_dse`` are rounded based on
+          ``rcParams["stats.round_to"]``.
         * ``p`` is rounded to 1 decimal place.
         * ``weight`` uses precision based on the largest weight, showing approximately 2
           significant digits for that maximum value.
@@ -114,8 +122,11 @@ def compare(
           If ``K k_psis > threshold`` is shown, there may be significant bias in ELPD differences
           favoring models with a large number of high Pareto k values.
           The ``threshold`` is the ``good_k`` attribute in the input ELPD results.
+          It is always empty for LFO-CV results, because every forecast origin whose
+          Pareto k exceeds the threshold is refit exactly.
         - **p**: pIC, Estimated effective number of parameters.
-        - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`).
+        - **elpd**: ELPD estimated using PSIS-LOO-CV (`elpd_loo`). For LFO-CV inputs, this
+          contains the corresponding LFO-CV ELPD.
           Higher ELPD indicates higher out-of-sample predictive fit ("better" model).
         - **se**: Standard error of the ELPD estimate.
           If method = BB-pseudo-BMA these values are estimated using Bayesian bootstrap.
@@ -127,9 +138,6 @@ def compare(
         - **subsampling_dse**: (Only when subsampling is used) The subsampling component
           of the standard error of the ELPD difference. This quantifies the uncertainty due to
           using a subsample rather than all observations.
-        - **warning**: A value of 1 indicates that the computation of the ELPD may not be reliable.
-          This could be indication of LOO starting to fail see
-          http://arxiv.org/abs/1507.04544 for details.
 
     Examples
     --------
@@ -156,14 +164,16 @@ def compare(
            ...: data2 = load_arviz_data("centered_eight")
            ...: loo_sub1 = loo_subsample(data1, observations=6, pointwise=True, seed=42)
            ...: loo_sub2 = loo_subsample(data2, observations=6, pointwise=True, seed=42)
-           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2})
+           ...: compare({"non_centered": loo_sub1, "centered": loo_sub2}, method="pseudo-BMA")
 
     When using subsampled LOO, the ``subsampling_dse`` column quantifies the additional
-    uncertainty from using subsamples instead of all observations. The ``elpd_diff`` values
-    are computed using a difference-of-estimators approach on overlapping observations, which
-    can differ from simple subtraction of ELPD values. Using the same seed across models
-    ensures overlapping observations for more accurate paired comparisons with smaller
-    standard errors.
+    uncertainty from using subsamples instead of all observations. When the models use the
+    same subsample, or the subsample of one contains the other, the ``elpd_diff`` values
+    are computed using a difference-of-estimators approach on the shared observations, which
+    can differ from simple subtraction of ELPD values. Otherwise ``elpd_diff`` is the
+    difference of the ELPD estimates and ``dse`` treats the models as independent, which makes
+    it larger. Using the same seed and number of observations across models gives the same
+    subsample and a paired comparison with smaller standard errors.
 
     See Also
     --------
@@ -202,9 +212,7 @@ def compare(
     ics_dict = _calculate_ics(compare_dict, var_name=var_name)
     names = list(ics_dict.keys())
 
-    has_subsampling = any(
-        getattr(elpd, "subsample_size", None) is not None for elpd in ics_dict.values()
-    )
+    has_subsampling = any(isinstance(elpd, ELPDDataLOOSubsample) for elpd in ics_dict.values())
     if reference is not None:
         prob_direction = "p_better"
         sign = -1
@@ -239,20 +247,34 @@ def compare(
             f"https://doi.org/10.1214/17-BA1091."
         )
 
+    if has_subsampling and method.lower() != "pseudo-bma":
+        raise ValueError(
+            "Results from loo_subsample only support method='pseudo-BMA', because stacking and "
+            "BB-pseudo-BMA need pointwise values for all observations and a subsampled result "
+            "only has them for its subsample. Use loo for all observations instead."
+        )
+
     if reference is not None and reference not in names:
         raise ValueError(
             f"Reference model '{reference}' not found in compare_dict. "
             f"Available models: {', '.join(names)}"
         )
 
-    ics = pd.DataFrame.from_dict(ics_dict, orient="index")
-    ics.sort_values(by="elpd", inplace=True, ascending=False)
-    ics["elpd_i"] = ics["elpd_i"].apply(lambda x: x.values.flatten())
+    ics = pd.DataFrame(
+        {
+            "elpd": [elpd_data.elpd for elpd_data in ics_dict.values()],
+            "se": [elpd_data.se for elpd_data in ics_dict.values()],
+            "p": [elpd_data.p for elpd_data in ics_dict.values()],
+            "elpd_i": [elpd_data.elpd_i.values.flatten() for elpd_data in ics_dict.values()],
+        },
+        index=names,
+    )
+    ics = ics.sort_values(by="elpd", ascending=False)
     ses = ics["se"]
 
     if method.lower() == "stacking":
         rows, cols, ic_i_val = _ic_matrix(ics)
-        exp_ic_i = np.exp(ic_i_val)
+        exp_ic_i = np.exp(ic_i_val - np.max(ic_i_val, axis=1, keepdims=True))
 
         def log_score(weights):
             return -np.sum(np.log(np.dot(exp_ic_i, weights)))
@@ -333,11 +355,16 @@ def compare(
                 diag_diff = "|elpd_diff| < 4" if abs(d_ic) > 0 and abs(d_ic) < 4 else ""
 
             diag_elpd = ""
-            k_vals = current_elpd_data.pareto_k.values
-            khat_threshold = current_elpd_data.good_k
-            n_k_exceed = np.sum(k_vals > khat_threshold)
-            if n_k_exceed > 0:
-                diag_elpd = f"{n_k_exceed} k̂ > {khat_threshold:.2f}"
+            if (
+                current_elpd_data.pareto_k is not None
+                and current_elpd_data.good_k is not None
+                and not isinstance(current_elpd_data, ELPDDataLFO)
+            ):
+                k_vals = current_elpd_data.pareto_k.values
+                khat_threshold = current_elpd_data.good_k
+                n_k_exceed = np.sum(k_vals > khat_threshold)
+                if n_k_exceed > 0:
+                    diag_elpd = f"{n_k_exceed} k̂ > {khat_threshold:.2f}"
 
             row_data = {
                 "rank": idx,
@@ -380,6 +407,8 @@ def compare(
     else:
         if round_to not in ("None", "none"):
             cols_to_round = ["elpd", "p", "elpd_diff", "weight", "se", "dse", prob_direction]
+            if "subsampling_dse" in result.columns:
+                cols_to_round.append("subsampling_dse")
             result[cols_to_round] = result[cols_to_round].map(lambda x: round_num(x, round_val))
 
     model_order = list(ics.index)
@@ -388,11 +417,24 @@ def compare(
     return result
 
 
+def _subsample_observations(elpd_data):
+    """Return the subsampled observation indices, or None for a result without subsampling."""
+    if isinstance(elpd_data, ELPDDataLOOSubsample):
+        return elpd_data.loo_subsample_observations
+    return None
+
+
+def _subsampling_dse(elpd_a, elpd_b):
+    """Combine the subsampling standard errors of two results, zero when not subsampled."""
+    se_a = elpd_a.subsampling_se if isinstance(elpd_a, ELPDDataLOOSubsample) else 0.0
+    se_b = elpd_b.subsampling_se if isinstance(elpd_b, ELPDDataLOOSubsample) else 0.0
+    return np.sqrt(se_a**2 + se_b**2)
+
+
 def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
     """Compute ELPD differences for subsampled models."""
-    subsample_a = getattr(elpd_a, "loo_subsample_observations", None)
-    subsample_b = getattr(elpd_b, "loo_subsample_observations", None)
-    mixed_subsample = (subsample_a is None) != (subsample_b is None)
+    subsample_a = _subsample_observations(elpd_a)
+    subsample_b = _subsample_observations(elpd_b)
 
     if subsample_a is None and subsample_b is None:
         pointwise_a = elpd_a.elpd_i
@@ -401,29 +443,19 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
         if pointwise_a is None or pointwise_b is None:
             return _compute_naive_diff(elpd_a, elpd_b)
 
-        diff = (np.asarray(pointwise_a) - np.asarray(pointwise_b)).reshape(-1)
+        diff = np.ravel(pointwise_a) - np.ravel(pointwise_b)
         valid = diff[np.isfinite(diff)]
 
         if valid.size == 0:
             return _compute_naive_diff(elpd_a, elpd_b)
 
         elpd_diff = np.nansum(valid)
-        se_diff = np.sqrt(valid.size * np.nanvar(valid))
+        se_diff = np.sqrt(valid.size * np.nanvar(valid, ddof=1))
         result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
-
-        subsampling_a = getattr(elpd_a, "subsampling_se", None) or 0.0
-        subsampling_b = getattr(elpd_b, "subsampling_se", None) or 0.0
-        combined = np.sqrt(subsampling_a**2 + subsampling_b**2)
-
+        combined = _subsampling_dse(elpd_a, elpd_b)
         if combined:
             result["subsampling_dse"] = combined
         return result
-
-    if mixed_subsample:
-        warnings.warn(
-            "Estimated elpd_diff using observations included in loo calculations for all models.",
-            UserWarning,
-        )
 
     indices_a = (
         np.unique(np.asarray(subsample_a, dtype=int))
@@ -437,20 +469,21 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
     )
 
     shared = np.intersect1d(indices_a, indices_b)
-    subsample_mismatch = (
-        subsample_a is not None
-        and subsample_b is not None
-        and not np.array_equal(indices_a, indices_b)
-    )
+    nested = shared.size in (indices_a.size, indices_b.size)
 
-    if shared.size >= 2:
+    if nested:
+        if indices_a.size != indices_b.size:
+            warnings.warn(
+                "Estimated elpd_diff using observations included in loo calculations for all "
+                "models.",
+                UserWarning,
+            )
         result = _difference_estimator(elpd_a, elpd_b, shared, subsample_a, subsample_b)
         if result is not None:
-            result["subsample_mismatch"] = subsample_mismatch
             return result
 
     result = _compute_naive_diff(elpd_a, elpd_b)
-    result["subsample_mismatch"] = subsample_mismatch
+    result["subsample_mismatch"] = not nested
     return result
 
 
@@ -481,16 +514,16 @@ def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subs
         None if elpd_b_values is None else np.asarray(elpd_b_values, dtype=float).reshape(-1)
     )
 
-    approx_a_values = getattr(elpd_a, "elpd_loo_approx", None)
-    if approx_a_values is None:
-        approx_a_values = elpd_a_values
+    approx_a_values = (
+        elpd_a.elpd_loo_approx if isinstance(elpd_a, ELPDDataLOOSubsample) else elpd_a_values
+    )
     approx_a_full = (
         None if approx_a_values is None else np.asarray(approx_a_values, dtype=float).reshape(-1)
     )
 
-    approx_b_values = getattr(elpd_b, "elpd_loo_approx", None)
-    if approx_b_values is None:
-        approx_b_values = elpd_b_values
+    approx_b_values = (
+        elpd_b.elpd_loo_approx if isinstance(elpd_b, ELPDDataLOOSubsample) else elpd_b_values
+    )
     approx_b_full = (
         None if approx_b_values is None else np.asarray(approx_b_values, dtype=float).reshape(-1)
     )
@@ -528,15 +561,10 @@ def _difference_estimator(elpd_a, elpd_b, shared_indices, subsample_a=None, subs
 def _compute_naive_diff(elpd_a, elpd_b):
     """Compute naive ELPD difference using paired observations."""
     elpd_diff = elpd_a.elpd - elpd_b.elpd
-    se_a = getattr(elpd_a, "se", 0.0)
-    se_b = getattr(elpd_b, "se", 0.0)
-    se_diff = np.sqrt(se_a**2 + se_b**2)
+    se_diff = np.sqrt(elpd_a.se**2 + elpd_b.se**2)
 
     result = {"elpd_diff": elpd_diff, "se_diff": se_diff}
-    subsampling_a = getattr(elpd_a, "subsampling_se", None) or 0.0
-    subsampling_b = getattr(elpd_b, "subsampling_se", None) or 0.0
-    combined = np.sqrt(subsampling_a**2 + subsampling_b**2)
-
+    combined = _subsampling_dse(elpd_a, elpd_b)
     if combined:
         result["subsampling_dse"] = combined
     return result
@@ -595,6 +623,13 @@ def _calculate_ics(
         for name, elpd_data in compare_dict.items()
         if isinstance(elpd_data, ELPDData)
     }
+    raw_names = [name for name, result in compare_dict.items() if not isinstance(result, ELPDData)]
+    if raw_names and any(result.kind == "lfo_cv" for result in precomputed_elpds.values()):
+        raise ValueError(
+            "Cannot compare LFO-CV results with raw model data. Raw inputs are evaluated "
+            f"with PSIS-LOO-CV. Precompute pointwise LFO-CV for models {raw_names}."
+        )
+
     if precomputed_elpds:
         for name, elpd_data in precomputed_elpds.items():
             if elpd_data.elpd_i is None:
@@ -613,7 +648,16 @@ def _calculate_ics(
         if len(methods_used) > 1:
             has_loo = "loo" in methods_used
             has_kfold = "loo_kfold" in methods_used
+            has_lfo = "lfo_cv" in methods_used
 
+            # LFO-CV should only be compared with other LFO-CV results
+            if has_lfo:
+                method_list = sorted(methods_used, key=str)
+                raise ValueError(
+                    f"Cannot compare LFO-CV results with other cross-validation methods: "
+                    f"{method_list}. LFO-CV evaluates time series predictive accuracy and "
+                    f"should only be compared with other LFO-CV results."
+                )
             if has_loo and has_kfold and len(methods_used) == 2:
                 warnings.warn(
                     "Comparing LOO-CV to K-fold-CV. "
@@ -622,12 +666,24 @@ def _calculate_ics(
                     UserWarning,
                 )
             else:
-                method_list = sorted(methods_used.keys())
+                method_list = sorted(methods_used, key=str)
                 raise ValueError(
                     f"Cannot compare models with incompatible cross-validation methods: "
-                    f"{method_list}. Only comparisons between 'loo' and 'loo_kfold' methods "
+                    f"{method_list}. Only 'loo', 'loo_kfold', and 'lfo_cv' methods "
                     f"are supported currently."
                 )
+
+        lfo_settings = {
+            name: (elpd_data.forecast_horizon, elpd_data.min_observations)
+            for name, elpd_data in precomputed_elpds.items()
+            if isinstance(elpd_data, ELPDDataLFO)
+        }
+        if len(lfo_settings) > 1 and len(set(lfo_settings.values())) > 1:
+            raise ValueError(
+                f"Cannot compare LFO-CV results computed with different settings: "
+                f"{lfo_settings}. All models must use the same forecast_horizon "
+                f"and min_observations."
+            )
 
     new_compare_dict = deepcopy(compare_dict)
     for name, dataset in compare_dict.items():
@@ -722,6 +778,11 @@ def _round_compare(result, round_val, prob_direction):
 
             decimal_places = get_decimal_places_from_se(se_val)
             result.loc[idx, stat_col] = round_num(stat_val, decimal_places)
+
+    if "subsampling_dse" in result.columns:
+        result["subsampling_dse"] = result["subsampling_dse"].apply(
+            lambda x: round_num(x, round_val)
+        )
 
     if "p" in result.columns:
         result["p"] = result["p"].apply(lambda x: round_num(x, 1))

@@ -13,9 +13,10 @@ azb = importorskip("arviz_base")
 pd = importorskip("pandas")
 sp = importorskip("scipy")
 
-from arviz_stats import compare, loo, loo_subsample, update_subsample
+from arviz_stats import compare, lfo_cv, loo, loo_subsample, update_subsample
 from arviz_stats.loo import _calculate_ics
 from arviz_stats.loo.compare import _round_compare
+from arviz_stats.utils import ELPDData, ELPDDataLOOKFold
 
 
 def log_lik_fn_subsample(obs_da, datatree):
@@ -114,9 +115,19 @@ def test_calculate_ics_pointwise_error(centered_eight, non_centered_eight):
 
 def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
     loo_result = loo(centered_eight, pointwise=True)
-    kfold_result = loo(non_centered_eight, pointwise=True)
-    kfold_result = copy.deepcopy(kfold_result)
-    kfold_result.kind = "loo_kfold"
+    other_result = loo(non_centered_eight, pointwise=True)
+    kfold_result = ELPDDataLOOKFold(
+        elpd=other_result.elpd,
+        se=other_result.se,
+        p=other_result.p,
+        n_samples=other_result.n_samples,
+        n_data_points=other_result.n_data_points,
+        scale="log",
+        warning=False,
+        good_k=None,
+        elpd_i=other_result.elpd_i,
+        n_folds=4,
+    )
 
     compare_dict = {
         "loo_model": loo_result,
@@ -135,18 +146,79 @@ def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_compare_unsupported_mixed_methods(centered_eight):
     loo_result = loo(centered_eight, pointwise=True)
-
-    waic_result = copy.deepcopy(loo_result)
-    waic_result.kind = "waic"
+    unknown_result = ELPDData(
+        elpd=loo_result.elpd,
+        se=loo_result.se,
+        p=loo_result.p,
+        n_samples=loo_result.n_samples,
+        n_data_points=loo_result.n_data_points,
+        scale="log",
+        warning=False,
+        good_k=None,
+        elpd_i=loo_result.elpd_i,
+    )
 
     compare_dict = {
         "loo_model": loo_result,
-        "waic_model": waic_result,
+        "unknown_model": unknown_result,
     }
 
     with pytest.raises(
-        ValueError, match="Cannot compare models with incompatible cross-validation methods.*waic"
+        ValueError, match="Cannot compare models with incompatible cross-validation methods.*None"
     ):
+        compare(compare_dict)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_lfo(lfo_result_factory):
+    result = compare({"m1": lfo_result_factory(sigma=1.0), "m2": lfo_result_factory(sigma=1.3)})
+
+    assert len(result) == 2
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+def test_compare_lfo_refits_not_flagged(varying_lfo_wrapper, lfo_varying_data):
+    result = lfo_cv(
+        lfo_varying_data,
+        varying_lfo_wrapper,
+        min_observations=3,
+        forecast_horizon=2,
+        method="approx",
+        k_threshold=0.5,
+        pointwise=True,
+    )
+
+    comparison = compare({"m1": result, "m2": result})
+
+    assert (comparison["diag_elpd"] == "").all()
+
+
+def test_compare_lfo_mixed_settings(lfo_result_factory):
+    result_h1 = lfo_result_factory(min_observations=8, forecast_horizon=1)
+    result_h2 = lfo_result_factory(min_observations=7, forecast_horizon=2)
+    assert result_h1.n_data_points == result_h2.n_data_points
+
+    with pytest.raises(ValueError, match="different settings"):
+        compare({"m1": result_h1, "m2": result_h2})
+
+
+def test_compare_lfo_with_other_methods(centered_eight, lfo_result_factory):
+    compare_dict = {
+        "loo_model": loo(centered_eight, pointwise=True),
+        "lfo_model": lfo_result_factory(),
+    }
+
+    with pytest.raises(ValueError, match="Cannot compare LFO-CV results"):
+        compare(compare_dict)
+
+
+def test_compare_lfo_with_raw_model_data(centered_eight, lfo_result_factory):
+    compare_dict = {
+        "raw_loo_model": centered_eight,
+        "lfo_model": lfo_result_factory(),
+    }
+
+    with pytest.raises(ValueError, match="Cannot compare LFO-CV results"):
         compare(compare_dict)
 
 
@@ -195,25 +267,97 @@ def test_compare_subsampled(centered_eight_with_sigma, centered_eight):
 
     loo_full = loo(centered_eight, pointwise=True)
 
-    comparison_subsampled = compare({"model1": loo_sub1, "model2": loo_sub2})
+    comparison_subsampled = compare({"model1": loo_sub1, "model2": loo_sub2}, method="pseudo-BMA")
     assert "subsampling_dse" in comparison_subsampled.columns
     assert np.isfinite(comparison_subsampled["subsampling_dse"].values).all()
     assert np.isfinite(comparison_subsampled["dse"].values).all()
     assert_almost_equal(comparison_subsampled["elpd_diff"].iloc[0], 0.0, decimal=4)
 
-    comparison_updated = compare({"model1": loo_sub1, "model2": loo_updated})
+    comparison_updated = compare({"model1": loo_sub1, "model2": loo_updated}, method="pseudo-BMA")
     assert "subsampling_dse" in comparison_updated.columns
     assert np.isfinite(comparison_updated["subsampling_dse"].values).all()
 
     with pytest.warns(UserWarning, match="Different subsamples used in 'model_a' and 'model_b'"):
-        comparison_diff_subsample = compare({"model_a": loo_sub1, "model_b": loo_sub3})
+        comparison_diff_subsample = compare(
+            {"model_a": loo_sub1, "model_b": loo_sub3}, method="pseudo-BMA", round_to=1
+        )
     assert "subsampling_dse" in comparison_diff_subsample.columns
     assert np.isfinite(comparison_diff_subsample["subsampling_dse"].values).all()
+    assert_allclose(comparison_diff_subsample["subsampling_dse"].to_numpy(), [0.0, 0.4])
 
     comparison_regular = compare({"model1": loo_full, "model2": loo_full})
     assert "subsampling_dse" not in comparison_regular.columns
     assert np.isfinite(comparison_regular["dse"].values).all()
     assert_almost_equal(comparison_regular["elpd_diff"].iloc[0], 0.0, decimal=4)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_subsampled_partial_overlap(centered_eight, non_centered_eight):
+    loo_a = loo_subsample(
+        centered_eight, observations=np.array([0, 1, 2, 3, 4]), var_name="obs", pointwise=True
+    )
+    loo_b = loo_subsample(
+        non_centered_eight, observations=np.array([2, 3, 4, 5, 6]), var_name="obs", pointwise=True
+    )
+
+    with pytest.warns(UserWarning, match="Naive diff SE is used"):
+        result = compare({"a": loo_a, "b": loo_b}, method="pseudo-BMA", round_to="none")
+
+    assert_allclose(result["elpd_diff"].iloc[1], -abs(loo_a.elpd - loo_b.elpd))
+    assert_allclose(result["dse"].iloc[1], np.sqrt(loo_a.se**2 + loo_b.se**2))
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_subsampled_nested(centered_eight, non_centered_eight):
+    loo_a = loo_subsample(
+        centered_eight, observations=np.array([0, 1, 2, 3, 4, 5]), var_name="obs", pointwise=True
+    )
+    loo_b = loo_subsample(
+        non_centered_eight, observations=np.array([0, 1, 2, 3]), var_name="obs", pointwise=True
+    )
+
+    with pytest.warns(UserWarning, match="observations included in loo calculations") as record:
+        compare({"a": loo_a, "b": loo_b}, method="pseudo-BMA")
+
+    assert not any("Naive diff SE" in str(warning.message) for warning in record)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_compare_subsampled_with_full_loo(centered_eight_with_sigma):
+    loo_sub = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 1, 2, 3]),
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        pointwise=True,
+    )
+    loo_full = loo(centered_eight_with_sigma, pointwise=True, var_name="obs")
+
+    with pytest.warns(UserWarning, match="observations included in loo calculations"):
+        result = compare({"sub": loo_sub, "full": loo_full}, method="pseudo-BMA")
+
+    assert "subsampling_dse" in result.columns
+    assert np.isfinite(result["subsampling_dse"].values).all()
+    assert_allclose(result["weight"].sum(), 1.0)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize("method", ["stacking", "BB-pseudo-BMA"])
+def test_compare_subsampled_needs_pseudo_bma(centered_eight_with_sigma, method):
+    loo_sub = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 1, 2, 3]),
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        pointwise=True,
+    )
+    loo_full = loo(centered_eight_with_sigma, pointwise=True, var_name="obs")
+    with pytest.raises(ValueError, match="pseudo-BMA"):
+        compare({"sub": loo_sub, "full": loo_full}, method=method)
 
 
 @pytest.mark.parametrize("method", ["BB-pseudo-BMA", "pseudo-BMA"])
@@ -338,6 +482,48 @@ def test_compare_elpd_diff_consistency(centered_eight, non_centered_eight):
 
     expected_diff = second_elpd - best_elpd
     assert_almost_equal(reported_diff, expected_diff, decimal=5)
+
+
+def test_compare_dse(centered_eight, non_centered_eight):
+    elpds = {"centered": loo(centered_eight), "non_centered": loo(non_centered_eight)}
+    result = compare(elpds, round_to="none")
+    best, other = result.index
+    diff = elpds[best].elpd_i.values - elpds[other].elpd_i.values
+    assert_allclose(result.loc[other, "dse"], np.sqrt(diff.size * np.var(diff, ddof=1)))
+
+
+@pytest.mark.parametrize("extra_dim_model", ["a", "b"])
+def test_compare_elpd_i_extra_dim(centered_eight, extra_dim_model):
+    delta = 0.1 * np.arange(1, 9)
+    log_lik = centered_eight.log_likelihood["obs"]
+    log_liks = {"a": log_lik, "b": log_lik - log_lik.school.copy(data=delta)}
+    log_liks[extra_dim_model] = log_liks[extra_dim_model].expand_dims(extra=1, axis=-1)
+    elpds = {}
+    for name, model_log_lik in log_liks.items():
+        data = centered_eight.copy()
+        data["log_likelihood"] = data["log_likelihood"].to_dataset().assign(obs=model_log_lik)
+        elpds[name] = loo(data)
+    result = compare(elpds, round_to="none")
+    assert_allclose(result.loc["b", "elpd_diff"], -delta.sum())
+    assert_allclose(result.loc["b", "dse"], np.sqrt(delta.size) * delta.std(ddof=1))
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize("offset", [1000.0, -1000.0])
+def test_compare_stacking_invariant_to_constant_shift(centered_eight, non_centered_eight, offset):
+    elpds = {"centered": loo(centered_eight), "non_centered": loo(non_centered_eight)}
+    expected = compare(elpds, method="stacking", round_to="none")["weight"]
+
+    shifted = {}
+    for name, elpd_data in elpds.items():
+        elpd_data = copy.deepcopy(elpd_data)
+        elpd_data.elpd_i[0] = elpd_data.elpd_i[0] + offset
+        elpd_data.elpd = elpd_data.elpd + offset
+        shifted[name] = elpd_data
+    weight = compare(shifted, method="stacking", round_to="none")["weight"]
+
+    assert np.all(np.isfinite(weight))
+    assert_allclose(weight[expected.index], expected, atol=1e-6)
 
 
 def test_compare_all_methods_produce_same_ranking(centered_eight, non_centered_eight):
@@ -482,10 +668,10 @@ def test_compare_order_stat_check_subsampling(centered_eight_with_sigma, rng):
         loo_sub = copy.deepcopy(base_loo_sub)
         shift = rng.normal(0, 0.1, size=loo_sub.elpd_i.shape)
         loo_sub.elpd_i = loo_sub.elpd_i + shift
-        loo_sub.elpd = np.sum(loo_sub.elpd_i)
+        loo_sub.elpd = loo_sub.elpd_i.sum().item()
         models[f"model_{i}"] = loo_sub
 
-    result = compare(models)
+    result = compare(models, method="pseudo-BMA")
     assert len(result) == 12
     assert "subsampling_dse" in result.columns
 
@@ -511,6 +697,7 @@ def test_round_auto():
             "rank": [0, 1, 2],
             "elpd_diff": [0.0, -0.031, -1.5],
             "dse": [0.0, 0.061, 0.0],
+            "subsampling_dse": [0.0, 0.369184, 0.072078],
             "p_worse": [0.9123, 0.9123, 0.0001],
             "diag_diff": ["", "", "N < 100"],
             "diag_elpd": ["", "", ""],
@@ -526,6 +713,7 @@ def test_round_auto():
 
     assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.0, 0.0, -2]))
     assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06, 0.0]))
+    assert_allclose(result["subsampling_dse"].to_numpy(), np.array([0.0, 0.37, 0.07]))
     assert_allclose(result["p_worse"].to_numpy(), np.array([0.91, 0.91, 0.0]))
     assert (result["diag_diff"] == ["", "", "N < 100"]).all()
     assert (result["diag_elpd"] == ["", "", ""]).all()
@@ -544,7 +732,7 @@ def test_round_int(centered_eight, non_centered_eight):
     assert_allclose(result["p"].to_numpy(), np.array([0.86, 0.95]))
     assert_allclose(result["elpd_diff"].to_numpy(), np.array([0.00, -0.03]))
     assert_allclose(result["weight"].to_numpy(), np.array([1.0, 0.0]))
-    assert_allclose(result["se"].to_numpy(), np.array([1.38, 1.34]))
+    assert_allclose(result["se"].to_numpy(), np.array([1.47, 1.43]))
     assert_allclose(result["dse"].to_numpy(), np.array([0.0, 0.06]))
 
 

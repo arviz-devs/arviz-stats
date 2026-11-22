@@ -11,8 +11,8 @@ azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 sp = importorskip("scipy")
 
-from arviz_stats import loo_subsample, update_subsample
-from arviz_stats.utils import ELPDData
+from arviz_stats import loo, loo_subsample, update_subsample
+from arviz_stats.utils import ELPDDataLOO, ELPDDataLOOKFold, ELPDDataLOOSubsample
 
 
 def log_lik_fn(obs_da, datatree):
@@ -43,7 +43,7 @@ def test_loo_subsample(centered_eight_with_sigma, pointwise, method):
         seed=42,
     )
 
-    assert isinstance(loo_sub, ELPDData)
+    assert isinstance(loo_sub, ELPDDataLOOSubsample)
     assert loo_sub.kind == "loo"
     assert loo_sub.subsample_size == observations
     assert isinstance(loo_sub.elpd, float)
@@ -91,7 +91,7 @@ def test_loo_subsample_with_custom_loglik(centered_eight_with_sigma, method):
         pointwise=True,
     )
 
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     assert result.subsample_size == observations
     assert -40 < result.elpd < -25
     assert np.sum(~np.isnan(result.pareto_k.values)) == observations
@@ -178,14 +178,43 @@ def test_loo_subsample_thin_parameter(centered_eight_with_sigma, thin):
         seed=42,
     )
 
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     assert result.kind == "loo"
     assert -40 < result.elpd < -25
     assert result.subsample_size == 4
 
     if thin is not None:
-        assert hasattr(result, "thin_factor")
         assert result.thin_factor == thin
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_loo_subsample_thin_r_eff(centered_eight):
+    thinned = centered_eight.isel(draw=slice(None, None, 5), missing_dims="ignore")
+    expected = loo_subsample(thinned, observations=8, var_name="obs", pointwise=True)
+
+    result = loo_subsample(centered_eight, observations=8, var_name="obs", thin=5, pointwise=True)
+
+    assert_allclose(result.pareto_k, expected.pareto_k)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_update_subsample_thin_r_eff(centered_eight):
+    thinned = centered_eight.isel(draw=slice(None, None, 5), missing_dims="ignore")
+    expected = update_subsample(
+        loo_subsample(thinned, observations=4, var_name="obs", pointwise=True),
+        thinned,
+        observations=4,
+        var_name="obs",
+    )
+
+    result = update_subsample(
+        loo_subsample(centered_eight, observations=4, var_name="obs", thin=5, pointwise=True),
+        centered_eight,
+        observations=4,
+        var_name="obs",
+    )
+
+    assert_allclose(result.pareto_k, expected.pareto_k)
 
 
 def test_loo_subsample_validation_errors(centered_eight_with_sigma):
@@ -221,8 +250,6 @@ def test_log_weights_storage_subsample(centered_eight_with_sigma):
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_log_weights_input_formats_subsample(centered_eight_with_sigma):
-    from arviz_stats import loo
-
     loo_result = loo(centered_eight_with_sigma, pointwise=True)
     loo_sub_elpddata = loo_subsample(
         centered_eight_with_sigma,
@@ -307,26 +334,26 @@ def test_update_subsample_size_increases(centered_eight_with_sigma):
     assert initial.subsample_size == 2
 
 
-def test_loo_subsample_methods_differ(centered_eight_with_sigma):
+def test_loo_subsample_p_loo_independent_of_approximation(centered_eight_with_sigma):
+    observations = np.array([1, 3, 5])
     result_lpd = loo_subsample(
         centered_eight_with_sigma,
-        observations=4,
+        observations=observations,
         method="lpd",
         var_name="obs",
-        seed=42,
         pointwise=True,
     )
     result_plpd = loo_subsample(
         centered_eight_with_sigma,
-        observations=4,
+        observations=observations,
         method="plpd",
         var_name="obs",
         log_lik_fn=log_lik_fn_subsample,
         param_names=["theta"],
-        seed=42,
         pointwise=True,
     )
     assert result_lpd.elpd != result_plpd.elpd
+    assert_allclose(result_lpd.p, result_plpd.p)
 
 
 def test_loo_subsample_observations_as_array(centered_eight_with_sigma):
@@ -339,7 +366,7 @@ def test_loo_subsample_observations_as_array(centered_eight_with_sigma):
         seed=42,
     )
     assert result.subsample_size == 4
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     non_nan_indices = np.where(~np.isnan(result.elpd_i.values))[0]
     assert np.array_equal(non_nan_indices, indices)
     assert np.sum(~np.isnan(result.pareto_k.values)) == 4
@@ -379,7 +406,7 @@ def test_loo_subsample_custom_reff(centered_eight_with_sigma):
         seed=42,
         pointwise=True,
     )
-    assert isinstance(result_custom, ELPDData)
+    assert isinstance(result_custom, ELPDDataLOOSubsample)
     assert result_custom.elpd != result_default.elpd
 
 
@@ -402,7 +429,7 @@ def test_loo_subsample_lpd_custom_loglik(centered_eight_with_sigma):
         seed=42,
         pointwise=True,
     )
-    assert isinstance(result_custom, ELPDData)
+    assert isinstance(result_custom, ELPDDataLOOSubsample)
     assert_allclose(result_custom.elpd, result_precomputed.elpd, rtol=5e-2)
     assert_allclose(result_custom.p, result_precomputed.p, rtol=5e-2)
 
@@ -424,7 +451,7 @@ def test_loo_subsample_log_false(centered_eight_with_sigma):
         seed=42,
         pointwise=True,
     )
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     assert np.isfinite(result.elpd)
     assert -40 < result.elpd < -25
 
@@ -451,9 +478,21 @@ def test_loo_subsample_all_observations(centered_eight_with_sigma):
         seed=42,
         pointwise=True,
     )
+    result_plpd = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.arange(n_obs),
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        pointwise=True,
+    )
+    result_full = loo(centered_eight_with_sigma, var_name="obs")
+
     assert result.subsample_size == n_obs
     assert np.sum(~np.isnan(result.elpd_i.values)) == n_obs
     assert result.subsampling_se == 0.0
+    assert_allclose(result_plpd.p, result_full.p)
 
 
 def test_loo_subsample_seed_reproducibility(centered_eight_with_sigma):
@@ -520,7 +559,7 @@ def test_loo_subsample_observations_exceeds_total(centered_eight_with_sigma):
 
 
 def test_loo_subsample_plpd_without_loglik(centered_eight_with_sigma):
-    with pytest.raises(ValueError, match="log_lik_fn must be provided when method='plpd'"):
+    with pytest.raises(ValueError, match="log_lik_fn or model must be provided when method='plpd'"):
         loo_subsample(
             centered_eight_with_sigma,
             observations=4,
@@ -551,6 +590,94 @@ def test_update_subsample_with_array_observations(centered_eight_with_sigma):
     )
     assert updated.subsample_size == 5
     assert np.sum(~np.isnan(updated.elpd_i.values)) == 5
+
+
+def test_update_subsample_repeated_obs_labels():
+    rng = np.random.default_rng(0)
+    idata = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 200))},
+            "log_likelihood": {"y": rng.normal(-1, 0.3, size=(2, 200, 6))},
+        },
+        dims={"y": ["match"]},
+        coords={"match": ["a", "b", "a", "c", "b", "a"]},
+    )
+
+    initial = loo_subsample(idata, observations=np.array([0, 3]), pointwise=True, var_name="y")
+    updated = update_subsample(initial, idata, observations=np.array([1, 4]), var_name="y")
+    expected = loo_subsample(idata, observations=np.array([0, 1, 3, 4]), var_name="y")
+
+    assert_allclose(updated.elpd, expected.elpd)
+    assert_allclose(updated.se, expected.se)
+    assert_allclose(updated.subsampling_se, expected.subsampling_se)
+
+
+def test_update_subsample_log_weights():
+    rng = np.random.default_rng(0)
+    idata = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 200))},
+            "log_likelihood": {"y": rng.normal(-1, 0.3, size=(2, 200, 6))},
+        },
+        dims={"y": ["match"]},
+    )
+
+    initial = loo_subsample(idata, observations=np.array([0, 3]), pointwise=True, var_name="y")
+    updated = update_subsample(initial, idata, observations=np.array([1, 4]), var_name="y")
+    expected = loo_subsample(
+        idata, observations=np.array([0, 1, 3, 4]), pointwise=True, var_name="y"
+    )
+
+    assert_allclose(updated.log_weights["y"].sortby("match"), expected.log_weights["y"])
+
+
+def test_update_subsample_multidim_obs():
+    rng = np.random.default_rng(0)
+    idata = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(2, 200))},
+            "log_likelihood": {"y": rng.normal(-1, 0.3, size=(2, 200, 2, 3))},
+        },
+        dims={"y": ["row", "col"]},
+    )
+
+    initial = loo_subsample(idata, observations=np.array([0, 4]), pointwise=True, var_name="y")
+    updated = update_subsample(initial, idata, observations=np.array([1, 5]), var_name="y")
+    expected = loo_subsample(idata, observations=np.array([0, 1, 4, 5]), var_name="y")
+
+    assert_allclose(updated.elpd, expected.elpd)
+    assert_allclose(updated.se, expected.se)
+    assert_allclose(updated.subsampling_se, expected.subsampling_se)
+
+
+def test_update_subsample_reuses_approximation(centered_eight_with_sigma):
+    log_jacobian = -np.log1p(np.abs(centered_eight_with_sigma.observed_data["obs"]))
+    initial = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 3]),
+        var_name="obs",
+        pointwise=True,
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        log_jacobian=log_jacobian,
+    )
+    updated = update_subsample(
+        initial, centered_eight_with_sigma, observations=np.array([1, 5]), var_name="obs"
+    )
+    expected = loo_subsample(
+        centered_eight_with_sigma,
+        observations=np.array([0, 1, 3, 5]),
+        var_name="obs",
+        method="plpd",
+        log_lik_fn=log_lik_fn_subsample,
+        param_names=["theta"],
+        log_jacobian=log_jacobian,
+    )
+
+    assert_allclose(updated.elpd, expected.elpd)
+    assert_allclose(updated.se, expected.se)
+    assert_allclose(updated.subsampling_se, expected.subsampling_se)
 
 
 def test_update_subsample_observations_none(centered_eight_with_sigma):
@@ -589,29 +716,45 @@ def test_update_subsample_observations_zero(centered_eight_with_sigma):
     assert updated.subsample_size == initial.subsample_size
 
 
-def test_update_subsample_plpd_method(centered_eight_with_sigma):
-    initial = loo_subsample(
+def test_update_subsample_p_loo_independent_of_approximation(centered_eight_with_sigma):
+    initial_observations = np.array([0, 2, 4])
+    new_observations = np.array([1, 3])
+    initial_lpd = loo_subsample(
         centered_eight_with_sigma,
-        observations=3,
+        observations=initial_observations,
+        var_name="obs",
+        method="lpd",
+        pointwise=True,
+    )
+    initial_plpd = loo_subsample(
+        centered_eight_with_sigma,
+        observations=initial_observations,
         var_name="obs",
         method="plpd",
         log_lik_fn=log_lik_fn_subsample,
         param_names=["theta"],
-        seed=42,
+        pointwise=True,
     )
-    updated = update_subsample(
-        initial,
+    updated_lpd = update_subsample(
+        initial_lpd,
         centered_eight_with_sigma,
-        observations=2,
+        observations=new_observations,
+        var_name="obs",
+        method="lpd",
+    )
+    updated_plpd = update_subsample(
+        initial_plpd,
+        centered_eight_with_sigma,
+        observations=new_observations,
         var_name="obs",
         method="plpd",
         log_lik_fn=log_lik_fn_subsample,
         param_names=["theta"],
-        seed=43,
     )
-    assert updated.subsample_size == 5
-    assert isinstance(updated, ELPDData)
-    assert np.isfinite(updated.elpd)
+    assert updated_plpd.subsample_size == 5
+    assert isinstance(updated_plpd, ELPDDataLOOSubsample)
+    assert np.isfinite(updated_plpd.elpd)
+    assert_allclose(updated_lpd.p, updated_plpd.p)
 
 
 def test_update_subsample_without_pointwise_raises(centered_eight_with_sigma):
@@ -631,6 +774,39 @@ def test_update_subsample_without_pointwise_raises(centered_eight_with_sigma):
         )
 
 
+def test_loo_subsample_rejects_kfold_log_weights(centered_eight_with_sigma):
+    kfold_result = ELPDDataLOOKFold(
+        elpd=-30.0,
+        se=2.0,
+        p=3.0,
+        n_samples=100,
+        n_data_points=8,
+        scale="log",
+        warning=False,
+        good_k=None,
+        n_folds=4,
+    )
+    with pytest.raises(ValueError, match="ELPDData object does not contain log_weights"):
+        loo_subsample(
+            centered_eight_with_sigma, observations=4, var_name="obs", log_weights=kfold_result
+        )
+
+
+def test_update_subsample_rejects_plain_loo_result(centered_eight_with_sigma):
+    loo_result = ELPDDataLOO(
+        elpd=-30.0,
+        se=2.0,
+        p=3.0,
+        n_samples=100,
+        n_data_points=8,
+        scale="log",
+        warning=False,
+        good_k=0.7,
+    )
+    with pytest.raises(TypeError, match="loo_orig must be an ELPDDataLOOSubsample object"):
+        update_subsample(loo_result, centered_eight_with_sigma, observations=2, var_name="obs")
+
+
 def test_loo_subsample_approximate_posterior(centered_eight, log_densities):
     log_p, log_q = log_densities["dataarray"]
     result = loo_subsample(
@@ -642,7 +818,7 @@ def test_loo_subsample_approximate_posterior(centered_eight, log_densities):
         seed=42,
         pointwise=True,
     )
-    assert isinstance(result, ELPDData)
+    assert isinstance(result, ELPDDataLOOSubsample)
     assert result.approx_posterior is True
     assert np.isfinite(result.elpd)
     assert result.log_p is not None
@@ -720,6 +896,7 @@ def test_loo_subsample_jacobian(centered_eight_with_sigma, method):
     loo_with_jac = loo_subsample(centered_eight, **loo_kwargs, log_jacobian=log_jacobian)
 
     assert loo_with_jac.elpd != loo_no_jac.elpd
+    assert_allclose(loo_with_jac.p, loo_no_jac.p)
     assert loo_with_jac.elpd_i is not None
     assert loo_no_jac.elpd_i is not None
 
@@ -745,7 +922,8 @@ def test_loo_subsample_jacobian(centered_eight_with_sigma, method):
     assert loo_no_pointwise.elpd != loo_no_jac.elpd
 
 
-def test_update_subsample_jacobian(centered_eight_with_sigma):
+@pytest.mark.parametrize("method", ["lpd", "plpd"])
+def test_update_subsample_jacobian(centered_eight_with_sigma, method):
     centered_eight = centered_eight_with_sigma
 
     y_obs = centered_eight.observed_data["obs"].values
@@ -757,8 +935,18 @@ def test_update_subsample_jacobian(centered_eight_with_sigma):
         coords={"school": centered_eight.observed_data["obs"].coords["school"]},
     )
 
+    method_log_lik_fn = log_lik_fn_subsample if method == "plpd" else None
+    method_param_names = ["theta"] if method == "plpd" else None
+
     initial_loo_no_jac = loo_subsample(
-        centered_eight, observations=3, var_name="obs", pointwise=True, seed=42
+        centered_eight,
+        observations=3,
+        var_name="obs",
+        pointwise=True,
+        method=method,
+        log_lik_fn=method_log_lik_fn,
+        param_names=method_param_names,
+        seed=42,
     )
 
     initial_loo_with_jac = loo_subsample(
@@ -766,19 +954,37 @@ def test_update_subsample_jacobian(centered_eight_with_sigma):
         observations=3,
         var_name="obs",
         pointwise=True,
+        method=method,
+        log_lik_fn=method_log_lik_fn,
+        param_names=method_param_names,
         seed=42,
         log_jacobian=log_jacobian,
     )
 
     updated_no_jac = update_subsample(
-        initial_loo_no_jac, centered_eight, observations=2, var_name="obs", seed=43
+        initial_loo_no_jac,
+        centered_eight,
+        observations=2,
+        var_name="obs",
+        method=method,
+        log_lik_fn=method_log_lik_fn,
+        param_names=method_param_names,
+        seed=43,
     )
 
     updated_with_jac = update_subsample(
-        initial_loo_with_jac, centered_eight, observations=2, var_name="obs", seed=43
+        initial_loo_with_jac,
+        centered_eight,
+        observations=2,
+        var_name="obs",
+        method=method,
+        log_lik_fn=method_log_lik_fn,
+        param_names=method_param_names,
+        seed=43,
     )
 
     assert updated_with_jac.elpd != updated_no_jac.elpd
+    assert_allclose(updated_with_jac.p, updated_no_jac.p)
     assert updated_with_jac.subsample_size == 5
     assert updated_no_jac.subsample_size == 5
     assert updated_with_jac.elpd_i is not None
@@ -827,3 +1033,19 @@ def test_loo_subsample_jacobian_errors(centered_eight):
     )
     with pytest.raises(ValueError, match="must contain only finite values"):
         loo_subsample(centered_eight, observations=4, var_name="obs", log_jacobian=nan_jacobian)
+
+
+def test_loo_subsample_multidim_obs_pointwise():
+    rng = np.random.default_rng(0)
+    log_lik = rng.normal(-1, 0.3, size=(2, 200, 3, 4))
+    idata = azb.from_dict(
+        {"posterior": {"mu": rng.normal(size=(2, 200))}, "log_likelihood": {"y": log_lik}},
+        dims={"y": ["row", "col"]},
+    )
+
+    result = loo_subsample(idata, observations=5, pointwise=True, method="lpd", seed=42)
+
+    assert result.elpd_i.dims == ("row", "col")
+    assert np.isfinite(result.elpd_i.values).sum() == 5
+    assert np.isfinite(result.pareto_k.values).sum() == 5
+    assert np.isfinite(result.elpd_i.values.ravel()[result.loo_subsample_observations]).all()

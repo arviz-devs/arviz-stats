@@ -35,7 +35,7 @@ class _CoreBase:
         """
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocov.")
-        axis = axis if axis > 0 else len(ary.shape) + axis
+        axis = axis if axis >= 0 else len(ary.shape) + axis
         n = ary.shape[axis]
         m = next_fast_len(2 * n)
 
@@ -70,7 +70,7 @@ class _CoreBase:
         if not isinstance(axis, int):
             raise ValueError("Only integer values are allowed for `axis` in autocorr.")
         corr = self.autocov(ary, axis=axis)
-        axis = axis = axis if axis > 0 else len(corr.shape) + axis
+        axis = axis if axis >= 0 else len(corr.shape) + axis
         norm = tuple(
             slice(None, None) if dim != axis else slice(None, 1) for dim, _ in enumerate(corr.shape)
         )
@@ -118,6 +118,9 @@ class _CoreBase:
            "Sample quantiles in statistical packages,"
            The American Statistician, 50(4), pp. 361-365, 1996
         """
+        ary = np.asarray(ary)
+        if ary.dtype.kind == "b":
+            ary = ary.astype(float)
         if skipna:
             result = np.nanquantile(ary, quantile, axis=axis, method=method, weights=weights)
         else:
@@ -167,17 +170,31 @@ class _CoreBase:
         """Compute ranks for continuous and discrete variables."""
         ary_shape = ary.shape
         ary = ary.flatten()
-        if ary.dtype.kind == "i":
+        if ary.dtype.kind == "i" and ary.min() < ary.max():
             min_ary, max_ary = min(ary), max(ary)
             x = np.linspace(min_ary, max_ary, len(ary))
             csi = CubicSpline(x, ary)
-            ary = csi(np.linspace(min_ary + 0.001, max_ary - 0.001, len(ary))).reshape(ary_shape)
+            ary = csi(np.linspace(min_ary + 0.001, max_ary - 0.001, len(ary)))
         out = self._float_rankdata(ary).reshape(ary_shape)
         if relative:
             return out / out.size
         return out
 
-    def _get_bininfo(self, values, bins="arviz"):
+    def _get_bininfo(self, values, bins="arviz", d=1):
+        """Compute ``(min, max, width)`` for the default or given bin rule.
+
+        Parameters
+        ----------
+        values : array-like
+        bins : str, int or array-like, default "arviz"
+        d : int, default 1
+            Dimension of the density being binned. The Freedman-Diaconis width
+            scales as ``n**(-1/(d + 2))``.
+        """
+        values = np.asarray(values)
+        finite = np.isfinite(values)
+        if not finite.all():
+            values = values[finite]
         dtype = values.dtype.kind
 
         if isinstance(bins, str) and bins != "arviz":
@@ -186,7 +203,10 @@ class _CoreBase:
         if isinstance(bins, np.ndarray):
             return bins[0], bins[-1], bins[1] - bins[0]
 
-        if dtype == "i":
+        if not values.size:
+            return np.nan, np.nan, np.nan
+
+        if dtype in "iub":
             x_min = values.min().astype(int)
             x_max = values.max().astype(int)
         else:
@@ -195,7 +215,7 @@ class _CoreBase:
 
         if isinstance(bins, int):
             width = (x_max - x_min) / bins
-            if dtype == "i":
+            if dtype in "iub":
                 width = max(1, width)
             return x_min, x_max, width
 
@@ -204,15 +224,17 @@ class _CoreBase:
 
         # The Freedman-Diaconis width estimator.
         iqr = np.subtract(*self.quantile(values, [0.75, 0.25]))  # pylint: disable=assignment-from-no-return
-        width_fd = 2 * iqr * values.size ** (-1 / 3)
+        width_fd = 2 * iqr * values.size ** (-1 / (d + 2))
 
         # Correct Freedman-Diaconis. Heuristic to limit the maximal number of bins
         width_sqrt = (x_max - x_min) / np.sqrt(values.size)
         corr_fd = max(width_fd, width_sqrt / 2)
 
         width = min(width_sturges, corr_fd)
-        if dtype == "i":
+        if dtype in "iub":
             width = np.round(max(1, width)).astype(int)
+            if x_max > x_min:
+                x_max = x_min + ((x_max - x_min) // width + 1) * width
 
         return x_min, x_max, width
 
@@ -249,13 +271,17 @@ class _CoreBase:
         It is considered a robust version of the Scott rule as the IQR is less affected by outliers
         than the standard deviation. However, the IQR depends on fewer points than the standard
         deviation, so it is less accurate, especially for long tailed distributions.
+
+        For two-dimensional input the same rule is applied to each marginal with the
+        ``d=2`` exponent ``n**(-1/4)`` (the MISE-optimal rate for 2D histograms,
+        Scott), instead of the 1D ``n**(-1/3)``.
         """
         dtype = values.dtype.kind
 
         x_min, x_max, width = self._get_bininfo(values, bins)
 
-        if dtype == "i":
-            bins = np.arange(x_min, x_max + width + 1, width)
+        if dtype in "iub":
+            bins = np.arange(x_min, values.max() + width + 1, width)
         else:
             if np.isclose(x_min, x_max):
                 width = 1e-3
@@ -267,13 +293,123 @@ class _CoreBase:
     def _histogram(self, ary, bins=None, range=None, weights=None, density=True):
         if bins is None:
             bins = self._get_bins(ary)
+        if ary.dtype == bool:  # np.histogram warns on boolean input
+            ary = ary.astype(np.uint8)
         return np.histogram(ary, bins=bins, range=range, weights=weights, density=density)
+
+    def _histogram2d(self, x, y, bins=10, range=None, weights=None, density=True):
+        return np.histogram2d(
+            x,
+            y,
+            bins=bins,
+            range=range,
+            weights=weights,
+            density=density,
+        )
+
+    @staticmethod
+    def _nonsingular_extent(lower, upper):
+        if not np.isfinite(lower) or not np.isfinite(upper):
+            raise ValueError("Extent values must be finite.")
+        if lower > upper:
+            raise ValueError("Extent upper bounds must be greater than lower bounds.")
+        if lower == upper:
+            delta = 0.1 * abs(lower) if lower else 0.1
+            return lower - delta, upper + delta
+        return lower, upper
+
+    def _hexbin(self, x, y, gridsize=100, extent=None, weights=None, density=True):
+        if np.isscalar(gridsize):
+            if not isinstance(gridsize, (int, np.integer)):
+                raise ValueError("`gridsize` values must be integers.")
+            nx = int(gridsize)
+            ny = int(nx / 1.732)
+        else:
+            try:
+                nx, ny = gridsize
+            except (TypeError, ValueError) as err:
+                raise ValueError("`gridsize` must be an integer or a pair of integers.") from err
+
+        if not isinstance(nx, (int, np.integer)) or not isinstance(ny, (int, np.integer)):
+            raise ValueError("`gridsize` values must be integers.")
+        nx, ny = int(nx), int(ny)
+        if nx <= 0 or ny <= 0:
+            raise ValueError("`gridsize` values must be positive.")
+
+        if extent is None:
+            xmin, xmax = self._nonsingular_extent(np.min(x), np.max(x))
+            ymin, ymax = self._nonsingular_extent(np.min(y), np.max(y))
+        else:
+            if np.size(extent) != 4:
+                raise ValueError("`extent` must contain (xmin, xmax, ymin, ymax).")
+            xmin, xmax, ymin, ymax = np.asarray(extent, dtype=float)
+            xmin, xmax = self._nonsingular_extent(xmin, xmax)
+            ymin, ymax = self._nonsingular_extent(ymin, ymax)
+
+        nx1, ny1 = nx + 1, ny + 1
+        nx2, ny2 = nx, ny
+
+        padding = 1e-9 * (xmax - xmin)
+        xmin -= padding
+        xmax += padding
+        sx = (xmax - xmin) / nx
+        sy = (ymax - ymin) / ny
+
+        ix = (x - xmin) / sx
+        iy = (y - ymin) / sy
+        ix1 = np.round(ix).astype(int)
+        iy1 = np.round(iy).astype(int)
+        ix2 = np.floor(ix).astype(int)
+        iy2 = np.floor(iy).astype(int)
+
+        i1 = np.where(
+            (0 <= ix1) & (ix1 < nx1) & (0 <= iy1) & (iy1 < ny1),
+            ix1 * ny1 + iy1 + 1,
+            0,
+        )
+        i2 = np.where(
+            (0 <= ix2) & (ix2 < nx2) & (0 <= iy2) & (iy2 < ny2),
+            ix2 * ny2 + iy2 + 1,
+            0,
+        )
+        d1 = (ix - ix1) ** 2 + 3 * (iy - iy1) ** 2
+        d2 = (ix - ix2 - 0.5) ** 2 + 3 * (iy - iy2 - 0.5) ** 2
+        use_first_grid = d1 < d2
+
+        counts1 = np.bincount(
+            i1[use_first_grid],
+            weights=None if weights is None else weights[use_first_grid],
+            minlength=1 + nx1 * ny1,
+        )[1:]
+        counts2 = np.bincount(
+            i2[~use_first_grid],
+            weights=None if weights is None else weights[~use_first_grid],
+            minlength=1 + nx2 * ny2,
+        )[1:]
+        values = np.concatenate((counts1, counts2)).astype(float)
+
+        offsets = np.zeros((nx1 * ny1 + nx2 * ny2, 2), dtype=float)
+        offsets[: nx1 * ny1, 0] = np.repeat(np.arange(nx1), ny1)
+        offsets[: nx1 * ny1, 1] = np.tile(np.arange(ny1), nx1)
+        offsets[nx1 * ny1 :, 0] = np.repeat(np.arange(nx2) + 0.5, ny2)
+        offsets[nx1 * ny1 :, 1] = np.tile(np.arange(ny2), nx2) + 0.5
+        offsets[:, 0] = offsets[:, 0] * sx + xmin
+        offsets[:, 1] = offsets[:, 1] * sy + ymin
+
+        if density:
+            hexagon_area = sx * sy / 2
+            in_extent_count = values.sum()
+            if in_extent_count == 0:
+                raise ValueError("No samples fall inside the requested extent.")
+            values /= in_extent_count * hexagon_area
+
+        return values, offsets
 
     def _hdi_linear_nearest_common(self, ary, prob):
         n = len(ary)
 
         ary = np.sort(ary)
-        interval_idx_inc = int(np.floor(prob * n))
+        interval_idx_inc = min(int(np.floor(prob * n)), n - 1)
         n_intervals = n - interval_idx_inc
         interval_width = np.subtract(ary[interval_idx_inc:], ary[:n_intervals], dtype=np.float64)
 
@@ -288,10 +424,11 @@ class _CoreBase:
     def _hdi_nearest(self, ary, prob, circular, skipna):
         """Compute HDI over the flattened array as closest samples that contain the given prob."""
         ary = ary.flatten()
-        if skipna:
-            nans = np.isnan(ary)
-            if not nans.all():
-                ary = ary[~nans]
+        nans = np.isnan(ary)
+        if nans.any():
+            if not skipna or nans.all():
+                return np.full(2, np.nan)
+            ary = ary[~nans]
 
         if circular:
             mean = self.circular_mean(ary)
@@ -431,11 +568,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -451,11 +588,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -469,20 +606,27 @@ class _CoreBase:
     def _mode(self, ary, round_to=None, skipna=False):
         ary = ary.flatten()
 
-        if ary.size == 0:
-            return np.nan
-        if ary.size == 1:
-            return ary.item()
-
         if skipna:
             ary = ary[~np.isnan(ary)]
 
+        if ary.size == 0:
+            return np.nan
+        if ary.size == 1:
+            val = ary.item()
+            return round_num(val, round_to) if ary.dtype.kind == "f" else val
+
         if ary.dtype.kind == "f":
             # For continuous data, we use the half-sample mode algorithm.
+            if np.isnan(ary).any():
+                return np.nan
             x = np.sort(ary)
             while len(x) > 2:
                 n = (len(x) + 1) // 2
-                widths = x[n:] - x[:-n]
+                # width of each window of n consecutive sorted values
+                widths = x[n - 1 :] - x[: len(x) - n + 1]
+                if len(x) == 3 and widths[0] == widths[1]:
+                    # equal gaps: the middle point, as in Bickel & Frühwirth (2006)
+                    return round_num(x[1], round_to)
                 min_idx = np.argmin(widths)
                 x = x[min_idx : min_idx + n]
 
@@ -496,11 +640,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -518,11 +662,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -540,11 +684,11 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -564,14 +708,14 @@ class _CoreBase:
 
         Parameters
         ----------
-        values : array-like
+        ary : array-like
             Input array.
         quantiles : tuple of two floats, default (0.25, 0.75)
             Quantiles to compute the interquantile range. Defaults to (0.25, 0.75), that is,
             the interquartile range.
         round_to : int or str, optional
             If integer, number of decimal places to round the result. If string of the
-            form '2g' number of significant digits to round the result. Defaults to '2g'.
+            form '2g' number of significant digits to round the result. Defaults to None.
             Use None to return raw numbers.
         skipna : bool, default False
             If True, ignore NaN values.
@@ -582,6 +726,8 @@ class _CoreBase:
             ary = ary[~np.isnan(ary)]
         if ary.size == 0:
             return np.nan
+        if np.asarray(ary).dtype.kind == "b":
+            ary = np.asarray(ary, dtype=float)
         q1, q3 = np.quantile(ary, quantiles, axis=axis)
         iqr = q3 - q1
         return round_num(iqr, round_to)

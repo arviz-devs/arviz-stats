@@ -11,7 +11,9 @@ azb = importorskip("arviz_base")
 pm = importorskip("pymc")
 xr = importorskip("xarray")
 
-from arviz_stats.loo import mm_from_pymc
+from arviz_stats.loo import loo, loo_moment_match, mm_from_pymc
+
+from .test_loo_mm import _get_roaches_data_path, load_roaches_r_example
 
 
 def _build_poisson_outlier_idata(*, n_chains=2, n_draws=80, seed=0):
@@ -89,6 +91,26 @@ def dirichlet_setup():
     return _build_dirichlet_multinomial_setup()
 
 
+@pytest.fixture(scope="module")
+def roaches_pymc_setup():
+    example = load_roaches_r_example()
+    data_path = _get_roaches_data_path()
+    root_ds = xr.load_dataset(data_path)
+    observed_ds = xr.load_dataset(data_path, group="observed_data")
+    coef_names = example["data_tree"]["posterior"]["beta"].coords["coef"].values.tolist()
+    design_matrix = observed_ds["design_matrix"].transpose("obs", "coef").values
+    y_obs = observed_ds["y"].values
+    offset = observed_ds["offset"].values
+    with pm.Model(coords={"coef": coef_names}) as model:
+        beta = pm.Normal("beta", 0.0, root_ds.attrs["beta_prior_scale"], dims="coef")
+        intercept = pm.Normal("intercept", 0.0, root_ds.attrs["alpha_prior_scale"])
+        mu = pm.math.exp(pm.math.dot(design_matrix, beta) + intercept + offset)
+        pm.Poisson("log_lik", mu=mu, observed=y_obs)
+    root_ds.close()
+    observed_ds.close()
+    return example["data_tree"], model
+
+
 class TestMomentMatchFunctions:
     def test_returns_expected_types_and_dims(self, poisson_setup):
         idata, model, _ = poisson_setup
@@ -142,6 +164,9 @@ class TestMomentMatchFunctions:
             draws=50,
             tune=50,
             chains=2,
+            # sample sequentially, forking workers triggers a RuntimeWarning
+            # from JAX's at-fork handler that our filterwarnings turns into an error
+            cores=1,
             random_seed=3,
             progressbar=False,
         )
@@ -260,3 +285,63 @@ class TestMomentMatchFunctions:
             mm_from_pymc(idata, model=model, var_name=None)
         _, _, up = mm_from_pymc(idata, model=model, var_name="y1")
         assert up.sizes["unconstrained_parameter"] == 1
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_loo_moment_match_flag_pointwise_false(poisson_setup):
+    idata, model, _ = poisson_setup
+    result = loo(idata, pointwise=False, moment_match=True, model=model)
+
+    assert result.method == "loo_moment_match"
+    assert result.elpd_i is None
+    assert result.pareto_k is None
+    assert result.influence_pareto_k is None
+    assert result.n_eff_i is None
+    assert np.isfinite(result.elpd)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_loo_moment_match_flag_roaches_model(roaches_pymc_setup):
+    data, model = roaches_pymc_setup
+    loo_orig = loo(data, pointwise=True, var_name="log_lik")
+    loo_manual = loo_moment_match(data, loo_orig, model=model, var_name="log_lik", pointwise=True)
+    loo_flag = loo(data, pointwise=True, var_name="log_lik", moment_match=True, model=model)
+
+    assert loo_flag.method == "loo_moment_match"
+    assert not np.allclose(loo_flag.elpd, loo_orig.elpd)
+    assert np.any(loo_flag.pareto_k.values != loo_orig.pareto_k.values)
+    non_nan = loo_flag.n_eff_i.values[~np.isnan(loo_flag.n_eff_i.values)]
+    assert len(non_nan) > 0
+    np.testing.assert_allclose(loo_flag.elpd, loo_manual.elpd)
+    np.testing.assert_allclose(loo_flag.se, loo_manual.se)
+    np.testing.assert_allclose(loo_flag.p, loo_manual.p)
+    xr.testing.assert_allclose(loo_flag.elpd_i, loo_manual.elpd_i)
+    xr.testing.assert_allclose(loo_flag.pareto_k, loo_manual.pareto_k)
+    xr.testing.assert_allclose(loo_flag.influence_pareto_k, loo_manual.influence_pareto_k)
+    xr.testing.assert_allclose(loo_flag.log_weights, loo_manual.log_weights)
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_loo_moment_match_flag_no_bad_k():
+    rng = np.random.default_rng(0)
+    y_obs = np.array([0, 1.0, 2.0, 1.0, 0, 1.0, 2.0, 0, 1.0, 1.0, 2.0])
+    beta_draws = rng.lognormal(0, 0.3, size=(2, 80))
+    log_lik = poisson.logpmf(y_obs[None, None, :], beta_draws[:, :, None])
+    idata = azb.from_dict(
+        {
+            "posterior": {"beta": beta_draws},
+            "log_likelihood": {"y": log_lik},
+            "observed_data": {"y": y_obs},
+        }
+    )
+    model = _build_poisson_outlier_model(y_obs)
+    loo_orig = loo(idata, pointwise=True)
+
+    with pytest.warns(UserWarning, match="No Pareto k values exceed"):
+        result = loo(idata, pointwise=True, moment_match=True, model=model)
+
+    np.testing.assert_allclose(result.elpd, loo_orig.elpd)
+    xr.testing.assert_allclose(result.elpd_i, loo_orig.elpd_i)
+    xr.testing.assert_allclose(result.pareto_k, loo_orig.pareto_k)

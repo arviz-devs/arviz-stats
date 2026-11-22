@@ -191,6 +191,19 @@ def test_bfmi_datatree_returns_datatree():
 
 
 @pytest.mark.parametrize("axis", ["01", "20"])
+def test_bfmi_axes(axis, data_c0d1, data_c2d0):
+    if axis == "01":
+        bfmi = array_stats.bfmi(data_c0d1, chain_axis=0, draw_axis=1)
+        energy = np.moveaxis(data_c0d1, (0, 1), (-2, -1))
+    else:
+        bfmi = array_stats.bfmi(data_c2d0, chain_axis=2, draw_axis=0)
+        energy = np.moveaxis(data_c2d0, (2, 0), (-2, -1))
+    expected = np.square(np.diff(energy, axis=-1)).mean(axis=-1) / np.var(energy, axis=-1, ddof=1)
+    assert bfmi.shape == (3, 4)
+    np.testing.assert_allclose(bfmi, expected)
+
+
+@pytest.mark.parametrize("axis", ["01", "20"])
 def test_pareto_min_ss_axes(axis, data_c0d1, data_c2d0):
     if axis == "01":
         pareto_min_ss = array_stats.pareto_min_ss(data_c0d1, chain_axis=0, draw_axis=1)
@@ -231,6 +244,14 @@ def test_pareto_khat_tails(data_c0d1, tail):
     assert np.all(khat < 0.7)
 
 
+def test_pareto_khat_log_weights():
+    rng = np.random.default_rng(0)
+    weights = rng.pareto(2, size=(1, 2000)) + 1
+    khat = array_stats.pareto_khat(weights, r_eff=1, tail="right")
+    khat_log = array_stats.pareto_khat(np.log(weights), r_eff=1, log_weights=True)
+    np.testing.assert_allclose(khat_log, khat)
+
+
 def test_psislw(data_c0d1):
     log_weights, khat = array_stats.psislw(data_c0d1, axis=(0, 1))
     assert log_weights.shape == (3, 4, 200)
@@ -247,9 +268,10 @@ def test_psislw_r_eff(data_c0d1, r_eff):
 @pytest.mark.parametrize("alpha", [0.0, 0.5, 0.9])
 def test_power_scale_lw(alpha):
     rng = np.random.default_rng(42)
-    log_lik = rng.uniform(-10, -1, size=(4, 200, 3))
-    scaled_lw = array_stats.power_scale_lw(log_lik, alpha=alpha, axis=(0, 1))
-    assert scaled_lw.shape == (3, 4, 200)
+    log_lik = rng.uniform(-10, -1, size=(4, 200))
+    scaled_lw, khat = array_stats.power_scale_lw(log_lik, alpha=alpha, axis=(0, 1))
+    assert scaled_lw.shape == (4, 200)
+    assert khat.shape == ()
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
@@ -257,8 +279,8 @@ def test_power_scale_sense():
     rng = np.random.default_rng(42)
     log_lik = rng.uniform(-10, -1, size=(4, 200, 3))
     data = rng.normal(size=(4, 200, 3))
-    lower_w = array_stats.power_scale_lw(log_lik, alpha=0.8, axis=-1)
-    upper_w = array_stats.power_scale_lw(log_lik, alpha=0.9, axis=-1)
+    lower_w, _ = array_stats.power_scale_lw(log_lik, alpha=0.8, axis=-1)
+    upper_w, _ = array_stats.power_scale_lw(log_lik, alpha=0.9, axis=-1)
     sense = array_stats.power_scale_sense(
         data, lower_w, upper_w, lower_alpha=0.8, upper_alpha=0.9, chain_axis=0, draw_axis=1
     )
@@ -442,3 +464,9 @@ def test_hdi_invalid_prob(data_c0d1):
 def test_thin_invalid_factor(data_c0d1):
     with pytest.raises(ValueError, match="must be greater than 1"):
         array_stats.thin(data_c0d1, factor=0, chain_axis=0, draw_axis=1)
+
+
+def test_hdi_invalid_kwarg(data_c0d1):
+    """Test that passing hdi_prob raises a helpful error message."""
+    with pytest.raises(TypeError, match="hdi_prob"):
+        array_stats.hdi(data_c0d1, 0.95, hdi_prob=0.95)

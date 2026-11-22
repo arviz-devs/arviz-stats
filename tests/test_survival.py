@@ -179,6 +179,15 @@ def test_generate_survival_curves_output_shape(survival_datatree_predictive):
     assert times_data.shape[1] <= num_samples
 
 
+def test_generate_survival_curves_default_num_samples(survival_datatree_predictive):
+    result = generate_survival_curves(
+        survival_datatree_predictive,
+        var_names=["times"],
+        extrapolation_factor=None,
+    )
+    assert result.sizes["sample"] == 200
+
+
 def test_generate_survival_curves_unique_sorted(survival_datatree_predictive):
     result = generate_survival_curves(
         survival_datatree_predictive,
@@ -249,6 +258,17 @@ def test_kaplan_meier_tied_events():
     survival_probs = result["times"].values[1]
     assert len(survival_probs) == 3
     assert np.all(np.diff(survival_probs) <= 0)
+
+
+def test_kaplan_meier_integer_times():
+    times = np.array([1, 1, 2, 3])
+    status = np.array([1, 0, 1, 0])
+    dt = azb.from_dict({"observed_data": {"times": times}, "constant_data": {"times": status}})
+
+    result = kaplan_meier(dt, var_names=["times"])
+    survival_probs = result["times"].values[1]
+
+    np.testing.assert_allclose(survival_probs, [0.75, 0.375, 0.375])
 
 
 def test_kaplan_meier_string_var_name():
@@ -375,3 +395,18 @@ def test_generate_survival_curves_first_prob_less_than_one():
         valid_probs = probs_array[i][~np.isnan(probs_array[i])]
         if len(valid_probs) > 0:
             assert valid_probs[0] <= 1.0
+
+
+def test_generate_survival_curves_values():
+    predictive_times = np.array([[[1.0, 1.0, 2.0, 3.0, 100.0], [1.0, 2.0, 3.0, 4.0, 5.0]]])
+    observed_times = np.array([1.0, 2.0, 2.0, 3.0, 3.0])
+    dt = azb.from_dict(
+        {
+            "posterior_predictive": {"times": predictive_times},
+            "observed_data": {"times": observed_times},
+        }
+    )
+    result = generate_survival_curves(dt, var_names="times", extrapolation_factor=1.2)
+    times_array, probs_array = result["times"].values
+    np.testing.assert_allclose(times_array, [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]])
+    np.testing.assert_allclose(probs_array, [[0.6, 0.4, 0.2], [0.8, 0.6, 0.4]])

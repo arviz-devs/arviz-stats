@@ -18,8 +18,10 @@ uni_dt = azb.convert_to_datatree(file_path)
 
 
 def test_psense():
-    assert_almost_equal(psense(uni_dt, group="prior").to_array(), [0.404, 0.293], decimal=3)
-    assert_almost_equal(psense(uni_dt, group="likelihood").to_array(), [0.575, 0.535], decimal=3)
+    assert_almost_equal(psense(uni_dt, group="prior").to_dataarray(), [0.404, 0.293], decimal=3)
+    assert_almost_equal(
+        psense(uni_dt, group="likelihood").to_dataarray(), [0.575, 0.535], decimal=3
+    )
 
 
 def test_psense_var_names():
@@ -196,6 +198,20 @@ def test_psense_sample_dims():
     result = psense(uni_dt, group="prior", sample_dims=["chain", "draw"])
     assert "mu" in result.data_vars
     assert "sigma" in result.data_vars
+
+
+@pytest.mark.parametrize("group", ["prior", "likelihood"])
+def test_psense_single_sample_dim(group):
+    stacked_dt = uni_dt.copy()
+    for group_name in ("posterior", "log_prior", "log_likelihood"):
+        stacked_dt[group_name] = (
+            uni_dt[group_name]
+            .dataset.stack(sample=("chain", "draw"))
+            .reset_index("sample", drop=True)
+        )
+    result = psense(stacked_dt, group=group, sample_dims="sample")
+    expected = psense(uni_dt, group=group)
+    assert_almost_equal(result.to_dataarray().values, expected.to_dataarray().values)
 
 
 def test_psense_summary_alphas():

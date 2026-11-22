@@ -10,7 +10,7 @@ import xarray as xr
 from arviz_base import convert_to_datatree, extract, ndarray_to_dataarray, rcParams
 from xarray_einstats.stats import logsumexp
 
-from arviz_stats.utils import ELPDData, get_log_likelihood
+from arviz_stats.utils import ELPDDataLOO, _warn_pareto_k, get_log_likelihood
 
 __all__ = [
     "_shift",
@@ -26,15 +26,12 @@ __all__ = [
     "_get_r_eff",
     "_get_r_eff_i",
     "_prepare_loo_inputs",
-    "_extract_loo_data",
     "_check_log_density",
     "_check_log_jacobian",
-    "_warn_pareto_k",
     "_warn_pointwise_loo",
     "_prepare_subsample",
     "_prepare_update_subsample",
     "_select_obs_by_indices",
-    "_select_obs_by_coords",
     "_prepare_full_arrays",
     "_align_data_to_obs",
     "_validate_crps_input",
@@ -147,20 +144,20 @@ def _compute_loo_results(
     if pointwise:
         _warn_pointwise_loo(elpd, elpd_i.values)
 
-    return ELPDData(
-        "loo",
-        elpd,
-        elpd_se,
-        p_loo,
-        n_samples,
-        n_data_points,
-        "log",
-        warn_mg,
-        good_k,
-        elpd_i if pointwise else None,
-        pareto_k if pointwise else None,
+    return ELPDDataLOO(
+        elpd=elpd,
+        se=elpd_se,
+        p=p_loo,
+        n_samples=n_samples,
+        n_data_points=n_data_points,
+        scale="log",
+        warning=warn_mg,
+        good_k=good_k,
+        elpd_i=elpd_i if pointwise else None,
+        pareto_k=pareto_k if pointwise else None,
         approx_posterior=approx_posterior,
         log_weights=log_weights,
+        log_jacobian=log_jacobian,
     )
 
 
@@ -303,45 +300,6 @@ def _log_lik_i(i, data, var_name, log_lik_fn):
     return log_lik_i, sample_dims, obs_dims, n_samples
 
 
-def _extract_loo_data(loo_orig):
-    """Extract pointwise DataArrays from original PSIS-LOO-CV object."""
-    elpd_values = loo_orig.elpd_i
-    pareto_values = loo_orig.pareto_k
-
-    valid_mask = ~np.isnan(elpd_values.values.flatten())
-    valid_indices = np.where(valid_mask)[0]
-
-    sample_dims = ["chain", "draw"]
-    obs_dims = [dim for dim in elpd_values.dims if dim not in sample_dims]
-    stacked_obs_dim = "__pareto_obs_stacked__"
-
-    if len(obs_dims) == 1:
-        obs_dim = obs_dims[0]
-        extracted_elpd = elpd_values.isel({obs_dim: valid_indices})
-    else:
-        is_already_stacked = stacked_obs_dim in elpd_values.dims
-        stacked_elpd = (
-            elpd_values if is_already_stacked else elpd_values.stack({stacked_obs_dim: obs_dims})
-        )
-        extracted_elpd = stacked_elpd.isel({stacked_obs_dim: valid_indices})
-
-    if pareto_values is not None:
-        if len(obs_dims) == 1:
-            obs_dim = obs_dims[0]
-            extracted_pareto = pareto_values.isel({obs_dim: valid_indices})
-        else:
-            is_already_stacked = stacked_obs_dim in pareto_values.dims
-            stacked_pareto = (
-                pareto_values
-                if is_already_stacked
-                else pareto_values.stack({stacked_obs_dim: obs_dims})
-            )
-            extracted_pareto = stacked_pareto.isel({stacked_obs_dim: valid_indices})
-    else:
-        extracted_pareto = xr.full_like(extracted_elpd, np.nan)
-    return extracted_elpd, extracted_pareto
-
-
 def _shift(upars, lwi):
     """Shift a DataArray of parameters to their weighted mean."""
     sample_dims = ["chain", "draw"]
@@ -385,14 +343,13 @@ def _shift_and_scale(upars, lwi):
     mean_weighted = np.sum(weights[:, None] * upars_values, axis=0)
     shift_vec = mean_weighted - mean_original
 
-    weighted_second_moment = np.sum(weights[:, None] * upars_values**2, axis=0)
-    mii = weighted_second_moment - mean_weighted**2
+    mii = np.sum(weights[:, None] * (upars_values - mean_weighted) ** 2, axis=0)
     mii = mii * samples / (samples - 1)  # Bessel's correction
 
     var_original = np.var(upars_values, axis=0, ddof=1)
 
     scaling_vec = np.ones_like(mean_original)
-    valid_mask = (var_original > 1e-9) & (mii > 1e-9)
+    valid_mask = (var_original > 0) & (mii > 0)
     scaling_vec[valid_mask] = np.sqrt(mii[valid_mask] / var_original[valid_mask])
 
     upars_new_values = upars_values - mean_original[None, :]
@@ -423,7 +380,7 @@ def _shift_and_cov(upars, lwi):
     shift_vec = mean_weighted - mean_original
 
     cov_original = np.cov(upars_values, rowvar=False, ddof=1)
-    cov_weighted = np.cov(upars_values, rowvar=False, aweights=weights, ddof=0)
+    cov_weighted = np.cov(upars_values, rowvar=False, aweights=weights, ddof=1)
 
     mapping_mat = np.eye(upars_values.shape[1])
     try:
@@ -439,7 +396,7 @@ def _shift_and_cov(upars, lwi):
         chol_weighted = np.linalg.cholesky(cov_weighted)
         chol_original = np.linalg.cholesky(cov_original)
 
-        mapping_mat = chol_weighted.T @ np.linalg.inv(chol_original.T)
+        mapping_mat = chol_weighted @ np.linalg.inv(chol_original)
 
     except np.linalg.LinAlgError as e:
         warnings.warn(
@@ -568,20 +525,13 @@ def _prepare_subsample(
     n_data_points,
     n_samples,
     thin_factor=None,
+    model=None,
 ):
     """Prepare inputs for PSIS-LOO-CV with sub-sampling."""
     indices, subsample_size = _generate_subsample_indices(n_data_points, observations, seed)
 
-    if thin_factor is not None and log_lik_fn is not None:
-        from arviz_stats.manipulation import thin
-
-        data = data.copy(deep=True)
-        if hasattr(data, "posterior"):
-            thinned_posterior = thin(data.posterior, factor=thin_factor)
-            data["posterior"] = thinned_posterior
-
     if method == "lpd":
-        if log_lik_fn is None:
+        if log_lik_fn is None and model is None:
             lpd_approx_all = logsumexp(log_likelihood_da, dims=sample_dims, b=1 / n_samples)
         else:
             lpd_approx_all = _compute_loo_approximation(
@@ -591,6 +541,8 @@ def _prepare_subsample(
                 param_names=param_names,
                 method="lpd",
                 log=log,
+                model=model,
+                thin_factor=thin_factor,
             )
     else:  # method == "plpd"
         lpd_approx_all = _compute_loo_approximation(
@@ -600,6 +552,8 @@ def _prepare_subsample(
             param_names=param_names,
             method="plpd",
             log=log,
+            model=model,
+            thin_factor=thin_factor,
         )
 
     log_likelihood_sample = _select_obs_by_indices(log_likelihood_da, indices, obs_dims, "__obs__")
@@ -625,14 +579,20 @@ def _prepare_update_subsample(
     param_names,
     log,
     thin_factor=None,
+    model=None,
 ):
     """Prepare inputs for updating PSIS-LOO-CV with additional observations."""
     loo_inputs = _prepare_loo_inputs(data, var_name, thin_factor)
-    old_elpd_i_da, old_pareto_k_da = _extract_loo_data(loo_orig)
+    old_indices = np.where(~np.isnan(loo_orig.elpd_i.values.flatten()))[0]
+    old_elpd_i_da = _select_obs_by_indices(
+        loo_orig.elpd_i, old_indices, loo_inputs.obs_dims, "__obs__"
+    )
+    old_pareto_k_da = _select_obs_by_indices(
+        loo_orig.pareto_k, old_indices, loo_inputs.obs_dims, "__obs__"
+    )
 
     log_likelihood = loo_inputs.log_likelihood
     concat_dim = old_elpd_i_da.dims[0]
-    old_indices = np.where(~np.isnan(loo_orig.elpd_i.values.flatten()))[0]
 
     if isinstance(observations, int):
         # Filter out existing indices before generating new ones
@@ -653,16 +613,10 @@ def _prepare_update_subsample(
         if len(overlap) > 0:
             raise ValueError(f"New indices {overlap} overlap with existing indices.")
 
-    if thin_factor is not None and log_lik_fn is not None:
-        from arviz_stats.manipulation import thin
-
-        data = data.copy(deep=True)
-        if hasattr(data, "posterior"):
-            thinned_posterior = thin(data.posterior, factor=thin_factor)
-            data["posterior"] = thinned_posterior
-
-    if method == "lpd":
-        if log_lik_fn is None:
+    if method is None:
+        lpd_approx_all = None
+    elif method == "lpd":
+        if log_lik_fn is None and model is None:
             lpd_approx_all = logsumexp(
                 log_likelihood, dims=loo_inputs.sample_dims, b=1 / loo_inputs.n_samples
             )
@@ -674,6 +628,8 @@ def _prepare_update_subsample(
                 param_names=param_names,
                 method="lpd",
                 log=log,
+                model=model,
+                thin_factor=thin_factor,
             )
     else:  # method == "plpd"
         lpd_approx_all = _compute_loo_approximation(
@@ -683,6 +639,8 @@ def _prepare_update_subsample(
             param_names=param_names,
             method="plpd",
             log=log,
+            model=model,
+            thin_factor=thin_factor,
         )
 
     log_likelihood_new_da = _select_obs_by_indices(
@@ -711,8 +669,38 @@ def _compute_loo_approximation(
     param_names=None,
     method="lpd",
     log=True,
+    model=None,
+    thin_factor=None,
 ):
     """Compute LOO approximation with LPD or PLPD method."""
+    if model is not None and log_lik_fn is not None:
+        warnings.warn(
+            "Both `model` and `log_lik_fn` were provided. The supplied `model` will be ignored.",
+            UserWarning,
+            stacklevel=4,
+        )
+    elif model is not None:
+        if not log:
+            raise ValueError("log must be True when log_lik_fn is auto-built from model.")
+        from arviz_stats.loo.loo_subsample_helper import ll_from_pymc
+
+        # If model is Bambi's, re-center the intercept so it matches the PyMC value variable
+        re_center_intercept = getattr(model, "_re_center_intercept", None)
+        if re_center_intercept is not None:
+            data = re_center_intercept(data)
+            model = model.backend.model
+
+        log_lik_fn = ll_from_pymc(data, model=model, var_name=var_name)
+        param_names = None
+
+    if thin_factor is not None and log_lik_fn is not None:
+        from arviz_stats.manipulation import thin
+
+        data = data.copy(deep=True)
+        if hasattr(data, "posterior"):
+            thinned_posterior = thin(data.posterior, factor=thin_factor)
+            data["posterior"] = thinned_posterior
+
     if not hasattr(data, "observed_data"):
         raise ValueError("No observed_data group found in the data")
     if var_name not in data.observed_data:
@@ -730,7 +718,7 @@ def _compute_loo_approximation(
         return logsumexp(log_likelihood, dims=sample_dims, b=1 / n_samples)
 
     if log_lik_fn is None:
-        raise ValueError(f"log_lik_fn required for {method} method")
+        raise ValueError("log_lik_fn or model must be provided when method='plpd'")
     if not callable(log_lik_fn):
         raise TypeError("log_lik_fn must be a callable function.")
 
@@ -900,7 +888,7 @@ def _diff_srs_estimator(
             )
 
             lpd_approx_sq_sum_all = np.nansum(approx_all**2)
-            mean_sq_diff = np.nanmean(elpd_valid**2 - approx_valid**2)
+            mean_sq_diff = np.nanmean(pointwise_diff * (elpd_valid + approx_valid))
             scaled_mean_sq_diff = n_data_points * mean_sq_diff
 
             total_variance_estimate = (
@@ -1028,10 +1016,12 @@ def _generate_subsample_indices(n_data_points, observations, seed):
     return indices, subsample_size
 
 
-def _get_r_eff(data, n_samples):
+def _get_r_eff(data, n_samples, draw=None):
     if not hasattr(data, "posterior"):
         raise TypeError("Must be able to extract a posterior group from data.")
     posterior = data.posterior
+    if draw is not None:
+        posterior = posterior.sel(draw=draw)
     n_chains = len(posterior.chain)
     if n_chains == 1:
         reff = 1.0
@@ -1088,8 +1078,8 @@ def _prepare_full_arrays(
         indexers = {
             dim: xr.DataArray(idx, dims="__obs__") for dim, idx in zip(obs_dims, multi_indices)
         }
-        elpd_i_full.isel(indexers).values[:] = pointwise_values.values
-        pareto_k_full.isel(indexers).values[:] = pareto_k_values.values
+        elpd_i_full[indexers] = xr.DataArray(pointwise_values.values.ravel(), dims="__obs__")
+        pareto_k_full[indexers] = xr.DataArray(pareto_k_values.values.ravel(), dims="__obs__")
     else:
         elpd_i_full[{obs_dims[0]: indices}] = pointwise_values.values
         pareto_k_full[{obs_dims[0]: indices}] = pareto_k_values.values
@@ -1126,32 +1116,6 @@ def _select_obs_by_indices(data_array, indices, dims, dim_name):
     indexers = {dim: xr.DataArray(idx, dims=dim_name) for dim, idx in zip(dims, multi_indices)}
 
     return data_array.isel(indexers)
-
-
-def _select_obs_by_coords(data_array, coord_array, dims, dim_name):
-    """Select a sub-sample from a DataArray based on coordinate values."""
-    if len(dims) > 1:
-        stacked_data = data_array.stack({dim_name: dims})
-        return stacked_data.sel({dim_name: coord_array[dim_name]})
-    return data_array.sel({dims[0]: coord_array[dims[0]]})
-
-
-def _warn_pareto_k(pareto_k_values, n_samples, suppress=False):
-    """Check Pareto k values and issue warnings if necessary."""
-    good_k = min(1 - 1 / np.log10(n_samples), 0.7) if n_samples > 1 else 0.7
-    warn_mg = False
-
-    if np.any(pareto_k_values > good_k):
-        if not suppress:
-            warnings.warn(
-                f"Estimated shape parameter of Pareto distribution is greater than {good_k:.2f} "
-                "for one or more samples. You should consider using a more robust model, this is "
-                "because importance sampling is less likely to work well if the marginal posterior "
-                "and LOO posterior are very different. This is more likely to happen with a "
-                "non-robust model and highly influential observations."
-            )
-        warn_mg = True
-    return warn_mg, good_k
 
 
 def _warn_pointwise_loo(elpd, elpd_i_values):

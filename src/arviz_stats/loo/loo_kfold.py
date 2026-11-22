@@ -8,7 +8,7 @@ from arviz_stats.loo.loo_kfold_helper import (
     _compute_kfold_results,
     _prepare_kfold_inputs,
 )
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDDataLOOKFold
 
 
 def loo_kfold(
@@ -71,7 +71,7 @@ def loo_kfold(
 
     Returns
     -------
-    ELPDData
+    ELPDDataLOOKFold
         Object with the following attributes:
 
         - **kind**: "loo_kfold"
@@ -227,8 +227,7 @@ def loo_kfold(
     se_elpd = combined_results["se_elpd_kfold"]
     p_sum = np.sum(kfold_results.ps)
 
-    elpd_data = ELPDData(
-        kind="loo_kfold",
+    return ELPDDataLOOKFold(
         elpd=elpd_sum,
         se=se_elpd,
         p=p_sum,
@@ -238,14 +237,7 @@ def loo_kfold(
         warning=False,
         good_k=None,
         elpd_i=kfold_results.elpd_i if pointwise else None,
-        pareto_k=None,
         n_folds=kfold_inputs.k,
+        p_kfold_i=kfold_results.p_kfold_i if pointwise else None,
+        fold_fits=kfold_results.fold_fits if save_fits else None,
     )
-
-    if save_fits:
-        elpd_data.fold_fits = kfold_results.fold_fits
-
-    if pointwise:
-        elpd_data.p_kfold_i = kfold_results.p_kfold_i
-
-    return elpd_data

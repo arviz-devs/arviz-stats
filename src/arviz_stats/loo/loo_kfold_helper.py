@@ -273,7 +273,7 @@ def _combine_fold_elpds(fold_elpds, n_data_points):
     """Combine ELPD values from all folds into final estimates."""
     elpds = np.concatenate(fold_elpds)
     elpd_kfold = np.sum(elpds)
-    se_elpd_kfold = np.sqrt(n_data_points * np.var(elpds))
+    se_elpd_kfold = np.sqrt(n_data_points * np.var(elpds, ddof=1))
 
     return {"elpd_kfold": elpd_kfold, "se_elpd_kfold": se_elpd_kfold, "pointwise": elpds}
 

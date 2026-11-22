@@ -18,7 +18,9 @@ shutil = importorskip("shutil")
 tempfile = importorskip("tempfile")
 
 from arviz_stats.loo import loo, loo_moment_match
-from arviz_stats.loo.loo_moment_match import _split_moment_match
+from arviz_stats.loo.loo_helper import _prepare_loo_inputs
+from arviz_stats.loo.loo_moment_match import _loo_moment_match_i, _split_moment_match
+from arviz_stats.utils import ELPDDataLOOKFold
 
 
 @ft.lru_cache(maxsize=1)
@@ -38,7 +40,20 @@ def _get_roaches_data_path():
     return path
 
 
-ROACHES_DATA_PATH = _get_roaches_data_path()
+def test_loo_moment_match_rejects_kfold_result(centered_eight):
+    kfold_result = ELPDDataLOOKFold(
+        elpd=-30.0,
+        se=2.0,
+        p=3.0,
+        n_samples=100,
+        n_data_points=8,
+        scale="log",
+        warning=False,
+        good_k=None,
+        n_folds=4,
+    )
+    with pytest.raises(TypeError, match="loo_orig must be an ELPDDataLOO object"):
+        loo_moment_match(centered_eight, kfold_result)
 
 
 def _safe_exp(da):
@@ -98,11 +113,12 @@ def log_lik_i_upars(
 
 
 def load_roaches_r_example():
-    root_ds = xr.load_dataset(ROACHES_DATA_PATH)
-    posterior_ds = xr.load_dataset(ROACHES_DATA_PATH, group="posterior")
-    log_likelihood_ds = xr.load_dataset(ROACHES_DATA_PATH, group="log_likelihood")
-    observed_ds = xr.load_dataset(ROACHES_DATA_PATH, group="observed_data")
-    upars_store = xr.load_dataset(ROACHES_DATA_PATH, group="upars")
+    data_path = _get_roaches_data_path()
+    root_ds = xr.load_dataset(data_path)
+    posterior_ds = xr.load_dataset(data_path, group="posterior")
+    log_likelihood_ds = xr.load_dataset(data_path, group="log_likelihood")
+    observed_ds = xr.load_dataset(data_path, group="observed_data")
+    upars_store = xr.load_dataset(data_path, group="upars")
 
     coef_names = posterior_ds["beta"].coords["coef"].values.tolist()
     beta_param_names = [f"beta_{name}" for name in coef_names]
@@ -203,7 +219,7 @@ def transform_inverse_upars(upars_matrix, total_shift, total_scaling, total_mapp
 
 
 def load_r_parity():
-    parity_ds = xr.load_dataset(ROACHES_DATA_PATH, group="parity")
+    parity_ds = xr.load_dataset(_get_roaches_data_path(), group="parity")
     try:
         log_lik = parity_ds["log_lik"].load().rename("log_lik")
         log_weights = parity_ds["log_weights"].load().rename("log_weights")
@@ -330,9 +346,11 @@ def test_moment_match_matches_r_reference(roaches_r_example):
             assert not np.allclose(orig_weights, updated_weights, rtol=1e-10, atol=1e-10)
 
 
+@pytest.mark.filterwarnings("ignore:Input contains infinite or NA values:UserWarning")
 def test_split_moment_match_matches_r_snapshot(roaches_r_example):
-    split_case_ds = xr.load_dataset(ROACHES_DATA_PATH, group="split_case")
-    split_snapshot_ds = xr.load_dataset(ROACHES_DATA_PATH, group="split_snapshot")
+    data_path = _get_roaches_data_path()
+    split_case_ds = xr.load_dataset(data_path, group="split_case")
+    split_snapshot_ds = xr.load_dataset(data_path, group="split_snapshot")
 
     upars_matrix = split_case_ds["upars"].values.astype(np.float64, copy=False)
     total_shift = split_case_ds["total_shift"].values.astype(np.float64, copy=False)
@@ -455,6 +473,54 @@ def test_n_eff_i(roaches_r_example, pointwise):
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_moment_match_reff_i_at_most_one(roaches_r_example):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+    loo_inputs = _prepare_loo_inputs(example["data_tree"], "log_lik")
+
+    upars = example["upars"].transpose(*loo_inputs.sample_dims, "uparam")
+    orig_log_prob = example["log_prob_fn"](upars)
+
+    ks = (
+        loo_orig.pareto_k.stack(__pareto_obs_stacked__=loo_inputs.obs_dims)
+        .transpose("__pareto_obs_stacked__")
+        .values
+    )
+    k_threshold = min(1 - 1 / np.log10(loo_inputs.n_samples), 0.7)
+    bad_obs_indices = np.where(ks > k_threshold)[0]
+    assert len(bad_obs_indices) > 0
+
+    reff_values = [
+        _loo_moment_match_i(
+            i=i,
+            upars=upars,
+            log_likelihood=loo_inputs.log_likelihood,
+            log_prob_upars_fn=example["log_prob_fn"],
+            log_lik_i_upars_fn=example["log_lik_i_fn"],
+            max_iters=30,
+            k_threshold=k_threshold,
+            split=False,
+            cov=True,
+            orig_log_prob=orig_log_prob,
+            ks=ks,
+            log_weights=loo_orig.log_weights,
+            pareto_k=loo_orig.pareto_k,
+            r_eff=1.0,
+            sample_dims=loo_inputs.sample_dims,
+            obs_dims=loo_inputs.obs_dims,
+            n_samples=loo_inputs.n_samples,
+            n_params=upars.sizes["uparam"],
+            param_dim_name="uparam",
+            var_name="log_lik",
+        ).reff_i
+        for i in bad_obs_indices
+    ]
+
+    assert all(0 < reff <= 1 for reff in reff_values)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_influence_pareto_k(roaches_r_example):
     example = roaches_r_example
     loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
@@ -471,6 +537,48 @@ def test_influence_pareto_k(roaches_r_example):
 
     assert loo_mm.influence_pareto_k is not None
     assert loo_mm.influence_pareto_k.shape == loo_mm.pareto_k.shape
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.parametrize("max_iters", [0, 30])
+def test_moment_match_log_jacobian(roaches_r_example, max_iters):
+    example = roaches_r_example
+    data = example["data_tree"]
+    log_jacobian = xr.DataArray(
+        np.linspace(0.5, 1.5, 262), dims="obs", coords={"obs": data.log_likelihood.obs}
+    )
+    loo_orig = loo(data, pointwise=True, var_name="log_lik")
+    loo_orig_jacobian = loo(data, pointwise=True, var_name="log_lik", log_jacobian=log_jacobian)
+
+    result = loo_moment_match(
+        data,
+        loo_orig,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=example["upars"],
+        var_name="log_lik",
+        k_threshold=2.0,
+        max_iters=max_iters,
+        pointwise=True,
+    )
+    result_jacobian = loo_moment_match(
+        data,
+        loo_orig_jacobian,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=example["upars"],
+        var_name="log_lik",
+        k_threshold=2.0,
+        max_iters=max_iters,
+        pointwise=True,
+    )
+
+    expected = result.elpd_i + log_jacobian
+    np.testing.assert_allclose(result_jacobian.elpd_i, expected)
+    np.testing.assert_allclose(result_jacobian.elpd, expected.sum())
+    np.testing.assert_allclose(result_jacobian.se, np.sqrt(262 * expected.var(ddof=1)))
+    np.testing.assert_allclose(result_jacobian.p, result.p)
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
@@ -492,3 +600,111 @@ def test_missing_upars_functions_raises(roaches_r_example, provided):
             var_name="log_lik",
             **kwargs,
         )
+
+
+def test_loo_moment_match_flag_errors(roaches_r_example):
+    example = roaches_r_example
+    n_obs = example["data_tree"]["log_likelihood"]["log_lik"].sizes["obs"]
+    log_jacobian = xr.DataArray(np.zeros(n_obs), dims=["obs"])
+
+    with pytest.raises(ValueError, match="mixture=True"):
+        loo(example["data_tree"], var_name="log_lik", moment_match=True, mixture=True)
+
+    with pytest.raises(ValueError, match="log_lik_fn"):
+        loo(
+            example["data_tree"],
+            var_name="log_lik",
+            moment_match=True,
+            log_lik_fn=lambda observed, data: None,
+        )
+
+    with pytest.raises(ValueError, match="log_jacobian"):
+        loo(
+            example["data_tree"],
+            var_name="log_lik",
+            moment_match=True,
+            log_jacobian=log_jacobian,
+        )
+
+    with pytest.raises(ValueError, match="requires model"):
+        loo(example["data_tree"], var_name="log_lik", moment_match=True)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_moment_match_max_iters_runs_last_iteration(roaches_r_example):
+    example = roaches_r_example
+    loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
+    loo_inputs = _prepare_loo_inputs(example["data_tree"], "log_lik")
+
+    upars = example["upars"].transpose(*loo_inputs.sample_dims, "uparam")
+    orig_log_prob = example["log_prob_fn"](upars)
+    ks = (
+        loo_orig.pareto_k.stack(__pareto_obs_stacked__=loo_inputs.obs_dims)
+        .transpose("__pareto_obs_stacked__")
+        .values
+    )
+    k_threshold = min(1 - 1 / np.log10(loo_inputs.n_samples), 0.7)
+    i = int(np.argmax(ks))
+    assert ks[i] > k_threshold
+
+    log_prob_calls = []
+
+    def log_prob_fn(upars_in):
+        log_prob_calls.append(upars_in)
+        return example["log_prob_fn"](upars_in)
+
+    with pytest.warns(UserWarning, match="Maximum number of moment matching iterations"):
+        result = _loo_moment_match_i(
+            i=i,
+            upars=upars,
+            log_likelihood=loo_inputs.log_likelihood,
+            log_prob_upars_fn=log_prob_fn,
+            log_lik_i_upars_fn=example["log_lik_i_fn"],
+            max_iters=1,
+            k_threshold=k_threshold,
+            split=False,
+            cov=True,
+            orig_log_prob=orig_log_prob,
+            ks=ks,
+            log_weights=loo_orig.log_weights,
+            pareto_k=loo_orig.pareto_k,
+            r_eff=1.0,
+            sample_dims=loo_inputs.sample_dims,
+            obs_dims=loo_inputs.obs_dims,
+            n_samples=loo_inputs.n_samples,
+            n_params=upars.sizes["uparam"],
+            param_dim_name="uparam",
+            var_name="log_lik",
+        )
+
+    assert 1 <= len(log_prob_calls) <= 3
+    assert result.final_ki <= result.original_ki
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_moment_match_single_chain(roaches_r_example):
+    example = roaches_r_example
+    data_tree = xr.DataTree()
+    for group in ("posterior", "log_likelihood"):
+        group_ds = example["data_tree"][group].to_dataset().isel(chain=[0])
+        data_tree[group] = xr.DataTree(dataset=group_ds)
+    upars = example["upars"].isel(chain=[0])
+
+    loo_orig = loo(data_tree, pointwise=True, var_name="log_lik")
+    k_threshold = min(1 - 1 / np.log10(loo_orig.n_samples), 0.7)
+    assert np.any(loo_orig.pareto_k.values > k_threshold)
+
+    loo_mm = loo_moment_match(
+        data_tree,
+        loo_orig,
+        log_prob_upars_fn=example["log_prob_fn"],
+        log_lik_i_upars_fn=example["log_lik_i_fn"],
+        upars=upars,
+        var_name="log_lik",
+    )
+
+    assert np.isfinite(loo_mm.elpd)
+    assert loo_mm.pareto_k.sizes == loo_orig.pareto_k.sizes
+    assert np.all(loo_mm.pareto_k.values <= loo_orig.pareto_k.values + 1e-12)

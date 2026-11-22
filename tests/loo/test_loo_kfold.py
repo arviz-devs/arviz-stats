@@ -11,14 +11,14 @@ azb = importorskip("arviz_base")
 xr = importorskip("xarray")
 
 from arviz_stats import loo_kfold
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDDataLOOKFold
 
 
 @pytest.mark.parametrize("pointwise", [True, False])
 def test_loo_kfold(centered_eight, fresh_wrapper, pointwise):
     kfold_data = loo_kfold(data=centered_eight, pointwise=pointwise, wrapper=fresh_wrapper, k=4)
 
-    assert isinstance(kfold_data, ELPDData)
+    assert isinstance(kfold_data, ELPDDataLOOKFold)
     assert kfold_data.kind == "loo_kfold"
     assert kfold_data.n_data_points == 8
     assert kfold_data.n_samples == 2000
@@ -31,12 +31,11 @@ def test_loo_kfold(centered_eight, fresh_wrapper, pointwise):
     if pointwise:
         assert kfold_data.elpd_i is not None
         assert kfold_data.elpd_i.shape == (8,)
-        assert hasattr(kfold_data, "p_kfold_i")
         assert kfold_data.p_kfold_i is not None
         assert kfold_data.p_kfold_i.shape == (8,)
     else:
         assert kfold_data.elpd_i is None
-        assert not hasattr(kfold_data, "p_kfold_i")
+        assert kfold_data.p_kfold_i is None
 
 
 @pytest.mark.parametrize("k", [2, 5, 8])
@@ -85,7 +84,6 @@ def test_loo_kfold_save_fits(centered_eight, fresh_wrapper, save_fits):
     )
 
     if save_fits:
-        assert hasattr(kfold_data, "fold_fits")
         assert len(kfold_data.fold_fits) == 4
 
         for k in range(1, 5):
@@ -93,7 +91,7 @@ def test_loo_kfold_save_fits(centered_eight, fresh_wrapper, save_fits):
             assert "fit" in kfold_data.fold_fits[k]
             assert "test_indices" in kfold_data.fold_fits[k]
     else:
-        assert not hasattr(kfold_data, "fold_fits") or kfold_data.fold_fits is None
+        assert kfold_data.fold_fits is None
 
 
 @pytest.mark.parametrize(

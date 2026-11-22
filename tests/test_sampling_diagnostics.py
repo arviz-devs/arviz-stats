@@ -109,6 +109,23 @@ def test_rhat_nested_dataarray_returns_dataarray(centered_eight):
     assert isinstance(result, xr.DataArray)
 
 
+def test_rhat_nested_dataset_single_draw():
+    rng = np.random.default_rng(0)
+    ds = xr.Dataset(
+        {
+            "a": (("chain", "draw"), rng.normal(size=(8, 1))),
+            "b": (("chain", "draw", "dim"), rng.normal(size=(8, 1, 3))),
+        }
+    )
+    superchain_ids = [0, 0, 0, 0, 1, 1, 1, 1]
+    identity = rhat_nested(ds, superchain_ids=superchain_ids, method="identity")
+    assert np.all(np.isfinite(identity["a"]))
+    assert np.all(np.isfinite(identity["b"]))
+    rank = rhat_nested(ds, superchain_ids=superchain_ids)
+    assert np.all(np.isnan(rank["a"]))
+    assert np.all(np.isnan(rank["b"]))
+
+
 def test_mcse_datatree_returns_datatree(centered_eight):
     result = mcse(centered_eight, group="posterior")
     assert isinstance(result, xr.DataTree)
@@ -164,7 +181,14 @@ def test_bfmi_dataset_returns_dataset(centered_eight):
 def test_diagnose_stdout(centered_eight, capsys):
     diagnose(centered_eight, show_diagnostics=True)
     output = capsys.readouterr().out
-    for keyword in ["ESS", "R-hat", "Divergences", "Treedepth", "E-BFMI"]:
+    for keyword in [
+        "ESS",
+        "R-hat",
+        "Divergences",
+        "Treedepth",
+        "E-BFMI",
+        "https://arviz-devs.github.io/EABM/Chapters/MCMC_diagnostics.html",
+    ]:
         assert keyword in output
 
     diagnose(centered_eight, show_diagnostics=False)
@@ -225,8 +249,8 @@ def test_diagnose_no_sample_stats(centered_eight, capsys):
 def test_diagnose_no_chains(centered_eight):
     data_no_chains = xr.DataTree.from_dict(
         {
-            "posterior": centered_eight["posterior"].ds.rename({"chain": "not_a_chain"}),
-            "sample_stats": centered_eight["sample_stats"].ds.rename({"chain": "not_a_chain"}),
+            "posterior": centered_eight["posterior"].dataset.rename({"chain": "not_a_chain"}),
+            "sample_stats": centered_eight["sample_stats"].dataset.rename({"chain": "not_a_chain"}),
         }
     )
 

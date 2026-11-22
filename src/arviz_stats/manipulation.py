@@ -36,11 +36,11 @@ def thin(
 
     sample_dims : iterable of hashable, optional
         Dimensions to be considered sample dimensions and are to be reduced.
-        Default ``rcParams["data.sample_dims"]``.
+        Default ``"draw"``.
     group : hashable, default "posterior"
-        Group on which to compute the ESS.
+        Group on which to perform the thinning.
     var_names : str or list of str, optional
-        Names of the variables for which the ess should be computed.
+        Names of the variables for which the thinning should be applied.
     filter_vars : {None, "like", "regex"}, default None
     coords : dict, optional
         Dictionary of dimension/index names to coordinate values defining a subset
@@ -48,7 +48,9 @@ def thin(
     factor : str or int, default "auto"
         The thinning factor. If "auto", the thinning factor is computed based on bulk and tail
         effective sample size as suggested by Säilynoja et al. (2022) [1]_.
-        If an integer, the thinning factor is set to that value.
+        For DataTree inputs, "auto" can only be used with the ``posterior`` and
+        ``unconstrained_posterior`` groups, and the factor is computed from the
+        requested `group`. If an integer, the thinning factor is set to that value.
     chain_axis, draw_axis : int, optional
         Integer indicators of the axis that correspond to the chain and the draw dimension.
         `chain_axis` can be ``None``.
@@ -156,6 +158,21 @@ def weight_predictions(
     See Also
     --------
     compare :  Compare models based on PSIS-LOO-CV `loo`
+
+    Examples
+    --------
+    .. ipython::
+
+        In [1]: import arviz_base as azb
+           ...: import arviz_stats as azs
+           ...: m0 = azb.load_arviz_data("crabs_poisson")
+           ...: m1 = azb.load_arviz_data("crabs_hurdle_nb")
+           ...: model_dict = {"m0": m0, "m1": m1}
+           ...: comp = azs.compare({"m0": m0, "m1": m1})
+           ...: azs.weight_predictions(
+           ...:     [model_dict[name] for name in comp.index],
+           ...:     weights=comp["weight"],
+           ...: )
     """
     dts = [convert_to_datatree(dt) for dt in dts]
     if len(dts) < 2:

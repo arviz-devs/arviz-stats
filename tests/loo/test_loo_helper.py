@@ -19,7 +19,6 @@ from arviz_stats.loo.loo_helper import (
     _check_log_jacobian,
     _compute_loo_approximation,
     _diff_srs_estimator,
-    _extract_loo_data,
     _generate_subsample_indices,
     _get_log_likelihood_i,
     _get_r_eff,
@@ -29,7 +28,6 @@ from arviz_stats.loo.loo_helper import (
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
-    _select_obs_by_coords,
     _select_obs_by_indices,
     _shift,
     _shift_and_cov,
@@ -55,6 +53,26 @@ def log_lik_fn_subsample(obs_da, datatree):
     theta = datatree.posterior["theta"]
     sigma = datatree.constant_data["sigma"]
     return sp.stats.norm.logpdf(obs_da, loc=theta, scale=sigma)
+
+
+def split_log_prob_fn(calls):
+    def log_prob_upars_fn(upars_in):
+        calls.append(upars_in)
+        return -0.5 * (upars_in**2).sum(dim="param")
+
+    return log_prob_upars_fn
+
+
+def split_log_lik_i_fn(upars_in, _idx):
+    return -0.5 * upars_in.isel(param=0) ** 2
+
+
+def stack_draw_major(upars):
+    return upars.stack(__sample__=["draw", "chain"]).transpose("__sample__", "param").values
+
+
+def forward_transform(values, mean_original, total_scaling, total_mapping):
+    return ((values - mean_original) * total_scaling) @ total_mapping.T + mean_original
 
 
 def test_get_r_eff(centered_eight):
@@ -186,18 +204,6 @@ def test_get_weights_and_k_i(centered_eight):
         assert pareto_k_i.sizes[dim] == 1
 
 
-def test_extract_loo_data(elpd_data):
-    elpd_i_extracted, pareto_k_extracted = _extract_loo_data(elpd_data)
-
-    assert isinstance(elpd_i_extracted, xr.DataArray)
-    assert isinstance(pareto_k_extracted, xr.DataArray)
-    assert elpd_i_extracted.dims == pareto_k_extracted.dims
-    assert elpd_i_extracted.shape == pareto_k_extracted.shape
-
-    xr.testing.assert_allclose(elpd_i_extracted, elpd_data.elpd_i)
-    xr.testing.assert_allclose(pareto_k_extracted, elpd_data.pareto_k)
-
-
 def test_check_log_density(log_likelihood_dataset):
     log_likelihood = log_likelihood_dataset["obs"]
     n_samples = log_likelihood.chain.size * log_likelihood.draw.size
@@ -249,10 +255,12 @@ def test_warn_pareto_k():
         assert len(record) == 0
 
     pareto_k_bad = np.array([0.1, 0.2, 0.8, 0.9])
-    with pytest.warns(
-        UserWarning, match="Estimated shape parameter of Pareto distribution is greater than"
-    ):
+    with pytest.warns(UserWarning, match="Model_comparison.html"):
         warn_flag, _ = _warn_pareto_k(pareto_k_bad, n_samples=1000)
+        assert warn_flag
+
+    with pytest.warns(UserWarning, match="Sensitivity_checks.html"):
+        warn_flag, _ = _warn_pareto_k(pareto_k_bad, n_samples=1000, usage="power_scale")
         assert warn_flag
 
 
@@ -309,16 +317,6 @@ def test_select_obs_by_indices():
 
     assert result.shape == (3,)
     assert_allclose(result.values, np.array([1, 3, 5]))
-
-
-def test_select_obs_by_coords():
-    data = xr.DataArray(np.arange(10), dims=["x"], coords={"x": np.arange(10)})
-
-    coord_array = xr.DataArray([5, 7, 9], dims=["x"], coords={"x": [5, 7, 9]})
-    result = _select_obs_by_coords(data, coord_array, dims=["x"], dim_name="x")
-
-    assert result.shape == (3,)
-    assert_allclose(result.values, np.array([5, 7, 9]))
 
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
@@ -525,6 +523,33 @@ def test_shift_and_cov():
     assert result.mapping.shape == (param_size, param_size)
 
 
+def test_shift_and_cov_matches_weighted_moments():
+    rng = np.random.default_rng(42)
+    chain_size, draw_size, param_size = 2, 500, 3
+    upars = xr.DataArray(
+        rng.normal(size=(chain_size, draw_size, param_size)),
+        dims=["chain", "draw", "param"],
+    )
+    log_weights = rng.normal(size=(chain_size, draw_size))
+    lwi = xr.DataArray(
+        log_weights - np.log(np.sum(np.exp(log_weights))),
+        dims=["chain", "draw"],
+    )
+
+    result = _shift_and_cov(upars, lwi)
+
+    sample_dims = ["chain", "draw"]
+    upars_values = upars.stack(__sample__=sample_dims).transpose("__sample__", "param").values
+    new_values = result.upars.stack(__sample__=sample_dims).transpose("__sample__", "param").values
+    weights = np.exp(lwi.stack(__sample__=sample_dims).values)
+    mean_weighted = weights @ upars_values
+    centered = upars_values - mean_weighted
+    cov_weighted = (weights[:, None] * centered).T @ centered / (1 - np.sum(weights**2))
+
+    assert_allclose(new_values.mean(axis=0), mean_weighted)
+    assert_allclose(np.cov(new_values, rowvar=False, ddof=1), cov_weighted)
+
+
 @pytest.mark.parametrize("cov", [True, False])
 def test_split_moment_match(cov, centered_eight):
     rng = np.random.default_rng(42)
@@ -590,6 +615,76 @@ def test_split_moment_match(cov, centered_eight):
     assert result.lwi.shape == (chain_size, draw_size)
     assert result.lwfi.shape == (chain_size, draw_size)
     assert result.log_liki.shape == (chain_size, draw_size)
+
+
+def test_split_moment_match_shift_inverse():
+    rng = np.random.default_rng(42)
+    chain_size, draw_size, param_size = 2, 100, 3
+    upars = xr.DataArray(
+        rng.normal(size=(chain_size, draw_size, param_size)),
+        dims=["chain", "draw", "param"],
+    )
+    total_shift = rng.normal(size=param_size)
+    log_prob_calls = []
+
+    _split_moment_match(
+        upars=upars,
+        cov=False,
+        total_shift=total_shift,
+        total_scaling=np.ones(param_size),
+        total_mapping=np.eye(param_size),
+        i=0,
+        reff=1.0,
+        log_prob_upars_fn=split_log_prob_fn(log_prob_calls),
+        log_lik_i_upars_fn=split_log_lik_i_fn,
+    )
+
+    original = stack_draw_major(upars)
+    half = original.shape[0] // 2
+    transformed = stack_draw_major(log_prob_calls[0])
+    inverted = stack_draw_major(log_prob_calls[1])
+
+    assert_allclose(transformed[:half], original[:half] + total_shift)
+    assert_allclose(transformed[half:], original[half:])
+    assert_allclose(inverted[:half], original[:half])
+    assert_allclose(inverted[half:], original[half:] - total_shift)
+
+
+def test_split_moment_match_scaling_inverse():
+    rng = np.random.default_rng(42)
+    chain_size, draw_size, param_size = 2, 100, 3
+    upars = xr.DataArray(
+        rng.normal(size=(chain_size, draw_size, param_size)),
+        dims=["chain", "draw", "param"],
+    )
+    total_scaling = rng.uniform(0.5, 2.0, param_size)
+    total_mapping = np.eye(param_size) + 0.1 * rng.normal(size=(param_size, param_size))
+    log_prob_calls = []
+
+    _split_moment_match(
+        upars=upars,
+        cov=True,
+        total_shift=np.zeros(param_size),
+        total_scaling=total_scaling,
+        total_mapping=total_mapping,
+        i=0,
+        reff=1.0,
+        log_prob_upars_fn=split_log_prob_fn(log_prob_calls),
+        log_lik_i_upars_fn=split_log_lik_i_fn,
+    )
+
+    original = stack_draw_major(upars)
+    half = original.shape[0] // 2
+    mean_original = original.mean(axis=0)
+    transformed = stack_draw_major(log_prob_calls[0])
+    inverted = stack_draw_major(log_prob_calls[1])
+    forward_of_original = forward_transform(original, mean_original, total_scaling, total_mapping)
+    forward_of_inverted = forward_transform(inverted, mean_original, total_scaling, total_mapping)
+
+    assert_allclose(transformed[:half], forward_of_original[:half])
+    assert_allclose(transformed[half:], original[half:])
+    assert_allclose(inverted[:half], original[:half])
+    assert_allclose(forward_of_inverted[half:], original[half:])
 
 
 @pytest.mark.parametrize("method", ["lpd", "plpd"])
@@ -853,3 +948,23 @@ def test_diff_srs_estimator_edge_case_full_sample():
     assert isinstance(subsampling_se, float)
     assert isinstance(total_se, float)
     assert subsampling_se == 0.0
+
+
+def test_shift_and_scale_large_offset():
+    rng = np.random.default_rng(42)
+    upars = xr.DataArray(rng.normal(size=(1, 100, 2)), dims=["chain", "draw", "param"])
+    log_weights = rng.normal(size=(1, 100))
+    lwi = xr.DataArray(log_weights - sp.special.logsumexp(log_weights), dims=["chain", "draw"])
+    expected = _shift_and_scale(upars, lwi).scaling
+    result = _shift_and_scale(upars + 1e8, lwi).scaling
+    assert_allclose(result, expected)
+
+
+def test_shift_and_scale_small_scale():
+    rng = np.random.default_rng(42)
+    upars = xr.DataArray(rng.normal(size=(1, 100, 2)), dims=["chain", "draw", "param"])
+    log_weights = rng.normal(size=(1, 100))
+    lwi = xr.DataArray(log_weights - sp.special.logsumexp(log_weights), dims=["chain", "draw"])
+    expected = _shift_and_scale(upars, lwi).scaling
+    result = _shift_and_scale(upars * 1e-6, lwi).scaling
+    assert_allclose(result, expected)

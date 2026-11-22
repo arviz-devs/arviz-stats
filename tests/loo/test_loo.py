@@ -12,11 +12,13 @@ sp = importorskip("scipy")
 np = importorskip("numpy")
 
 from arviz_stats import loo, loo_i
+from arviz_stats.utils import ELPDDataLOO
 
 
 @pytest.mark.parametrize("pointwise", [True, False])
 def test_loo(centered_eight, pointwise):
     loo_data = loo(centered_eight, pointwise=pointwise)
+    assert isinstance(loo_data, ELPDDataLOO)
     assert_almost_equal(loo_data.elpd, -30.78, decimal=1)
     assert_almost_equal(loo_data.p, 0.94, decimal=1)
     assert_almost_equal(loo_data.se, 1.34, decimal=1)
@@ -305,7 +307,7 @@ def test_loo_jacobian(centered_eight):
     assert_almost_equal(loo_with_jacobian.elpd, expected_elpd, decimal=10)
 
     n_obs = len(y_obs)
-    elpd_se_adjusted = (n_obs * np.var(elpd_i_with_jac)) ** 0.5
+    elpd_se_adjusted = (n_obs * np.var(elpd_i_with_jac, ddof=1)) ** 0.5
 
     assert_almost_equal(loo_with_jacobian.se, elpd_se_adjusted, decimal=10)
     assert_almost_equal(loo_with_jacobian.p, loo_no_jacobian.p, decimal=10)
@@ -554,3 +556,50 @@ def test_loo_mixture(centered_eight):
     assert np.isfinite(result_mix.elpd)
     assert np.all(np.isfinite(result_mix.elpd_i.values))
     assert np.all(np.isfinite(result_mix.pareto_k.values))
+
+
+def test_loo_mixture_pareto_k_right_tail():
+    rng = np.random.default_rng(42)
+    noise = rng.normal(size=(4, 1000))
+    log_x = np.log(rng.pareto(1 / 0.9, size=(4, 1000)) + 1)
+    data = azb.from_dict(
+        {
+            "posterior": {"mu": rng.normal(size=(4, 1000))},
+            "log_likelihood": {"y": np.stack([noise + log_x, noise], axis=-1)},
+        }
+    )
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        result = loo(data, mixture=True, pointwise=True)
+    assert np.all(result.pareto_k.values < 0)
+
+
+@pytest.mark.parametrize("dim_order", [("school", "chain", "draw"), ("chain", "school", "draw")])
+def test_loo_mixture_dim_order(centered_eight, dim_order):
+    data = centered_eight.copy()
+    data["log_likelihood"] = data.log_likelihood.dataset.transpose(*dim_order)
+
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        expected = loo(centered_eight, mixture=True, pointwise=True)
+    with pytest.warns(UserWarning, match="mixture=True assumes"):
+        result = loo(data, mixture=True, pointwise=True)
+
+    assert_almost_equal(result.elpd, expected.elpd)
+    assert_almost_equal(result.p, expected.p)
+    assert_allclose(result.elpd_i.values, expected.elpd_i.values)
+
+
+def test_loo_jax_arrays(centered_eight):
+    """loo() must not raise when log_likelihood contains JAX arrays (immutability regression)."""
+    jnp = importorskip("jax.numpy")
+
+    # Copy first: centered_eight is a session-scoped fixture and must not be mutated.
+    data = centered_eight.copy()
+    # Replace the log_likelihood group values with JAX arrays to simulate a JAX backend.
+    obs = data.log_likelihood["obs"]
+    data.log_likelihood["obs"] = xr.DataArray(
+        jnp.asarray(obs.values), dims=obs.dims, coords=obs.coords
+    )
+
+    result = loo(data, pointwise=True)
+    assert np.isfinite(result.elpd)
+    assert np.all(np.isfinite(result.pareto_k.values))

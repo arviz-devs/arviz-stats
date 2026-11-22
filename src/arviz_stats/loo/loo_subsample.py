@@ -14,11 +14,10 @@ from arviz_stats.loo.loo_helper import (
     _prepare_loo_inputs,
     _prepare_subsample,
     _prepare_update_subsample,
-    _select_obs_by_coords,
     _select_obs_by_indices,
     _warn_pareto_k,
 )
-from arviz_stats.utils import ELPDData
+from arviz_stats.utils import ELPDData, ELPDDataLOO, ELPDDataLOOSubsample
 
 
 def loo_subsample(
@@ -37,6 +36,7 @@ def loo_subsample(
     param_names=None,
     log=True,
     log_jacobian=None,
+    model=None,
 ):
     r"""Compute PSIS-LOO-CV using sub-sampling.
 
@@ -71,11 +71,11 @@ def loo_subsample(
     reff: float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
-    log_weights : DataArray or ELPDData, optional
+    log_weights : DataArray or ELPDDataLOO, optional
         Smoothed log weights. Can be either:
 
         - A DataArray with the same shape as the log likelihood data
-        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
+        - An ELPDDataLOO object from a previous :func:`arviz_stats.loo` call.
 
         Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     log_p : ndarray or DataArray, optional
@@ -89,13 +89,16 @@ def loo_subsample(
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
-        - ``lpd``: Use standard log predictive density approximation (default)
-        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
+        - ``lpd``: Use standard log predictive density approximation (default). The stored
+          log likelihood values are used unless ``log_lik_fn`` or ``model`` is provided,
+          in which case the approximation is recomputed from it.
+        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``
+          or a ``model`` from which one is built.
     thin: int or str, optional
         Thinning factor for posterior draws. Can be an integer to thin by that factor,
         "auto" to automatically determine thinning based on bulk and tail ESS, or None
         (default) to use all posterior draws. This value is stored in the returned
-        ``ELPDData`` object and will be automatically used by ``update_subsample``.
+        ``ELPDDataLOOSubsample`` object and will be automatically used by ``update_subsample``.
     log_lik_fn : callable, optional
         Custom log-likelihood function. The signature must be ``log_lik_fn(observed, data)``
         where ``observed`` is an :class:`~xarray.DataArray` containing one or more observations
@@ -118,10 +121,15 @@ def loo_subsample(
         original response scale :math:`y`. The value should be :math:`\log|\frac{dz}{dy}|`
         (the log absolute value of the derivative of the transformation). Must be a DataArray
         with dimensions matching the observation dimensions.
+    model : Model, optional
+        A model object. Currently supported models are PyMC and Bambi.
+        If provided and ``log_lik_fn`` is not, it will be used to auto-build ``log_lik_fn``,
+        so it does not have to be constructed manually. ``param_names`` is ignored in
+        this case. If both are provided, ``log_lik_fn`` takes precedence and a warning is issued.
 
     Returns
     -------
-    ELPDData
+    ELPDDataLOOSubsample
         Object with the following attributes:
 
         - **kind**: "loo"
@@ -194,12 +202,10 @@ def loo_subsample(
 
     if method not in ["lpd", "plpd"]:
         raise ValueError("Method must be either 'lpd' or 'plpd'")
-    if method == "plpd" and log_lik_fn is None:
-        raise ValueError("log_lik_fn must be provided when method='plpd'")
 
     log_likelihood = loo_inputs.log_likelihood
     if reff is None:
-        reff = _get_r_eff(data, loo_inputs.n_samples)
+        reff = _get_r_eff(data, loo_inputs.n_samples, log_likelihood.draw)
 
     jacobian_da = _check_log_jacobian(log_jacobian, loo_inputs.obs_dims)
 
@@ -218,6 +224,7 @@ def loo_subsample(
         loo_inputs.n_data_points,
         loo_inputs.n_samples,
         thin,
+        model=model,
     )
 
     lpd_approx_all = subsample_data.lpd_approx_all
@@ -226,6 +233,11 @@ def loo_subsample(
 
     lpd_approx_sample = _select_obs_by_indices(
         lpd_approx_all, subsample_data.indices, loo_inputs.obs_dims, "__obs__"
+    )
+    lpd_sample = logsumexp(
+        subsample_data.log_likelihood_sample,
+        dims=loo_inputs.sample_dims,
+        b=1 / loo_inputs.n_samples,
     )
 
     sample_ds = xr.Dataset({loo_inputs.var_name: subsample_data.log_likelihood_sample})
@@ -247,7 +259,7 @@ def loo_subsample(
     else:
         if log_weights is not None:
             if isinstance(log_weights, ELPDData):
-                if log_weights.log_weights is None:
+                if not isinstance(log_weights, ELPDDataLOO) or log_weights.log_weights is None:
                     raise ValueError("ELPDData object does not contain log_weights")
                 log_weights = log_weights.log_weights
                 if loo_inputs.var_name in log_weights:
@@ -277,6 +289,7 @@ def loo_subsample(
             jacobian_da, subsample_data.indices, loo_inputs.obs_dims, "__obs__"
         )
         elpd_loo_i = elpd_loo_i + jacobian_sample
+        lpd_sample = lpd_sample + jacobian_sample
 
     warn_mg, good_k = _warn_pareto_k(pareto_k_sample_da, loo_inputs.n_samples)
 
@@ -288,36 +301,32 @@ def loo_subsample(
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
     # from the subsample
-    p_loo_sample = lpd_approx_sample - elpd_loo_i
+    p_loo_sample = lpd_sample - elpd_loo_i
     p_loo, _, _ = p_loo_sample.azstats.srs_estimator(
         n_data_points=loo_inputs.n_data_points,
     )
 
     if not pointwise:
         stored_log_weights = log_weights_sample if "log_weights_sample" in locals() else None
-        return ELPDData(
-            "loo",
-            elpd_loo_hat,
-            se,
-            p_loo,
-            loo_inputs.n_samples,
-            loo_inputs.n_data_points,
-            "log",
-            warn_mg,
-            good_k,
-            None,
-            None,
-            approx_posterior,
-            subsampling_se,
-            subsample_data.subsample_size,
-            log_p,
-            log_q,
-            thin,
-            stored_log_weights,
-            None,
-            subsample_data.indices,
-            lpd_approx_all,
-            jacobian_da,
+        return ELPDDataLOOSubsample(
+            elpd=elpd_loo_hat,
+            se=se,
+            p=p_loo,
+            n_samples=loo_inputs.n_samples,
+            n_data_points=loo_inputs.n_data_points,
+            scale="log",
+            warning=warn_mg,
+            good_k=good_k,
+            approx_posterior=approx_posterior,
+            subsampling_se=subsampling_se,
+            subsample_size=subsample_data.subsample_size,
+            log_p=log_p,
+            log_q=log_q,
+            thin_factor=thin,
+            log_weights=stored_log_weights,
+            loo_subsample_observations=subsample_data.indices,
+            elpd_loo_approx=lpd_approx_all,
+            log_jacobian=jacobian_da,
         )
 
     elpd_i_full, pareto_k_full = _prepare_full_arrays(
@@ -334,29 +343,27 @@ def loo_subsample(
     else:
         log_weights_full = None
 
-    return ELPDData(
-        "loo",
-        elpd_loo_hat,
-        se,
-        p_loo,
-        loo_inputs.n_samples,
-        loo_inputs.n_data_points,
-        "log",
-        warn_mg,
-        good_k,
-        elpd_i_full,
-        pareto_k_full,
-        approx_posterior,
-        subsampling_se,
-        subsample_data.subsample_size,
-        log_p,
-        log_q,
-        thin,
-        log_weights_full,
-        None,
-        subsample_data.indices,
-        lpd_approx_all,
-        jacobian_da,
+    return ELPDDataLOOSubsample(
+        elpd=elpd_loo_hat,
+        se=se,
+        p=p_loo,
+        n_samples=loo_inputs.n_samples,
+        n_data_points=loo_inputs.n_data_points,
+        scale="log",
+        warning=warn_mg,
+        good_k=good_k,
+        elpd_i=elpd_i_full,
+        pareto_k=pareto_k_full,
+        approx_posterior=approx_posterior,
+        subsampling_se=subsampling_se,
+        subsample_size=subsample_data.subsample_size,
+        log_p=log_p,
+        log_q=log_q,
+        thin_factor=thin,
+        log_weights=log_weights_full,
+        loo_subsample_observations=subsample_data.indices,
+        elpd_loo_approx=lpd_approx_all,
+        log_jacobian=jacobian_da,
     )
 
 
@@ -366,12 +373,12 @@ def update_subsample(
     observations=None,
     var_name=None,
     reff=None,
-    log_weights=None,
     seed=315,
-    method="lpd",
+    method=None,
     log_lik_fn=None,
     param_names=None,
     log=True,
+    model=None,
 ):
     """Update a sub-sampled PSIS-LOO-CV object with new observations.
 
@@ -386,7 +393,7 @@ def update_subsample(
 
     Parameters
     ----------
-    loo_orig : ELPDData
+    loo_orig : ELPDDataLOOSubsample
         Original PSIS-LOO-CV result created with ``loo_subsample`` with ``pointwise=True``.
     data : DataTree or InferenceData
         Input data. It should contain the posterior and the log_likelihood groups.
@@ -403,20 +410,19 @@ def update_subsample(
     reff : float, optional
         Relative MCMC efficiency, ``ess / n`` i.e. number of effective samples divided by the number
         of actual samples. Computed from trace by default.
-    log_weights : DataArray or ELPDData, optional
-        Smoothed log weights. Can be either:
-
-        - A :class:`~xarray.DataArray` with the same shape as the log likelihood data
-        - An ELPDData object from a previous :func:`arviz_stats.loo` call.
-
-        Defaults to None. If not provided, it will be computed using the PSIS-LOO method.
     seed : int, optional
         Seed for random sampling.
     method: str, optional
         Method used for approximating the pointwise log predictive density:
 
-        - ``lpd``: Use standard log predictive density approximation (default)
-        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``.
+        - ``lpd``: Use standard log predictive density approximation. The stored
+          log likelihood values are used unless ``log_lik_fn`` or ``model`` is provided,
+          in which case the approximation is recomputed from it.
+        - ``plpd``: Use point log predictive density approximation which requires a ``log_lik_fn``
+          or a ``model`` from which one is built.
+
+        Defaults to None, which reuses the approximation stored in ``loo_orig``, so
+        ``log_lik_fn`` and ``model`` are only used when a method is given.
     log_lik_fn : callable, optional
         Custom log-likelihood function. The signature must be ``log_lik_fn(observed, data)``
         where ``observed`` is a :class:`~xarray.DataArray` containing one or more observations
@@ -432,10 +438,15 @@ def update_subsample(
     log: bool, optional
         Whether the ``log_lik_fn`` returns log-likelihood (True) or likelihood (False).
         Default is True.
+    model : Model, optional
+        A model object. Currently supported models are PyMC and Bambi.
+        If provided and ``log_lik_fn`` is not, it will be used to auto-build ``log_lik_fn``,
+        so it does not have to be constructed manually. ``param_names`` is ignored in
+        this case. If both are provided, ``log_lik_fn`` takes precedence and a warning is issued.
 
     Returns
     -------
-    ELPDData
+    ELPDDataLOOSubsample
         Object with the following attributes:
 
         - **kind**: "loo"
@@ -494,53 +505,51 @@ def update_subsample(
     """
     if observations is None or (isinstance(observations, int) and observations == 0):
         return loo_orig
+    if not isinstance(loo_orig, ELPDDataLOOSubsample):
+        raise TypeError(
+            "loo_orig must be an ELPDDataLOOSubsample object, as returned by loo_subsample."
+        )
     if loo_orig.elpd_i is None:
         raise ValueError("Original loo_subsample result must have pointwise=True")
-    if method not in ["lpd", "plpd"]:
+    if method not in [None, "lpd", "plpd"]:
         raise ValueError("Method must be either 'lpd' or 'plpd'")
-    if method == "plpd" and log_lik_fn is None:
-        raise ValueError("log_lik_fn must be provided when method='plpd'")
 
-    thin = getattr(loo_orig, "thin_factor", None)
+    thin = loo_orig.thin_factor
     loo_inputs = _prepare_loo_inputs(data, var_name, thin)
-    update_data = _prepare_update_subsample(
-        loo_orig, data, observations, var_name, seed, method, log_lik_fn, param_names, log, thin
-    )
 
     if reff is None:
-        reff = _get_r_eff(data, loo_inputs.n_samples)
+        reff = _get_r_eff(data, loo_inputs.n_samples, loo_inputs.log_likelihood.draw)
 
-    log_jacobian = getattr(loo_orig, "log_jacobian", None)
+    update_data = _prepare_update_subsample(
+        loo_orig,
+        data,
+        observations,
+        var_name,
+        seed,
+        method,
+        log_lik_fn,
+        param_names,
+        log,
+        thin,
+        model=model,
+    )
+
+    log_jacobian = loo_orig.log_jacobian
     jacobian_da = _check_log_jacobian(log_jacobian, loo_inputs.obs_dims)
 
     lpd_approx_all = update_data.lpd_approx_all
-    if jacobian_da is not None:
+    if lpd_approx_all is None:
+        lpd_approx_all = loo_orig.elpd_loo_approx
+    elif jacobian_da is not None:
         lpd_approx_all = lpd_approx_all + jacobian_da
 
-    log_p = getattr(loo_orig, "log_p", None)
-    log_q = getattr(loo_orig, "log_q", None)
+    log_p = loo_orig.log_p
+    log_q = loo_orig.log_q
 
-    log_weights_new = None
-    if log_weights is None:
-        log_weights = getattr(loo_orig, "log_weights", None)
-
-    if log_weights is not None:
-        if isinstance(log_weights, ELPDData):
-            if log_weights.log_weights is None:
-                raise ValueError("ELPDData object does not contain log_weights")
-            log_weights = log_weights.log_weights
-            if loo_inputs.var_name in log_weights:
-                log_weights = log_weights[loo_inputs.var_name]
-
-        log_weights_new = _select_obs_by_indices(
-            log_weights, update_data.new_indices, loo_inputs.obs_dims, "__obs__"
-        )
-
-    if log_weights_new is None:
-        log_weights_new_ds, _ = update_data.log_likelihood_new.azstats.psislw(
-            r_eff=reff, dim=loo_inputs.sample_dims
-        )
-        log_weights_new = log_weights_new_ds[loo_inputs.var_name]
+    log_weights_new_ds, _ = update_data.log_likelihood_new.azstats.psislw(
+        r_eff=reff, dim=loo_inputs.sample_dims
+    )
+    log_weights_new = log_weights_new_ds[loo_inputs.var_name]
 
     jacobian_new = None
     if jacobian_da is not None:
@@ -581,12 +590,13 @@ def update_subsample(
     combined_pareto_k_da = xr.concat(
         [update_data.old_pareto_k, pareto_k_new_da], dim=update_data.concat_dim
     )
+    combined_indices = np.concatenate((update_data.old_indices, update_data.new_indices))
 
     good_k = loo_orig.good_k
     warn_mg, _ = _warn_pareto_k(combined_pareto_k_da, loo_inputs.n_samples)
 
-    lpd_approx_sample_da = _select_obs_by_coords(
-        lpd_approx_all, combined_elpd_i_da, loo_inputs.obs_dims, "__obs__"
+    lpd_approx_sample_da = _select_obs_by_indices(
+        lpd_approx_all, combined_indices, loo_inputs.obs_dims, "__obs__"
     )
 
     elpd_loo_hat, subsampling_se, se = combined_elpd_i_da.azstats.diff_srs_estimator(
@@ -597,12 +607,25 @@ def update_subsample(
 
     # Calculate p_loo using SRS estimation directly on the p_loo values
     # from the subsample
-    p_loo_sample = lpd_approx_sample_da - combined_elpd_i_da
+    log_likelihood_sample_da = _select_obs_by_indices(
+        loo_inputs.log_likelihood, combined_indices, loo_inputs.obs_dims, "__obs__"
+    )
+    lpd_sample_da = logsumexp(
+        log_likelihood_sample_da,
+        dims=loo_inputs.sample_dims,
+        b=1 / loo_inputs.n_samples,
+    )
+    if jacobian_da is not None:
+        jacobian_sample_da = _select_obs_by_indices(
+            jacobian_da, combined_indices, loo_inputs.obs_dims, "__obs__"
+        )
+        lpd_sample_da = lpd_sample_da + jacobian_sample_da
+
+    p_loo_sample = lpd_sample_da - combined_elpd_i_da
     p_loo, _, _ = p_loo_sample.azstats.srs_estimator(
         n_data_points=loo_inputs.n_data_points,
     )
 
-    combined_indices = np.concatenate((update_data.old_indices, update_data.new_indices))
     elpd_i_full, pareto_k_full = _prepare_full_arrays(
         combined_elpd_i_da,
         combined_pareto_k_da,
@@ -612,13 +635,11 @@ def update_subsample(
         elpd_loo_hat,
     )
 
-    if loo_orig.log_weights is not None and log_weights_new is not None:
+    if loo_orig.log_weights is not None:
         old_log_weights = loo_orig.log_weights
         if isinstance(old_log_weights, xr.Dataset):
             old_log_weights = old_log_weights[loo_inputs.var_name]
 
-        if isinstance(log_weights_new, xr.Dataset):
-            log_weights_new = log_weights_new[loo_inputs.var_name]
         combined_log_weights = xr.concat(
             [old_log_weights, log_weights_new], dim=update_data.concat_dim
         )
@@ -626,27 +647,25 @@ def update_subsample(
     else:
         log_weights_full = None
 
-    return ELPDData(
-        "loo",
-        elpd_loo_hat,
-        se,
-        p_loo,
-        loo_inputs.n_samples,
-        loo_inputs.n_data_points,
-        "log",
-        warn_mg,
-        good_k,
-        elpd_i_full,
-        pareto_k_full,
-        approx_posterior,
-        subsampling_se,
-        update_data.combined_size,
-        log_p,
-        log_q,
-        thin,
-        log_weights_full,
-        None,
-        combined_indices,
-        lpd_approx_all,
-        jacobian_da,
+    return ELPDDataLOOSubsample(
+        elpd=elpd_loo_hat,
+        se=se,
+        p=p_loo,
+        n_samples=loo_inputs.n_samples,
+        n_data_points=loo_inputs.n_data_points,
+        scale="log",
+        warning=warn_mg,
+        good_k=good_k,
+        elpd_i=elpd_i_full,
+        pareto_k=pareto_k_full,
+        approx_posterior=approx_posterior,
+        subsampling_se=subsampling_se,
+        subsample_size=update_data.combined_size,
+        log_p=log_p,
+        log_q=log_q,
+        thin_factor=thin,
+        log_weights=log_weights_full,
+        loo_subsample_observations=combined_indices,
+        elpd_loo_approx=lpd_approx_all,
+        log_jacobian=jacobian_da,
     )
