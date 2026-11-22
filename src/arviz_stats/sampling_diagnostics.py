@@ -912,7 +912,7 @@ def diagnose(
 
     if ess_threshold is not None:
         below_minimum_params = [
-            var for var in ess_bulk.ds.data_vars if (ess_bulk.ds[var] < ess_threshold).any()
+            var for var in ess_min.data_vars if (ess_min[var] < ess_threshold).any()
         ]
 
         if below_minimum_params:
