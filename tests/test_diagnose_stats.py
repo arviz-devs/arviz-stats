@@ -1,7 +1,8 @@
-import arviz_base as azb
-import numpy as np
-import xarray as xr
+import pytest
 
+azb = pytest.importorskip("arviz_base")
+xr = pytest.importorskip("xarray")
+np = pytest.importorskip("numpy")
 import arviz_stats as azs
 
 
