@@ -960,12 +960,8 @@ def diagnose(
 
     if ess_threshold is not None:
         below_minimum_params = [
-    feature-diagnose-stats
-        var for var in ess_min.data_vars if (ess_min[var] < ess_threshold).any()
-        for var in ess_bulk.dataset.data_vars
-        if (ess_bulk.dataset[var] < ess_threshold).any()
-        main
-        
+            var for var in ess_min.data_vars if (ess_min[var] < ess_threshold).any()
+        ]
 
         if below_minimum_params:
             has_errors = True
