@@ -19,7 +19,7 @@ def test_diagnose_precomputed_stats():
 
     bfmi_da = xr.DataArray([0.8, 0.9, 0.85, 0.88], dims=["chain"], coords={"chain": range(4)})
     ess_ds = xr.Dataset({"mu": xr.DataArray([200], dims=["mu"])})
-    rhat_ds = xr.Dataset({"mu": xr.DataArray([1.02], dims=["mu"])})
+    rhat_ds = xr.Dataset({"mu": xr.DataArray([1.1], dims=["mu"])})
 
     has_errors, res = azs.diagnose(
         dt,
