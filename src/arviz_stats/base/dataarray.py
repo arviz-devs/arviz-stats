@@ -1184,6 +1184,65 @@ class BaseDataArray:
             random_state=random_state,
         )
 
+    def log_lik_nonfactorized(
+        self, da, mean, cov=None, prec=None, df=None, dims=None, sample_dims=None
+    ):
+        """Compute pointwise conditional log-likelihoods on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+            Observed values.
+        mean : DataArray or scalar
+            Mean of the multivariate normal or Student-t.
+        cov : DataArray, optional
+            Covariance matrix of the multivariate normal or scale matrix of the
+            multivariate Student-t.
+        prec : DataArray, optional
+            Precision matrix, the inverse of cov.
+        df : DataArray or scalar, optional
+            Degrees of freedom of the multivariate Student-t. If None, the distribution
+            is multivariate normal.
+        dims : list of str, optional
+            The two matrix dimensions of cov or prec. Defaults to its dimensions that
+            are not in sample_dims.
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"].
+
+        Returns
+        -------
+        log_lik : DataArray
+            Log-likelihood of each observation given all the others.
+        """
+        if (cov is None) == (prec is None):
+            raise ValueError("Exactly one of `cov` and `prec` must be provided.")
+        matrix = cov if prec is None else prec
+        sample_dims = validate_dims(sample_dims)
+        if dims is None:
+            dims = [dim for dim in matrix.dims if dim not in sample_dims]
+        if len(dims) != 2:
+            raise ValueError(f"`dims` must contain the two matrix dimensions, got {list(dims)}")
+        obs_dims = [dim for dim in da.dims if dim in dims] or list(da.dims)
+
+        resid = da - mean
+        extra_dims = [dim for dim in resid.dims if dim not in (*da.dims, *sample_dims)]
+        if extra_dims:
+            raise ValueError(
+                f"`mean` has dimensions {extra_dims} that are neither sample dimensions "
+                f"nor dimensions of the observed data {list(da.dims)}"
+            )
+
+        return apply_ufunc(
+            self.array_class.log_lik_nonfactorized,
+            resid,
+            0,
+            cov,
+            prec,
+            df,
+            input_core_dims=[obs_dims, [], list(dims), list(dims), []],
+            output_core_dims=[obs_dims],
+        ).rename(da.name)
+
     def power_scale_lw(self, da, alpha=0, dim=None):
         """Compute log weights for power-scaling component by alpha."""
         dims = validate_dims(dim)

@@ -1851,6 +1851,36 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             random_state=random_state,
         )
 
+    def log_lik_nonfactorized(self, y, mean, cov=None, prec=None, df=None):
+        """Compute pointwise conditional log-likelihoods of a multivariate normal or Student-t.
+
+        Parameters
+        ----------
+        y : array-like
+            Observed values, with the observations along the last axis.
+        mean : array-like
+            Mean of the distribution. Must broadcast against y.
+        cov : array-like, optional
+            Covariance matrix of the multivariate normal or scale matrix of the
+            multivariate Student-t, along the last two axes.
+        prec : array-like, optional
+            Precision matrix, the inverse of cov, along the last two axes.
+        df : array-like, optional
+            Degrees of freedom of the multivariate Student-t. If None, the distribution
+            is multivariate normal.
+
+        Returns
+        -------
+        log_lik : array-like
+            Log-likelihood of each observation given all the others.
+        """
+        if (cov is None) == (prec is None):
+            raise ValueError("Exactly one of `cov` and `prec` must be provided.")
+        if prec is None:
+            prec = np.linalg.inv(cov)
+
+        return self._log_lik_nonfactorized(np.asarray(y) - mean, np.asarray(prec), df)
+
     def srs_estimator(self, y_sample, n_data_points):
         """Compute simple random sampling estimate for subsampled LOO.
 

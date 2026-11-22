@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 import numpy as np
 from scipy import stats
-from scipy.special import logsumexp
+from scipy.special import gammaln, logsumexp  # pylint: disable=no-name-in-module
 
 from arviz_stats.base.circular_utils import circular_diff, circular_mean, circular_sd, circular_var
 from arviz_stats.base.core import _CoreBase
@@ -688,6 +688,44 @@ class _DiagnosticsBase(_CoreBase):
             loo_r_squared = np.clip(loo_r_squared, -1, 1)
 
         return loo_r_squared
+
+    @staticmethod
+    def _log_lik_nonfactorized(resid, prec, df=None):
+        """
+        Compute pointwise conditional log-likelihoods of a multivariate normal or Student-t.
+
+        Parameters
+        ----------
+        resid : np.ndarray
+            Observed values minus the mean, with shape (..., n_obs).
+        prec : np.ndarray
+            Precision matrix with shape (..., n_obs, n_obs).
+        df : np.ndarray, optional
+            Degrees of freedom of the Student-t with shape (...). If None, the
+            distribution is normal.
+
+        Returns
+        -------
+        log_lik : np.ndarray
+            Log-likelihood of each observation given all the others, with shape (..., n_obs).
+        """
+        prec_diag = np.diagonal(prec, axis1=-2, axis2=-1)
+        prec_resid = (prec @ resid[..., None])[..., 0]
+        quad = prec_resid**2 / prec_diag
+
+        if df is None:
+            return 0.5 * (np.log(prec_diag) - quad - np.log(2 * np.pi))
+
+        df = np.asarray(df)[..., None]
+        alpha = 0.5 * (df + resid.shape[-1])
+        beta = df + np.sum(resid * prec_resid, axis=-1, keepdims=True) - quad
+        return (
+            gammaln(alpha)
+            - gammaln(alpha - 0.5)
+            - 0.5 * np.log(np.pi)
+            + 0.5 * (np.log(prec_diag) - np.log(beta))
+            - alpha * np.log1p(quad / beta)
+        )
 
     @staticmethod
     def _mixture(ary, obs_axes, sample_axes, log_jacobian=None):
