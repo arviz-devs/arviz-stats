@@ -368,3 +368,15 @@ def test_update_kwargs_with_dims_both_dim_and_dims():
     assert result["dim"] == ["chain"]
     assert result["dims"] == ["draw"]
     assert result["other"] == 123
+
+
+def test_thin_default_sample_dims(idata):
+    assert idata.posterior["a"].azstats.thin(factor=2).sizes["draw"] == 50
+    assert idata.posterior.dataset.azstats.thin(factor=2)["a"].sizes["draw"] == 50
+    assert idata.azstats.thin(factor=2).dataset["a"].sizes["draw"] == 50
+
+
+def test_thin_stacked_sample_dims(idata):
+    stacked = idata.posterior["a"].stack(sample=("chain", "draw"))
+    with azb.rc_context(rc={"data.sample_dims": ["sample"]}):
+        assert stacked.azstats.thin(factor=2).sizes["sample"] == 200
