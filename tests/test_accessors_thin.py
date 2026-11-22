@@ -1,9 +1,12 @@
 # pylint: disable=redefined-outer-name
-import arviz_base as azb
 import numpy as np
 import pytest
 
-import arviz_stats  # noqa: F401
+from .helpers import importorskip
+
+azb = importorskip("arviz_base")
+
+import arviz_stats  # noqa: F401,E402
 
 
 @pytest.fixture
