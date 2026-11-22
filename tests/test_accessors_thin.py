@@ -1,12 +1,16 @@
+# pylint: disable=redefined-outer-name
+import arviz_base as azb
 import numpy as np
 import pytest
-import arviz_base as azb
-import arviz_stats
+
+import arviz_stats  # noqa: F401
+
 
 @pytest.fixture
 def sample_data():
     rng = np.random.default_rng(0)
     return azb.from_dict({"posterior": {"mu": rng.normal(size=(4, 100))}})
+
 
 def test_thin_accessor_integer_factor(sample_data):
     # DataArray accessor
@@ -18,4 +22,5 @@ def test_thin_accessor_integer_factor(sample_data):
     assert ds.azstats.thin(factor=2).sizes["draw"] == 50
 
     # DataTree accessor
-    assert sample_data.azstats.thin(factor=2).posterior.sizes["draw"] == 50
+    result = sample_data.azstats.thin(factor=2)
+    assert result["mu"].sizes["draw"] == 50
