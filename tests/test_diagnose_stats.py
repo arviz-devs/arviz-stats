@@ -1,11 +1,11 @@
 
 import numpy as np
 import pytest
-import xarray as xr
 
 from .helpers import importorskip
 
 azb = importorskip("arviz_base")
+xr = importorskip("xarray")
 
 import arviz_stats as azs  # pylint: disable=unused-import, wrong-import-position
 
@@ -17,7 +17,6 @@ def test_diagnose_precomputed_stats():
         "sample_stats": {"energy": rng.normal(size=(4, 100))},
     })
     
-    # Create precomputed stats to cover the custom stats logic
     bfmi_da = xr.DataArray([0.8, 0.9, 0.85, 0.88], dims=["chain"], coords={"chain": range(4)})
     ess_ds = xr.Dataset({"mu": xr.DataArray([200], dims=["mu"])}) 
     rhat_ds = xr.Dataset({"mu": xr.DataArray([1.02], dims=["mu"])}) 
