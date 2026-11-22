@@ -167,11 +167,13 @@ def compare(
            ...: compare({"non_centered": loo_sub1, "centered": loo_sub2}, method="pseudo-BMA")
 
     When using subsampled LOO, the ``subsampling_dse`` column quantifies the additional
-    uncertainty from using subsamples instead of all observations. The ``elpd_diff`` values
-    are computed using a difference-of-estimators approach on overlapping observations, which
-    can differ from simple subtraction of ELPD values. Using the same seed across models
-    ensures overlapping observations for more accurate paired comparisons with smaller
-    standard errors.
+    uncertainty from using subsamples instead of all observations. When the models use the
+    same subsample, or the subsample of one contains the other, the ``elpd_diff`` values
+    are computed using a difference-of-estimators approach on the shared observations, which
+    can differ from simple subtraction of ELPD values. Otherwise ``elpd_diff`` is the
+    difference of the ELPD estimates and ``dse`` treats the models as independent, which makes
+    it larger. Using the same seed and number of observations across models gives the same
+    subsample and a paired comparison with smaller standard errors.
 
     See Also
     --------
@@ -433,7 +435,6 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
     """Compute ELPD differences for subsampled models."""
     subsample_a = _subsample_observations(elpd_a)
     subsample_b = _subsample_observations(elpd_b)
-    mixed_subsample = (subsample_a is None) != (subsample_b is None)
 
     if subsample_a is None and subsample_b is None:
         pointwise_a = elpd_a.elpd_i
@@ -456,12 +457,6 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
             result["subsampling_dse"] = combined
         return result
 
-    if mixed_subsample:
-        warnings.warn(
-            "Estimated elpd_diff using observations included in loo calculations for all models.",
-            UserWarning,
-        )
-
     indices_a = (
         np.unique(np.asarray(subsample_a, dtype=int))
         if subsample_a is not None
@@ -474,20 +469,21 @@ def _compute_elpd_diff_subsampled(elpd_a, elpd_b):
     )
 
     shared = np.intersect1d(indices_a, indices_b)
-    subsample_mismatch = (
-        subsample_a is not None
-        and subsample_b is not None
-        and not np.array_equal(indices_a, indices_b)
-    )
+    nested = shared.size in (indices_a.size, indices_b.size)
 
-    if shared.size >= 2:
+    if nested:
+        if indices_a.size != indices_b.size:
+            warnings.warn(
+                "Estimated elpd_diff using observations included in loo calculations for all "
+                "models.",
+                UserWarning,
+            )
         result = _difference_estimator(elpd_a, elpd_b, shared, subsample_a, subsample_b)
         if result is not None:
-            result["subsample_mismatch"] = subsample_mismatch
             return result
 
     result = _compute_naive_diff(elpd_a, elpd_b)
-    result["subsample_mismatch"] = subsample_mismatch
+    result["subsample_mismatch"] = not nested
     return result
 
 
