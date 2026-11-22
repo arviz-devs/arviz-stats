@@ -891,6 +891,19 @@ class TestLOO:
         assert pareto_k.shape == ()
         assert p_loo_i.shape == ()
 
+    def test_loo_chain_axis_none_log_weights(self, array_stats, rng):
+        ary = rng.normal(-2, 1, size=(100,))
+        log_weights, pareto_k = array_stats.psislw(ary)
+        expected = array_stats.loo(ary, chain_axis=None, draw_axis=-1)
+
+        result = array_stats.loo(
+            ary, chain_axis=None, draw_axis=-1, log_weights=log_weights, pareto_k=pareto_k
+        )
+
+        for res, exp in zip(result, expected):
+            assert res.shape == ()
+            assert_allclose(res, exp)
+
     def test_loo_diff_chain_draw_axes(self, array_stats, rng):
         ary = rng.normal(-2, 1, size=(5, 4, 100))
         elpd_i, pareto_k, p_loo_i = array_stats.loo(ary, chain_axis=1, draw_axis=2)

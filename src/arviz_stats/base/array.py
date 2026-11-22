@@ -1443,7 +1443,12 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         p_loo_i : array-like
             Pointwise effective number of parameters.
         """
-        ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
+        if log_weights is None:
+            ary, chain_axis, draw_axis = process_chain_none(ary, chain_axis, draw_axis)
+        else:
+            ary, log_weights, chain_axis, draw_axis = process_chain_none_multi(
+                ary, log_weights, chain_axis=chain_axis, draw_axis=draw_axis
+            )
         ary, axes = process_ary_axes(ary, [chain_axis, draw_axis])
 
         if log_weights is not None:
