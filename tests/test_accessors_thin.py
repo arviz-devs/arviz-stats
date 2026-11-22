@@ -6,7 +6,7 @@ from .helpers import importorskip
 
 azb = importorskip("arviz_base")
 
-import arviz_stats  # noqa: F401,E402
+import arviz_stats  # pylint: disable=unused-import, wrong-import-position
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def test_thin_accessor_integer_factor(sample_data):
     assert da.azstats.thin(factor=2).sizes["draw"] == 50
 
     # Dataset accessor
-    ds = sample_data.posterior.ds
+    ds = sample_data.posterior.dataset
     assert ds.azstats.thin(factor=2).sizes["draw"] == 50
 
     # DataTree accessor
