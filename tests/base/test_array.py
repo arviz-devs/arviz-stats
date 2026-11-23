@@ -893,11 +893,11 @@ class TestLOO:
 
     def test_loo_chain_axis_none_log_weights(self, array_stats, rng):
         ary = rng.normal(-2, 1, size=(100,))
-        log_weights, pareto_k = array_stats.psislw(ary)
-        expected = array_stats.loo(ary, chain_axis=None, draw_axis=-1)
+        log_weights = rng.normal(size=(100,))
+        expected = array_stats.loo(ary[None, :], log_weights=log_weights[None, :], pareto_k=0.3)
 
         result = array_stats.loo(
-            ary, chain_axis=None, draw_axis=-1, log_weights=log_weights, pareto_k=pareto_k
+            ary, chain_axis=None, draw_axis=-1, log_weights=log_weights, pareto_k=0.3
         )
 
         for res, exp in zip(result, expected):
