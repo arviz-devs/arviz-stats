@@ -26,7 +26,7 @@ classifiers = [
 dynamic = ["version", "description"]
 dependencies = [
   "numpy>=2",
-  "scipy>=1.13",
+  "scipy>=1.16",
 ]
 
 [tool.flit.module]

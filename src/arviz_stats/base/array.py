@@ -8,6 +8,7 @@ batching as necessary.
 import warnings
 
 import numpy as np
+from scipy.linalg import solve_triangular
 
 from arviz_stats.base.density import _DensityBase
 from arviz_stats.base.diagnostics import _DiagnosticsBase
@@ -1883,7 +1884,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         if cov is not None:
             prec = np.linalg.inv(cov)
         elif chol is not None:
-            chol_inv = np.linalg.inv(chol)
+            chol_inv = solve_triangular(chol, np.eye(np.shape(chol)[-1]), lower=lower)
             prec = chol_inv.mT @ chol_inv if lower else chol_inv @ chol_inv.mT
 
         return self._log_lik_nonfactorized(np.asarray(y) - mean, np.asarray(prec), df)
