@@ -176,4 +176,5 @@ def lfo_cv(
         refits=np.asarray(lfo_results.refits),
         n_refits=n_refits,
         p_lfo_i=lfo_results.p_lfo_i if pointwise else None,
+        observed=lfo_inputs.observed,
     )

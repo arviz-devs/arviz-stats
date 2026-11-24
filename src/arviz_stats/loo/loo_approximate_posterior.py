@@ -132,4 +132,5 @@ def loo_approximate_posterior(data, log_p, log_q, pointwise=None, var_name=None,
         elpd_i=elpd_i if pointwise else None,
         pareto_k=pareto_k if pointwise else None,
         approx_posterior=True,
+        observed=loo_inputs.observed,
     )

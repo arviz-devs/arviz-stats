@@ -327,6 +327,7 @@ def loo_subsample(
             loo_subsample_observations=subsample_data.indices,
             elpd_loo_approx=lpd_approx_all,
             log_jacobian=jacobian_da,
+            observed=loo_inputs.observed,
         )
 
     elpd_i_full, pareto_k_full = _prepare_full_arrays(
@@ -364,6 +365,7 @@ def loo_subsample(
         loo_subsample_observations=subsample_data.indices,
         elpd_loo_approx=lpd_approx_all,
         log_jacobian=jacobian_da,
+        observed=loo_inputs.observed,
     )
 
 
@@ -668,4 +670,5 @@ def update_subsample(
         loo_subsample_observations=combined_indices,
         elpd_loo_approx=lpd_approx_all,
         log_jacobian=jacobian_da,
+        observed=loo_inputs.observed,
     )

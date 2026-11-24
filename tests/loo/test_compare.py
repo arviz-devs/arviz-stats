@@ -498,14 +498,30 @@ def test_compare_elpd_i_extra_dim(centered_eight, extra_dim_model):
     log_lik = centered_eight.log_likelihood["obs"]
     log_liks = {"a": log_lik, "b": log_lik - log_lik.school.copy(data=delta)}
     log_liks[extra_dim_model] = log_liks[extra_dim_model].expand_dims(extra=1, axis=-1)
+    observed = {"a": centered_eight.observed_data["obs"], "b": centered_eight.observed_data["obs"]}
+    observed[extra_dim_model] = observed[extra_dim_model].expand_dims(extra=1, axis=-1)
     elpds = {}
     for name, model_log_lik in log_liks.items():
         data = centered_eight.copy()
         data["log_likelihood"] = data["log_likelihood"].to_dataset().assign(obs=model_log_lik)
+        data["observed_data"] = data["observed_data"].to_dataset().assign(obs=observed[name])
         elpds[name] = loo(data)
     result = compare(elpds, round_to="none")
     assert_allclose(result.loc["b", "elpd_diff"], -delta.sum())
     assert_allclose(result.loc["b", "dse"], np.sqrt(delta.size) * delta.std(ddof=1))
+
+
+@pytest.mark.parametrize("precomputed", [False, True])
+def test_compare_different_observed(centered_eight, non_centered_eight, precomputed):
+    rescaled = non_centered_eight.copy()
+    rescaled["observed_data"] = (
+        rescaled["observed_data"].to_dataset().assign(obs=rescaled.observed_data["obs"] / 10)
+    )
+    models = {"centered": centered_eight, "rescaled": rescaled}
+    if precomputed:
+        models = {name: loo(data, pointwise=True) for name, data in models.items()}
+    with pytest.warns(UserWarning, match="same observed data"):
+        compare(models)
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")

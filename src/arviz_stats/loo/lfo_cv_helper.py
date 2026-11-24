@@ -35,6 +35,7 @@ LFOInputs = namedtuple(
         "min_observations",
         "forecast_horizon",
         "origins",
+        "observed",
     ],
 )
 
@@ -77,6 +78,12 @@ def _prepare_lfo_inputs(data, var_name, wrapper, min_observations, forecast_hori
         )
 
     log_likelihood = get_log_likelihood(data, var_name)
+    var_name = log_likelihood.name
+
+    if hasattr(data, "observed_data") and var_name in data.observed_data:
+        observed = data.observed_data[var_name]
+    else:
+        observed = None
 
     sample_dims = ["chain", "draw"]
     if time_dim not in log_likelihood.dims:
@@ -108,6 +115,7 @@ def _prepare_lfo_inputs(data, var_name, wrapper, min_observations, forecast_hori
         min_observations=min_observations,
         forecast_horizon=forecast_horizon,
         origins=origins,
+        observed=observed,
     )
 
 

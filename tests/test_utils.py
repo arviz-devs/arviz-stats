@@ -531,6 +531,7 @@ def test_elpddata_base_fields():
         "good_k",
         "elpd_i",
         "pareto_k",
+        "observed",
     ]
 
 

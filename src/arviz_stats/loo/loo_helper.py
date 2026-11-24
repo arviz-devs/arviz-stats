@@ -44,7 +44,15 @@ __all__ = [
 
 LooInputs = namedtuple(
     "LooInputs",
-    ["log_likelihood", "var_name", "sample_dims", "obs_dims", "n_samples", "n_data_points"],
+    [
+        "log_likelihood",
+        "var_name",
+        "sample_dims",
+        "obs_dims",
+        "n_samples",
+        "n_data_points",
+        "observed",
+    ],
 )
 
 SubsampleData = namedtuple(
@@ -83,6 +91,7 @@ def _compute_loo_results(
     approx_posterior=False,
     return_pointwise=False,
     log_jacobian=None,
+    observed=None,
 ):
     """Compute PSIS-LOO-CV results."""
     if isinstance(log_likelihood, xr.Dataset):
@@ -158,6 +167,7 @@ def _compute_loo_results(
         approx_posterior=approx_posterior,
         log_weights=log_weights,
         log_jacobian=log_jacobian,
+        observed=observed,
     )
 
 
@@ -173,6 +183,11 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
         log_likelihood = get_log_likelihood(data, var_name=var_name)
         if var_name is None and log_likelihood.name is not None:
             var_name = log_likelihood.name
+
+        if hasattr(data, "observed_data") and var_name in data.observed_data:
+            observed = data.observed_data[var_name]
+        else:
+            observed = None
 
         if thin_factor is not None:
             from arviz_stats.manipulation import thin
@@ -218,6 +233,7 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
         obs_dims,
         n_samples,
         n_data_points,
+        observed,
     )
 
 

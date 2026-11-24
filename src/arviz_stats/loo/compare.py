@@ -5,6 +5,7 @@ from copy import deepcopy
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 from arviz_base import rcParams
 from scipy.optimize import Bounds, LinearConstraint, minimize
 from scipy.stats import dirichlet, norm
@@ -32,6 +33,9 @@ def compare(
     Precomputed pointwise LFO-CV results can also be compared, but only with other LFO-CV
     results that use the same ``forecast_horizon`` and ``min_observations``. Raw model data
     are evaluated with PSIS-LOO-CV and therefore cannot be mixed with LFO-CV results.
+
+    All models should be fit to the same observations. A warning is raised when the observed
+    values stored with the results differ between models.
 
     If more than 11 models are compared, a diagnostic check for selection bias
     is performed [4]_. If detected, avoid LOO-based selection and use model averaging/stacking
@@ -698,6 +702,18 @@ def _calculate_ics(
                 raise e.__class__(
                     f"Encountered error trying to compute ELPD from model {name}."
                 ) from e
+
+    observed = [
+        xr.DataArray(np.ravel(elpd_data.observed))
+        for elpd_data in new_compare_dict.values()
+        if elpd_data.observed is not None
+    ]
+    if any(not observed[0].equals(other) for other in observed[1:]):
+        warnings.warn(
+            "Not all models have the same observed data. ELPD values are only comparable "
+            "between models fit to the same observations in the same order.",
+            UserWarning,
+        )
     return new_compare_dict
 
 

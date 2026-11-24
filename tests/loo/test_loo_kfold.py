@@ -27,6 +27,7 @@ def test_loo_kfold(centered_eight, fresh_wrapper, pointwise):
     assert kfold_data.good_k is None
     assert kfold_data.pareto_k is None
     assert fresh_wrapper.fit_count == 4
+    np.testing.assert_array_equal(kfold_data.observed, centered_eight.observed_data["obs"])
 
     if pointwise:
         assert kfold_data.elpd_i is not None
