@@ -229,7 +229,7 @@ def loo_moment_match(
     else:
         raise ValueError("upars must have at most one dimension besides 'chain' and 'draw'.")
 
-    upars = upars.transpose(*sample_dims, param_dim_name)
+    upars = upars.transpose(*sample_dims, param_dim_name).as_numpy()
 
     loo_data = deepcopy(loo_orig)
     loo_data.method = "loo_moment_match"

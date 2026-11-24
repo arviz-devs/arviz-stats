@@ -345,3 +345,19 @@ def test_loo_moment_match_flag_no_bad_k():
     np.testing.assert_allclose(result.elpd, loo_orig.elpd)
     xr.testing.assert_allclose(result.elpd_i, loo_orig.elpd_i)
     xr.testing.assert_allclose(result.pareto_k, loo_orig.pareto_k)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_loo_moment_match_jax_mode(roaches_pymc_setup):
+    importorskip("jax")
+    pytensor = importorskip("pytensor")
+    data, model = roaches_pymc_setup
+    loo_orig = loo(data, pointwise=True, var_name="log_lik")
+    expected = loo_moment_match(data, loo_orig, model=model, var_name="log_lik")
+
+    with pytensor.config.change_flags(mode="JAX"):
+        result = loo_moment_match(data, loo_orig, model=model, var_name="log_lik")
+
+    xr.testing.assert_allclose(result.elpd_i, expected.elpd_i)
+    xr.testing.assert_allclose(result.pareto_k, expected.pareto_k)
