@@ -5,7 +5,9 @@ from arviz_base import convert_to_datatree
 from arviz_stats.loo.loo_helper import _var_name_custom_ll
 
 
-def log_lik_nonfactorized(data, mean, cov=None, prec=None, df=None, var_name=None, dims=None):
+def log_lik_nonfactorized(
+    data, mean, cov=None, prec=None, chol=None, lower=True, df=None, var_name=None, dims=None
+):
     r"""Compute pointwise conditional log-likelihoods for non-factorized models.
 
     PSIS-LOO-CV, described in [3]_ and [4]_, needs the log-likelihood of each observation, but a
@@ -18,28 +20,33 @@ def log_lik_nonfactorized(data, mean, cov=None, prec=None, df=None, var_name=Non
     Parameters
     ----------
     data : DataTree or InferenceData
-        Input data. It should contain the ``posterior`` and ``observed_data`` groups.
+        Input data. It should contain the ``posterior`` and ``observed_data`` groups. Variable
+        names are looked up in the ``posterior`` group first and then in ``constant_data``.
     mean : str or float
-        Name of the variable in the ``posterior`` group with the mean of the observation model.
-        A number can be passed instead when the mean is a known constant.
+        Name of the variable with the mean of the observation model. A number can be passed
+        instead when the mean is a known constant.
     cov : str, optional
-        Name of the variable in the ``posterior`` group with the covariance matrix of the
-        multivariate normal or the scale matrix of the multivariate Student-t. Must be provided
-        if ``prec`` is None.
+        Name of the variable with the covariance matrix of the multivariate normal or the
+        scale matrix of the multivariate Student-t. Exactly one of ``cov``, ``prec`` and
+        ``chol`` must be provided.
     prec : str, optional
-        Name of the variable in the ``posterior`` group with the precision matrix, the inverse
-        of the covariance or scale matrix. Must be provided if ``cov`` is None.
+        Name of the variable with the precision matrix, the inverse of the covariance or
+        scale matrix.
+    chol : str, optional
+        Name of the variable with the Cholesky factor of the covariance or scale matrix.
+    lower : bool, default True
+        Whether ``chol`` is the lower triangular factor. If False, it is the upper one.
     df : str or float, optional
-        Name of the variable in the ``posterior`` group with the degrees of freedom of the
-        multivariate Student-t. A number can be passed instead when they are a known constant.
-        Defaults to None, in which case the observation model is multivariate normal.
+        Name of the variable with the degrees of freedom of the multivariate Student-t.
+        A number can be passed instead when they are a known constant. Defaults to None,
+        in which case the observation model is multivariate normal.
     var_name : str, optional
         The name of the variable in the ``observed_data`` group to use. If None, the only
         variable in the ``observed_data`` group is used (an error is raised if there are
         several).
     dims : sequence of hashable, optional
-        The two dimensions of ``cov`` or ``prec`` that define the matrix. Defaults to its
-        dimensions that are not sample dimensions.
+        The two dimensions of ``cov``, ``prec`` or ``chol`` that define the matrix. Defaults
+        to its dimensions that are not sample dimensions.
 
     Returns
     -------
@@ -137,11 +144,15 @@ def log_lik_nonfactorized(data, mean, cov=None, prec=None, df=None, var_name=Non
     """
     data = convert_to_datatree(data)
     var_name = _var_name_custom_ll(data, var_name)
-    mean, cov, prec, df = (
-        data.posterior[param] if isinstance(param, str) else param
-        for param in (mean, cov, prec, df)
+    variables = {}
+    for group in ("constant_data", "posterior"):
+        if group in data.children:
+            variables.update(data[group].data_vars)
+    mean, cov, prec, chol, df = (
+        variables[param] if isinstance(param, str) else param
+        for param in (mean, cov, prec, chol, df)
     )
 
     return data.observed_data[var_name].azstats.log_lik_nonfactorized(
-        mean, cov=cov, prec=prec, df=df, dims=dims
+        mean, cov=cov, prec=prec, chol=chol, lower=lower, df=df, dims=dims
     )

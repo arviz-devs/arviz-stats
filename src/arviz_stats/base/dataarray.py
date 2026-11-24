@@ -1185,7 +1185,16 @@ class BaseDataArray:
         )
 
     def log_lik_nonfactorized(
-        self, da, mean, cov=None, prec=None, df=None, dims=None, sample_dims=None
+        self,
+        da,
+        mean,
+        cov=None,
+        prec=None,
+        chol=None,
+        lower=True,
+        df=None,
+        dims=None,
+        sample_dims=None,
     ):
         """Compute pointwise conditional log-likelihoods on DataArray input.
 
@@ -1200,12 +1209,16 @@ class BaseDataArray:
             multivariate Student-t.
         prec : DataArray, optional
             Precision matrix, the inverse of cov.
+        chol : DataArray, optional
+            Cholesky factor of cov.
+        lower : bool, default True
+            Whether chol is the lower triangular factor. If False, it is the upper one.
         df : DataArray or scalar, optional
             Degrees of freedom of the multivariate Student-t. If None, the distribution
             is multivariate normal.
         dims : list of str, optional
-            The two matrix dimensions of cov or prec. Defaults to its dimensions that
-            are not in sample_dims.
+            The two matrix dimensions of cov, prec or chol. Defaults to its dimensions
+            that are not in sample_dims.
         sample_dims : list of str, optional
             Sample dimensions. Defaults to ["chain", "draw"].
 
@@ -1214,12 +1227,12 @@ class BaseDataArray:
         log_lik : DataArray
             Log-likelihood of each observation given all the others.
         """
-        if (cov is None) == (prec is None):
-            raise ValueError("Exactly one of `cov` and `prec` must be provided.")
-        matrix = cov if prec is None else prec
+        matrices = [matrix for matrix in (cov, prec, chol) if matrix is not None]
+        if len(matrices) != 1:
+            raise ValueError("Exactly one of `cov`, `prec` and `chol` must be provided.")
         sample_dims = validate_dims(sample_dims)
         if dims is None:
-            dims = [dim for dim in matrix.dims if dim not in sample_dims]
+            dims = [dim for dim in matrices[0].dims if dim not in sample_dims]
         if len(dims) != 2:
             raise ValueError(f"`dims` must contain the two matrix dimensions, got {list(dims)}")
         obs_dims = [dim for dim in da.dims if dim in dims] or list(da.dims)
@@ -1238,8 +1251,10 @@ class BaseDataArray:
             0,
             cov,
             prec,
+            chol,
+            lower,
             df,
-            input_core_dims=[obs_dims, [], list(dims), list(dims), []],
+            input_core_dims=[obs_dims, [], list(dims), list(dims), list(dims), [], []],
             output_core_dims=[obs_dims],
         ).rename(da.name)
 

@@ -20,9 +20,25 @@ def test_log_lik_nonfactorized():
     factor = rng.normal(size=(2, 10, 5, 5))
     cov = factor @ factor.swapaxes(-1, -2) + np.eye(5)
     df = rng.uniform(3, 10, size=(2, 10))
+    chol = np.linalg.cholesky(cov)
     data = azb.from_dict(
-        {"posterior": {"mu": mean, "cov": cov, "nu": df}, "observed_data": {"y": y}},
-        dims={"mu": ["obs_id"], "cov": ["obs_id", "obs_id_bis"], "y": ["obs_id"]},
+        {
+            "posterior": {
+                "mu": mean,
+                "cov": cov,
+                "chol": chol,
+                "chol_upper": chol.swapaxes(-1, -2),
+                "nu": df,
+            },
+            "observed_data": {"y": y},
+        },
+        dims={
+            "mu": ["obs_id"],
+            "cov": ["obs_id", "obs_id_bis"],
+            "chol": ["obs_id", "obs_id_bis"],
+            "chol_upper": ["obs_id", "obs_id_bis"],
+            "y": ["obs_id"],
+        },
     )
 
     log_lik = log_lik_nonfactorized(data, mean="mu", cov="cov", df="nu")
@@ -31,6 +47,10 @@ def test_log_lik_nonfactorized():
     assert log_lik.dims == ("chain", "draw", "obs_id")
     expected = array_stats.log_lik_nonfactorized(y, mean, cov=cov, df=df)
     assert_allclose(log_lik.values, expected)
+    log_lik_chol = log_lik_nonfactorized(data, mean="mu", chol="chol", df="nu")
+    assert_allclose(log_lik_chol.values, expected)
+    log_lik_upper = log_lik_nonfactorized(data, mean="mu", chol="chol_upper", lower=False, df="nu")
+    assert_allclose(log_lik_upper.values, expected)
 
 
 def test_log_lik_nonfactorized_dims():
@@ -41,7 +61,7 @@ def test_log_lik_nonfactorized_dims():
         factor @ factor.swapaxes(-1, -2) + np.eye(4), dims=("group", "time", "time_bis")
     )
     data = xr.DataTree.from_dict(
-        {"posterior": xr.Dataset({"prec": prec}), "observed_data": xr.Dataset({"y": y})}
+        {"constant_data": xr.Dataset({"prec": prec}), "observed_data": xr.Dataset({"y": y})}
     )
 
     log_lik = log_lik_nonfactorized(data, mean=0, prec="prec", dims=("time", "time_bis"))
@@ -64,11 +84,11 @@ def test_log_lik_nonfactorized_mean_dims():
         log_lik_nonfactorized(data, mean="mu", cov="cov")
 
 
-def test_log_lik_nonfactorized_cov_and_prec():
+def test_log_lik_nonfactorized_one_matrix():
     data = azb.from_dict(
         {"posterior": {"mu": np.zeros((2, 10))}, "observed_data": {"y": np.zeros(2)}}
     )
-    with pytest.raises(ValueError, match="Exactly one of `cov` and `prec`"):
+    with pytest.raises(ValueError, match="Exactly one of `cov`, `prec` and `chol`"):
         log_lik_nonfactorized(data, mean="mu")
 
 

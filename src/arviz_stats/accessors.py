@@ -323,7 +323,16 @@ class _BaseAccessor:
         )
 
     def log_lik_nonfactorized(
-        self, mean, cov=None, prec=None, df=None, dims=None, sample_dims=None, **kwargs
+        self,
+        mean,
+        cov=None,
+        prec=None,
+        chol=None,
+        lower=True,
+        df=None,
+        dims=None,
+        sample_dims=None,
+        **kwargs,
     ):
         """Compute pointwise conditional log-likelihoods of a multivariate normal or Student-t."""
         return self._apply(
@@ -331,6 +340,8 @@ class _BaseAccessor:
             mean=mean,
             cov=cov,
             prec=prec,
+            chol=chol,
+            lower=lower,
             df=df,
             dims=dims,
             sample_dims=sample_dims,

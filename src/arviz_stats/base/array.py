@@ -1851,7 +1851,7 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             random_state=random_state,
         )
 
-    def log_lik_nonfactorized(self, y, mean, cov=None, prec=None, df=None):
+    def log_lik_nonfactorized(self, y, mean, cov=None, prec=None, chol=None, lower=True, df=None):
         """Compute pointwise conditional log-likelihoods of a multivariate normal or Student-t.
 
         Parameters
@@ -1865,6 +1865,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             multivariate Student-t, along the last two axes.
         prec : array-like, optional
             Precision matrix, the inverse of cov, along the last two axes.
+        chol : array-like, optional
+            Cholesky factor of cov, along the last two axes.
+        lower : bool, default True
+            Whether chol is the lower triangular factor. If False, it is the upper one.
         df : array-like, optional
             Degrees of freedom of the multivariate Student-t. If None, the distribution
             is multivariate normal.
@@ -1874,10 +1878,13 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         log_lik : array-like
             Log-likelihood of each observation given all the others.
         """
-        if (cov is None) == (prec is None):
-            raise ValueError("Exactly one of `cov` and `prec` must be provided.")
-        if prec is None:
+        if sum(matrix is not None for matrix in (cov, prec, chol)) != 1:
+            raise ValueError("Exactly one of `cov`, `prec` and `chol` must be provided.")
+        if cov is not None:
             prec = np.linalg.inv(cov)
+        elif chol is not None:
+            chol_inv = np.linalg.inv(chol)
+            prec = chol_inv.mT @ chol_inv if lower else chol_inv @ chol_inv.mT
 
         return self._log_lik_nonfactorized(np.asarray(y) - mean, np.asarray(prec), df)
 

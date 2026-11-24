@@ -1772,6 +1772,13 @@ class TestLogLikNonfactorized:
         )
         log_lik_prec = array_stats.log_lik_nonfactorized(y, mean, prec=np.linalg.inv(cov))
         assert_allclose(log_lik_prec, log_lik)
+        chol = np.linalg.cholesky(cov)
+        log_lik_chol = array_stats.log_lik_nonfactorized(y, mean, chol=chol)
+        assert_allclose(log_lik_chol, log_lik)
+        log_lik_upper = array_stats.log_lik_nonfactorized(
+            y, mean, chol=np.swapaxes(chol, -1, -2), lower=False
+        )
+        assert_allclose(log_lik_upper, log_lik)
 
     def test_student_t(self, array_stats):
         y = np.array([2.9, 0.4, -1.2])
@@ -1786,8 +1793,8 @@ class TestLogLikNonfactorized:
             ],
         )
 
-    def test_cov_and_prec(self, array_stats):
-        with pytest.raises(ValueError, match="Exactly one of `cov` and `prec`"):
+    def test_one_matrix(self, array_stats):
+        with pytest.raises(ValueError, match="Exactly one of `cov`, `prec` and `chol`"):
             array_stats.log_lik_nonfactorized(np.zeros(2), 0)
-        with pytest.raises(ValueError, match="Exactly one of `cov` and `prec`"):
-            array_stats.log_lik_nonfactorized(np.zeros(2), 0, cov=np.eye(2), prec=np.eye(2))
+        with pytest.raises(ValueError, match="Exactly one of `cov`, `prec` and `chol`"):
+            array_stats.log_lik_nonfactorized(np.zeros(2), 0, cov=np.eye(2), chol=np.eye(2))
