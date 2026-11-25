@@ -513,11 +513,9 @@ def test_compare_elpd_i_extra_dim(centered_eight, extra_dim_model):
 
 @pytest.mark.parametrize("precomputed", [False, True])
 def test_compare_different_observed(centered_eight, non_centered_eight, precomputed):
-    rescaled = non_centered_eight.copy()
-    rescaled["observed_data"] = (
-        rescaled["observed_data"].to_dataset().assign(obs=rescaled.observed_data["obs"] / 10)
-    )
-    models = {"centered": centered_eight, "rescaled": rescaled}
+    reordered = non_centered_eight.copy()
+    reordered["observed_data"] = reordered["observed_data"].to_dataset().sortby("school")
+    models = {"centered": centered_eight, "reordered": reordered}
     if precomputed:
         models = {name: loo(data, pointwise=True) for name, data in models.items()}
     with pytest.warns(UserWarning, match="same observed data"):
