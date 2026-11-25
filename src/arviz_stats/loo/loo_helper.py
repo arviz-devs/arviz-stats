@@ -183,11 +183,7 @@ def _prepare_loo_inputs(data, var_name, thin_factor=None, log_lik_fn=None):
         log_likelihood = get_log_likelihood(data, var_name=var_name)
         if var_name is None and log_likelihood.name is not None:
             var_name = log_likelihood.name
-
-        if hasattr(data, "observed_data") and var_name in data.observed_data:
-            observed = data.observed_data[var_name]
-        else:
-            observed = None
+        observed = data.get("observed_data", {}).get(var_name)
 
         if thin_factor is not None:
             from arviz_stats.manipulation import thin
