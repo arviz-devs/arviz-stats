@@ -140,8 +140,10 @@ class _DiagnosticsBase(_CoreBase):
     def _ess(self, ary, relative=False):
         """Compute the effective sample size for a 2D array."""
         ary = np.asarray(ary, dtype=float)
-        if (np.max(ary) - np.min(ary)) < np.finfo(float).resolution:  # pylint: disable=no-member
+                scale = np.max(np.abs(ary))
+        if (np.max(ary) - np.min(ary)) <= np.finfo(float).resolution * scale:  # pylint: disable=no-member
             return ary.size
+
         n_chain, n_draw = ary.shape
         acov = self.autocov(ary, axis=1)
         chain_mean = ary.mean(axis=1)
