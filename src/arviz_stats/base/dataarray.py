@@ -618,12 +618,12 @@ class BaseDataArray:
             warnings.warn("dims are ignored if factor is auto")
         if factor == "auto":
             factor = self.thin_factor(da)
-            sample_dims = "draw"
+            sample_dims = rcParams["data.sample_dims"][-1]
 
         elif isinstance(factor, (float | int)):
             if sample_dims is None:
-                sample_dims = rcParams["data.sample_dims"]
-            if not isinstance(sample_dims, str):
+                sample_dims = rcParams["data.sample_dims"][-1]
+            elif not isinstance(sample_dims, str):
                 if len(sample_dims) >= 2:
                     raise ValueError("dims must be of length 1")
                 if len(sample_dims) == 1:
