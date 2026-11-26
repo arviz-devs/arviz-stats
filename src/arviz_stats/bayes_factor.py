@@ -1,7 +1,6 @@
 """Bayes Factor using Savage-Dickey density ratio."""
 
 import warnings
-from numbers import Real
 
 import numpy as np
 import xarray as xr
@@ -62,7 +61,7 @@ def bayes_factor(data, var_names, ref_vals=0, return_ref_vals=False, prior=None,
     if isinstance(var_names, str):
         var_names = [var_names]
 
-    if isinstance(ref_vals, Real):
+    if isinstance(ref_vals, int | float | np.integer | np.floating):
         ref_vals = [ref_vals] * len(var_names)
 
     if len(var_names) != len(ref_vals):
@@ -72,7 +71,7 @@ def bayes_factor(data, var_names, ref_vals=0, return_ref_vals=False, prior=None,
     ref_density_vals = {}
 
     for var, ref_val in zip(var_names, ref_vals):
-        if not isinstance(ref_val, Real):
+        if not isinstance(ref_val, int | float | np.integer | np.floating):
             raise ValueError(f"Reference value for variable '{var}' must be numerical")
 
     if prior is not None:
