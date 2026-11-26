@@ -605,15 +605,17 @@ def kde(
         of the data for which to perform the computation.
     circular : bool, default False
     **kwargs : any, optional
-            Forwarded to the array or dataarray interface for KDE.
-            See :func:`arviz_stats.base.array_stats.kde` for the full list of supported arguments.
+        For array-like input, forwarded to :meth:`arviz_stats.base.array_stats.kde`.
+        For xarray input, forwarded through :meth:`arviz_stats.base.dataarray_stats.kde`
+        to the array implementation. See the array method for supported options such as
+        ``grid_len``, ``bw`` and ``cumulative``.
 
     Returns
     -------
-    ndarray, DataArray, Dataset, DataTree
-        Requested KDE of the provided input.
-        The xarray objects will have a ``kde_dim`` dimension and a ``plot_axis`` dimension
-        with coordinates "x", and "y".
+    tuple of ndarray, or DataArray, Dataset, DataTree
+        Array-like input returns a tuple containing the grid, density and bandwidth.
+        Xarray results have a ``kde_dim`` dimension and a ``plot_axis`` dimension with
+        coordinates ``"x"`` and ``"y"``. The bandwidth is stored as a coordinate.
 
     See Also
     --------
