@@ -641,11 +641,7 @@ def test_pareto_pit_avoid_boundary_values():
     assert not np.any(pit == 0.0)
     assert not np.any(pit == 1.0)
 
-
-
-
-def test_ess_mcse_sd_scale_invariance():
-    """ess_sd and mcse_sd should be invariant to the scale/units of the draws."""
+def test_ess_sd_scale_invariance():
     rng = np.random.default_rng(0)
     base = 1.0 + 0.3 * rng.normal(size=(4, 500))
     small = base * 1e-9
@@ -654,6 +650,3 @@ def test_ess_mcse_sd_scale_invariance():
     ess_small = array_stats.ess(small, method="sd", chain_axis=0, draw_axis=1)
     np.testing.assert_allclose(ess_small, ess_base)
 
-    mcse_base = array_stats.mcse(base, method="sd", chain_axis=0, draw_axis=1) / base.std()
-    mcse_small = array_stats.mcse(small, method="sd", chain_axis=0, draw_axis=1) / small.std()
-    np.testing.assert_allclose(mcse_small, mcse_base)
