@@ -142,7 +142,7 @@ class _DiagnosticsBase(_CoreBase):
         ary = np.asarray(ary, dtype=float)
         spread = np.max(ary) - np.min(ary)
         scale = np.max(np.abs(ary))
-        if np.isfinite(spread) and spread < np.finfo(float).resolution * scale:  # pylint: disable=no-member
+        if np.isfinite(spread) and spread <= np.finfo(float).resolution * scale:  # pylint: disable=no-member
             return ary.size
 
         n_chain, n_draw = ary.shape
