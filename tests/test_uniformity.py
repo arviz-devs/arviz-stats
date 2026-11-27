@@ -4,7 +4,7 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
-from scipy.stats import beta, binom, expon
+from scipy.stats import beta, binom, expon, rankdata
 
 from arviz_stats.base import array_stats
 
@@ -318,11 +318,13 @@ class TestMchainUniformity:
     def test_different_chains_low_pvalue(self):
         rng = np.random.default_rng(123)
         n_chains, n_draws = 4, 200
-        ranks = np.empty((n_chains, n_draws))
+        samples = np.empty((n_chains, n_draws))
         for i in range(n_chains):
-            ranks[i] = rng.beta(0.5 + i * 2, 5 - i, size=n_draws)
+            samples[i] = rng.beta(0.5 + i * 2, 5 - i, size=n_draws)
+        ranks = rankdata(samples, method="average").reshape(n_chains, n_draws)
+        ranks /= n_chains * n_draws + 1
         p_value, *_ = array_stats.mchain_uniformity_test(ranks)
-        assert p_value < 0.05, f"Different chains yielded p={p_value}, expected < 0.05"
+        assert p_value < 0.05
 
     def test_batched_3d(self):
         rng = np.random.default_rng(7)

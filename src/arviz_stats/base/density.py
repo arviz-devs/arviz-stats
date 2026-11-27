@@ -972,7 +972,6 @@ class _DensityBase(_CoreBase):
         z = np.arange(1, n_draws + 1) / (n_draws + 1)
         samples = n_chains * n_draws
         k = np.floor(z * samples).astype(int)
-
         tau = np.stack([self._geyer_taus(chain, z, max_lag) for chain in ary])
         tau_pooled = np.maximum(np.median(tau, axis=0), 1)
 
@@ -984,9 +983,9 @@ class _DensityBase(_CoreBase):
         pointwise = np.empty((n_draws, n_chains))
         for j in range(n_chains):
             # Calculate the exact probability mass at the observed point
-            p_exact = _hypergeom_pmf(ecdfs[:, j], k, samples, n_draws)
+            p_exact = _hypergeom_pmf(ecdfs[:, j], n_draws, k, samples)
             # Mid-p lower tail
-            lower = _hypergeom_cdf(ecdfs[:, j], k, samples, n_draws) - 0.5 * p_exact
+            lower = _hypergeom_cdf(ecdfs[:, j], n_draws, k, samples) - 0.5 * p_exact
             # Mid-p upper tail
             p_mid = np.clip(2 * np.minimum(lower, 1 - lower), eps, 1)
             # Convert the mid-p value to a z-score for the pointwise test
@@ -1008,7 +1007,6 @@ class _DensityBase(_CoreBase):
         b_shapley_vals = np.apply_along_axis(self._shapley_mean, 1, b_cauchy_vals)
         w_shapley_vals = np.zeros(n_draws)
         w_shapley_vals[valid] = self._shapley_mean(w_cauchy_vals[valid])
-
         return p_value, b_shapley_vals, w_shapley_vals
 
     @staticmethod
