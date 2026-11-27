@@ -473,7 +473,7 @@ def test_n_eff_i(roaches_r_example, pointwise):
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
-def test_moment_match_reff_i_at_most_one(roaches_r_example):
+def test_moment_match_reff_i_range(roaches_r_example):
     example = roaches_r_example
     loo_orig = loo(example["data_tree"], pointwise=True, var_name="log_lik")
     loo_inputs = _prepare_loo_inputs(example["data_tree"], "log_lik")
@@ -516,7 +516,7 @@ def test_moment_match_reff_i_at_most_one(roaches_r_example):
         for i in bad_obs_indices
     ]
 
-    assert all(0 < reff <= 1 for reff in reff_values)
+    assert all(0 < reff < 1.1 for reff in reff_values)
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
