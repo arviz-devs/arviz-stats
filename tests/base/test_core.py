@@ -204,6 +204,26 @@ class TestRanking:
         result = core._compute_ranks(x)
         assert result.dtype == np.int64
 
+    @pytest.mark.parametrize("dtype", [np.int64, np.uint64, float, bool])
+    def test_compute_ranks_ties(self, core, dtype):
+        x = np.array([[0, 1, 0], [1, 0, 1]], dtype=dtype)
+        ranks = core._compute_ranks(x)
+        assert ranks.shape == x.shape
+        assert_array_equal(np.sort(ranks, axis=None), np.arange(1, x.size + 1))
+        assert ranks[x == 0].max() < ranks[x == 1].min()
+        assert_array_equal(ranks, core._compute_ranks(x))
+        assert_allclose(core._compute_ranks(x, relative=True), ranks / x.size)
+
+    def test_compute_ranks_constant_randomized(self, core):
+        x = np.ones(20, dtype=int)
+        ranks = core._compute_ranks(x)
+        assert_array_equal(np.sort(ranks), np.arange(1, x.size + 1))
+        assert not np.array_equal(ranks, np.arange(1, x.size + 1))
+
+    def test_compute_ranks_large_integers(self, core):
+        x = np.array([2**53 + 1, 2**53], dtype=np.int64)
+        assert_array_equal(core._compute_ranks(x), [2, 1])
+
 
 class TestBinning:
     def test_get_bininfo(self, core, rng):

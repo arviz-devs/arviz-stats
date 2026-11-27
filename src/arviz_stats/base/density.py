@@ -5,12 +5,14 @@ import math
 import warnings
 
 import numpy as np
+from scipy.fft import irfft, next_fast_len, rfft
 from scipy.optimize import brentq
 from scipy.signal import convolve, convolve2d
 from scipy.signal.windows import gaussian
 from scipy.sparse import coo_array
 from scipy.special import betainc, ive  # pylint: disable=no-name-in-module
-from scipy.stats import binom, hypergeom
+from scipy.special._ufuncs import _hypergeom_cdf, _hypergeom_pmf
+from scipy.stats import binom, norm
 
 from arviz_stats.base.core import _CoreBase
 
@@ -965,37 +967,72 @@ class _DensityBase(_CoreBase):
         if n_chains < 2:
             raise ValueError("_mtc_c requires at least 2 chains for a multi-chain test.")
 
+        n_chains, n_draws = ary.shape
+        max_lag = min(100, n_draws - 1)
         z = np.arange(1, n_draws + 1) / (n_draws + 1)
         samples = n_chains * n_draws
-        m = n_draws
         k = np.floor(z * samples).astype(int)
 
-        sorted_ary = np.sort(ary, axis=1)
-        ecdfs = np.empty((n_draws, n_chains), dtype=int)
-        for j in range(n_chains):
-            ecdfs[:, j] = np.searchsorted(sorted_ary[j], z, side="right")
+        tau = np.stack([self._geyer_taus(chain, z, max_lag) for chain in ary])
+        tau_pooled = np.maximum(np.median(tau, axis=0), 1)
 
-        gamma_chains = np.empty((n_draws, n_chains))
+        sorted_ary = np.sort(ary, axis=1)
+        ecdfs = np.stack(
+            [np.searchsorted(sorted_ary[j], z, side="right") for j in range(n_chains)], axis=1
+        )
+        eps = np.finfo(float).eps
+        pointwise = np.empty((n_draws, n_chains))
         for j in range(n_chains):
             # Calculate the exact probability mass at the observed point
-            p_exact = hypergeom.pmf(ecdfs[:, j], samples, m, k)
+            p_exact = _hypergeom_pmf(ecdfs[:, j], k, samples, n_draws)
             # Mid-p lower tail
-            probs1 = hypergeom.cdf(ecdfs[:, j], samples, m, k) - 0.5 * p_exact
-            # Mid-p upper tail.
-            probs2 = 1.0 - probs1
+            lower = _hypergeom_cdf(ecdfs[:, j], k, samples, n_draws) - 0.5 * p_exact
+            # Mid-p upper tail
+            p_mid = np.clip(2 * np.minimum(lower, 1 - lower), eps, 1)
+            # Convert the mid-p value to a z-score for the pointwise test
+            score = norm.isf(p_mid / 2) / np.sqrt(tau_pooled)
+            # Two-sided p-value for the pointwise test
+            pointwise[:, j] = np.clip(2 * norm.sf(score), eps, 1 - eps)
 
-            gamma_chains[:, j] = 2 * np.minimum(probs1, probs2)
+        valid = n_draws * np.minimum(z, 1 - z) >= 10
+        if not valid.any():
+            return np.nan, np.zeros((n_draws, n_chains)), np.zeros(n_draws)
 
-        b_cauchy_vals = np.tan((0.5 - gamma_chains) * np.pi)
-        ps = 0.5 - np.arctan(b_cauchy_vals.mean(axis=1)) / np.pi
-
-        w_cauchy_vals = np.tan((0.5 - ps) * np.pi)
-        p_value = 0.5 - np.arctan(w_cauchy_vals.mean()) / np.pi
+        b_cauchy_vals = np.zeros((n_draws, n_chains))
+        w_cauchy_vals = np.zeros(n_draws)
+        b_cauchy_vals[valid] = np.tan((0.5 - pointwise[valid]) * np.pi)
+        combined = np.clip(0.5 - np.arctan(b_cauchy_vals[valid].mean(axis=1)) / np.pi, eps, 1 - eps)
+        w_cauchy_vals[valid] = np.tan((0.5 - combined) * np.pi)
+        p_value = 0.5 - np.arctan(w_cauchy_vals[valid].mean()) / np.pi
 
         b_shapley_vals = np.apply_along_axis(self._shapley_mean, 1, b_cauchy_vals)
-        w_shapley_vals = self._shapley_mean(w_cauchy_vals)
+        w_shapley_vals = np.zeros(n_draws)
+        w_shapley_vals[valid] = self._shapley_mean(w_cauchy_vals[valid])
 
         return p_value, b_shapley_vals, w_shapley_vals
+
+    @staticmethod
+    def _geyer_taus(chain, z, max_lag):
+        """Estimate Geyer autocorrelation times for each threshold indicator."""
+        n = len(chain)
+        counts = np.searchsorted(np.sort(chain), z, side="right")
+        unique_counts, first, inverse = np.unique(counts, return_index=True, return_inverse=True)
+        constant = (unique_counts == 0) | (unique_counts == n)
+        tau = np.ones(len(unique_counts))
+        active = ~constant
+        if active.any():
+            indicators = (chain[None, :] <= z[first[active], None]).astype(float)
+            indicators -= unique_counts[active, None] / n
+            n_fft = next_fast_len(2 * n - 1)
+            transformed = rfft(indicators, n=n_fft, axis=1)
+            covariance = np.asarray(irfft(transformed * transformed.conj(), n=n_fft, axis=1))
+            rho = covariance[:, : max_lag + 1] / covariance[:, :1]
+            pair_count = (max_lag + 1) // 2
+            pairs = rho[:, : 2 * pair_count : 2] + rho[:, 1 : 2 * pair_count : 2]
+            positive = np.logical_and.accumulate(pairs >= 0, axis=1)
+            monotone = np.minimum.accumulate(pairs, axis=1)
+            tau[active] = -1 + 2 * np.where(positive, monotone, 0).sum(axis=1)
+        return tau[inverse]
 
     def _cauchy_combination(self, ps, cauchy_vals, truncate):
         """Combine p-values using the Cauchy combination method.
