@@ -372,3 +372,33 @@ def test_reloo_log_jacobian(mock_wrapper_reloo, non_centered_eight):
     assert_allclose(result_jacobian.elpd, expected.sum())
     assert_allclose(result_jacobian.se, np.sqrt(8 * expected.var(ddof=1)))
     assert_allclose(result_jacobian.p, result.p)
+
+
+@pytest.mark.filterwarnings("ignore:Estimated shape parameter:UserWarning")
+def test_reloo_repeated_obs_labels(non_centered_eight):
+    class Wrapper(SamplingWrapper):  # pylint: disable=abstract-method
+        def sel_observations(self, idx):
+            obs = self.idata_orig.observed_data["obs"]
+            return obs.drop_isel(school=idx), obs.isel(school=idx)
+
+        def sample(self, modified_observed_data):
+            return None
+
+        def get_inference_data(self, fitted_model):
+            return self.idata_orig
+
+        def log_likelihood__i(self, excluded_obs, idata__i):
+            return xr.full_like(idata__i.posterior["mu"], -1.0)
+
+    data = non_centered_eight.copy()
+    log_lik = data.log_likelihood.to_dataset()
+    data["log_likelihood"] = log_lik.assign_coords(school=["a", "b", "c", "d"] * 2)
+    loo_orig = loo(data, pointwise=True)
+    loo_orig.pareto_k.values[:] = [0.1, 0.1, 0.1, 0.1, 0.1, 0.9, 0.1, 0.1]
+
+    result = reloo(Wrapper(model=None, idata_orig=data), loo_orig=loo_orig, k_threshold=0.7)
+
+    assert_allclose(result.pareto_k.values, [0.1, 0.1, 0.1, 0.1, 0.1, 0.0, 0.1, 0.1])
+    assert_allclose(result.elpd_i.values[5], -1.0)
+    assert_allclose(result.elpd_i.values[1], loo_orig.elpd_i.values[1])
+    assert_allclose(result.log_weights.isel(school=1), loo_orig.log_weights.isel(school=1))

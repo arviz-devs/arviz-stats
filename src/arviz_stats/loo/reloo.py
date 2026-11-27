@@ -240,18 +240,17 @@ def reloo(
     for i, _ in enumerate(bad_obs_flat_indices):
         if len(obs_dims) == 1:
             obs_idx = bad_obs_indices[i]
-            coord_value = loo_orig.pareto_k.coords[obs_dims[0]].values[obs_idx]
-            obs_idx_dict = {obs_dims[0]: coord_value}
+            obs_idx_dict = {obs_dims[0]: obs_idx}
             sel_idx = obs_idx
         else:
             obs_idx = bad_obs_indices[i]
-            obs_idx_dict = {}
+            obs_idx_dict = dict(zip(obs_dims, obs_idx))
+            sel_idx = {}
             for j, dim in enumerate(obs_dims):
                 coord_value = loo_orig.pareto_k.coords[dim].values[obs_idx[j]]
-                obs_idx_dict[dim] = coord_value
-            sel_idx = obs_idx_dict
+                sel_idx[dim] = coord_value
 
-        log_lik_i = log_likelihood.sel(obs_idx_dict)
+        log_lik_i = log_likelihood.isel(obs_idx_dict)
         hat_lpd_i = logsumexp(log_lik_i, dims=sample_dims, b=1 / n_samples).item()
 
         new_obs, excluded_obs = wrapper.sel_observations(sel_idx)
@@ -274,9 +273,9 @@ def reloo(
             )
         elpd_loo_i = logsumexp(log_lik_idx, dims=sample_dims, b=1 / log_lik_idx.size).item()
 
-        loo_refitted.elpd_i.loc[obs_idx_dict] = elpd_loo_i
-        loo_refitted.pareto_k.loc[obs_idx_dict] = 0.0
-        loo_refitted.p_loo_i.loc[obs_idx_dict] = hat_lpd_i - elpd_loo_i
+        loo_refitted.elpd_i[obs_idx_dict] = elpd_loo_i
+        loo_refitted.pareto_k[obs_idx_dict] = 0.0
+        loo_refitted.p_loo_i[obs_idx_dict] = hat_lpd_i - elpd_loo_i
         refitted_obs.append(obs_idx_dict)
 
     if log_jacobian is not None:
@@ -301,7 +300,7 @@ def reloo(
                 log_weights_refitted = log_weights_refitted[loo_inputs.var_name]
             log_weights_refitted = log_weights_refitted.copy()
             for obs_idx_dict in refitted_obs:
-                log_weights_refitted.loc[obs_idx_dict] = np.nan
+                log_weights_refitted[obs_idx_dict] = np.nan
             loo_refitted.log_weights = log_weights_refitted
 
     return loo_refitted
