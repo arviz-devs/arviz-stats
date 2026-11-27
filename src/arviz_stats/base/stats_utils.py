@@ -168,7 +168,7 @@ def logsumexp(ary, *, b=None, b_inv=None, axis=None, keepdims=False, out=None, c
     """
     # check dimensions for result arrays
     ary = np.asarray(ary)
-    if ary.dtype.kind == "i":
+    if ary.dtype.kind in "iub":
         ary = ary.astype(np.float64)
     dtype = ary.dtype.type
     shape = ary.shape
