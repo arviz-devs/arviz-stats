@@ -7,6 +7,7 @@ import pytest
 from .helpers import importorskip
 
 azb = importorskip("arviz_base")
+xr = importorskip("xarray")
 
 from arviz_stats.bayes_factor import bayes_factor
 
@@ -82,6 +83,9 @@ def test_bayes_factor_with_ref_vals(fake_dt):
     result, ref_vals = bayes_factor(
         data=fake_dt, var_names=["a", "b"], ref_vals=[0, 0], return_ref_vals=True
     )
+
+    assert isinstance(result, xr.Dataset)
+    assert isinstance(ref_vals, xr.Dataset)
 
     for var in ["a", "b"]:
         assert var in result
