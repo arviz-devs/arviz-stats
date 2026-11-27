@@ -1389,9 +1389,7 @@ def _validate_log_lik_fn_result(log_likelihood, sample_dims, obs_dims, observed)
 def _var_name_custom_ll(data, var_name):
     """Get variable name from observed data for custom log-likelihood."""
     if not hasattr(data, "observed_data"):
-        raise ValueError(
-            "Must be able to extract an `observed_data` group from data when using `log_lik_fn`."
-        )
+        raise ValueError("Must be able to extract an `observed_data` group from data.")
 
     if var_name is not None:
         if var_name not in data.observed_data:

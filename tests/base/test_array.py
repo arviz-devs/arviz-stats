@@ -1765,3 +1765,49 @@ class TestLooInfluence:
             array_stats.loo_influence(ary, ary, kind="mode")
         with pytest.raises(ValueError, match="probs must be provided"):
             array_stats.loo_influence(ary, ary, kind="quantile")
+
+
+class TestLogLikNonfactorized:
+    def test_normal(self, array_stats):
+        y = np.array([2.9, 0.4])
+        mean = np.array([[0.8, -0.9], [-0.9, 0.6], [-0.6, 0.4]])
+        cov = np.array(
+            [[[1.3, 0.7], [0.7, 0.5]], [[2.7, -1.4], [-1.4, 1.5]], [[1.0, 0.2], [0.2, 0.2]]]
+        )
+        log_lik = array_stats.log_lik_nonfactorized(y, mean, cov=cov)
+        assert_allclose(
+            log_lik,
+            [
+                [-0.47172139161049, 0.0121881770570726],
+                [-5.77001927210705, -2.81538519891525],
+                [-8.46361675754757, -1.53389780133052],
+            ],
+        )
+        log_lik_prec = array_stats.log_lik_nonfactorized(y, mean, prec=np.linalg.inv(cov))
+        assert_allclose(log_lik_prec, log_lik)
+        chol = np.linalg.cholesky(cov)
+        log_lik_chol = array_stats.log_lik_nonfactorized(y, mean, chol=chol)
+        assert_allclose(log_lik_chol, log_lik)
+        log_lik_upper = array_stats.log_lik_nonfactorized(
+            y, mean, chol=np.swapaxes(chol, -1, -2), lower=False
+        )
+        assert_allclose(log_lik_upper, log_lik)
+
+    def test_student_t(self, array_stats):
+        y = np.array([2.9, 0.4, -1.2])
+        mean = np.array([0.8, -0.9, 0.3])
+        cov = np.array([[1.3, 0.7, 0.2], [0.7, 0.9, -0.3], [0.2, -0.3, 1.1]])
+        log_lik = array_stats.log_lik_nonfactorized(y, mean, cov=cov, df=np.array([4.5, 30.0]))
+        assert_allclose(
+            log_lik,
+            [
+                [-2.42358772369298, -0.968051982177693, -2.38230110506879],
+                [-2.65180856138359, -0.828826193496916, -2.58419915535754],
+            ],
+        )
+
+    def test_one_matrix(self, array_stats):
+        with pytest.raises(ValueError, match="Exactly one of `cov`, `prec` and `chol`"):
+            array_stats.log_lik_nonfactorized(np.zeros(2), 0)
+        with pytest.raises(ValueError, match="Exactly one of `cov`, `prec` and `chol`"):
+            array_stats.log_lik_nonfactorized(np.zeros(2), 0, cov=np.eye(2), chol=np.eye(2))

@@ -322,6 +322,32 @@ class _BaseAccessor:
             **kwargs,
         )
 
+    def log_lik_nonfactorized(
+        self,
+        mean,
+        cov=None,
+        prec=None,
+        chol=None,
+        lower=True,
+        df=None,
+        dims=None,
+        sample_dims=None,
+        **kwargs,
+    ):
+        """Compute pointwise conditional log-likelihoods of a multivariate normal or Student-t."""
+        return self._apply(
+            "log_lik_nonfactorized",
+            mean=mean,
+            cov=cov,
+            prec=prec,
+            chol=chol,
+            lower=lower,
+            df=df,
+            dims=dims,
+            sample_dims=sample_dims,
+            **kwargs,
+        )
+
     def bayesian_r2(self, scale, sample_dims=None, scale_kind="sd", circular=False, **kwargs):
         """Compute Bayesian :math:`R^2`."""
         return self._apply(

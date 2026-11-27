@@ -10,6 +10,7 @@ from arviz_stats.loo.loo_subsample import loo_subsample, update_subsample
 from arviz_stats.loo.loo_subsample_helper import ll_from_pymc
 from arviz_stats.loo.loo_moment_match import loo_moment_match
 from arviz_stats.loo.loo_moment_match_helper import mm_from_pymc
+from arviz_stats.loo.log_lik_nonfactorized import log_lik_nonfactorized
 from arviz_stats.loo.reloo import reloo
 from arviz_stats.loo.wrapper import SamplingWrapper
 from arviz_stats.loo.compare import compare, _calculate_ics
@@ -30,6 +31,7 @@ __all__ = [
     "loo_subsample",
     "update_subsample",
     "loo_moment_match",
+    "log_lik_nonfactorized",
     "reloo",
     "SamplingWrapper",
     "compare",

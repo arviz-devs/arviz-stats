@@ -1184,6 +1184,80 @@ class BaseDataArray:
             random_state=random_state,
         )
 
+    def log_lik_nonfactorized(
+        self,
+        da,
+        mean,
+        cov=None,
+        prec=None,
+        chol=None,
+        lower=True,
+        df=None,
+        dims=None,
+        sample_dims=None,
+    ):
+        """Compute pointwise conditional log-likelihoods on DataArray input.
+
+        Parameters
+        ----------
+        da : DataArray
+            Observed values.
+        mean : DataArray or scalar
+            Mean of the multivariate normal or Student-t.
+        cov : DataArray, optional
+            Covariance matrix of the multivariate normal or scale matrix of the
+            multivariate Student-t.
+        prec : DataArray, optional
+            Precision matrix, the inverse of cov.
+        chol : DataArray, optional
+            Cholesky factor of cov.
+        lower : bool, default True
+            Whether chol is the lower triangular factor. If False, it is the upper one.
+        df : DataArray or scalar, optional
+            Degrees of freedom of the multivariate Student-t. If None, the distribution
+            is multivariate normal.
+        dims : list of str, optional
+            The two matrix dimensions of cov, prec or chol. Defaults to its dimensions
+            that are not in sample_dims.
+        sample_dims : list of str, optional
+            Sample dimensions. Defaults to ["chain", "draw"].
+
+        Returns
+        -------
+        log_lik : DataArray
+            Log-likelihood of each observation given all the others.
+        """
+        matrices = [matrix for matrix in (cov, prec, chol) if matrix is not None]
+        if len(matrices) != 1:
+            raise ValueError("Exactly one of `cov`, `prec` and `chol` must be provided.")
+        sample_dims = validate_dims(sample_dims)
+        if dims is None:
+            dims = [dim for dim in matrices[0].dims if dim not in sample_dims]
+        if len(dims) != 2:
+            raise ValueError(f"`dims` must contain the two matrix dimensions, got {list(dims)}")
+        obs_dims = [dim for dim in da.dims if dim in dims] or list(da.dims)
+
+        resid = da - mean
+        extra_dims = [dim for dim in resid.dims if dim not in (*da.dims, *sample_dims)]
+        if extra_dims:
+            raise ValueError(
+                f"`mean` has dimensions {extra_dims} that are neither sample dimensions "
+                f"nor dimensions of the observed data {list(da.dims)}"
+            )
+
+        return apply_ufunc(
+            self.array_class.log_lik_nonfactorized,
+            resid,
+            0,
+            cov,
+            prec,
+            chol,
+            lower,
+            df,
+            input_core_dims=[obs_dims, [], list(dims), list(dims), list(dims), [], []],
+            output_core_dims=[obs_dims],
+        ).rename(da.name)
+
     def power_scale_lw(self, da, alpha=0, dim=None):
         """Compute log weights for power-scaling component by alpha."""
         dims = validate_dims(dim)

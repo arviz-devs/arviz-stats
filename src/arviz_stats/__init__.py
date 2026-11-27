@@ -19,6 +19,7 @@ try:
         loo_subsample,
         update_subsample,
         loo_moment_match,
+        log_lik_nonfactorized,
         reloo,
         compare,
         SamplingWrapper,

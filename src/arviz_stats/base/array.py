@@ -8,6 +8,7 @@ batching as necessary.
 import warnings
 
 import numpy as np
+from scipy.linalg import solve_triangular
 
 from arviz_stats.base.density import _DensityBase
 from arviz_stats.base.diagnostics import _DiagnosticsBase
@@ -1855,6 +1856,43 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
             circular=circular,
             random_state=random_state,
         )
+
+    def log_lik_nonfactorized(self, y, mean, cov=None, prec=None, chol=None, lower=True, df=None):
+        """Compute pointwise conditional log-likelihoods of a multivariate normal or Student-t.
+
+        Parameters
+        ----------
+        y : array-like
+            Observed values, with the observations along the last axis.
+        mean : array-like
+            Mean of the distribution. Must broadcast against y.
+        cov : array-like, optional
+            Covariance matrix of the multivariate normal or scale matrix of the
+            multivariate Student-t, along the last two axes.
+        prec : array-like, optional
+            Precision matrix, the inverse of cov, along the last two axes.
+        chol : array-like, optional
+            Cholesky factor of cov, along the last two axes.
+        lower : bool, default True
+            Whether chol is the lower triangular factor. If False, it is the upper one.
+        df : array-like, optional
+            Degrees of freedom of the multivariate Student-t. If None, the distribution
+            is multivariate normal.
+
+        Returns
+        -------
+        log_lik : array-like
+            Log-likelihood of each observation given all the others.
+        """
+        if sum(matrix is not None for matrix in (cov, prec, chol)) != 1:
+            raise ValueError("Exactly one of `cov`, `prec` and `chol` must be provided.")
+        if cov is not None:
+            prec = np.linalg.inv(cov)
+        elif chol is not None:
+            chol_inv = solve_triangular(chol, np.eye(np.shape(chol)[-1]), lower=lower)
+            prec = chol_inv.mT @ chol_inv if lower else chol_inv @ chol_inv.mT
+
+        return self._log_lik_nonfactorized(np.asarray(y) - mean, np.asarray(prec), df)
 
     def srs_estimator(self, y_sample, n_data_points):
         """Compute simple random sampling estimate for subsampled LOO.
