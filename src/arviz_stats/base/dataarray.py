@@ -349,8 +349,8 @@ class BaseDataArray:
         grid_len : int, default 512
             Number of points on the KDE grid.
         **kwargs : any, optional
-            Additional keyword arguments forwarded to the array or dataarray interface.
-            See :func:`arviz_stats.base.array_stats.kde` for the full list of supported arguments.
+            Additional keyword arguments forwarded to :meth:`arviz_stats.base.array_stats.kde`.
+            See that method for supported options such as ``bw`` and ``cumulative``.
 
         Returns
         -------
