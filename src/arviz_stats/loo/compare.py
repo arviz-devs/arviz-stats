@@ -35,7 +35,7 @@ def compare(
     are evaluated with PSIS-LOO-CV and therefore cannot be mixed with LFO-CV results.
 
     All models should be fit to the same observations. A warning is raised when the observed
-    values stored with the results differ between models.
+    values stored with the results differ between models or are stored for only some of them.
 
     If more than 11 models are compared, a diagnostic check for selection bias
     is performed [4]_. If detected, avoid LOO-based selection and use model averaging/stacking
@@ -708,7 +708,8 @@ def _calculate_ics(
         for elpd_data in new_compare_dict.values()
         if elpd_data.observed is not None
     ]
-    if any(not observed[0].equals(other) for other in observed[1:]):
+    some_missing = 0 < len(observed) < len(new_compare_dict)
+    if some_missing or any(not observed[0].equals(other) for other in observed[1:]):
         warnings.warn(
             "Not all models have the same observed data. ELPD values are only comparable "
             "between models fit to the same observations in the same order.",

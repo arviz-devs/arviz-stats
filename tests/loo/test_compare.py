@@ -2,6 +2,7 @@
 
 # pylint: disable=redefined-outer-name, unused-argument
 import copy
+import warnings
 
 import numpy as np
 import pytest
@@ -126,6 +127,7 @@ def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
         warning=False,
         good_k=None,
         elpd_i=other_result.elpd_i,
+        observed=other_result.observed,
         n_folds=4,
     )
 
@@ -520,6 +522,23 @@ def test_compare_different_observed(centered_eight, non_centered_eight, precompu
         models = {name: loo(data, pointwise=True) for name, data in models.items()}
     with pytest.warns(UserWarning, match="same observed data"):
         compare(models)
+
+
+def test_compare_missing_observed(centered_eight, non_centered_eight):
+    missing = non_centered_eight.drop_nodes("observed_data")
+    with pytest.warns(UserWarning, match="same observed data"):
+        compare({"centered": centered_eight, "missing": missing})
+
+
+def test_compare_no_observed(centered_eight, non_centered_eight):
+    models = {
+        "centered": centered_eight.drop_nodes("observed_data"),
+        "non_centered": non_centered_eight.drop_nodes("observed_data"),
+    }
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        compare(models)
+    assert [str(item.message) for item in record] == []
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
