@@ -1006,13 +1006,9 @@ class _DensityBase(_CoreBase):
         b_cauchy_vals = np.zeros((n_draws, n_chains))
         w_cauchy_vals = np.zeros(n_draws)
         b_cauchy_vals[valid] = np.tan((0.5 - pointwise[valid]) * np.pi)
-        combined = np.clip(
-            self._cauchy_combination(pointwise[valid], b_cauchy_vals[valid], truncate=True, axis=1),
-            eps,
-            1 - eps,
-        )
+        combined = np.clip(0.5 - np.arctan(b_cauchy_vals[valid].mean(axis=1)) / np.pi, eps, 1 - eps)
         w_cauchy_vals[valid] = np.tan((0.5 - combined) * np.pi)
-        p_value = self._cauchy_combination(combined, w_cauchy_vals[valid], truncate=True)
+        p_value = 0.5 - np.arctan(w_cauchy_vals[valid].mean()) / np.pi
 
         b_shapley_vals = np.apply_along_axis(self._shapley_mean, 1, b_cauchy_vals)
         w_shapley_vals = np.zeros(n_draws)
@@ -1042,7 +1038,7 @@ class _DensityBase(_CoreBase):
             tau[active] = -1 + 2 * np.where(positive, monotone, 0).sum(axis=1)
         return tau[inverse]
 
-    def _cauchy_combination(self, ps, cauchy_vals, truncate, axis=None):
+    def _cauchy_combination(self, ps, cauchy_vals, truncate):
         """Combine p-values using the Cauchy combination method.
 
         With ``truncate=True`` this is the truncated Cauchy combination test:
@@ -1052,9 +1048,9 @@ class _DensityBase(_CoreBase):
         therefore yields a statistic of 0 and a p-value of 0.5.
         """
         if truncate:
-            cauchy_mean = np.mean(np.where(ps < 0.5, cauchy_vals, 0.0), axis=axis)
+            cauchy_mean = np.mean(np.where(ps < 0.5, cauchy_vals, 0.0))
         else:
-            cauchy_mean = np.mean(cauchy_vals, axis=axis)
+            cauchy_mean = np.mean(cauchy_vals)
         return 0.5 - np.arctan(cauchy_mean) / np.pi
 
     def _compute_quantiles_and_binwidth(self, values, nquantiles, binwidth=None):
