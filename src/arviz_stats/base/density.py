@@ -980,14 +980,20 @@ class _DensityBase(_CoreBase):
             [np.searchsorted(sorted_ary[j], z, side="right") for j in range(n_chains)], axis=1
         )
         eps = np.finfo(float).eps
+        tiny = np.finfo(float).tiny
+        mean = n_draws * k / samples
         pointwise = np.empty((n_draws, n_chains))
         for j in range(n_chains):
+            x = ecdfs[:, j]
+            above = x > mean
             # Calculate the exact probability mass at the observed point
-            p_exact = _hypergeom_pmf(ecdfs[:, j], n_draws, k, samples)
-            # Mid-p lower tail
-            lower = _hypergeom_cdf(ecdfs[:, j], n_draws, k, samples) - 0.5 * p_exact
-            # Mid-p upper tail
-            p_mid = np.clip(2 * np.minimum(lower, 1 - lower), eps, 1)
+            p_exact = _hypergeom_pmf(x, n_draws, k, samples)
+            # Mid-p tail nearest to the observed count. Above the mean, count draws above the
+            # threshold instead, so the upper tail becomes a lower tail and 1 - cdf is avoided.
+            y = np.where(above, n_draws - x, x)
+            kk = np.where(above, samples - k, k)
+            tail = _hypergeom_cdf(y, n_draws, kk, samples) - 0.5 * p_exact
+            p_mid = np.clip(2 * tail, tiny, 1)
             # Convert the mid-p value to a z-score for the pointwise test
             score = norm.isf(p_mid / 2) / np.sqrt(tau_pooled)
             # Two-sided p-value for the pointwise test
@@ -1000,9 +1006,13 @@ class _DensityBase(_CoreBase):
         b_cauchy_vals = np.zeros((n_draws, n_chains))
         w_cauchy_vals = np.zeros(n_draws)
         b_cauchy_vals[valid] = np.tan((0.5 - pointwise[valid]) * np.pi)
-        combined = np.clip(0.5 - np.arctan(b_cauchy_vals[valid].mean(axis=1)) / np.pi, eps, 1 - eps)
+        combined = np.clip(
+            self._cauchy_combination(pointwise[valid], b_cauchy_vals[valid], truncate=True, axis=1),
+            eps,
+            1 - eps,
+        )
         w_cauchy_vals[valid] = np.tan((0.5 - combined) * np.pi)
-        p_value = 0.5 - np.arctan(w_cauchy_vals[valid].mean()) / np.pi
+        p_value = self._cauchy_combination(combined, w_cauchy_vals[valid], truncate=True)
 
         b_shapley_vals = np.apply_along_axis(self._shapley_mean, 1, b_cauchy_vals)
         w_shapley_vals = np.zeros(n_draws)
@@ -1032,7 +1042,7 @@ class _DensityBase(_CoreBase):
             tau[active] = -1 + 2 * np.where(positive, monotone, 0).sum(axis=1)
         return tau[inverse]
 
-    def _cauchy_combination(self, ps, cauchy_vals, truncate):
+    def _cauchy_combination(self, ps, cauchy_vals, truncate, axis=None):
         """Combine p-values using the Cauchy combination method.
 
         With ``truncate=True`` this is the truncated Cauchy combination test:
@@ -1042,9 +1052,9 @@ class _DensityBase(_CoreBase):
         therefore yields a statistic of 0 and a p-value of 0.5.
         """
         if truncate:
-            cauchy_mean = np.mean(np.where(ps < 0.5, cauchy_vals, 0.0))
+            cauchy_mean = np.mean(np.where(ps < 0.5, cauchy_vals, 0.0), axis=axis)
         else:
-            cauchy_mean = np.mean(cauchy_vals)
+            cauchy_mean = np.mean(cauchy_vals, axis=axis)
         return 0.5 - np.arctan(cauchy_mean) / np.pi
 
     def _compute_quantiles_and_binwidth(self, values, nquantiles, binwidth=None):

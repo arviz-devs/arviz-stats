@@ -214,11 +214,12 @@ class TestRanking:
         assert_array_equal(ranks, core._compute_ranks(x))
         assert_allclose(core._compute_ranks(x, relative=True), ranks / x.size)
 
-    def test_compute_ranks_constant_randomized(self, core):
-        x = np.ones(20, dtype=int)
+    def test_compute_ranks_ties_not_biased_by_position(self, core):
+        x = np.ones((4, 1000), dtype=int)
         ranks = core._compute_ranks(x)
-        assert_array_equal(np.sort(ranks), np.arange(1, x.size + 1))
-        assert not np.array_equal(ranks, np.arange(1, x.size + 1))
+        assert_array_equal(np.sort(ranks.ravel()), np.arange(1, x.size + 1))
+        mean_rank = ranks.mean(axis=1)
+        assert np.all(np.abs(mean_rank - (x.size + 1) / 2) < 200)
 
     def test_compute_ranks_large_integers(self, core):
         x = np.array([2**53 + 1, 2**53], dtype=np.int64)
