@@ -290,10 +290,11 @@ class TestMomentMatchFunctions:
 @pytest.mark.filterwarnings("ignore::UserWarning")
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_loo_moment_match_flag_pointwise_false(poisson_setup):
-    idata, model, _ = poisson_setup
+    idata, model, y_obs = poisson_setup
     result = loo(idata, pointwise=False, moment_match=True, model=model)
 
     assert result.method == "loo_moment_match"
+    np.testing.assert_array_equal(result.observed, y_obs)
     assert result.elpd_i is None
     assert result.pareto_k is None
     assert result.influence_pareto_k is None

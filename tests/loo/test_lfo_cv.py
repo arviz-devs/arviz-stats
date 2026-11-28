@@ -34,6 +34,7 @@ def test_lfo_cv_constant_log_likelihood(constant_lfo_wrapper, lfo_constant_data,
     assert result.kind == "lfo_cv"
     assert result.n_data_points == n_origins
     assert result.elpd_i.sizes["time"] == n_origins
+    np.testing.assert_array_equal(result.observed, lfo_constant_data.observed_data["obs"])
     np.testing.assert_allclose(result.elpd_i.values, horizon * const)
     assert np.isclose(result.elpd, n_origins * horizon * const)
     assert np.isclose(result.se, 0.0)

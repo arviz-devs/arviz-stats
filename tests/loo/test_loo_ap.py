@@ -36,6 +36,7 @@ def test_loo_approx_basic(centered_eight, log_densities, input_type):
     assert result.kind == "loo"
     assert result.n_samples == n_samples
     assert result.n_data_points == n_data_points
+    np.testing.assert_array_equal(result.observed, centered_eight.observed_data["obs"])
     assert isinstance(result.elpd, float)
     assert isinstance(result.se, float)
     assert isinstance(result.p, float)

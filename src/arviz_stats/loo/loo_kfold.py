@@ -240,4 +240,5 @@ def loo_kfold(
         n_folds=kfold_inputs.k,
         p_kfold_i=kfold_results.p_kfold_i if pointwise else None,
         fold_fits=kfold_results.fold_fits if save_fits else None,
+        observed=kfold_inputs.observed,
     )

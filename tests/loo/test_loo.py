@@ -546,6 +546,7 @@ def test_loo_mixture(centered_eight):
     assert result_mix.scale == "log"
     assert result_mix.n_samples == result_psis.n_samples
     assert result_mix.n_data_points == result_psis.n_data_points
+    assert_array_equal(result_mix.observed, centered_eight.observed_data["obs"])
 
     assert result_mix.elpd != result_psis.elpd
     assert not np.array_equal(result_mix.elpd_i.values, result_psis.elpd_i.values)

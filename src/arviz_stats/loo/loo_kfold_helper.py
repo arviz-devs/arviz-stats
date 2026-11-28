@@ -39,6 +39,7 @@ KfoldInputs = namedtuple(
         "n_samples",
         "folds",
         "k",
+        "observed",
     ],
 )
 
@@ -60,6 +61,7 @@ def _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_
 
     log_likelihood = get_log_likelihood(data, var_name)
     var_name = log_likelihood.name if var_name is None else var_name
+    observed = data.get("observed_data", {}).get(var_name)
     sample_dims = ["chain", "draw"]
 
     obs_dims = [dim for dim in log_likelihood.dims if dim not in sample_dims]
@@ -99,6 +101,7 @@ def _prepare_kfold_inputs(data, var_name, wrapper, k, folds, stratify_by, group_
         n_samples=n_samples,
         folds=folds,
         k=k,
+        observed=observed,
     )
 
 

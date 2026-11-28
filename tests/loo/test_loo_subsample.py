@@ -51,6 +51,7 @@ def test_loo_subsample(centered_eight_with_sigma, pointwise, method):
     assert isinstance(loo_sub.p, float)
     assert isinstance(loo_sub.subsampling_se, float) and loo_sub.subsampling_se >= 0
     assert loo_sub.n_data_points == centered_eight_with_sigma.observed_data.obs.size
+    np.testing.assert_array_equal(loo_sub.observed, centered_eight_with_sigma.observed_data["obs"])
 
     assert -35 < loo_sub.elpd < -29
     assert 0 < loo_sub.p < 5
@@ -161,6 +162,9 @@ def test_update_loo_subsample(centered_eight_with_sigma):
     )
 
     assert updated_loo.subsample_size == 6
+    np.testing.assert_array_equal(
+        updated_loo.observed, centered_eight_with_sigma.observed_data["obs"]
+    )
     assert updated_loo.subsampling_se <= initial_loo.subsampling_se
     assert np.sum(~np.isnan(updated_loo.elpd_i.values)) == 6
     assert np.sum(~np.isnan(updated_loo.pareto_k.values)) == 6

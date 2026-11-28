@@ -2,6 +2,7 @@
 
 # pylint: disable=redefined-outer-name, unused-argument
 import copy
+import warnings
 
 import numpy as np
 import pytest
@@ -126,6 +127,7 @@ def test_compare_mixed_elpd_methods(centered_eight, non_centered_eight):
         warning=False,
         good_k=None,
         elpd_i=other_result.elpd_i,
+        observed=other_result.observed,
         n_folds=4,
     )
 
@@ -498,14 +500,45 @@ def test_compare_elpd_i_extra_dim(centered_eight, extra_dim_model):
     log_lik = centered_eight.log_likelihood["obs"]
     log_liks = {"a": log_lik, "b": log_lik - log_lik.school.copy(data=delta)}
     log_liks[extra_dim_model] = log_liks[extra_dim_model].expand_dims(extra=1, axis=-1)
+    observed = {"a": centered_eight.observed_data["obs"], "b": centered_eight.observed_data["obs"]}
+    observed[extra_dim_model] = observed[extra_dim_model].expand_dims(extra=1, axis=-1)
     elpds = {}
     for name, model_log_lik in log_liks.items():
         data = centered_eight.copy()
         data["log_likelihood"] = data["log_likelihood"].to_dataset().assign(obs=model_log_lik)
+        data["observed_data"] = data["observed_data"].to_dataset().assign(obs=observed[name])
         elpds[name] = loo(data)
     result = compare(elpds, round_to="none")
     assert_allclose(result.loc["b", "elpd_diff"], -delta.sum())
     assert_allclose(result.loc["b", "dse"], np.sqrt(delta.size) * delta.std(ddof=1))
+
+
+@pytest.mark.parametrize("precomputed", [False, True])
+def test_compare_different_observed(centered_eight, non_centered_eight, precomputed):
+    reordered = non_centered_eight.copy()
+    reordered["observed_data"] = reordered["observed_data"].to_dataset().sortby("school")
+    models = {"centered": centered_eight, "reordered": reordered}
+    if precomputed:
+        models = {name: loo(data, pointwise=True) for name, data in models.items()}
+    with pytest.warns(UserWarning, match="same observed data"):
+        compare(models)
+
+
+def test_compare_missing_observed(centered_eight, non_centered_eight):
+    missing = non_centered_eight.drop_nodes("observed_data")
+    with pytest.warns(UserWarning, match="same observed data"):
+        compare({"centered": centered_eight, "missing": missing})
+
+
+def test_compare_no_observed(centered_eight, non_centered_eight):
+    models = {
+        "centered": centered_eight.drop_nodes("observed_data"),
+        "non_centered": non_centered_eight.drop_nodes("observed_data"),
+    }
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        compare(models)
+    assert [str(item.message) for item in record] == []
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")

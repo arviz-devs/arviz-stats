@@ -176,7 +176,7 @@ SCALE_DICT = {"deviance": "deviance", "log": "elpd", "negative_log": "-elpd"}
 
 
 @dataclass(kw_only=True)
-class ELPDData:
+class ELPDData:  # pylint: disable=too-many-instance-attributes
     """Base container for expected log pointwise predictive density (ELPD) results.
 
     Every cross-validation function returns a subclass of this class.
@@ -211,6 +211,9 @@ class ELPDData:
         Pointwise ELPD values, only when ``pointwise=True`` was requested.
     pareto_k : DataArray, optional
         Pointwise Pareto k diagnostics, only when ``pointwise=True`` was requested.
+    observed : DataArray, optional
+        Observed values the result was computed for, only when ``observed_data`` has a
+        variable with the same name as the log likelihood variable.
     """
 
     elpd: float
@@ -223,6 +226,7 @@ class ELPDData:
     good_k: float
     elpd_i: DataArray = None
     pareto_k: DataArray = None
+    observed: DataArray = None
 
     _kind: ClassVar[str | None] = None
     _display_kind: ClassVar[str | None] = None
