@@ -447,7 +447,10 @@ class BaseArray(_DensityBase, _DiagnosticsBase):
         return pss_array(ary, lower_w, upper_w, lower_alpha=lower_alpha, upper_alpha=upper_alpha)
 
     def compute_ranks(self, ary, axis=-1, relative=False):
-        """Compute ranks of MCMC samples.
+        """Compute unique ranks of MCMC samples.
+
+        Equal values are assigned randomly ordered ranks using a fixed seed,
+        so repeated calls with the same input give the same result.
 
         Parameters
         ----------

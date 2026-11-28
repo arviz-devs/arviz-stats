@@ -9,7 +9,6 @@ import warnings
 
 import numpy as np
 from scipy.fftpack import next_fast_len
-from scipy.interpolate import CubicSpline
 from scipy.stats import circmean
 
 from arviz_stats.base.stats_utils import round_num
@@ -153,29 +152,23 @@ class _CoreBase:
         )
 
     def _float_rankdata(self, ary):
-        """Compute ranks on continuous data, assuming there are no ties.
-
-        Notes
-        -----
-        :func:`scipy.stats.rankdata` is focused on discrete data and different ways
-        to resolve ties. However, our most common use is converting all data to continuous
-        to get rid of the ties, the call rankdata which is not very efficient nor
-        numba compatible.
-        """
+        """Compute unique ranks, breaking ties according to the sorting order."""
         ranks = np.empty(len(ary), dtype=int)
         ranks[np.argsort(ary, axis=None)] = np.arange(1, ary.size + 1)
         return ranks
 
     def _compute_ranks(self, ary, relative=False):
-        """Compute ranks for continuous and discrete variables."""
+        """Compute unique ranks by breaking ties randomly.
+
+        The randomization preserves the ordering of distinct values while
+        assigning unique ranks to tied observations.
+        """
         ary_shape = ary.shape
         ary = ary.flatten()
-        if ary.dtype.kind == "i" and ary.min() < ary.max():
-            min_ary, max_ary = min(ary), max(ary)
-            x = np.linspace(min_ary, max_ary, len(ary))
-            csi = CubicSpline(x, ary)
-            ary = csi(np.linspace(min_ary + 0.001, max_ary - 0.001, len(ary)))
-        out = self._float_rankdata(ary).reshape(ary_shape)
+        permutation = np.random.default_rng(214).permutation(ary.size)
+        out = np.empty(ary.size, dtype=int)
+        out[permutation] = self._float_rankdata(ary[permutation])
+        out = out.reshape(ary_shape)
         if relative:
             return out / out.size
         return out

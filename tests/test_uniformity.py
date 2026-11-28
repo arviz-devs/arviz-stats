@@ -4,7 +4,7 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
-from scipy.stats import beta, binom, expon
+from scipy.stats import beta, binom, expon, rankdata
 
 from arviz_stats.base import array_stats
 
@@ -16,6 +16,15 @@ def _cauchy_combination(ps, truncate=True):
         cauchy_vals = np.where(ps < 0.5, cauchy_vals, 0.0)
     mean_val = np.mean(cauchy_vals)
     return 0.5 - np.arctan(mean_val) / np.pi
+
+
+def _ar1_chain(rng, n_draws, phi=0.9):
+    noise = rng.normal(size=n_draws)
+    chain = np.empty(n_draws)
+    chain[0] = noise[0]
+    for t in range(1, n_draws):
+        chain[t] = phi * chain[t - 1] + noise[t]
+    return chain
 
 
 class TestShapleyMean:
@@ -318,11 +327,40 @@ class TestMchainUniformity:
     def test_different_chains_low_pvalue(self):
         rng = np.random.default_rng(123)
         n_chains, n_draws = 4, 200
-        ranks = np.empty((n_chains, n_draws))
+        samples = np.empty((n_chains, n_draws))
         for i in range(n_chains):
-            ranks[i] = rng.beta(0.5 + i * 2, 5 - i, size=n_draws)
+            samples[i] = rng.beta(0.5 + i * 2, 5 - i, size=n_draws)
+        ranks = rankdata(samples, method="average").reshape(n_chains, n_draws)
+        ranks /= n_chains * n_draws + 1
         p_value, *_ = array_stats.mchain_uniformity_test(ranks)
-        assert p_value < 0.05, f"Different chains yielded p={p_value}, expected < 0.05"
+        assert p_value < 0.05
+
+    def test_geyer_taus_detects_autocorrelation(self):
+        rng = np.random.default_rng(0)
+        n_draws = 2000
+        z = np.arange(1, n_draws + 1) / (n_draws + 1)
+        tau_iid = array_stats._geyer_taus(rng.uniform(size=n_draws), z, max_lag=100)
+        tau_ar = array_stats._geyer_taus(_ar1_chain(rng, n_draws), z, max_lag=100)
+        assert np.median(tau_iid) < 1.5
+        assert np.median(tau_ar) > 5
+
+    def test_autocorrelation_correction(self, monkeypatch):
+        """Autocorrelated but exchangeable chains must not be flagged as non-uniform."""
+        rng = np.random.default_rng(3)
+        n_chains, n_draws = 4, 1000
+        samples = np.stack([_ar1_chain(rng, n_draws) for _ in range(n_chains)])
+        ranks = rankdata(samples, method="average").reshape(n_chains, n_draws)
+        ranks /= n_chains * n_draws + 1
+
+        p_value, *_ = array_stats.mchain_uniformity_test(ranks)
+
+        monkeypatch.setattr(
+            array_stats, "_geyer_taus", staticmethod(lambda chain, z, max_lag: np.ones_like(z))
+        )
+        p_value_uncorrected, *_ = array_stats.mchain_uniformity_test(ranks)
+
+        assert p_value_uncorrected < 0.01
+        assert p_value > p_value_uncorrected
 
     def test_batched_3d(self):
         rng = np.random.default_rng(7)
